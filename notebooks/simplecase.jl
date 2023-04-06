@@ -27,7 +27,72 @@ using Roots
 using LinearAlgebra
 
 # ╔═╡ 2193a81e-c19a-42e6-a4f3-36913c3fbea7
-using DifferentialEquations, DynamicalSystems
+using DifferentialEquations, DynamicalSystems, DynamicalSystemsBase
+
+# ╔═╡ ebb98fa7-b113-48a9-8490-d68fcd9178d0
+function ingredients(path::String)
+	# this is from the Julia source code (evalfile in base/loading.jl)
+	# but with the modification that it returns the module instead of the last object
+	name = Symbol(basename(path))
+	m = Module(name)
+	Core.eval(m,
+        Expr(:toplevel,
+             :(eval(x) = $(Expr(:core, :eval))($name, x)),
+             :(include(x) = $(Expr(:top, :include))($name, x)),
+             :(include(mapexpr::Function, x) = $(Expr(:top, :include))(mapexpr, $name, x)),
+             :(include($path))))
+	m
+end;
+
+# ╔═╡ 61e5f112-796c-4bfd-85d0-deb5c6636ca0
+begin
+	function computemanifolds(
+	    F!::Function, DF!::Function,
+	    steadystates::Vector{Vector{Float64}},
+	    p::Vector{<:Real};
+	    T = 100, limit = 1000, dt = 0.01, h = 1e-3,
+	    kwargs...)
+	
+	    m = length(steadystates)
+	    n = length(first(steadystates))
+	
+	    function Finv!(dx, x, p, t)
+	        F!(dx, x, p, t)
+	        dx .= -dx
+	    end
+	
+	    fwds = CoupledODEs(F!, zeros(n), p)
+	    bckds = CoupledODEs(Finv!, zeros(n), p)
+	
+	    manifolds = NaN * ones(m, 2, 2, T, n)
+	        
+	    for (j, x̄) ∈ enumerate(steadystates)
+	        J = zeros(n, n); DF!(J, x̄, p, 0.0)
+	        λ, V = eigen(J)
+	
+	        for (i, vᵢ) ∈ enumerate(eachcol(V))
+	            isstable = real(λ[i]) < 0 # Stable if real part of eigenvalue is negative
+	
+	            ds = isstable ? bckds : fwds
+	            
+	            for (k, op) ∈ enumerate([-, +])
+	                reinit!(ds, op(x̄, vᵢ * h))
+	
+	                for t ∈ 1:T
+	                    step!(ds, dt)
+	                    xₙ = ds.integ.u
+	
+	                    manifolds[j, i, k, t, :] = xₙ
+	
+	                    if norm(xₙ) > limit break end
+	                end         
+	            end
+	        end
+	    end
+	
+	    return manifolds
+	end
+end;
 
 # ╔═╡ d306f317-f91d-4507-a7a5-59bea527058f
 begin
@@ -95,7 +160,7 @@ Damages $\gamma$: $(@bind γ Slider(0.01:0.01:1., show_value = true, default = 0
 # ╔═╡ e9600f1e-26f3-4d11-aa50-02d557268a75
 begin # Parameters for social planner
 	ρ = 0.01
-	η = 1 / 2
+	η = 1 
 	c = 1 / 2
 	T₀ = 1.
 
@@ -166,43 +231,18 @@ end;
 
 # ╔═╡ f1beb784-4e9a-4ddf-b5a8-73ad73f66c8d
 begin
-	sim_time = 100
-	steady_states = [[0., 0.], [2T₀, 0.]]
-	manifolds = NaN * ones(length(steady_states), 2, 2, sim_time, 2)
-	
-	for (j, T̄) ∈ enumerate(steady_states)
-	
-		λ, V = eigen(DF(T̄, p, 0.))
-	
-		for (i, vᵢ) ∈ enumerate(eachcol(V))
-			dsᵢ = real(λ[i]) < 0 ? dsinv : ds	
-	
-			for (dir, op) ∈ enumerate([+, -])
-				x₀ = op(T̄, 1e-3 * vᵢ)
-					
-				reinit!(dsᵢ, x₀)
-				
-				manifold = NaN * ones(100, 2)
-				
-				for n ∈ 1:100
-					step!(dsᵢ, 0.01)
-					xₙ = dsᵢ.integ.u
-					
-					manifolds[j, i, dir, n, :] = xₙ
-	
-					if norm(xₙ) > 5 break end
-				end
-		
-			end
-		end
-	end
+	steadystates = [[0., 0.], [2T₀, 0.]]
+	manifolds = computemanifolds(F!, DF!, steadystates, p; limit = 3, dt = 0.005)
 end;
 
 # ╔═╡ f08156bd-8fb3-4811-9e21-4ff3c76f6be0
 begin
 	narrows = 23
-	T = range(0, 2; length = narrows)
-	E = range(-0.005, 2; length = narrows)
+	T = range(-0.5, 2; length = narrows)
+	E = range(-0.5, 2; length = narrows)
+
+	Tdense = range(extrema(T)...; length = 101)
+	Edense = range(extrema(T)...; length = 101)
 
 	vecfig = plot(
 		xlabel = "\$T\$", ylabel = "\$E\$",
@@ -274,6 +314,18 @@ begin
 	
 		return first(roots)
 	end
+
+	manifolds_comp = computemanifolds(F!, DF!, steadystates, pcomp; dt = 0.001, limit = 3)
+end;
+
+# ╔═╡ 17767795-0c38-489b-9d49-5583206fd5e9
+begin	
+	attractors = Dict(
+		i => StateSpaceSet([x̄]) for (i, x̄) ∈ enumerate(steadystates)
+	)
+	
+	mapper = AttractorsViaProximity(dscomp, attractors)
+	basin, = basins_of_attraction(mapper, (Tdense, Edense); show_progress = true)
 end;
 
 # ╔═╡ 02abda44-bdc7-484b-b30b-b012f96970bc
@@ -284,6 +336,7 @@ let
 	)
 	
 	plotvectorfield!(compfig, T, E, gc; rescale = 0.12, alpha = 0.4)
+	heatmap!(compfig, Tdense, Edense, basin; alpha = 0.4, c = [:darkgreen, :darkred])
 
 
 	plot!(compfig, 
@@ -307,6 +360,12 @@ let
 				plot!(compfig, 
 					manifolds[j, i, dir, :, 1], manifolds[j, i, dir, :, 2]; 
 					label = false, c = colors[j],
+					linewidth = 2, alpha = 0.5, linestyle = :dash
+				)
+
+				plot!(compfig, 
+					manifolds_comp[j, i, dir, :, 1], manifolds_comp[j, i, dir, :, 2]; 
+					label = false, c = colors[j],
 					linewidth = 2
 				)
 			end
@@ -315,18 +374,16 @@ let
 		end
 	end
 	
-	vecfig
+	compfig
 
 end
-
-# ╔═╡ 5238e75d-4eec-40d6-8d3f-7d6af9e4d35b
-p[end-2]
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 DifferentialEquations = "0c46a032-eb83-5123-abaf-570d42b7fbaa"
 DynamicalSystems = "61744808-ddfa-5f27-97ff-6e42cc95d634"
+DynamicalSystemsBase = "6e36e845-645a-534a-86f2-f5d4aa5a06b4"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
@@ -335,6 +392,7 @@ Roots = "f2b01f46-fcfa-551c-844a-d8ac1e96c665"
 [compat]
 DifferentialEquations = "~7.7.0"
 DynamicalSystems = "~3.0.0"
+DynamicalSystemsBase = "~3.1.1"
 Plots = "~1.38.8"
 PlutoUI = "~0.7.50"
 Roots = "~2.0.10"
@@ -346,7 +404,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.1"
 manifest_format = "2.0"
-project_hash = "bf2751f1d543122ec252f7ceb4de334161d065ac"
+project_hash = "634418021e04e19b9aabd9c94550d8b17e545936"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
@@ -2263,15 +2321,17 @@ version = "1.4.1+0"
 """
 
 # ╔═╡ Cell order:
+# ╟─ebb98fa7-b113-48a9-8490-d68fcd9178d0
 # ╠═89966f9e-9efd-4f6f-9bef-70e4a8bbf888
 # ╠═d00742c2-d306-11ed-322f-cfc00510f9da
 # ╠═1643c274-6e36-4e0d-9700-85dff776f4dc
 # ╠═234afd6a-6986-48d0-8d2e-82c0f2cc312e
+# ╠═2193a81e-c19a-42e6-a4f3-36913c3fbea7
+# ╠═61e5f112-796c-4bfd-85d0-deb5c6636ca0
 # ╟─d306f317-f91d-4507-a7a5-59bea527058f
 # ╠═163b87df-71ee-4c1b-a926-a9141d480a67
 # ╠═5112dbfb-8345-41cb-9a36-c58092991e5c
 # ╟─7f4f38ac-b53c-4815-bfe5-d61a39cc11d8
-# ╠═2193a81e-c19a-42e6-a4f3-36913c3fbea7
 # ╠═cc914634-092d-4176-858b-978097ebc805
 # ╠═e884a2b5-564a-4e3d-980e-7d6fa2bfc619
 # ╠═e9600f1e-26f3-4d11-aa50-02d557268a75
@@ -2286,7 +2346,7 @@ version = "1.4.1+0"
 # ╟─4c2bd98e-a2f1-474e-b042-a6da0c38ab1b
 # ╟─9cc387c6-283c-4b50-b7bd-b8863d9a1358
 # ╟─d2cb15fb-73d8-45bf-b398-b79b00c7fa1b
+# ╠═17767795-0c38-489b-9d49-5583206fd5e9
 # ╠═02abda44-bdc7-484b-b30b-b012f96970bc
-# ╠═5238e75d-4eec-40d6-8d3f-7d6af9e4d35b
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
