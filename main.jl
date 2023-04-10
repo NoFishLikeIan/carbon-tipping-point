@@ -4,6 +4,8 @@ using ChaosTools
 
 using Plots
 
+include("model/optimalpollution.jl")
+
 include("src/socialplanner.jl")
 include("utils/plotting.jl")
 include("utils/dynamicalsystems.jl")
