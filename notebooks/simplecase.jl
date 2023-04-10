@@ -332,11 +332,11 @@ end;
 let
 	compfig = plot(
 		xlabel = "\$T\$", ylabel = "\$E\$",
-		size = (600 .* (√2, 1))
+		size = (600 .* (√2, 1)), dpi = 200
 	)
 	
 	plotvectorfield!(compfig, T, E, gc; rescale = 0.12, alpha = 0.4)
-	heatmap!(compfig, Tdense, Edense, basin; alpha = 0.4, c = [:darkgreen, :darkred])
+	heatmap!(compfig, Tdense, Edense, basin; alpha = 0.5, c = [:green, :red])
 
 
 	plot!(compfig, 
@@ -356,7 +356,7 @@ let
 			isstable = real(λᵢ) < 0
 
 			# Social planner manifolds
-			for dir ∈ [1, 2]
+			for dir ∈ [2]
 				plot!(compfig, 
 					manifolds[j, i, dir, :, 1], manifolds[j, i, dir, :, 2]; 
 					label = false, c = colors[j],
@@ -373,6 +373,8 @@ let
 			scatter!(compfig, [T̄[1]], [T̄[2]]; c = colors[j], label = false, markersize = 3)
 		end
 	end
+
+	savefig(compfig, "../../../dev/nofishlikeian.github.io/content/images/carbon-tax.png")
 	
 	compfig
 
@@ -404,7 +406,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.1"
 manifest_format = "2.0"
-project_hash = "634418021e04e19b9aabd9c94550d8b17e545936"
+project_hash = "588fcf60fa174c614847311fe1307d352c7cf5a5"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
