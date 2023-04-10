@@ -15,7 +15,7 @@ end
 Optimal emissions given costate λ and model parameters.
 """
 function E(λ::Float64, m::OptimalPollution)
-    return inv(m.τ - m.c * λ)
+    max(inv(m.τ - m.c * λ), 0.)
 end
 
 """
@@ -30,7 +30,7 @@ function μ′(x::Float64, x₀::Float64)
 end
 
 function d(x, x₀, γ)
-    exp(γ * (x - x₀))
+    γ * exp(x - x₀)
 end
 
 
