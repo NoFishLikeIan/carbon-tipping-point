@@ -33,8 +33,11 @@ function μ′(x, x̂)
     3 * (x - x̂)^2 - 2 * x̂ * (x - x̂)
 end
 
+"""
+Damage function. d(0, γ) = γ
+"""
 function d(x, x̂, γ)
-    γ * exp(x - x̂)
+    exp(γ*(x - 1.))
 end
 
 function H(x, p, m::OptimalPollution)

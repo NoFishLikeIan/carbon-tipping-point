@@ -6,6 +6,8 @@ using QuadGK
 
 using Plots, StatsPlots
 
+default(size = 600 .* (√2, 1), dpi = 220)
+
 include("model/optimalpollution.jl")
 include("utils/piecewisevalue.jl")
 
@@ -36,50 +38,73 @@ function solveforvalue(m::OptimalPollution)
 end
 solveforvalue(τ, γ, σ²) = solveforvalue(OptimalPollution(x̂ = x̂, τ = τ, γ = γ, σ² = σ²))
 
-
-
 ε = 1e-3
 # Monte carlo experiment
-function montecarlo(m::OptimalPollution; trajectories = 1000, dt = 0.005, tspan = (0., 200.), x₀ = 0.5)
-    v, e = solveforvalue(m)
+montecarlo(m::OptimalPollution) = montecarlo(solveforvalue(m)[2])
+function montecarlo(e; trajectories = 1000, dt = 0.005, tspan = (0., 200.), x₀ = 0.)
+    
     f(x, p, t) = -m.c * (μ(x, m.x̂) - e(x, ε))
     g(x, p, t) = ε * √σ²
     
     prob = SDEProblem(f, g, x₀, tspan)
-    montecarlo = EnsembleProblem(
-        prob; 
-        output_func = (sol, i) -> (last(sol), false) # Only return the last value
-    )
+    montecarlo = EnsembleProblem(prob)
     
     sim = solve(montecarlo, EM(); trajectories = trajectories, dt = dt)
     
-    return sim[:]
+    return sim
 end
 
-γ = 4.0
-σ² = 2.0
+γ = 3.
+σ² = 1.0
 
-
-m = OptimalPollution(x̂ = x̂, τ = 0.001, γ = γ, σ² = σ²)
-v, e = solveforvalue(m)
-
+m = OptimalPollution(x̂ = x̂, τ = 0.01, γ = γ, σ² = σ²)
 mtax = OptimalPollution(x̂ = x̂, τ = 1., γ = γ, σ² = σ²)
-vt, et = solveforvalue(mtax)
 
-# Density function
-densfig = plot(xlabel = "Temperature", ylabel = "Density", legendtitle = "\$\\varepsilon\$") 
-for ε ∈ [0.001, 0.006, 0.01]
-    plot!(densfig, temperature, x -> φ(x, ε, e, m); label = ε)
-end
-densfig
+# Policies
+v, e = solveforvalue(m)
+vtax, etax = solveforvalue(mtax)
+
+vfig = plot(xlabel = "Temperature", ylabel = "Value")
+
+plot!(vfig, temperature, x -> v(x, ε); label = "\$\\tau = 0\$", c = :darkred)
+plot!(vfig, temperature, x -> v(x, 0.); label = nothing, c = :darkred, alpha = 0.3)
+
+plot!(vfig, temperature, x -> vtax(x, ε); c = :darkblue, label = "\$\\tau > 0\$")
+plot!(vfig, temperature, x -> vtax(x, 0.); label = nothing, c = :darkblue, alpha = 0.3)
+
+vline!(vfig, [x̂]; c = :black, label = false)
+vline!(vfig, steadystates; c = :black, linestyle = :dash, label = false)
+
+savefig(vfig, "figures/valuefunction.png")
+
+efig = plot(xlabel = "Temperature", ylabel = "Value")
+
+plot!(efig, temperature, x -> e(x, ε); label = "\$\\tau \\approx 0\$", c = :darkred)
+plot!(efig, temperature, x -> e(x, 0.); label = nothing, c = :darkred, alpha = 0.3)
+
+plot!(efig, temperature, x -> etax(x, ε); c = :darkblue, label = "\$\\tau > 0\$")
+plot!(efig, temperature, x -> etax(x, 0.); label = nothing, c = :darkblue, alpha = 0.3)
+
+vline!(efig, [x̂]; c = :black, label = false)
+vline!(efig, steadystates; c = :black, linestyle = :dash, label = false)
+
+savefig(efig, "figures/emissions.png")
 
 # Monte Carlo simulation
-trj = 100
-sim = montecarlo(m; trajectories = trj)
-simtax = montecarlo(mtax; trajectories = trj)
+trj = 1000
+sim = montecarlo(e; trajectories = trj)
+simtax = montecarlo(etax; trajectories = trj)
 
-distfig = plot(xlabel = "Temperature")
-histogram!(distfig, sim; label = "\$\\tau \\approx 0\$", bins = 50, normed = true, alpha = 0.5, c = :darkred)
-histogram!(distfig, simtax; label = "\$\\tau = 0.6 \$", bins = 50, normed = true, alpha = 0.5, c = :darkblue)
+summ = EnsembleSummary(sim, 0:0.01:200.)
+summtax = EnsembleSummary(simtax, 0:0.01:200.)
 
-distfig
+trjfig = plot(xlabel = "Time", ylabel = "Temperature", legend = :bottomright)
+
+plot!(trjfig, summ; fillalpha = 0.2, c = :darkred, label = "\$\\tau \\approx 0\$")
+plot!(trjfig, summtax; fillalpha = 0.2, c = :darkblue, label = "\$\\tau > 0\$")
+
+
+hline!(trjfig, [x̂]; c = :black, label = false)
+hline!(trjfig, steadystates; c = :black, linestyle = :dash, label = false)
+
+savefig(trjfig, "figures/montecarlo.png")
