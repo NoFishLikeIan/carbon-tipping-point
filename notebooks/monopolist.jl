@@ -17,20 +17,32 @@ end
 # ╔═╡ 9c56df12-5247-453f-8ebf-7e398533f20a
 begin
 	using Plots
-	default(size = 500 .* (√2, 1), dpi = 180)
+	default(size = 600 .* (√2, 1), dpi = 200)
 end
 
 # ╔═╡ 90910474-baab-4479-a081-f0932f4945cc
 using PlutoUI
 
 # ╔═╡ 437b9812-d798-11ed-1f52-593f5b374264
-using EconPDEs, Dierckx
+using EconPDEs, Dierckx, OrderedCollections
 
 # ╔═╡ 0ade2dcf-eeb5-4d7d-a86f-443ae8c90902
 using QuadGK
 
 # ╔═╡ e34000a0-dfc6-4914-80ae-48d34953d8d2
 using DifferentialEquations
+
+# ╔═╡ a89bf7b5-611b-474e-b8dd-e02271377b0b
+html"""
+<style>
+	main {
+		margin: 0 auto;
+		max-width: 2000px;
+    	padding-left: max(160px, 10%);
+    	padding-right: max(160px, 10%);
+	}
+</style>
+"""
 
 # ╔═╡ a582899a-fdab-48ba-bf56-b247e89a58c2
 function ingredients(path::String)
@@ -47,171 +59,159 @@ function ingredients(path::String)
 	m
 end;
 
+# ╔═╡ 84e501b6-8ea8-441b-bcb9-c89357eca6f0
+function solvepiecewisevalue(hbj::Function, grid::Tuple)
+
+    lowregime, highregime = grid
+    x̂ = (highregime[1] + lowregime[end]) / 2
+
+    lowsol, lowresidual = pdesolve(
+        hbj, 
+        OrderedDict(:x => lowregime), 
+        OrderedDict(:v => -100. * ones(length(lowregime))))
+
+    if lowresidual > 1e-3
+        @warn "Low regime residual is too large: $lowresidual"
+    end
+
+    highsol, highresidual = pdesolve(
+        hbj, 
+        OrderedDict(:x => highregime), 
+        OrderedDict(:v => -100. * ones(length(highregime))))
+
+    if highresidual > 1e-3
+        @warn "High regime residual is too large: $highresidual"
+    end
+
+    lowspline = Spline1D(lowregime, lowsol[:v])
+    highspline = Spline1D(highregime, highsol[:v])
+
+    """
+    Compute the ν-th derivative of the value function at x. If ν = 0, computes v(x).
+    """
+    function v(x; ν::Int64 = 0)
+        spl = x ≤ x̂ ? lowspline : highspline
+
+        return ν > 0 ? derivative(spl, x; nu = ν) : spl(x)
+    end
+
+    return v
+end
+
 # ╔═╡ 9dff9a68-fdd6-4fc0-8215-70c6b03ec152
 op = ingredients("../model/optimalpollution.jl");
 
 # ╔═╡ 03df3d13-e37c-4173-b0d7-3d81f9be7499
 begin
-	x̂ = 0.5
-	N = 101
-
-	lowregime = range(-0.2, x̂ - 1e-3; length = N)
-	highregime = range(x̂ + 1e-3, 2x̂ + 0.2; length = N)
+	x̂ = 0.5 # Critical region
+	ξ = 0.2 # Area around steady states 
 	
-	vguess = OrderedDict(:v => -100 * ones(N))
+	steadystates = [0., 2x̂]
+	
+	N = 101
+	
+	lowregime = range(-ξ, x̂ - 1e-3; length = N)
+	highregime = range(x̂ + 1e-3, 2x̂ + ξ; length = N)
+	
+	temperature = vcat(lowregime, highregime)
 end;
 
 # ╔═╡ e5523194-b4bc-44d5-bba6-08925bb2c649
-begin
-	function solvedeterministic(m::op.OptimalPollution)
-	    leftsol, leftresidual = pdesolve(
-			op.deterministic(m), 
-			OrderedDict(:x => lowregime), vguess
-		)
-		
-	    rightsol, rightresidual = pdesolve(
-			op.deterministic(m), 
-			OrderedDict(:x => highregime), vguess
-		)
-	
-	    @assert leftresidual < 1e-3
-	    @assert rightresidual < 1e-3
-	
-	    spllow = Spline1D(lowregime, leftsol[:v])
-	    splhigh = Spline1D(highregime, rightsol[:v])
-	
-		function v(x; ν::Int64 = 0)
-	        if x ≈ m.x̂ return NaN end
-	        spl = x < m.x̂ ? spllow : splhigh
-	
-	        return ν > 0 ? derivative(spl, x; nu = ν) : spl(x)
-	    end
-	
-	    return v
-	end
+function solveforvalue(τ, γ, σ²)
+    m = op.OptimalPollution(x̂ = x̂, τ = τ, γ = γ, σ² = σ²)
+    
+    v₀ = solvepiecewisevalue(op.deterministic(m), (lowregime, highregime))
+    v₁ = solvepiecewisevalue(op.firstordercorrection(m, v₀), (lowregime, highregime))
+    v₂ = solvepiecewisevalue(op.secondordercorrection(m, v₀, v₁), (lowregime, highregime))
+    
+    v(x, ε; ν = 0) = v₀(x; ν) + ε * v₁(x; ν) + ε^2 * v₂(x; ν) # Value function
+    e(x, ε) = op.E(v(x, ε; ν = 1), m) # Emissions function
 
-	function solvefirstordercorrection(m::op.OptimalPollution, v₀)
-		leftsol, leftresidual = pdesolve(
-			op.firstordercorrection(m, v₀), 
-			OrderedDict(:x => lowregime), vguess
-		)
-		
-	    rightsol, rightresidual = pdesolve(
-			op.firstordercorrection(m, v₀), 
-			OrderedDict(:x => highregime), vguess
-		)
-	
-	    @assert leftresidual < 1e-3
-	    @assert rightresidual < 1e-3
-	
-	    spllow = Spline1D(lowregime, leftsol[:v])
-	    splhigh = Spline1D(highregime, rightsol[:v])
-	
-		function v(x; ν::Int64 = 0)
-	        if x ≈ m.x̂ return NaN end
-	        spl = x < m.x̂ ? spllow : splhigh
-	
-	        return ν > 0 ? derivative(spl, x; nu = ν) : spl(x)
-	    end
-	
-	    return v
-	end
+    return v, e
 end;
+
+# ╔═╡ c065125e-6b40-42f2-b73e-3a89ae30ed47
+σ², ε = 1., 0.001;
 
 # ╔═╡ 2269a457-0182-4419-8e5c-d3969d55566d
 md"""
-- Carbon tax $\tau$ $(@bind τ Slider(0.01:0.01:2, show_value = true, default = 0.5))
-- Climate damage $\gamma$ $(@bind γ Slider(0:0.01:10, show_value = true, default = 5.))
+- Carbon tax $\tau$ $(@bind τ Slider(0.01:0.01:2, show_value = true, default = 0.01))
+- Climate damage $\gamma$ $(@bind γ Slider(0:0.01:20, show_value = true, default = 2.))
 """
-
-# ╔═╡ 12a1e48e-d2e6-480f-838b-e769830e3bab
-begin
-	σ² = 1
-	ε = 0.03
-end;
 
 # ╔═╡ 6d6a7293-1933-4b49-8cc4-5ccc8889119b
 # ╠═╡ show_logs = false
-begin
-	m = op.OptimalPollution(τ = τ, γ = γ, σ² = σ², x̂ = x̂)
-	v₀ = solvedeterministic(m)
-	v₁ = solvefirstordercorrection(m, v₀)
-	
-	v₀′(x) = v₀(x; ν = 1)
-	v₁′(x) = v₁(x; ν = 1)
-
-	e₀(x) = op.E(v₀′(x), m)
-	e₁(x) = op.E(v₀′(x) + ε * v₁′(x), m)
-
-	function ∫e(x)
-		if x ≤ m.x̂
-			int, error = quadgk(e₁, 0, x)
-			return int
-		else
-			int, error = quadgk(e₁, 1, x)
-			return ∫e(1) + int
-		end
-	end
-	
-	function φ(x)
-		Δx = x - m.x̂
-		det = -Δx^4 / 4 + m.x̂^2 * Δx^2 / 2
-		
-		return exp(det + ∫e(x))
-	end
-end;
+v, e = solveforvalue(τ, γ, σ²);
 
 # ╔═╡ e2f541b2-14fd-4c84-ad10-279399d5846b
 let
-	vfig = plot(xlabel = "Temperature, \$x\$", ylabel = "Emissions, \$e\$", legend = :topright, title = "System with \$\\tau = $τ\$ and \$\\gamma = $γ\$")
+
+    # Value function plotting
+    vfig = plot(
+		xlabel = "Temperature, \$x\$", ylabel = "\$v(x)\$", dpi = 220, 
+		title = "Value function for \$\\tau = $τ, \\gamma = $γ\$"
+	)
 	
-	plot!(vfig, lowregime, e₀; c = :darkred, label = "Deterministic")
-	plot!(vfig, highregime, e₀; label = nothing, c = :darkred)
+    vline!(vfig, steadystates; 
+		label = false, c = :black, linestyle = :dash, alpha = 0.5)
+    plot!(vfig, temperature, x -> v(x, 0); 
+		label = "Deterministic", c = :darkblue)
+    plot!(vfig, temperature, x -> v(x, ε); 
+		label = "Stochastic correction", c = :darkred)
 
-	plot!(vfig, lowregime, e₁; c = :darkblue, label = "Stochastic correction")
-	plot!(vfig, highregime, e₁; label = nothing, c = :darkblue)
+    vline!(vfig, [x̂]; c = :black, label = "Critical value \$\\hat{x}\$")
 
-	vline!(vfig, [m.x̂], linestyle = :dash, label = "Tipping point", c = :black)
-	vline!(vfig, [0.], linestyle = :dot, label = "Steady state", c = :black)
-	vline!(vfig, [2m.x̂], linestyle = :dot, label = nothing, c = :black)
+    # Emissions plotting
+    efig = plot(
+		xlabel = "Temperature, \$x\$", ylabel = "\$e(x)\$", dpi = 220, title = "Optimal emissions for \$\\tau = $τ, \\gamma = $γ\$"
+	)
+	
+    vline!(efig, steadystates; 
+		label = false, c = :black, linestyle = :dash, alpha = 0.5)
+    plot!(efig, temperature, x -> e(x, 0); 
+		label = "Deterministic", c = :darkblue)
+    plot!(efig, temperature, x -> e(x, ε); 
+		label = "Stochastic correction", c = :darkred)
 
-	temperature = vcat(lowregime, highregime)
-	# plot!(twinx(vfig), temperature, φ; c = :darkgreen, linewidth = 2, label = "\$\\varphi(x)\$")
+    vline!(efig, [x̂]; c = :black, label = "Critical value \$\\hat{x}\$")
 
-	vfig
+	plot(vfig, efig; size = 600 .* (2√2, 1))
 	
 end
 
-# ╔═╡ 2f6943eb-3971-432a-8173-f34a886ec926
-md"
-# One such path
-"
+# ╔═╡ 23b84b89-4000-42f1-ab80-252aaa4b1902
+md"# Temperature evolution"
+
+# ╔═╡ 5c03a157-121f-4532-b626-96c7ea3d0615
+ m = op.OptimalPollution(x̂ = x̂, τ = τ, γ = γ, σ² = σ²);
 
 # ╔═╡ 47add6ee-da22-4b75-99b1-d4a46d0719c7
-f(x, p, t) = -m.c * (op.μ(x, m.x̂) - e₁(x));
+f(x, p, t) = -m.c * (op.μ(x, m.x̂) - e(x, ε));
 
 # ╔═╡ c280834d-9159-4ad9-9cd9-f40f0ca1bf5f
-g(x, p, t) = √(ε^2 * σ²);	
+g(x, p, t) = ε * √σ²;	
 
-# ╔═╡ 96b41bfd-5bef-4fb0-8e33-e311f3a5b4d9
+# ╔═╡ a03fa1b5-fcaa-4068-aad5-ed476d7b75bc
 begin
 	dt = 0.005
-	tspan = (0., 1000.)
+	tspan = (0., 200.)
 	prob = SDEProblem(f, g, 0., tspan)
-	sol = solve(prob, EM(), dt = dt)
+	
+	sol = solve(prob)
 end;
 
 # ╔═╡ 5cc3e855-e5bb-440e-801f-ffe9fee97d01
 let
 	time = range(tspan...; step = dt)
-	tsfig = plot(xlabel = "Time", ylabel = "Temperature")
+	tsfig = plot(xlabel = "Time", ylabel = "Temperature", size = 500 .* (2√2, 1), margins = 8Plots.mm)
 
 	hline!(tsfig, [0]; c = "black", linestyle = :dash, label = nothing)
 	hline!(tsfig, [2m.x̂]; c = "black", linestyle = :dash, label = nothing)
 	
 	hline!(tsfig, [m.x̂]; c = "black", label = "Critical threshold")
 	
-	plot!(tsfig, time, t -> sol(t); c = :darkred, label = nothing)
+	plot!(tsfig, time, t -> sol(t); c = :darkred, label = nothing, yguidefontcolor = :darkred)
+	plot!(twinx(tsfig), time, t -> e(sol(t), ε); c = :darkblue, label = nothing, yguidefontcolor = :darkblue)
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -220,6 +220,7 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 Dierckx = "39dd38d3-220a-591b-8e3c-4c3a8c710a94"
 DifferentialEquations = "0c46a032-eb83-5123-abaf-570d42b7fbaa"
 EconPDEs = "a3315474-fad9-5060-8696-cee5f38a87b7"
+OrderedCollections = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 QuadGK = "1fd47b50-473d-5c70-9696-f719f8f3bcdc"
@@ -228,6 +229,7 @@ QuadGK = "1fd47b50-473d-5c70-9696-f719f8f3bcdc"
 Dierckx = "~0.5.3"
 DifferentialEquations = "~7.7.0"
 EconPDEs = "~1.0.3"
+OrderedCollections = "~1.6.0"
 Plots = "~1.38.9"
 PlutoUI = "~0.7.50"
 QuadGK = "~2.8.2"
@@ -239,7 +241,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.1"
 manifest_format = "2.0"
-project_hash = "d9ca7dfac6a193a5b1758aee702c94024cf8290b"
+project_hash = "4382c60cfcfa6d1794f0e8ef99e5651b261801e9"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -1925,23 +1927,26 @@ version = "1.4.1+0"
 """
 
 # ╔═╡ Cell order:
+# ╟─a89bf7b5-611b-474e-b8dd-e02271377b0b
 # ╟─a582899a-fdab-48ba-bf56-b247e89a58c2
 # ╠═9c56df12-5247-453f-8ebf-7e398533f20a
 # ╠═90910474-baab-4479-a081-f0932f4945cc
 # ╠═437b9812-d798-11ed-1f52-593f5b374264
 # ╠═0ade2dcf-eeb5-4d7d-a86f-443ae8c90902
+# ╟─84e501b6-8ea8-441b-bcb9-c89357eca6f0
 # ╠═9dff9a68-fdd6-4fc0-8215-70c6b03ec152
-# ╠═03df3d13-e37c-4173-b0d7-3d81f9be7499
-# ╠═e5523194-b4bc-44d5-bba6-08925bb2c649
+# ╟─03df3d13-e37c-4173-b0d7-3d81f9be7499
+# ╟─e5523194-b4bc-44d5-bba6-08925bb2c649
+# ╠═c065125e-6b40-42f2-b73e-3a89ae30ed47
 # ╟─2269a457-0182-4419-8e5c-d3969d55566d
-# ╠═12a1e48e-d2e6-480f-838b-e769830e3bab
-# ╟─6d6a7293-1933-4b49-8cc4-5ccc8889119b
+# ╠═6d6a7293-1933-4b49-8cc4-5ccc8889119b
 # ╟─e2f541b2-14fd-4c84-ad10-279399d5846b
-# ╟─2f6943eb-3971-432a-8173-f34a886ec926
+# ╟─23b84b89-4000-42f1-ab80-252aaa4b1902
 # ╠═e34000a0-dfc6-4914-80ae-48d34953d8d2
+# ╠═5c03a157-121f-4532-b626-96c7ea3d0615
 # ╠═47add6ee-da22-4b75-99b1-d4a46d0719c7
 # ╠═c280834d-9159-4ad9-9cd9-f40f0ca1bf5f
-# ╠═96b41bfd-5bef-4fb0-8e33-e311f3a5b4d9
-# ╟─5cc3e855-e5bb-440e-801f-ffe9fee97d01
+# ╠═a03fa1b5-fcaa-4068-aad5-ed476d7b75bc
+# ╠═5cc3e855-e5bb-440e-801f-ffe9fee97d01
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

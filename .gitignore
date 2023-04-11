@@ -23,5 +23,5 @@ docs/site/
 # environment.
 Manifest.toml
 
-# Visual studio code
 .vscode
+figures
