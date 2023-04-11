@@ -52,11 +52,11 @@ op = ingredients("../model/optimalpollution.jl");
 
 # ╔═╡ 03df3d13-e37c-4173-b0d7-3d81f9be7499
 begin
-	x₀ = 0.5
+	x̂ = 0.5
 	N = 101
 
-	lowregime = range(-0.2, x₀ - 1e-3; length = N)
-	highregime = range(x₀ + 1e-3, 2x₀ + 0.2; length = N)
+	lowregime = range(-0.2, x̂ - 1e-3; length = N)
+	highregime = range(x̂ + 1e-3, 2x̂ + 0.2; length = N)
 	
 	vguess = OrderedDict(:v => -100 * ones(N))
 end;
@@ -81,8 +81,8 @@ begin
 	    splhigh = Spline1D(highregime, rightsol[:v])
 	
 		function v(x; ν::Int64 = 0)
-	        if x ≈ m.x₀ return NaN end
-	        spl = x < m.x₀ ? spllow : splhigh
+	        if x ≈ m.x̂ return NaN end
+	        spl = x < m.x̂ ? spllow : splhigh
 	
 	        return ν > 0 ? derivative(spl, x; nu = ν) : spl(x)
 	    end
@@ -108,8 +108,8 @@ begin
 	    splhigh = Spline1D(highregime, rightsol[:v])
 	
 		function v(x; ν::Int64 = 0)
-	        if x ≈ m.x₀ return NaN end
-	        spl = x < m.x₀ ? spllow : splhigh
+	        if x ≈ m.x̂ return NaN end
+	        spl = x < m.x̂ ? spllow : splhigh
 	
 	        return ν > 0 ? derivative(spl, x; nu = ν) : spl(x)
 	    end
@@ -133,7 +133,7 @@ end;
 # ╔═╡ 6d6a7293-1933-4b49-8cc4-5ccc8889119b
 # ╠═╡ show_logs = false
 begin
-	m = op.OptimalPollution(τ = τ, γ = γ, σ² = σ², x₀ = x₀)
+	m = op.OptimalPollution(τ = τ, γ = γ, σ² = σ², x̂ = x̂)
 	v₀ = solvedeterministic(m)
 	v₁ = solvefirstordercorrection(m, v₀)
 	
@@ -144,7 +144,7 @@ begin
 	e₁(x) = op.E(v₀′(x) + ε * v₁′(x), m)
 
 	function ∫e(x)
-		if x ≤ m.x₀
+		if x ≤ m.x̂
 			int, error = quadgk(e₁, 0, x)
 			return int
 		else
@@ -154,8 +154,8 @@ begin
 	end
 	
 	function φ(x)
-		Δx = x - m.x₀
-		det = -Δx^4 / 4 + m.x₀^2 * Δx^2 / 2
+		Δx = x - m.x̂
+		det = -Δx^4 / 4 + m.x̂^2 * Δx^2 / 2
 		
 		return exp(det + ∫e(x))
 	end
@@ -171,9 +171,9 @@ let
 	plot!(vfig, lowregime, e₁; c = :darkblue, label = "Stochastic correction")
 	plot!(vfig, highregime, e₁; label = nothing, c = :darkblue)
 
-	vline!(vfig, [m.x₀], linestyle = :dash, label = "Tipping point", c = :black)
+	vline!(vfig, [m.x̂], linestyle = :dash, label = "Tipping point", c = :black)
 	vline!(vfig, [0.], linestyle = :dot, label = "Steady state", c = :black)
-	vline!(vfig, [2m.x₀], linestyle = :dot, label = nothing, c = :black)
+	vline!(vfig, [2m.x̂], linestyle = :dot, label = nothing, c = :black)
 
 	temperature = vcat(lowregime, highregime)
 	# plot!(twinx(vfig), temperature, φ; c = :darkgreen, linewidth = 2, label = "\$\\varphi(x)\$")
@@ -188,7 +188,7 @@ md"
 "
 
 # ╔═╡ 47add6ee-da22-4b75-99b1-d4a46d0719c7
-f(x, p, t) = -m.c * (op.μ(x, m.x₀) - e₁(x));
+f(x, p, t) = -m.c * (op.μ(x, m.x̂) - e₁(x));
 
 # ╔═╡ c280834d-9159-4ad9-9cd9-f40f0ca1bf5f
 g(x, p, t) = √(ε^2 * σ²);	
@@ -207,9 +207,9 @@ let
 	tsfig = plot(xlabel = "Time", ylabel = "Temperature")
 
 	hline!(tsfig, [0]; c = "black", linestyle = :dash, label = nothing)
-	hline!(tsfig, [2m.x₀]; c = "black", linestyle = :dash, label = nothing)
+	hline!(tsfig, [2m.x̂]; c = "black", linestyle = :dash, label = nothing)
 	
-	hline!(tsfig, [m.x₀]; c = "black", label = "Critical threshold")
+	hline!(tsfig, [m.x̂]; c = "black", label = "Critical threshold")
 	
 	plot!(tsfig, time, t -> sol(t); c = :darkred, label = nothing)
 end
