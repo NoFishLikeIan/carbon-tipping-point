@@ -1,68 +1,141 @@
-using DynamicalSystems
-using LinearAlgebra
-using ChaosTools
+using EconPDEs
+using DifferentialEquations
+using Dierckx
 
-using Plots
+using QuadGK
+
+using Plots, StatsPlots
+
+default(size = 600 .* (√2, 1), dpi = 220)
 
 include("model/optimalpollution.jl")
+include("utils/piecewisevalue.jl")
 
-include("src/socialplanner.jl")
-include("utils/plotting.jl")
-include("utils/dynamicalsystems.jl")
+x̂ = 0.5 # Critical region
+ξ = 0.02 # Area around steady states 
 
-ρ = 0.01
-η = 1 # logarithmic utility
-c = 1 / 2
-T₀ = 1.
-γ = 0.5
+steadystates = [0., 2x̂]
 
-p(τ, n) = [ρ, η, c, γ, T₀, n, τ]
+N = 101
 
+lowregime = range(-ξ, x̂ - 1e-3; length = N)
+highregime = range(x̂ + 1e-3, 2x̂ + ξ; length = N)
 
-ω(E, τ, η) = 1 - (E > 0 ? τ * E^η : 0)
-ω′(E, τ, η) = E > 0 ? - τ * η / E^(1 - η) : 0
+temperature = vcat(lowregime, highregime)
 
-@inbounds function F!(dx, x, p, t)
-    ρ, η, c, γ, T₀, n, τ = p
-    T, E = x
+"""
+Returns the value function and emission function given an OptimalPollution model.
+"""
+function solveforvalue(m::OptimalPollution; verbose = true)
+    verbose && println("Solving for v₀...")    
+    v₀, resv₀ = solvepiecewisevalue(deterministic(m), (lowregime, highregime))
+    verbose && println("Residual = $resv₀")    
 
-    ΔT = T - T₀
+    verbose && println("Solving for v₁...")  
+    v₁, resv₁ = solvepiecewisevalue(firstordercorrection(m, v₀), (lowregime, highregime))
+    verbose && println("Residual = $resv₁")    
 
-    dx[1] = -c * (ΔT^3 - T₀^2 * ΔT - n * E)
-    dx[2] = -E * ω(E, τ, η) * (ρ + c * (3 * ΔT^2 - T₀) + γ * T) / η
+    verbose && println("Solving for v₂...") 
+    v₂, resv₂ = solvepiecewisevalue(secondordercorrection(m, v₀, v₁), (lowregime, highregime))
+    verbose && println("Residual = $resv₂")
+
+    if resv₁ > 1e-3 || resv₀ > 1e-3
+        throw("Integration error too large: $resv₁, $resv₂")
+    end
+
+    if resv₂ > 1e-3
+        @warn "Second order integration too large, will not use in correction."
+        δ = 0
+    else
+        δ = 1
+    end
     
-    return dx
+    v(x, ε; ν = 0) = v₀(x; ν = ν) + ε * v₁(x; ν = ν) + δ * ε^2 * v₂(x; ν = ν) # Value function
+    e(x, ε) = E(v(x, ε; ν = 1), m) # Emissions function
+    
+    return v, e
 end
 
-@inbounds function DF!(J, x, p, t)
-    ρ, η, c, γ, T₀, n, τ = p
-    T, E = x
+σ² = 2.
+ε = 1e-4
+γ = 2.0
 
-    ΔT = T - T₀
-
-    J[1, 1] = -c * (3ΔT^2 - T₀^2)
-    J[1, 2] = c * n
-    J[2, 1] = -E * ω(E, τ, η) * (6c * ΔT + γ) / η
-    J[2, 2] =  -(ω(E, τ, η) + E * ω′(E, τ, η)) * (ρ + c * (3 * ΔT^2 - T₀) + γ * T) / η
-
-    return J
+begin # Damage
+    plot(temperature, x -> d(x, -x̂, γ); label = nothing, c = :darkred, title = "Temperature damages", ylabel = "\$d_{\\gamma}(x)\$", xlabel = "Temperature")
 end
 
-steadystates = [
-    [0., 0.], 
-    [2T₀, 0.]
-]
+# Policies
+mnotax = OptimalPollution(x̂ = x̂, σ² = σ², γ = γ, τ = 0.5)
+vnotax, enotax = solveforvalue(mnotax)
 
-emissions = range(-1, 2; length = 101)
-temperature = range(-1, 2; length = 101)
+mtax = OptimalPollution(x̂ = x̂, σ² = σ², γ = γ, τ = 1.)
+vtax, etax = solveforvalue(mtax)
 
-ds(τ, n) = CoupledODEs(F!, zeros(2), p(τ, n))
+begin # Value function
+    vfig = plot(xlabel = "Temperature", ylabel = "Value")
 
-basin_before_tax = computebasins(ds(0., 3), steadystates, (temperature, emissions))
+    plot!(vfig, temperature, x -> vnotax(x, ε); label = "\$\\tau = 0\$", c = :darkred)
+    plot!(vfig, temperature, x -> vnotax(x, 0.); label = nothing, c = :darkred, alpha = 0.3)
 
-basin_after_tax = computebasins(ds(0.8, 3), steadystates, (temperature, emissions))
+    plot!(vfig, temperature, x -> vtax(x, ε); c = :darkblue, label = "\$\\tau > 0\$")
+    plot!(vfig, temperature, x -> vtax(x, 0.); label = nothing, c = :darkblue, alpha = 0.3)
 
-P = tipping_probabilities(basin_before_tax, basin_after_tax)
+    vline!(vfig, [x̂]; c = :black, label = false)
+    vline!(vfig, steadystates; c = :black, linestyle = :dash, label = false)
+end
 
-heatmap(temperature, emissions, basin_before_tax)
-heatmap(temperature, emissions, basin_after_tax)
+savefig(vfig, "figures/valuefunction.png")
+
+begin # Emissions policy
+    efig = plot(xlabel = "Temperature", ylabel = "Value")
+
+    plot!(efig, temperature, x -> enotax(x, ε); label = "\$\\tau \\approx 0\$", c = :darkred)
+    plot!(efig, temperature, x -> enotax(x, 0.); label = nothing, c = :darkred, alpha = 0.3)
+
+    plot!(efig, temperature, x -> etax(x, ε); c = :darkblue, label = "\$\\tau > 0\$")
+    plot!(efig, temperature, x -> etax(x, 0.); label = nothing, c = :darkblue, alpha = 0.3)
+
+    vline!(efig, [x̂]; c = :black, label = false)
+    vline!(efig, steadystates; c = :black, linestyle = :dash, label = false)
+end
+
+savefig(efig, "figures/emissions.png")
+
+# Monte carlo experiment
+function montecarlo(m::OptimalPollution; trajectories = 1000, dt = 0.005, tspan = (0., 200.), x₀ = 0.)
+    
+    e = last(solveforvalue(m))
+    
+    f(x, p, t) = -m.c * (μ(x, m.x̂) - e(x, ε))
+    g(x, p, t) = ε * √σ²
+    
+    prob = SDEProblem(f, g, x₀, tspan)
+    montecarlo = EnsembleProblem(prob)
+    
+    sim = solve(montecarlo, EM(); trajectories = trajectories, dt = dt)
+    
+    return sim
+end
+
+begin # Monte Carlo simulation
+    trj = 100
+    tspan = (0., 50.)
+    time = range(tspan[1], tspan[2]; length = 1000)
+
+    sim = montecarlo(mnotax; trajectories = trj, tspan = tspan)
+    simtax = montecarlo(mtax; trajectories = trj, tspan = tspan)
+
+    summ = EnsembleSummary(sim, time)
+    summtax = EnsembleSummary(simtax, time)
+
+    trjfig = plot(xlabel = "Time", ylabel = "Temperature", legend = :bottomright)
+
+    plot!(trjfig, summ; fillalpha = 0.2, c = :darkred, label = "\$\\tau \\approx 0\$")
+    plot!(trjfig, summtax; fillalpha = 0.2, c = :darkblue, label = "\$\\tau > 0\$")
+
+
+    hline!(trjfig, [x̂]; c = :black, label = false)
+    hline!(trjfig, steadystates; c = :black, linestyle = :dash, label = false)
+end
+
+savefig(trjfig, "figures/montecarlo.png")
