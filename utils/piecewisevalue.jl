@@ -9,7 +9,9 @@ function solvepiecewisevalue(hbj::Function, grid::Tuple)
     lowsol, lowresidual = pdesolve(
         hbj, 
         OrderedDict(:x => lowregime), 
-        OrderedDict(:v => -100. * ones(length(lowregime))))
+        OrderedDict(:v => -100. * ones(length(lowregime)));
+        verbose = false
+    )
 
     if lowresidual > 1e-3
         @warn "Low regime residual is too large: $lowresidual"
@@ -18,7 +20,9 @@ function solvepiecewisevalue(hbj::Function, grid::Tuple)
     highsol, highresidual = pdesolve(
         hbj, 
         OrderedDict(:x => highregime), 
-        OrderedDict(:v => -100. * ones(length(highregime))))
+        OrderedDict(:v => -100. * ones(length(highregime)));
+        verbose = false
+    )
 
     if highresidual > 1e-3
         @warn "High regime residual is too large: $highresidual"
@@ -36,5 +40,5 @@ function solvepiecewisevalue(hbj::Function, grid::Tuple)
         return ν > 0 ? derivative(spl, x; nu = ν) : spl(x)
     end
 
-    return v
+    return v, lowresidual + highresidual
 end
