@@ -12,7 +12,7 @@ include("model/optimalpollution.jl")
 include("utils/piecewisevalue.jl")
 
 x̂ = 0.5 # Critical region
-ξ = 0.01 # Area around steady states 
+ξ = 0.02 # Area around steady states 
 
 steadystates = [0., 2x̂]
 
@@ -44,44 +44,31 @@ function solveforvalue(m::OptimalPollution; verbose = true)
     end
 
     if resv₂ > 1e-3
-        @warn "Integration error too large: $resv₂"
+        @warn "Second order integration too large, will not use in correction."
         δ = 0
     else
         δ = 1
     end
     
     v(x, ε; ν = 0) = v₀(x; ν = ν) + ε * v₁(x; ν = ν) + δ * ε^2 * v₂(x; ν = ν) # Value function
-    e(x, ε) = E(x, v(x, ε; ν = 1), m) # Emissions function
+    e(x, ε) = E(v(x, ε; ν = 1), m) # Emissions function
     
     return v, e
 end
-solveforvalue(τ, γ, σ²) = solveforvalue(OptimalPollution(x̂ = x̂, τ = τ, γ = γ, σ² = σ²))
 
-# Monte carlo experiment
-function montecarlo(m::OptimalPollution; trajectories = 1000, dt = 0.005, tspan = (0., 200.), x₀ = 0.)
-    
-    e = last(solveforvalue(m))
-    
-    f(x, p, t) = -m.c * (μ(x, m.x̂) - e(x, ε))
-    g(x, p, t) = ε * √σ²
-    
-    prob = SDEProblem(f, g, x₀, tspan)
-    montecarlo = EnsembleProblem(prob)
-    
-    sim = solve(montecarlo, EM(); trajectories = trajectories, dt = dt)
-    
-    return sim
+σ² = 2.
+ε = 1e-4
+γ = 2.0
+
+begin # Damage
+    plot(temperature, x -> d(x, -x̂, γ); label = nothing, c = :darkred, title = "Temperature damages", ylabel = "\$d_{\\gamma}(x)\$", xlabel = "Temperature")
 end
 
-σ² = 10.
-ε = 1e-4
-d = 6
-
 # Policies
-mnotax = OptimalPollution(x̂ = x̂, σ² = σ², d = d, τ = 0.01)
+mnotax = OptimalPollution(x̂ = x̂, σ² = σ², γ = γ, τ = 0.5)
 vnotax, enotax = solveforvalue(mnotax)
 
-mtax = OptimalPollution(x̂ = x̂, σ² = σ², d = d, τ = 0.5)
+mtax = OptimalPollution(x̂ = x̂, σ² = σ², γ = γ, τ = 1.)
 vtax, etax = solveforvalue(mtax)
 
 begin # Value function
@@ -114,13 +101,32 @@ end
 
 savefig(efig, "figures/emissions.png")
 
-begin # Monte Carlo simulation
-    trj = 1000
-    sim = montecarlo(mnotax; trajectories = trj)
-    simtax = montecarlo(mtax; trajectories = trj)
+# Monte carlo experiment
+function montecarlo(m::OptimalPollution; trajectories = 1000, dt = 0.005, tspan = (0., 200.), x₀ = 0.)
+    
+    e = last(solveforvalue(m))
+    
+    f(x, p, t) = -m.c * (μ(x, m.x̂) - e(x, ε))
+    g(x, p, t) = ε * √σ²
+    
+    prob = SDEProblem(f, g, x₀, tspan)
+    montecarlo = EnsembleProblem(prob)
+    
+    sim = solve(montecarlo, EM(); trajectories = trajectories, dt = dt)
+    
+    return sim
+end
 
-    summ = EnsembleSummary(sim, 0:0.01:200.)
-    summtax = EnsembleSummary(simtax, 0:0.01:200.)
+begin # Monte Carlo simulation
+    trj = 100
+    tspan = (0., 50.)
+    time = range(tspan[1], tspan[2]; length = 1000)
+
+    sim = montecarlo(mnotax; trajectories = trj, tspan = tspan)
+    simtax = montecarlo(mtax; trajectories = trj, tspan = tspan)
+
+    summ = EnsembleSummary(sim, time)
+    summtax = EnsembleSummary(simtax, time)
 
     trjfig = plot(xlabel = "Time", ylabel = "Temperature", legend = :bottomright)
 

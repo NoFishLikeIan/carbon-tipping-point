@@ -1,7 +1,7 @@
 @Base.kwdef struct OptimalPollution
     ρ::Float64 = 0.01 # Discount rate
     τ::Float64 = 0.0 # Emission tax
-    d::Float64 = 4.0 # Damage exponent of temperature
+    γ::Float64 = 2.0 # Damage of temperature
     
     # Temperature process parameters
     c::Float64 = 0.01 # Temperature sensitivity
@@ -12,8 +12,12 @@ end
 """
 Optimal emissions given costate λ and model parameters.
 """
-function E(x, p, m::OptimalPollution)
-    max((1 - γ(x, m.d)) / (m.τ - m.c * p), 1e-5)
+function E(λ, m::OptimalPollution)
+    if m.τ ≤ m.c * λ
+        inv(1e-5)
+    else
+        inv(m.τ - m.c * λ)
+    end
 end
 
 function V(x, x̂)
@@ -32,22 +36,22 @@ function μ′(x, x̂)
 end
 
 """
-Damage function, γ(x)
+Damage function. d(0, γ) = γ
 """
-function γ(x, d)
-    inv(1 + exp(-d * (x - 1)))
+function d(x, xref, γ)
+    exp(γ*(x - xref))
 end
 
 function H(x, p, m::OptimalPollution)
-    return (1 - γ(x, m.d)) * (log(E(x, p, m)) - 1) - m.c * p * μ(x, m.x̂)
+    log(E(p, m)) - 1 - d(x, -m.x̂, m.γ) - m.c * p * μ(x, m.x̂)
 end
 
 function Hₚ(x, p, m::OptimalPollution)
-    m.c * (E(x, p, m) - μ(x, m.x̂))
+    m.c * (E(p, m) - μ(x, m.x̂))
 end
 
 function Hₚₚ(x, p, m::OptimalPollution)
-    -m.c^2 * (1 - γ(x, m.d)) / (m.τ - m.c * p)^2
+    m.c^2 * E(p, m)^2
 end
 
 """

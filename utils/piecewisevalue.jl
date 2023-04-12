@@ -28,8 +28,8 @@ function solvepiecewisevalue(hbj::Function, grid::Tuple)
         @warn "High regime residual is too large: $highresidual"
     end
 
-    lowspline = Spline1D(lowregime, lowsol[:v])
-    highspline = Spline1D(highregime, highsol[:v])
+    lowspline = Spline1D(lowregime, lowsol[:v]; bc = "extrapolate")
+    highspline = Spline1D(highregime, highsol[:v]; bc = "extrapolate")
 
     """
     Compute the ν-th derivative of the value function at x. If ν = 0, computes v(x).
