@@ -11,15 +11,14 @@ default(size = 600 .* (√2, 1), dpi = 220)
 include("model/optimalpollution.jl")
 include("utils/piecewisevalue.jl")
 
-x̂ = 0.5 # Critical region
-ξ = 0.02 # Area around steady states 
+xᵤ = 0.5 # Critical region
+ξ = 0.05 # Area around steady states 
 
-steadystates = [0., 2x̂]
+steadystates = [0., 2xᵤ]
 
 N = 101
-
-lowregime = range(-ξ, x̂ - 1e-3; length = N)
-highregime = range(x̂ + 1e-3, 2x̂ + ξ; length = N)
+lowregime = range(-ξ, xᵤ - 1e-3; length = N)
+highregime = range(xᵤ + 1e-3, 2xᵤ + ξ; length = N)
 
 temperature = vcat(lowregime, highregime)
 
@@ -61,14 +60,37 @@ end
 γ = 2.0
 
 begin # Damage
-    plot(temperature, x -> d(x, -x̂, γ); label = nothing, c = :darkred, title = "Temperature damages", ylabel = "\$d_{\\gamma}(x)\$", xlabel = "Temperature")
+    plot(temperature, x -> d(x, -xᵤ, γ); label = nothing, c = :darkred, title = "Temperature damages", ylabel = "\$d_{\\gamma}(x)\$", xlabel = "Temperature")
 end
 
+m = OptimalPollution(σ² = σ², γ = γ, xᵤ = xᵤ, τ = 0.01)
+
+# Solver
+h₀ = deterministic(m)
+temperature = range(0, 1.; length = 101)
+sol, res = pdesolve(
+    h₀, 
+    OrderedDict(:x => temperature), 
+    OrderedDict(:v => -100 .* ones(length(temperature)));
+    verbose = true, reformulation = :smooth,
+    bc = OrderedDict(:vx => (10., 0.0,))
+)
+
+temperature = range(0., 1; length = 101)
+sol, res = pdesolve(
+    h₀, 
+    OrderedDict(:x => temperature), 
+    OrderedDict(:v => -100 .* ones(length(temperature)));
+    verbose = true
+)
+
+
+
 # Policies
-mnotax = OptimalPollution(x̂ = x̂, σ² = σ², γ = γ, τ = 0.5)
+mnotax = OptimalPollution(xᵤ = xᵤ, σ² = σ², γ = γ, τ = 0.5)
 vnotax, enotax = solveforvalue(mnotax)
 
-mtax = OptimalPollution(x̂ = x̂, σ² = σ², γ = γ, τ = 1.)
+mtax = OptimalPollution(xᵤ = xᵤ, σ² = σ², γ = γ, τ = 1.)
 vtax, etax = solveforvalue(mtax)
 
 begin # Value function
@@ -80,7 +102,7 @@ begin # Value function
     plot!(vfig, temperature, x -> vtax(x, ε); c = :darkblue, label = "\$\\tau > 0\$")
     plot!(vfig, temperature, x -> vtax(x, 0.); label = nothing, c = :darkblue, alpha = 0.3)
 
-    vline!(vfig, [x̂]; c = :black, label = false)
+    vline!(vfig, [xᵤ]; c = :black, label = false)
     vline!(vfig, steadystates; c = :black, linestyle = :dash, label = false)
 end
 
@@ -95,7 +117,7 @@ begin # Emissions policy
     plot!(efig, temperature, x -> etax(x, ε); c = :darkblue, label = "\$\\tau > 0\$")
     plot!(efig, temperature, x -> etax(x, 0.); label = nothing, c = :darkblue, alpha = 0.3)
 
-    vline!(efig, [x̂]; c = :black, label = false)
+    vline!(efig, [xᵤ]; c = :black, label = false)
     vline!(efig, steadystates; c = :black, linestyle = :dash, label = false)
 end
 
@@ -106,7 +128,7 @@ function montecarlo(m::OptimalPollution; trajectories = 1000, dt = 0.005, tspan 
     
     e = last(solveforvalue(m))
     
-    f(x, p, t) = -m.c * (μ(x, m.x̂) - e(x, ε))
+    f(x, p, t) = -m.c * (μ(x, m.xᵤ) - e(x, ε))
     g(x, p, t) = ε * √σ²
     
     prob = SDEProblem(f, g, x₀, tspan)
@@ -134,7 +156,7 @@ begin # Monte Carlo simulation
     plot!(trjfig, summtax; fillalpha = 0.2, c = :darkblue, label = "\$\\tau > 0\$")
 
 
-    hline!(trjfig, [x̂]; c = :black, label = false)
+    hline!(trjfig, [xᵤ]; c = :black, label = false)
     hline!(trjfig, steadystates; c = :black, linestyle = :dash, label = false)
 end
 

@@ -1,10 +1,11 @@
 """
-Solves the HJB equation for a two regime system with critical value x̂. It assumes that the lowregime[end] and highregime[1] are equidistant from x̂.
+Solves the HJB equation for a two regime system with critical value xᵤ. It assumes that the lowregime[end] and highregime[1] are equidistant from xᵤ.
 """
-function solvepiecewisevalue(hbj::Function, grid::Tuple)
+function solvepiecewisevalue(m::OptimalPollution, grid::Tuple)
+
 
     lowregime, highregime = grid
-    x̂ = (highregime[1] + lowregime[end]) / 2
+    xᵤ = (highregime[1] + lowregime[end]) / 2
 
     lowsol, lowresidual = pdesolve(
         hbj, 
@@ -35,7 +36,7 @@ function solvepiecewisevalue(hbj::Function, grid::Tuple)
     Compute the ν-th derivative of the value function at x. If ν = 0, computes v(x).
     """
     function v(x; ν::Int64 = 0)
-        spl = x ≤ x̂ ? lowspline : highspline
+        spl = x ≤ xᵤ ? lowspline : highspline
 
         return ν > 0 ? derivative(spl, x; nu = ν) : spl(x)
     end

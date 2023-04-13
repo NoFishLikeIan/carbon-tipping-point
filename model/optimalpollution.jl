@@ -4,35 +4,32 @@
     γ::Float64 = 2.0 # Damage of temperature
     
     # Temperature process parameters
-    c::Float64 = 0.01 # Temperature sensitivity
+    xᵤ::Float64 = 0.0 # unstable steady state 
     σ²::Float64 = 1.0 # Volatility
-    x̂::Float64 = 1.0 # Baseline temperature
 end
 
 """
 Optimal emissions given costate λ and model parameters.
 """
-function E(λ, m::OptimalPollution)
-    if m.τ ≤ m.c * λ
-        inv(1e-5)
-    else
-        inv(m.τ - m.c * λ)
-    end
+function E(p, m::OptimalPollution)
+    e = m.τ - p
+
+    return e < 0 ? inv(1e-5) : inv(e)
 end
 
-function V(x, x̂)
-    (x - x̂)^4 / 4 - x̂^2 * (x - x̂)^2 / 2
+function V(x, xᵤ)
+    (x - xᵤ)^4 / 4 - xᵤ^2 * (x - xᵤ)^2 / 2
 end
 
 """
 Deterministic evolution of temperature without emissions
 """
-function μ(x, x̂)
-    (x - x̂)^3 - x̂^2 * (x - x̂)
+function μ(x, xᵤ)
+    (x - xᵤ)^3 - xᵤ^2 * (x - xᵤ)
 end
 
-function μ′(x, x̂)
-    3 * (x - x̂)^2 - 2 * x̂ * (x - x̂)
+function μ′(x, xᵤ)
+    3 * (x - xᵤ)^2 - 2 * xᵤ * (x - xᵤ)
 end
 
 """
@@ -43,11 +40,11 @@ function d(x, xref, γ)
 end
 
 function H(x, p, m::OptimalPollution)
-    log(E(p, m)) - 1 - d(x, -m.x̂, m.γ) - m.c * p * μ(x, m.x̂)
+    log(E(p, m)) - 1 - d(x, -m.xᵤ, m.γ) - p * μ(x, m.xᵤ)
 end
 
 function Hₚ(x, p, m::OptimalPollution)
-    m.c * (E(p, m) - μ(x, m.x̂))
+    E(p, m) - μ(x, m.xᵤ)
 end
 
 function Hₚₚ(x, p, m::OptimalPollution)
@@ -96,30 +93,4 @@ function secondordercorrection(m::OptimalPollution, v₀, v₁)
 
         return (vt = vt,)
     end
-end
-
-function cumulemissions(x, ε, e::Function, m::OptimalPollution)
-    if x ≤ m.x̂
-        int, res = quadgk(y -> e(y, 1e-3), 0, x)
-
-        if res > 1e-3
-            @warn "Integration error too large: $res"
-        end
-
-        return int
-    else
-        int, res = quadgk(y -> e(y, 1e-3), m.x̂, x)
-
-        if res > 1e-3
-            @warn "Integration error too large: $res"
-        end
-
-        return cumulemissions(m.x̂, ε, e, m) + int
-    end
-end
-
-function φ(x, ε, e::Function, m::OptimalPollution)
-    C = exp(-m.c * V(x, m.x̂))
-
-    return C * exp(m.c * cumulemissions(x, ε, e, m))
 end
