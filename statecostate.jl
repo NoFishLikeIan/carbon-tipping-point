@@ -1,98 +1,139 @@
-using DifferentialEquations
+using DifferentialEquations, DynamicalSystems
 using Roots
+using LinearAlgebra
 
+
+using Plots
+default(size = 600 .* (√2, 1), dpi = 180, margins = 5Plots.mm, linewidth = 1.5)
+
+include("utils/plotting.jl")
+include("utils/dynamicalsystems.jl")
+
+include("model/climate.jl")
+include("model/economic.jl")
+
+
+c₀ = 410 # Current carbon concentration
+x₀ = first(φ⁻¹(c₀, m)) # There are three solutions to φ⁻¹(c₀), we are in the low stable temperature equilibrium
+
+xₛ = first(φ⁻¹(m.cₚ, m)) # Surely safe temperature
+
+# State costate dynamics
+m = MendezFarazmand() # Climate model
+l = LinearQuadratic(τ = 0, γ = 0.15, xₛ = xₛ) # Social planner
+eᵤ = (l.β₀ - l.τ) / l.β₁ # Unconstrained emissions
+
+xₗ, xᵤ = l.xₛ, 1.5l.xₛ # Bounds on temperature
+
+f(x, c, λ, e) = F!(zeros(4), [x, c, λ, e], [m, l], 0.)
+function F!(dz, z, p, t)
+	m, l = p # Unpack a LinearQuadratic model
+	x, c, λ, e = z # Unpack state
+	
+	dz[1] = m.κ * μ(x, c, m) # Temperature 
+	dz[2] = e - m.δ * c # Concentration 
+
+	dz[3] = (l.ρ - m.κ * ∂xμ(x, m)) * λ + l.γ * (x - l.xₛ) # Shadow price of temperature
+
+	dz[4] = (l.ρ + m.δ) * e - m.κ * (m.A / l.β₁) * (λ / c) - eᵤ # Emission dynamics
+
+	return dz
+end
+
+function DF!(D, z, p, t)
+	m, l = p # Unpack a LinearQuadratic model
+	x, c, λ, e = z # Unpack state
+
+	J = zeros(4, 4)
+
+	J[1, 1] = m.κ * ∂xμ(x, m)
+	J[1, 2] = m.κ * m.A / c
+
+	J[2, 2] = -m.δ
+	J[2, 4] = 1
+	
+	J[3, 1] = l.γ - m.κ * ∂xxμ(x, m) * λ
+	J[3, 3] = - m.κ * ∂xμ(x, m)
+
+	J[4, 2] = -m.κ * (m.A / l.β₁) * (λ / c^2)
+	J[4, 3] = -m.κ * (m.A / l.β₁) * (1 / c)
+	J[4, 4] = l.ρ + m.δ
+
+	D .= J
+
+	return J
+end
+
+# Equilibrium relations assuming e = δc
+
+"""
+Get the equilibria of the deterministic climate-economy model.
+"""
+function getequilibria(m::MendezFarazmand, l::LinearQuadratic)
+	ψ(x) = φ(x, m) * m.δ
+	ω(x) = l.γ * (x - l.xₛ) / (m.κ * ∂xμ(x, m) - l.ρ)
+	ϕ(e) = l.β₁ * e * ((l.ρ + m.δ) * e - eᵤ) / (m.δ * m.κ * m.A)
+	
+	equilibriumcond(x) = ω(x) - (ϕ ∘ ψ)(x)
+	
+	asymptotesω = find_zeros(x -> m.κ * ∂xμ(x, m) - l.ρ, xₗ, xᵤ)
+	
+	regions = [
+		(xₗ, asymptotesω[1]),
+		(asymptotesω[1], asymptotesω[2]),
+		(asymptotesω[2], xᵤ)
+	]
+	
+	
+	equilibria = Vector{Float64}[]
+	for (l, u) ∈ regions, x ∈ find_zeros(equilibriumcond, l, u)
+		e = ψ(x)
+		λ = ω(x)
+		c = e / m.δ
+	
+		push!(equilibria, [x, c, λ, e])
+	end
+	equilibria
+end
+
+equilibria = getequilibria(m, l)
+
+manifolds = computemanifolds(
+	F!, DF!, equilibria, [m, l];
+	dt = 0.01 	
+)
+
+# Vector field plot
+λnull, enull = equilibria[1][3:4]
+function g(c, x) 
+	dx, dc, dλ, de = f(x, c, λnull, enull)
+	
+	return [dc, dx]
+end
 begin
-	using Plots
-	default(size = 600 .* (√2, 1), dpi = 180)
+	celsiustokelvin = 273.15
+	narrows = 17
+	npoints = 201
+
+	tscale(n) = range(10 + celsiustokelvin, 25. + celsiustokelvin, length = n) # temperatures
+	cscale(n) = range(300, 500, length = n) # concentrations
+
+	tcnullcline = hcat(tscale(npoints), (x -> φ(x, m)).(tscale(npoints)))
+
+	vecfig = plot(xlabel = "CO\$_2\$ concentration (ppm)", ylabel = "Temperature, K")
+	plot!(vecfig, tcnullcline[:, 2], tcnullcline[:, 1], label = false, c = :black)
+
+	plotvectorfield!(vecfig, cscale(narrows), tscale(narrows), g;rescale = 0.0001, aspect_ratio = 200 / 15)
+
+	scatter!(vecfig, [c₀], [x₀]; label = "Current")
+
+	for (i, z) ∈ enumerate(equilibria)
+		x, c, λ, e = z
+		scatter!(vecfig, [c], [x]; 
+			label = i == 1 ? "Equilibrium" : false,
+			c = :red
+		)
+	end
+
+	vecfig
 end
-
-begin # Climate parameters from Mendez and Farazmand
-    sectoyear = 3.154e7
-    q₀ = 342
-	η = 5.67e-8
-	A, S = 20.5, 150
-	cₚ = 280
-	c₀ = 410
-	κₓ = 1
-	δ = 2.37e-10 * sectoyear # Decay per year
-
-    α₁, α₂ = 0.31, 0.2 # Ice melting coefficients
-	x₁, x₂ = 289, 295 # Temperatures at ice melting coefficients 
-	xₐ = 3 # Transition rate
-
-	h(x) = (1 + tanh(x / xₐ)) / 2
-	h′(x) = (1 / 2xₐ) * sech(x / xₐ)^2
-
-	Σ(x) = ((x - x₁) / (x₂ - x₁)) * h(x - x₁) * h(x₂ - x) + h(x - x₂)
-	Σ′(x) = h′(x - x₂) + (
-		h(x - x₁) * h(x₂ - x) +
-		(x - x₁) * h′(x - x₁) * h(x₂ - x) -
-		(x - x₁) * h(x - x₁) * h′(x₂ - x)
-	) / (x₂ - x₁)
-
-	α(x) = α₁ * (1 - Σ(x)) + α₂ * Σ(x)
-	α′(x) = - (α₁ - α₂) * Σ′(x)
-
-    μ(x, c) = q₀ * (1 - α(x)) + (S + A * log(c / cₚ)) - η * x^4
-	
-	∂xμ(x, c) = - q₀ * α′(x) - 4 * η * x^3
-	∂cμ(x, c) = A / c
-end
-
-begin # Economic parameters
-    gigatonco2toppm = 7.821
-    ρ = 0.01 # Discount rate
-	τ = 0. # Carbont tax ($ ppm)
-    β₀ = 97.1 / gigatonco2toppm # $ / ppm
-    β₁ = 4.81 / gigatonco2toppm^2 # $ / (y ppm^2)
-    γ = 1. # $ / K^2
-	
-	d(x) = γ * x^2 / 2 # Damages
-	u(e) = (β₀ - τ) * e - (β₁ / 2) * e^2 # Profits
-	
-    emissionlimits = (1e-5, Inf)
-    @assert emissionlimits[1] < δ * cₗ < emissionlimits[2] # make sure that steady state emissions are in range
-	
-	# emissions given shadow price of carbon stock
-    e(pc) = max((β₀ - τ + pc) / β₁, 0.)
-    l(x, e) = u(e) - d(x) # Payoff function
-end
-
-# Make regions
-allconcentrations = range(100, 500; length = 1001)
-φ(c) = find_zeros(x -> μ(x, c), 0.01, 1000.) # Equilibrium temperatures associated with c
-
-equiltemperatures = φ.(allconcentrations)
-
-idx, jdx = findfirst(x -> length(x) > 1, equiltemperatures), findlast(x -> length(x) > 1, equiltemperatures)
-
-cₗ = allconcentrations[idx]
-cᵤ = allconcentrations[jdx]
-
-xₗ = minimum(equiltemperatures[idx])
-xᵤ = maximum(equiltemperatures[jdx])
-
-x₀ = first(φ(c₀))
-
-function f(du, u, p, t)
-	x, c, λx, λc = u
-	
-	du[1] = κₓ * μ(x, c)
-	du[2] = e(λc) - δ * c
-
-	du[3] = (ρ + δ) * λc - ∂cμ(x, c) * λx * κₓ
-	du[4] = (ρ + ∂xμ(x, c) * κₓ) * λx - γ * x
-
-end
-
-timespan = (0, 100) # years
-dt = 1 / 365
-
-prob = ODEProblem(f, [x₀, c₀, -10., -10.], timespan, dt = dt)
-sol = solve(prob, Tsit5())
-
-time = range(timespan[1], timespan[2]; step = dt)
-plot(time, t -> sol(t)[1]; xlabel = "Time (years)", ylabel = "Temperature (K)", c = :darkblue, yguidefontcolor = :darkblue,  label = false, rightmargin = 10Plots.mm)
-
-plot!(twinx(), time, t -> sol(t)[2]; c = :darkred, yguidefontcolor = :darkred, ylabel =  "Concentration", label = false)
-
