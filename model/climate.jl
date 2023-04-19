@@ -32,6 +32,7 @@ end
 
 function μ(x, c, m::MendezFarazmand)
     dx = m.q₀ * (1 - α(x, m)) - m.η * x^4 # natural temperature dynamics
+
     dc = m.S + m.A * log(c / m.cₚ) # contribution of CO₂ concentration
 
     return dx + dc
