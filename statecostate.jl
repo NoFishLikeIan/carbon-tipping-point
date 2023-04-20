@@ -1,5 +1,4 @@
 using DifferentialEquations
-using DynamicalSystems
 
 using Roots
 using LinearAlgebra
@@ -22,57 +21,34 @@ m = MendezFarazmand() # Climate model
 c₀ = 410 # Current carbon concentration
 x₀ = first(φ⁻¹(c₀, m)) # Current temperature
 xₛ = first(φ⁻¹(m.cₚ, m)) # Surely safe temperature
-eᵤ = (l.β₀ - l.τ) / l.β₁ # Unconstrained emissions
 
-l = LinearQuadratic(τ = 0, γ = 100., xₛ = xₛ) # Social planner
+l = LinearQuadratic(τ = 0, γ = 0.15, xₛ = xₛ) # Social planner
+eᵤ = (l.β₀ - l.τ) / l.β₁ # Unconstrained emissions
 xₗ, xᵤ = l.xₛ, 1.5l.xₛ # Bounds on temperature
 
-equilibria = getequilibria(m, l)
 
-solver = (alg = TanYam7(), abstol = 1.0e-8, reltol = 1.0e-8, dt = 1e-2)
+u₀ = [x₀, c₀, 0., 0.]
+prob = ODEProblem(F!, u₀, (0., 2.), [m, l])
 
-# Vector field plot
-λnull, enull = equilibria[1][3:4]
-function g(c, x) 
-	dx, dc, dλ, de = F([x, c, λnull, enull])
-	
-	return [dc, dx]
-end
-	
-u₀ = [x₀, c₀, λnull, enull]
-ds = TangentDynamicalSystem(
-	CoupledODEs(F!, u₀, [m, l]; solver...),
-	J = DF!, J0 = DF(u₀)
-)
+solve(prob, Tsit5(), abstol = 1e-9, reltol = 1e-9, isoutdomain = (u, t, integrator) -> any(u[1:2] .< 0.))
 
-begin
-	celsiustokelvin = 273.15
-	narrows = 17
-	npoints = 201
+nullclines, equilibria = getequilibria(m, l)
+ψ, ω, ϕ = nullclines 
 
-	tscale(n) = range(10 + celsiustokelvin, 25. + celsiustokelvin, length = n) # temperatures
-	cscale(n) = range(300, 500, length = n) # concentrations
+k = 21
+shadowpricespace = range(-0.5, 0.5; length = k)
+emissionspace = range(-150, 150; length = k)
+attractors = Array{Float64, 3}(undef, k, k, 2)
 
-	tcnullcline = hcat(tscale(npoints), (x -> φ(x, m)).(tscale(npoints)))
+U₀ = vec(collect(Base.product(shadowpricespace, emissionspace)))
 
-	vecfig = plot(xlabel = "CO\$_2\$ concentration (ppm)", ylabel = "Temperature, K")
-	plot!(vecfig, tcnullcline[:, 2], tcnullcline[:, 1], label = false, c = :black)
+longrun = EnsembleProblem(prob;
+	output_func = (sol, i) -> (sol[end], false),
+	prob_func = (prob, i, repeat) -> begin
+		λ₀, e₀ = U₀[i]
+		@. prob.u0 = [x₀, c₀, λ₀, e₀]
+		return prob
+	end)
 
-	plotvectorfield!(vecfig, cscale(narrows), tscale(narrows), g;rescale = 0.0001, aspect_ratio = 200 / 15)
+sol = solve(longrun, Tsit5(), trajectories = k^2, abstol = 1e-9, reltol = 1e-9)
 
-	scatter!(vecfig, [c₀], [x₀]; label = "Current")
-
-	for (i, z) ∈ enumerate(equilibria)
-		x, c, λ, e = z
-		
-		J = DF!(zeros(4, 4), z, [m, l], 0.)
-		λ, v = eigen(J)
-
-		scatter!(vecfig, [c], [x]; 
-			label = i == 1 ? "Equilibrium" : false,
-			c = :red
-		)
-	end
-
-	vecfig
-end

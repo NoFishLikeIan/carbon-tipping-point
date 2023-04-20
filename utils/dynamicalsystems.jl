@@ -33,37 +33,43 @@ computemanifolds(F!, DF!, steadystates; kwargs...) = computemanifolds(F!, DF!, s
 	    n = length(first(steadystates))
 
 		odefn = ODEFunction(F!; jac = DF!)
-
-		T = ceil(Int64, tend / dt)
 	
-	    manifolds = NaN * ones(s, 2, 2, T, n)
+		manifolds = []
 	        
 	    for (j, x̄) ∈ enumerate(steadystates)
 	        J = zeros(n, n); DF!(J, x̄, p, 0.0)
 
 	        λ, V = eigen(J)
 
-			# manifold = Vector{Float64}(undef, T, )
+			manifoldsofx̄ = []
 	
 	        for (i, vᵢ) ∈ enumerate(eachcol(V))
-				if any(imag(vᵢ) .!= 0)
-					# TODO: How to handle imaginary eigenvalues?
-					continue
+				isstable = real(λ[i]) < 0 # Stable if real part of eigenvalue is negative
+
+				manifoldᵢ = NaN .* ones(2, T, n) # Stores left and right manifold
+			
+				if all(imag(vᵢ) .≈ 0) # TODO: How to handle imaginary eigenvalues?
+					tspace = isstable ? (0., -tend) : (0., tend)
+					timeframe = range(tspace...; length = T)
+
+					u₀⁻ = x̄ - h * real.(vᵢ)
+					u₀⁺ = x̄ + h * real.(vᵢ)
+	
+					prob⁻ = ODEProblem(odefn, u₀⁻, tspace, p)
+					prob⁺ = ODEProblem(odefn, u₀⁺, tspace, p)
+	
+					sol⁻ = solve(prob⁻; solver...)
+					sol⁺ = solve(prob⁺; solver...)
+	
+					for (k, t) ∈ enumerate(timeframe)
+						manifoldᵢ[1, k, :] = sol⁻(t)
+						manifoldᵢ[1, k, :] = sol⁺(t)
+ 					end
 				end
-
-	            isstable = real(λ[i]) < 0 # Stable if real part of eigenvalue is negative
-
-				tspace = isstable ? (0., -tend) : (0. : tend)
-
-				u₀⁻ = x̄ - h * vᵢ
-				u₀⁺ = x̄ + h * vᵢ
-
-				prob⁻ = ODEProblem(odefn, u₀⁻, tspace, p)
-				prob⁺ = ODEProblem(odefn, u₀⁺, tspace, p)
-
-				sol⁻ = solve(prob⁻; solver...)
-				sol⁺ = solve(prob⁺; solver...)
+				push!(manifoldsofx̄, (isstable, manifoldᵢ))
 	        end
+
+			push!(manifolds, manifoldsofx̄)
 	    end
 	
 	    return manifolds
