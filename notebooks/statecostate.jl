@@ -26,7 +26,7 @@ using PlutoUI
 # ╔═╡ 09589e67-c55e-44a5-bd51-37a53e8a8585
 begin
 	using Plots
-	default(size = 600 .* (√2, 1), dpi = 180, margins = 5Plots.mm, linewidth = 2)
+	default(size = 600 .* (√2, 1), dpi = 180, margins = 10Plots.mm, linewidth = 2)
 end
 
 # ╔═╡ c1fc4206-5541-4c8e-92f3-7e072fd17a5d
@@ -35,7 +35,35 @@ using LinearAlgebra
 # ╔═╡ 9bc05e95-a185-43b6-afe6-4707d4cefc2f
 using ForwardDiff
 
-# ╔═╡ 3b90d02c-0cd4-4bad-8b2f-5e17249f8b63
+# ╔═╡ 24b43a3d-d657-44e4-8aca-995ee007ebb2
+html"""
+<style>
+	main {
+		margin: 0 auto;
+		max-width: 2000px;
+    	padding-left: max(160px, 10%);
+    	padding-right: max(160px, 10%);
+	}
+</style>
+"""
+
+
+# ╔═╡ 94078a8e-c9ee-4351-8d4d-c9656024934d
+function ingredients(path::String)
+	# this is from the Julia source code (evalfile in base/loading.jl)
+	# but with the modification that it returns the module instead of the last object
+	name = Symbol(basename(path))
+	m = Module(name)
+	Core.eval(m,
+        Expr(:toplevel,
+             :(eval(x) = $(Expr(:core, :eval))($name, x)),
+             :(include(x) = $(Expr(:top, :include))($name, x)),
+             :(include(mapexpr::Function, x) = $(Expr(:top, :include))(mapexpr, $name, x)),
+             :(include($path))))
+	m
+end;
+
+# ╔═╡ c5287aba-1465-46ea-bdf8-7d9cf19bf945
 begin
 	function plotvectorfield(xs, ys, g::Function; plotkwargs...)
 	    fig = plot()
@@ -76,53 +104,17 @@ begin
 	end
 end
 
-# ╔═╡ d753c418-ad08-4d85-82d0-1c16d1e34b07
-function computemanifolds(
-    F!::Function, DF!::Function,
-    steadystates::Vector{Vector{Float64}},
-    p::Vector{<:Real};
-    T = 100, limit = 1000, dt = 0.01, h = 1e-3,
-    kwargs...)
+# ╔═╡ 61b868ce-b080-471d-8de8-edf807b253ce
+climate = ingredients("../model/climate.jl");
 
-    m = length(steadystates)
-    n = length(first(steadystates))
+# ╔═╡ 8d16ec1e-e16f-45d4-93a4-1cc1a18fb487
+economic = ingredients("../model/economic.jl");
 
-    function Finv!(dx, x, p, t)
-        F!(dx, x, p, t)
-        dx .= -dx
-    end
+# ╔═╡ b78704bf-bcc4-4859-8978-fcde1a64dafb
+gigatonco2toppm = 7.821;
 
-    fwds = CoupledODEs(F!, zeros(n), p)
-    bckds = CoupledODEs(Finv!, zeros(n), p)
-
-    manifolds = NaN * ones(m, 2, 2, T, n)
-        
-    for (j, x̄) ∈ enumerate(steadystates)
-        J = zeros(n, n); DF!(J, x̄, p, 0.0)
-        λ, V = eigen(J)
-
-        for (i, vᵢ) ∈ enumerate(eachcol(V))
-            isstable = real(λ[i]) < 0 # Stable if real part of eigenvalue is negative
-
-            ds = isstable ? bckds : fwds
-            
-            for (k, op) ∈ enumerate([-, +])
-                reinit!(ds, op(x̄, vᵢ * h))
-
-                for t ∈ 1:T
-                    step!(ds, dt)
-                    xₙ = ds.integ.u
-
-                    manifolds[j, i, k, t, :] = xₙ
-
-                    if norm(xₙ) > limit break end
-                end         
-            end
-        end
-    end
-
-    return manifolds
-end
+# ╔═╡ 519620d9-c504-40ff-998e-262dbe3caeb0
+sectoyear = 3.154e7;
 
 # ╔═╡ 3fe60d4b-6d9d-4dbb-9f99-cbae81ef6cd3
 md"## Climate model from Mendez and Farazmand (2021)"
@@ -132,311 +124,360 @@ md"
 Originally the paper uses the function $\Sigma$ function to model the ice melting coefficients. I will approximate this by $\sigma$
 "
 
-# ╔═╡ 831e9db9-e768-4d0c-9cb5-2f479d55c66d
-begin # Climate parameters from Mendez and Farazmand
-    sectoyear = 3.154e7
-    q₀ = 342
-	η = 5.67e-8
-	A, S = 20.5, 150
-	cₚ = 280
-	c₀ = 410
-	κₓ = 5e8 / sectoyear
-	δ = 2.37e-10 * sectoyear # Decay per year
-
-    α₁, α₂ = 0.31, 0.2 # Ice melting coefficients
-	x₁, x₂ = 289, 295 # Temperatures at ice melting coefficients 
-	xₐ = 3 # Transition rate
-	xₛ = 250 # "Safe temperature"
-
-	σ(x) = inv(1 + exp(-(x - (x₂ + x₁) / 2))) # Approximate Σ
-	σ′(x) = σ(x) * (1 - σ(x))
-	σ′′(x) = σ(x) * (1 - σ(x)) * (1 - 2σ(x))
-
-	α(x) = α₁ * (1 - σ(x)) + α₂ * σ(x)
-	α′(x) = -(α₁ - α₂) * σ′(x)
-	α′′(x) = -(α₁ - α₂) * σ′′(x)
-
-    μ(x, c) = q₀ * (1 - α(x)) + (S + A * log(max(c, 0.) / cₚ)) - η * x^4
-	
-	∂xμ(x) = - q₀ * α′(x) - 4 * η * x^3
-	∂cμ(c) = A / c
-
-	∂²xμ(x) = -q₀ * α′′(x) - 12 * η * x^2
-	∂²cμ(c) = -A / c^2
-end;
-
-# ╔═╡ 5bed7b2a-31c3-4010-ac91-15fe6874f19c
-begin
-	h(x) = (1 + tanh(x / xₐ)) / 2
-	h′(x) = (1 / 2xₐ) * sech(x / xₐ)^2
-
-	Σ(x) = ((x - x₁) / (x₂ - x₁)) * h(x - x₁) * h(x₂ - x) + h(x - x₂)
-	Σ′(x) = h′(x - x₂) + (
-		h(x - x₁) * h(x₂ - x) +
-		(x - x₁) * h′(x - x₁) * h(x₂ - x) -
-		(x - x₁) * h(x - x₁) * h′(x₂ - x)
-	) / (x₂ - x₁)
-end;
-
-# ╔═╡ 6ca2cd96-3878-43a1-a8a3-f131de4274db
-md"### Equilibrium concentration and temperature"
-
-# ╔═╡ 3d321cb9-b7ed-4cda-8950-ed5146d6a96d
-begin
-	# Make regions
-			
-	alltemperature = range(285, 297; length = 1001)
-	allconcentrations = range(300, 500; length = 1001)
-	φ(x) = exp((η * x^4 - q₀ * (1 - α(x)) - S) / A) * cₚ  # Equilibrium temperatures associated with c
-
-	φ⁻¹(c) = find_zero(x -> φ(x) - c, (280, 300)) 
-
-	xₗ, xᵤ = extrema(alltemperature)
-	cₗ, cᵤ = φ(xₗ), φ(xᵤ)
-	x₀ =  φ⁻¹(c₀)
-end;
+# ╔═╡ 6fcf3aca-84a6-4d71-a498-fff91ffae7f2
+m = climate.MendezFarazmand();
 
 # ╔═╡ 5a2c219a-a727-44dd-917b-759667911d77
 let
-	xs = range(xₗ - 10, xᵤ + 10; length = 101)
-	plot(xs, Σ; label = "\$\\Sigma(x)\$", xlabel = "Temperature (K), \$x\$", ylabel = "Ice melting coefficient")	
+	(; α₁, α₂, x₁, x₂, q₀) = m
 	
-	vline!([x₁]; label = false, c = :black, linestyle = :dash)
-	vline!([x₂]; label = false, c = :black, linestyle = :dash)
-	vline!([(x₂ + x₁) / 2]; label = false, c = :black, linestyle = :solid)
-
+	h(x) = (1 + tanh(x / 3)) / 2
+	Σ(x) = ((x - m.x₁) / (m.x₂ - m.x₁)) * h(x - m.x₁) * h(m.x₂ - x) + h(x - m.x₂)
 	
+	xs = range(280, 310; length = 101)
+	
+	basefig = plot(xlabel = "Temperature (Kelvin) \$x\$", ylabel = "Baseline temperature", dpi = 300, legend = :bottomright)
+	
+	plot!(basefig, xs, x -> q₀ * ((1 - α₁) + (α₁ - α₂) * Σ(x)); c = :darkblue, label = "Mendez and Farazmand")	
+	
+	vline!(basefig, [m.x₁]; label = false, c = :black, linestyle = :dash)
+	vline!(basefig, [m.x₂]; label = false, c = :black, linestyle = :dash)
+	vline!(basefig, [(m.x₂ + m.x₁) / 2]; label = false, c = :black, linestyle = :solid)
 
-	plot!(xs, σ; label = "\$\\sigma(x)\$")
+	plot!(basefig, xs, x -> q₀ * ((1 - α₁) + (α₁ - α₂) * climate.σ(x, m)); label = "This paper", c = :darkred)
+
+	savefig(basefig, "../docs/figures/baseline-temperature.png")
+
+	basefig
 end
 
-# ╔═╡ 647f5629-a25c-4062-ae2b-72ce9a9e15a4
-function f(s, e) # Evolution of (x, c) given emissions e
-	x, c = s
-	
-	return [ μ(x, c) * κₓ, e - δ * c ]
-end;
+# ╔═╡ 82d4835a-2a2f-4208-ad23-9e4c9ac2cba0
+current_emissions = 2.59 + m.δ * m.c₀
 
-# ╔═╡ 729e35d9-58eb-4044-ba2e-68346ab3a67f
-md"## Dynamics of temperature and concentration given emissions"
-
-# ╔═╡ 31c2be9b-9919-409f-b83f-ed1cfe5cf2af
-md"
-Emission $e$ ppm / year: $(@bind emissionsfig Slider(range(δ * c₀, 10.; length = 101), default = δ * c₀, show_value = true))
-
-The system is stable at $e = \delta c_0 \approx  3.06$
-"
-
-# ╔═╡ 1082ef15-29b1-491f-ba6a-f6de65b050e3
+# ╔═╡ ad1738b0-8f7c-4c91-92a6-ad4bc096a98d
 md"## Economic model"
 
-# ╔═╡ a9df3d12-32e5-4af0-85b2-cb383459c0ef
-begin # Economic parameters
-    gigatonco2toppm = 7.821
-    ρ = 0.01 # Discount rate
-	τ = 0. # Carbont tax ($ ppm)
-    β₀ = 97.1 / gigatonco2toppm # $ / ppm
-    β₁ = 4.81 / gigatonco2toppm^2 # $ / (y ppm^2)
-    γ = 1.5 # $ / K^2
-	
-	d(x) = γ * (x - xₛ)^2 / 2 # Damages
-	u(e) = (β₀ - τ) * e - (β₁ / 2) * e^2 # Profits
-	
-    emissionlimits = (1e-5, Inf)
-    @assert emissionlimits[1] < δ * cₗ < emissionlimits[2] # make sure that steady state emissions are in range
-	
-	# emissions given shadow price of carbon stock
-    e(pc) = max((β₀ - τ + pc) / β₁, 0.)
-    l(x, e) = u(e) - d(x) # Payoff function
-end;
+# ╔═╡ 60a24b1b-d933-45bb-8638-9167ab9dd520
+l = economic.LinearQuadratic(γ = 0.5, τ = 0., xₛ = 280);
 
-# ╔═╡ ca1f722e-1f88-49ed-8067-d7247baf8b72
-let
-	emissionspace = range(0, 100; length = 101)
-	temperaturespace = range(xₗ - 10, xᵤ + 10; length = 101)
-
-	contourf(
-		temperaturespace, emissionspace, l; 
-		levels = 10, cmap = :viridis,
-		xlabel = "Temperature (K), \$x\$", ylabel = "Emissions (ppm / year), \$e\$",
-		title = "Payoff function \$l(x, e)\$", margins = 5Plots.mm
-	)
-end
-
-# ╔═╡ c6e23f8e-8cd4-41c6-816e-8208f1907c28
-md"## State - costate"
-
-# ╔═╡ 59af542e-7980-4a42-b05d-2366582bd34e
-function f(x, c, λx, λc)
-	[
-		κₓ * μ(x, c), # dx
-		(β₀ - τ + λc) / β₁ - δ * c, # dc
-		(ρ - κₓ * ∂xμ(x)) * λx + γ * (x - xₛ), # dλx
-		(ρ + δ) * λc - κₓ * ∂cμ(c) * λx, # dλc
-	]
-end
-
-# ╔═╡ bb05259a-75cf-4999-8239-1cd371ea58df
-begin
-	g(x, c) = f([x, c], emissionsfig)
-	tspan = (0., 100.)
-
-	emissionprob = ODEProblem((u, p, t) -> g(u[1], u[2]), [x₀, c₀], tspan)
-	
-	sol = solve(emissionprob, dt = 1 / 356, reltol = 1e-7)
-
-	temperaturepath = hcat(sol.(range(tspan..., length = 301))...)'
-end;
-
-# ╔═╡ 205fadbf-07d8-4dda-97bd-48f46b81a2b0
-begin
-	xs = range(286, 297, length = 17)
-	ys = range(200, 600, length = 17)
-
-	ratio = (maximum(xs) - minimum(xs)) / (maximum(ys) - minimum(ys))
-
-	vecfig = plot(xlabel = "Temperature (K)", ylabel = "Concentration (C0\$_2\$ ppm)")
-
-	plot!(vecfig, alltemperature, φ; c = :darkred, linewidth = 2.5, label = nothing)
-	
-	plotvectorfield!(vecfig, xs, ys, g; aspect_ratio = ratio, rescale = 0.01)
-
-	plot!(vecfig, temperaturepath[:, 1], temperaturepath[:, 2]; c = :darkblue, linewidth = 3, label = nothing)
-	scatter!(vecfig, [x₀], [c₀]; c = :darkblue, label = "\$(x_0, c_0)\$")
-	
-end
-
-# ╔═╡ 97193405-0509-4439-b4e1-857cc28e040a
-function Df(x, c, λx, λc)
-	J = zeros(4, 4)
-
-	J[1, 1] = κₓ * ∂xμ(x)
-	J[1, 2] = κₓ * ∂cμ(c)
-
-	J[2, 2] = -δ
-	J[2, 4] = 1 / β₁
-
-	J[3, 1] = γ - κₓ * ∂²xμ(x) * λx
-	J[3, 3] = ρ - κₓ * ∂xμ(x)
-	
-	J[4, 2] = -κₓ * ∂²cμ(x) * λx
-	J[4, 3] = -κₓ * ∂cμ(x) 
-	J[4, 4] = ρ + δ
-
-	return J
-end
-
-# ╔═╡ 34908110-ccca-49d1-aa0f-74d3915fe842
-begin
-	function f!(du, u, p, t)
-		du .= f(u[1], u[2], u[3], u[4])
-	end
-	
-	function Df!(J, u, p, t)
-		J .= Df(u[1], u[2], u[3], u[4])
-
-	end
-end;
-
-# ╔═╡ 4f58af47-a9de-45f2-828e-4d770a141233
-prob = ODEProblem(
-	ODEFunction(f!; jac = Df!),
-	(x₀, c₀), (0, 100)
-);
-
-# ╔═╡ d10f7ce0-5142-4bb7-9a21-dc88669ed002
+# ╔═╡ eca60d2f-b7c1-4153-8a1f-268b94f66a2a
 md"
+## Linear System
 
-The nullcline of $\dot{\lambda}_x$ only depends on $x$. We can study the function
+A simplified linear model
 
-$\psi(x) = \frac{\gamma \ (x - x_s)}{\rho + \kappa_x \ \mu_x(x)}$
+- Climate damages $\gamma_c$ $(@bind γc Slider(0:0.01:1, show_value = true, default = 0.001))
 
-which satisfies
-
-$\dot{\lambda}_x = 0 \iff \lambda_x = \psi(x).$"
-
-# ╔═╡ d0518c15-30d5-46eb-80d6-279ff1b8c3b3
-ψ(x, ρ) = γ * (x - xₛ) / (κₓ * ∂xμ(x) - ρ); ψ(x) = ψ(x, ρ);
-
-# ╔═╡ e1147960-cd70-4616-8053-541d96f60e84
-md"Discount rate $\rho$: $(@bind ρnullcline Slider(0.01:0.01:1, show_value = true, default = ρ))"
-
-# ╔═╡ d7f0bfd2-5777-4044-9a1b-58e3aecc8d34
-let
-	asymptotes = find_zeros(x -> -ρnullcline + κₓ * ∂xμ(x), (xₗ, xᵤ))
-	spaces = [(xₗ, asymptotes[1]), (asymptotes[1], asymptotes[2]), (asymptotes[2], xᵤ)]
-
-	psifig = plot(xlabel = "Temperature (K), \$x\$", ylabel = "Shadow value of temperature, \$\\lambda_x\$", title = "\$\\psi(x)\$")
-	vline!(asymptotes; label = false, c = :black, linestyle = :dash)
-	vline!([x₀]; label = "\$x_0\$", c = :black)
-	
-	for (l, u) ∈ spaces
-		xs = range(l + 0.01, u - 0.01; length = 101)
-		plot!(psifig, xs, x -> ψ(x, ρnullcline); c = :darkred, label = false)
-	end
-
-	psifig
-end
-
-# ╔═╡ d6f126fe-4dc3-495f-a1de-0d83a2f36b8e
-md"
-The nullcline of $\dot{\lambda}_c = 0$, is given by 
-
-$\phi(c, \lambda_x) = \frac{A \kappa_x \lambda_x}{(\rho + \delta) \ c}$
 "
 
-# ╔═╡ 6f4129a5-efeb-4f49-8ef9-883abe1404ad
-ϕ(c, λₓ) = (A * κₓ * λₓ) / ((ρ + δ) * c);
+# ╔═╡ 85d4cad2-9f17-41cf-9b27-d3accb7057e8
+begin
+	(; κ, A, δ) = m
+	(; β₀, β₁, ρ, τ, xₛ) = l
+	
+	cₛ = m.cₚ
+	eᵤ = (β₀ - τ) / β₁
+	
+	A = [
+		ρ + δ 	γc / β₁;
+		1 		-δ;
+	]
 
-# ╔═╡ eaa6c6d0-17fb-4023-ad37-1e2e3982115b
-ω(c) = δ * c * β₁ - (β₀ - τ) 
+	ηₛ = 1/2 * (ρ - √(ρ^2 + 4 * (ρ + δ) * δ + γc / β₁))
 
-# ╔═╡ 7eb5f00c-2390-40e9-b77c-22fe3822ee21
-function equil(x)
-	c = φ(x)
-	return ω(c) - ϕ(c, ψ(x))
+	ubase = inv(A) * [(ρ + δ) * eᵤ; (γc / β₁) * cₛ]
+
+	λ, V = eigen(A)
+
+	optimalemissions(c) = inv(δ + ηₛ) * c
+
 end
 
-# ╔═╡ c13db550-16f0-411a-bca3-d4edfded3f8e
+# ╔═╡ 314c6433-27ca-4aba-bd41-0e80f5c1118f
+let
+	(; δ, cₚ) = m
+	(; ρ, β₁, β₀) = l
+	c̄(γ, τ) = (β₀ - τ - γ * cₚ) / (β₁ * δ + γ / (ρ + δ))
+
+	γspace = range(0.0001, 0.0008; length = 1001)
+	τspace = range(0., 12.; length = 1001) * (gigatonco2toppm / sectoyear) * 1e9
+	
+	css = contour(γspace, τspace, (γ, τ) -> c̄(γ, sectoyear * τ / (gigatonco2toppm * 1e9)); c = :viridis, contourlabels = true, levels = cₚ:150:1500, cbar = false, ylabel = "Carbon tax \$ \\tau \$ in USD per ton of carbon", xlabel = "Damage coefficient \$ \\gamma_c \$", dpi = 300)
+
+	# savefig(css, "../docs/figures/linear-cbar.png")
+	
+	css
+end
+
+# ╔═╡ 7646b79b-e215-4486-bac5-b85772452ba0
+
+
+# ╔═╡ b17c0b74-40a4-4d90-a664-7025c44fef06
+md"
+## State costate
+"
+
+# ╔═╡ 4f9964b2-05fa-4c01-b003-7a3ca32041b4
 begin
-	xequil = find_zeros(x -> equil(x), 0.01, 1000)
+	c₀ = 410 # Current carbon concentration
+	x₀ = 289 # Current temperature
+end;
+
+# ╔═╡ 7b56773e-7d5f-411e-a5de-541ba6e7e0b0
+let
+	xspace = range(285, 297; length = 101)
+	css = (x -> climate.φ(x, m)).(xspace)
+
+	arrows = 17
+	yarrows = range(extrema(xspace)...; length = arrows)
+	xarrows = range(extrema(css)...; length = arrows)
+	
+	ssfig = plotvectorfield(
+		xarrows, yarrows, (c, x) -> [climate.μ(x, c, m); current_emissions - m.δ * c ];
+		xlims = extrema(css), ylims = extrema(xspace), 
+		xlabel = "Carbon concentration \$c\$", ylabel = "Temperature \$x\$",
+		aspect_ratio = (maximum(css) - minimum(css)) / (xspace[end] - xspace[1]),
+		rescale = 0.0001, c = :coolwarm, dpi = 300
+	)
+
+
+	plot!(ssfig, css, xspace; label = "\$\\mu(x, c) = 0\$", c = :darkred)
+	scatter!(ssfig, [m.c₀], [x₀]; c = :black, label = "Current \$(c_0, x_0)\$", marker = 3.5)
+
+	# savefig(ssfig, "../docs/figures/temperature-dynamics.png")
+
+	ssfig
+		
+end
+
+# ╔═╡ cae95c3f-698c-4287-8c68-c91186c63dc0
+let
+	b(e, x) = (l.β₀ - l.τ) * e - (l.β₁ / 2) * e^2 - (l.γ / 2) * (x - l.xₛ)^2 
+
+	xspace = range(285, 297; length = 101)
+	espace = range(-20, 20; length = 101)
+
+	lfig = contourf(
+		espace, xspace, b; 
+		ylabel = "Temperature \$x\$", xlabel = "Emissions \$e\$",
+		c = :viridis, 
+		levels = 10, linewidth = 0,
+		aspect_ratio =  (espace[end] - espace[1]) / (xspace[end] - xspace[1]),
+		xlims = extrema(espace), ylims = extrema(xspace), dpi = 300
+	)
+
+	scatter!(lfig, [current_emissions], [x₀]; c = "black", label = "Current emissions and temperature")
+
+	# savefig(lfig, "../docs/figures/benefit-functional.png")
+	
+	lfig
+end
+
+# ╔═╡ 9f888b0c-7d8b-4213-8820-f584b3a36500
+let
+	
+	narrows = 22
+	cspace = range(-300, 300; length = narrows)
+	emissionspace = range(-300, 300; length = narrows)
+
+	aspect_ratio = (emissionspace[end] - emissionspace[1]) / (cspace[end] - cspace[1]) 
+
+	
+	vecfig = plotvectorfield(
+		emissionspace, cspace, (e, c) -> A * [e; c]; 
+		aspect_ratio = aspect_ratio, rescale = 0.001,
+		xlabel = "Emissions", ylabel = "Concentration"
+	)
+
+	vline!(vecfig, [c₀]; c = :black, linestyle = :dash, label = "\$c_0\$")
+
+	eopt = optimalemissions.(cspace)
+	plot!(vecfig, eopt, cspace, c = :darkred, label = "Optimal emissions")
+
+	scatter!(vecfig, [0], [0]; c = :black, label = false)
+end
+
+# ╔═╡ 1206ce34-d491-44ab-84fe-54b7d4afb502
+u₀ = [x₀, c₀, λ₀, e₀];
+
+# ╔═╡ 75daf019-f422-4623-9418-c3992fa55897
+function getequilibria(m, l; xₗ = 220, xᵤ = 320)
+	(; κ, A, δ) = m
+	(; β₀, β₁, τ, γ, ρ, xₛ) = l
+
+	ψ(x) = climate.φ(x, m) * δ
+	ω(x) = γ * (x - xₛ) / (κ * climate.μₓ(x, m) - ρ)
+	ϕ(e) = (β₁ * e) / (κ * A * δ) * (ρ + δ) * (e - (β₀ - τ) / β₁)
+	
+	equilibriumcond(x) = ω(x) - (ϕ ∘ ψ)(x)
+	
+	asymptotesω = find_zeros(x -> κ * climate.μₓ(x, m) - ρ, xₗ, xᵤ)
+	
+	regions = [
+		(xₗ, asymptotesω[1]),
+		(asymptotesω[1], asymptotesω[2]),
+		(asymptotesω[2], xᵤ)
+	]
+	
 	
 	equilibria = Vector{Float64}[]
+	for (l, u) ∈ regions, x ∈ find_zeros(equilibriumcond, l, u)
+		e = ψ(x)
+		λ = ω(x)
+		c = e / δ
+	
+		push!(equilibria, [x, c, λ, e])
+	end
 
-	for x ∈ xequil
-		c = φ(x)
-		λx = ψ(x)
-		λc = ω(c)
+	(ψ, ω, ϕ), equilibria
+end;
 
-		push!(equilibria, [x, c, λx, λc])
+# ╔═╡ 4a6c00dc-3382-4460-9ebc-40be27f22dd3
+begin
+	function F!(dz, z, p, t)
+		m, l = p # Unpack a LinearQuadratic model
+		(; κ, A, δ) = m
+		(; β₀, β₁, τ, γ, ρ, xₛ) = l
+	
+		x, c, λ, e = z # Unpack state
+		
+		dz[1] = κ * climate.μ(x, c, m) # Temperature 
+		dz[2] = e - δ * c # Concentration 
+	
+		dz[3] = (ρ - κ * climate.μₓ(x, m)) * λ + γ * (x - xₛ) # Shadow price of temperature
+		dz[4] = (ρ + δ) * (e - (β₀ - τ) / β₁) - (λ / c) * (κ * A) / β₁ # Emissions
+	
+		return dz
+	end
+	
+	function DF!(D, z, p, t)
+		m, l = p # Unpack a LinearQuadratic model
+		(; κ, A, δ) = m
+		(; β₀, β₁, τ, γ, ρ, xₛ) = l
+	
+		x, c, λ, e = z # Unpack state
+	
+		J = zeros(4, 4)
+	
+		J[1, 1] = κ * climate.μₓ(x, m)
+		J[1, 2] = κ * A / c
+	
+		J[2, 2] = -δ
+		J[2, 4] = 1
+		
+		J[3, 1] = γ - κ * climate.μₓₓ(x, m) * λ
+		J[3, 3] = ρ - κ * climate.μₓ(x, m)
+	
+		J[4, 2] = -(κ * A / β₁) * (λ / c^2)
+		J[4, 3] = -(κ * A / β₁) * (1 / c)
+		J[4, 4] = ρ + δ
+	
+		D .= J
+	
+		return J
 	end
 end;
 
-# ╔═╡ 68daf18b-d50a-472d-b2f3-10ce77f2e379
-let
-	xs = range(249, 310, length = 17)
-	ys = range(-20, 810, length = 17)
+# ╔═╡ dd8b41b7-71d5-4f4f-97e4-6d5ca8906521
+function isoutofdomain(u, p, t)
+	c, x, λ, e = u
+	stateout = c < 0 || x < 0 || λ > 0
 
-	ratio = (maximum(xs) - minimum(xs)) / (maximum(ys) - minimum(ys))
+	return stateout
+end;
 
-	vecfig = plot(xlabel = "Temperature (K)", ylabel = "Concentration (C0\$_2\$ ppm)")
+# ╔═╡ 331cadc1-57af-4199-b113-8f2696708916
+begin
+	nullfns, equilibria = getequilibria(m, l)
 
-	plot!(vecfig, range(extrema(xs)...; length = 1001), φ; c = :darkred, linewidth = 2.5, label = nothing)
+	ψ, ω, ϕ = nullfns
+end;
+
+# ╔═╡ 0c162fce-29d8-4fb8-ac3b-5f99a3b83ff0
+tend = 100.;
+
+# ╔═╡ 94340814-0996-49db-8655-fd2a4ddd2473
+prob = ODEProblem(ODEFunction(F!, jac = DF!), u₀, (0., tend), [m, l]);
+
+# ╔═╡ 7c720d93-e01c-4bb8-81ab-14d16acd550f
+current_emissions = 2.59 + m.δ * m.c₀
+
+- Emissions $e_0$ $(@bind e₀ Slider(-1000:0.1:1000, show_value = true, default = 0.))
+- Shadow cost of emissions $\lambda_0$ $(@bind λ₀ Slider(-50:0.01:ω(x₀), show_value = true, default = 0))
+"
+
+# ╔═╡ 4e61bbe7-a651-4f11-a280-6788bff784a2
+sol = solve(prob, Tsit5(), abstol = 1e-10, reltol = 1e-10, isoutofdomain = isoutofdomain); sol.retcode
+
+# ╔═╡ e125196e-8646-4f14-8beb-720e4518d9e7
+orbit = hcat((t -> sol(t)).(range(0, tend; length = 1001))...)';
+
+# ╔═╡ fc002126-03c7-4906-8fce-cd58cf36f5e3
+begin
+	clims = (0, 1000)
+	xlims = (280, 300)
+	elims = (-30, 30)
+	λlims = (-100, 0)
+
+
+	sratio = (clims[2] - clims[1]) / (xlims[2] - xlims[1])
+	aratio = (λlims[2] - λlims[1]) / (elims[2] - elims[1]) 
+
+
+	# c - x figure
+	statefig = plot(
+		xlims = clims, ylims = xlims, aspect_ratio = sratio, 
+		xlabel = "CO\$_2\$ concentration \$c\$", ylabel = "Temperature \$x\$")
 	
-	plotvectorfield!(vecfig, xs, ys, (x, c) -> f([x, c], 0.0); aspect_ratio = ratio, rescale = 1 / 5000)
 
-	scatter!(vecfig, [x₀], [c₀]; c = :darkblue, label = "\$(x_0, c_0)\$")
+	temperaturespace = range(xlims..., length = 1001)
+	statenullcline = (x -> climate.φ(x, m)).(temperaturespace)
+
+	plot!(statefig, statenullcline, temperaturespace; c = :darkblue, label = "\$\\varphi\$")
+	plot!(statefig, orbit[:, 2], orbit[:, 1]; c = :darkred, label = false)
+	scatter!(statefig, [orbit[1, 2]], [orbit[1, 1]]; c = :black, label = false)
+
+
+	# λ - e figure
+	actionfig = plot(
+		xlims = λlims, ylims = elims, aspect_ratio = aratio,
+		xlabel = "Shadow price \$\\lambda_x\$", ylabel = "Emissions \$e\$"
+	)
 	
-	
-	for (x, c, λx, λc) ∈ equilibria
-		J = Df(x, c, λx, λc)
-		λ, V = eigen(J)
+
+	emissionsspace = range(elims...; length = 1001)
+	actionnullcine = ϕ.(emissionsspace)
+
+	plot!(actionfig, actionnullcine, emissionsspace; c = :darkblue, label = "\$\\phi\$")
+	plot!(actionfig, orbit[:, 3], orbit[:, 4]; c = :darkred, label = false)
+	scatter!(actionfig, [orbit[1, 3]], [orbit[1, 4]]; c = :black, label = false)
+
+	# x - λ figure
+	xλratio = (xlims[2] - xlims[1]) / (λlims[2] - λlims[1])
 		
-		scatter!(vecfig, [x], [c]; c = :green, label = nothing, markersize = 5)
+	shadowcostfig = plot(
+		xlims = xlims, ylims = λlims, aspect_ratio = xλratio,
+		ylabel = "Shadow price \$\\lambda_x\$", xlabel = "Temperature \$x\$"
+	)
+	
+	shadownullprice = ω.(temperaturespace)
+
+	plot!(shadowcostfig, temperaturespace, shadownullprice; c = :darkblue, label = "\$\\omega\$")
+	plot!(shadowcostfig, orbit[:, 1], orbit[:, 3]; c = :darkred, label = false)
+	scatter!(shadowcostfig, [orbit[1, 1]], [orbit[1, 3]]; c = :black, label = false)
+
+	
+	# Equilibria
+
+	for (i, u) ∈ enumerate(equilibria)
+		x, c, λ, e = u
+
+		scatter!(statefig, [c], [x]; c = palette(:tab10)[i], label = false)
+		scatter!(actionfig, [λ], [e]; c = palette(:tab10)[i], label = false)
+		scatter!(shadowcostfig, [x], [λ]; c = palette(:tab10)[i], label = false)
 	end
 
-	vecfig
-	
+	plot(statefig, actionfig, shadowcostfig; layout = (2, 2), size = (900, 600), margins = Plots.mm)
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -2382,43 +2423,45 @@ version = "1.4.1+0"
 """
 
 # ╔═╡ Cell order:
+# ╟─24b43a3d-d657-44e4-8aca-995ee007ebb2
+# ╟─94078a8e-c9ee-4351-8d4d-c9656024934d
+# ╟─c5287aba-1465-46ea-bdf8-7d9cf19bf945
 # ╠═e80c5fa0-dad7-11ed-22a9-c7d0f0e8f71f
 # ╠═585cee5d-0ac8-49fc-b760-9200972e30a1
 # ╠═67b6ee24-192b-4b19-b876-757087f26263
 # ╠═09589e67-c55e-44a5-bd51-37a53e8a8585
 # ╠═c1fc4206-5541-4c8e-92f3-7e072fd17a5d
 # ╠═9bc05e95-a185-43b6-afe6-4707d4cefc2f
-# ╟─3b90d02c-0cd4-4bad-8b2f-5e17249f8b63
-# ╟─d753c418-ad08-4d85-82d0-1c16d1e34b07
+# ╠═61b868ce-b080-471d-8de8-edf807b253ce
+# ╠═8d16ec1e-e16f-45d4-93a4-1cc1a18fb487
+# ╠═b78704bf-bcc4-4859-8978-fcde1a64dafb
+# ╠═519620d9-c504-40ff-998e-262dbe3caeb0
 # ╟─3fe60d4b-6d9d-4dbb-9f99-cbae81ef6cd3
 # ╟─ff62d855-fccf-4418-b255-333832c58f29
-# ╠═5bed7b2a-31c3-4010-ac91-15fe6874f19c
+# ╠═6fcf3aca-84a6-4d71-a498-fff91ffae7f2
 # ╟─5a2c219a-a727-44dd-917b-759667911d77
-# ╠═831e9db9-e768-4d0c-9cb5-2f479d55c66d
-# ╟─6ca2cd96-3878-43a1-a8a3-f131de4274db
-# ╠═3d321cb9-b7ed-4cda-8950-ed5146d6a96d
-# ╠═647f5629-a25c-4062-ae2b-72ce9a9e15a4
-# ╟─729e35d9-58eb-4044-ba2e-68346ab3a67f
-# ╠═bb05259a-75cf-4999-8239-1cd371ea58df
-# ╟─31c2be9b-9919-409f-b83f-ed1cfe5cf2af
-# ╠═205fadbf-07d8-4dda-97bd-48f46b81a2b0
-# ╟─1082ef15-29b1-491f-ba6a-f6de65b050e3
-# ╠═a9df3d12-32e5-4af0-85b2-cb383459c0ef
-# ╟─ca1f722e-1f88-49ed-8067-d7247baf8b72
-# ╟─c6e23f8e-8cd4-41c6-816e-8208f1907c28
-# ╠═59af542e-7980-4a42-b05d-2366582bd34e
-# ╠═97193405-0509-4439-b4e1-857cc28e040a
-# ╠═34908110-ccca-49d1-aa0f-74d3915fe842
-# ╠═4f58af47-a9de-45f2-828e-4d770a141233
-# ╟─d10f7ce0-5142-4bb7-9a21-dc88669ed002
-# ╠═d0518c15-30d5-46eb-80d6-279ff1b8c3b3
-# ╟─e1147960-cd70-4616-8053-541d96f60e84
-# ╟─d7f0bfd2-5777-4044-9a1b-58e3aecc8d34
-# ╟─d6f126fe-4dc3-495f-a1de-0d83a2f36b8e
-# ╠═6f4129a5-efeb-4f49-8ef9-883abe1404ad
-# ╠═eaa6c6d0-17fb-4023-ad37-1e2e3982115b
-# ╠═7eb5f00c-2390-40e9-b77c-22fe3822ee21
-# ╠═c13db550-16f0-411a-bca3-d4edfded3f8e
-# ╠═68daf18b-d50a-472d-b2f3-10ce77f2e379
+# ╠═82d4835a-2a2f-4208-ad23-9e4c9ac2cba0
+# ╠═7b56773e-7d5f-411e-a5de-541ba6e7e0b0
+# ╟─ad1738b0-8f7c-4c91-92a6-ad4bc096a98d
+# ╠═60a24b1b-d933-45bb-8638-9167ab9dd520
+# ╠═cae95c3f-698c-4287-8c68-c91186c63dc0
+# ╟─eca60d2f-b7c1-4153-8a1f-268b94f66a2a
+# ╠═85d4cad2-9f17-41cf-9b27-d3accb7057e8
+# ╟─9f888b0c-7d8b-4213-8820-f584b3a36500
+# ╠═314c6433-27ca-4aba-bd41-0e80f5c1118f
+# ╠═7646b79b-e215-4486-bac5-b85772452ba0
+# ╟─b17c0b74-40a4-4d90-a664-7025c44fef06
+# ╠═4f9964b2-05fa-4c01-b003-7a3ca32041b4
+# ╠═1206ce34-d491-44ab-84fe-54b7d4afb502
+# ╠═75daf019-f422-4623-9418-c3992fa55897
+# ╠═4a6c00dc-3382-4460-9ebc-40be27f22dd3
+# ╠═dd8b41b7-71d5-4f4f-97e4-6d5ca8906521
+# ╠═331cadc1-57af-4199-b113-8f2696708916
+# ╠═0c162fce-29d8-4fb8-ac3b-5f99a3b83ff0
+# ╠═94340814-0996-49db-8655-fd2a4ddd2473
+# ╠═7c720d93-e01c-4bb8-81ab-14d16acd550f
+# ╠═4e61bbe7-a651-4f11-a280-6788bff784a2
+# ╠═e125196e-8646-4f14-8beb-720e4518d9e7
+# ╟─fc002126-03c7-4906-8fce-cd58cf36f5e3
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

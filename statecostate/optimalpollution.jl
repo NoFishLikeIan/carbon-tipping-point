@@ -8,7 +8,6 @@ function Fexogenousemissions!(dz, z, p, t)
 	return dz
 end
 
-F(z) = F!(zeros(4), z, [m, l], 0.)
 function F!(dz, z, p, t)
 	m, l = p # Unpack a LinearQuadratic model
 	(; κ, A, δ) = m
@@ -20,30 +19,32 @@ function F!(dz, z, p, t)
 	dz[2] = e - δ * c # Concentration 
 
 	dz[3] = (ρ - κ * μₓ(x, m)) * λ + γ * (x - xₛ) # Shadow price of temperature
-	dz[4] = (ρ + δ) * e - (β₀ - τ) / β₁ - (κ * A * λ) / (β₁ * c) # Emissions
+	dz[4] = (ρ + δ) * (e - (β₀ - τ) / β₁) - (λ / c) * (κ * A) / β₁ # Emissions
 
 	return dz
 end
 
-DF(z) = DF!(zeros(4, 4), z, [m, l], 0.)
 function DF!(D, z, p, t)
 	m, l = p # Unpack a LinearQuadratic model
+	(; κ, A, δ) = m
+	(; β₀, β₁, τ, γ, ρ, xₛ) = l
+
 	x, c, λ, e = z # Unpack state
 
 	J = zeros(4, 4)
 
-	J[1, 1] = m.κ * ∂xμ(x, m)
-	J[1, 2] = m.κ * m.A / c
+	J[1, 1] = κ * μₓ(x, m)
+	J[1, 2] = κ * A / c
 
-	J[2, 2] = -m.δ
+	J[2, 2] = -δ
 	J[2, 4] = 1
 	
-	J[3, 1] = l.γ - m.κ * ∂xxμ(x, m) * λ
-	J[3, 3] = - m.κ * ∂xμ(x, m)
+	J[3, 1] = γ - κ * μₓₓ(x, m) * λ
+	J[3, 3] = ρ - κ * μₓ(x, m)
 
-	J[4, 2] = -m.κ * (m.A / l.β₁) * (λ / c^2)
-	J[4, 3] = -m.κ * (m.A / l.β₁) * (1 / c)
-	J[4, 4] = l.ρ + m.δ
+	J[4, 2] = -(κ * A / β₁) * (λ / c^2)
+	J[4, 3] = -(κ * A / β₁) * (1 / c)
+	J[4, 4] = ρ + δ
 
 	D .= J
 
@@ -54,13 +55,13 @@ end
 """
 Get the equilibria of the deterministic climate-economy model.
 """
-function getequilibria(m::MendezFarazmand, l::LinearQuadratic)
+function getequilibria(m, l)
 	(; κ, A, δ) = m
 	(; β₀, β₁, τ, γ, ρ, xₛ) = l
 
 	ψ(x) = φ(x, m) * δ
 	ω(x) = γ * (x - xₛ) / (κ * μₓ(x, m) - ρ)
-	ϕ(e) = e * ((ρ + δ) * β₁ * e - β₀ + τ) / (κ * A * δ)
+	ϕ(e) = (β₁ * e) / (κ * A * δ) * (ρ + δ) * (e - (β₀ - τ) / β₁)
 	
 	equilibriumcond(x) = ω(x) - (ϕ ∘ ψ)(x)
 	
