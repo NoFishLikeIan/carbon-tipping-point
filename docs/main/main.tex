@@ -50,7 +50,7 @@
     % Bibliography
 
     \usepackage[bibencoding=utf8, style=apa, backend=biber]{biblatex}
-    \addbibresource{../../ssc-tipping-points.bib}
+    \addbibresource{../scc-tipping-points.bib}
 
     % Make title page
 
@@ -60,10 +60,21 @@
 \begin{document}
 
 \maketitle
+\section{Climate}
 
-\section{Linear Model}
+\subfile{sections/climate-model/climate-model.tex}
+
+\section{Economy}
+
+\subfile{sections/economy-model/economy-model.tex}
+
+\section{Model without Tipping Point}
 
 \subfile{sections/linear-model/linear-model.tex}
+
+\nocite{*}
+\newpage
+\printbibliography
 
 
 \end{document}

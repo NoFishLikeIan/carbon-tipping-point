@@ -1,0 +1,24 @@
+\documentclass[../../main.tex]{subfiles}
+\begin{document}
+
+For illustration purposes, we are going to solve a social planner model with linear quadratic benefits from emissions and quadratic damages of temperature. Namely, the benefit functional is \begin{equation}
+    l(x, e) = (\beta_0 - \tau) e - \frac{1}{2}\beta_1 e^2 - \frac{1}{2} \gamma \ (x - x_p)^2
+\end{equation} 
+
+where $x_p$ is the pre-industrial temperature and $\tau$ is an exogenous carbon tax. 
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{../figures/benefit-functional.png}
+    \caption{Benefit functional $l$}
+    \label{fig:benefit-functional}
+\end{figure}
+
+I assume the social planner maximises the functional \begin{equation}
+    J(e) = \int_0^\infty  \exp(-\rho t) \ l(x, e) \ dt
+\end{equation} with respect to $e \in \mathcal{C}\Big([0, \infty), [-\underline{e}, \overline{e}]\Big)$ given an initial condition $(x_0, c_0)$ and the evolution $\text{d}c$ and $\text{d}x$.
+
+To compute the optimal carbon tax we first solve the social planner problem with $\tau = 0$ and then, using $\gamma = 0$, compute the functional $\tau(x, e)$ that yields the same path of temperature and emissions.  
+
+\end{document}

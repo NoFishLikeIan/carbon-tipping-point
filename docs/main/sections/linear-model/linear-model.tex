@@ -1,6 +1,45 @@
 \documentclass[../../main.tex]{subfiles}
 \begin{document}
 
-Linear model
+First consider a simplified model without tipping points. In particular, assume that temperature $x$ is linearly related to carbon concentration $c$. Then we can rewrite the benefit functional as \begin{equation}
+    l(x, c) = (\beta_0 - \tau) e - \frac{1}{2}\beta_1 e^2 - \frac{1}{2} \gamma_c \ (c - c_p)^2,
+\end{equation} for an appropriate $\gamma_c$. The control Hamiltonian is then given by
+
+\begin{equation}
+    \begin{split}
+        H(c, \lambda) &= \max_e \ (\beta_0 - \tau + \lambda) e - \frac{1}{2} \beta_1 e^2 - \frac{1}{2} \gamma_c \ (c - c_p)^2 - \lambda \delta c \\
+        &= \frac{(\beta_0 - \tau + \lambda)^2}{2\beta_1} - \frac{1}{2} \gamma_c \ (c - c_p)^2 - \lambda \delta c,
+    \end{split}
+\end{equation} where I have used the maximiser $e^* = \frac{\beta_0 - \tau + \lambda}{\beta_1}$. For convenience we can write the unconstrained emissions as $e_u = \frac{\beta_0 - \tau}{\beta_1}$.
+
+Then we can write a state-action system using the differential $\dot{\lambda} = \rho \lambda - \frac{\partial H}{\partial c}$,
+
+\begin{align}
+    \dot{e} &= (\rho + \delta) (e - e_u) + \frac{\gamma_c}{\beta_1} (c - c_p), \label{eq:linear-e-dot} \\
+    \dot{c} &= e - \delta c. \label{eq:linear-c-dot}
+\end{align}
+
+Letting $u = (e, c)'$, \begin{equation}
+    u_b = \begin{pmatrix}(\rho + \delta) e_u \\ (\gamma_c / \beta_1) c_p \end{pmatrix} \text{ and }
+    A = \begin{pmatrix}
+        \rho + \delta & \gamma_c / \beta_1 \\
+        1 & -\delta 
+    \end{pmatrix},
+\end{equation}
+
+we can write the system above as a linear system \begin{equation}
+    \dot{u} = A u - u_b
+\end{equation} with steady state $A^{-1} u_b$. In particular, we can write the steady state level of concentrations as \begin{equation}
+    \bar{c}(\gamma_c, \tau) = \frac{(\beta_0 - \tau) - \gamma_c c_p}{\delta \beta_1 + \gamma_c / (\rho + \delta)}.
+\end{equation}
+
+This can be used to compute a crude measure of the social cost of carbon. Namely, the contour line $\bar{c}$ represents, for each $\gamma_c$, the tax $\tau$ that allows one to achieve a steady state concentration $\bar{c}$ (Figure \ref{fig:linear-cbar}). Consider, for example, the case of $\gamma_c = 0.000751443$ which yields, in absence of carbon taxes $\tau = 0$, a steady state level of concentration equal to the pre-industrial level $\bar{c} = c_p = 280$. Now assume that we have a unique polluter that only experiences a fraction of the damages $\gamma_c$. Then, the social planner needs can achieve the same steady state level of concentration by imposing a carbon tax and moving along the contour line $\bar{c} = 280.$
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{../figures/linear-cbar.png}
+    \caption{Contour plot of $\bar{c}$}
+    \label{fig:linear-cbar}
+\end{figure}
 
 \end{document}

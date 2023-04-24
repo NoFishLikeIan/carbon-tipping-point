@@ -1,0 +1,32 @@
+\documentclass[../../main.tex]{subfiles}
+\begin{document}
+
+The climate model employed here is a simplified version of the one used in \cite{mendez_investigating_2021}. The model describes the join evolution of concentration of carbon diaoxide in the atmosphere, $c$, and the global mean surface temperature, $x$, by two stochastic differential equations \begin{align}
+    \text{d}c &= (e - \delta c) \text{d} t + \sigma^2_c \text{d} w_c, \label{eq:climate-model-c} \\
+    \frac{1}{\kappa}\text{d}x &= \mu(x, c) \text{d} t + \sigma^2_x \text{d} w_x, \label{eq:climate-model-x},
+\end{align} where $w_c$ and $w_x$ are Weiner processes.
+
+The function $\mu(x, c)$ controls the non-linear interaction between temperature $x$ and carbon concentration $c$. We can write \begin{equation}
+    \mu(x, c) = a(x) - \eta x^4 + \log(c / c_p) A + S
+\end{equation} where $a$ is a baseline temperature which accounts for the loss in albedo due to ice melting and $c_p$ is pre-industrial carbon concentration. In this paper we will use a simplified version of $a$ as depicted in Figure (\ref{fig:baseline-temperature}).
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\linewidth]{../figures/baseline-temperature.png}
+    \caption{Comparison of $a(x)$ in this paper and \cite{mendez_investigating_2021}}
+    \label{fig:baseline-temperature}
+\end{figure}
+
+Taking the current estimated level of emissions we can plot the vector field of the dynamics implied by equations (\ref{eq:climate-model-c}) and (\ref{eq:climate-model-x}).
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{../figures/temperature-dynamics.png}
+    \caption{temperature dynamics given current level of emissions.}
+    \label{fig:temperature-dynamics}
+\end{figure}
+
+
+
+\end{document}
