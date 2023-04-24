@@ -1,0 +1,69 @@
+\documentclass[american, abstract=on]{scrartcl}
+
+    \newcommand{\lang}{en}
+
+    \usepackage{babel}
+    \usepackage[utf8]{inputenc}
+
+    \usepackage{csquotes}
+
+    \usepackage{amsmath, amssymb, mathtools, bbm, bm}
+    \usepackage{xcolor}
+    \usepackage{xcolor-solarized}
+    \usepackage{graphicx}
+    \usepackage{wrapfig}
+    \usepackage{relsize}
+    \usepackage{makecell}
+    \usepackage{booktabs}
+    \usepackage[font=footnotesize,labelfont=bf]{caption}
+    \usepackage{subcaption}
+    \usepackage{float}
+    \usepackage{multirow} 
+
+    % Refs
+    \usepackage{hyperref}
+    \usepackage{cleveref}
+    \hypersetup{
+        colorlinks = true, 
+        urlcolor = blue,
+        linkcolor = blue, 
+        citecolor = blue 
+      }      
+
+    \usepackage{subfiles} % Load last
+
+    % Paths
+
+    % Formatting
+    \setlength{\parindent}{0em}
+    \setlength{\parskip}{0.5em}
+    \setlength{\fboxsep}{1em}
+    \newcommand\headercell[1]{\smash[b]{\begin{tabular}[t]{@{}c@{}} #1 \end{tabular}}}
+
+    % Graphs
+    \usepackage{tikz} 
+    \usepackage{tikzit}
+    \usetikzlibrary{positioning,fit,calc,decorations.pathreplacing,calligraphy}
+
+    % Math commands
+
+    % Bibliography
+
+    \usepackage[bibencoding=utf8, style=apa, backend=biber]{biblatex}
+    \addbibresource{../../ssc-tipping-points.bib}
+
+    % Make title page
+
+    \author{Andrea Titton}
+    \title{Social Cost of Carbon with Tipping Points}
+    
+\begin{document}
+
+\maketitle
+
+\section{Linear Model}
+
+\subfile{sections/linear-model/linear-model.tex}
+
+
+\end{document}
