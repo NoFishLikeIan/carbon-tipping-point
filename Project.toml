@@ -2,7 +2,6 @@
 ChaosTools = "608a59af-f2a3-5ad4-90b4-758bdf3122a7"
 Dierckx = "39dd38d3-220a-591b-8e3c-4c3a8c710a94"
 DifferentialEquations = "0c46a032-eb83-5123-abaf-570d42b7fbaa"
-DynamicalSystems = "61744808-ddfa-5f27-97ff-6e42cc95d634"
 EconPDEs = "a3315474-fad9-5060-8696-cee5f38a87b7"
 IfElse = "615f187c-cbe4-4ef1-ba3b-2fcf58d6d173"
 Lux = "b2108857-7c20-44ae-9111-449ecde12c47"
