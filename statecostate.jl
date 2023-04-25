@@ -3,9 +3,8 @@ using DifferentialEquations
 using Roots
 using LinearAlgebra
 
-
 using Plots
-default(size = 600 .* (√2, 1), dpi = 180, margins = 5Plots.mm, linewidth = 1.5)
+default(size = 600 .* (√2, 1), dpi = 300, margins = 5Plots.mm, linewidth = 1.5)
 
 include("utils/plotting.jl")
 include("utils/dynamicalsystems.jl")
@@ -21,77 +20,137 @@ m = MendezFarazmand() # Climate model
 c₀ = 410 # Current carbon concentration
 x₀ = first(φ⁻¹(c₀, m)) # Current temperature
 xₛ = first(φ⁻¹(m.cₚ, m)) # Surely safe temperature
+γ₀ = 7.51443e-4
 
-l = LinearQuadratic(τ = 0., γ = .01, xₛ = xₛ) # Social planner
+l = LinearQuadratic(τ = 0., γ = 1e-3, xₛ = xₛ) # Social planner
 eᵤ = (l.β₀ - l.τ) / l.β₁ # Unconstrained emissions
 xₗ, xᵤ = l.xₛ, 1.5l.xₛ # Bounds on temperature
 
 nullclines, equilibria = getequilibria(m, l)
 ψ, ω, ϕ = nullclines 
 
-# Equilibria
-begin
-	function bif(γ)
-		l = LinearQuadratic(τ = 0., γ = γ, xₛ = xₛ)
-		nullclines, equilibria = getequilibria(m, l)
-
-		return hcat(equilibria...)'[:, 1]
-	end
-
-	γspace = range(0, 2.; length = 1001)
-
-	biffig = plot(xlabel = "\$\\gamma\$", ylabel = "Equilibrium temperature")
-
-	for γ ∈ γspace
-		equil = bif(γ)
-		k = length(equil)
-		scatter!(biffig, repeat([γ], k), equil; c = :black, label = false, markersize = 1)
-	end
-
-	biffig
-end
-
-# Possible paths
-function isoutofdomain(u, p, t)
+# Finding boundaries via shooting
+reltol = 1e-10
+abstol = 1e-10
+isoutofdomain = (u, p, t) -> begin
 	c, x, λ, e = u
-	stateout = c < 0 || x < 0 || λ > 0
+	m, l = p
 
-	return stateout && (-1e3 < e < 1e3)
+	stateout = c ≤ m.cₚ || x < l.xₛ || λ > 0
+	emissionsout = e > eᵤ
+
+	return stateout && emissionsout
 end
 
-u₀ = [x₀, c₀, -100., m.δ * c₀]
-prob = ODEProblem(F!, u₀, (0., 100.), [m, l])
+timehorizons = [
+	(135., 110.),
+	(67., 110.),
+	(30., 28.)
+]
 
-sol = solve(prob, Tsit5(), abstol = 1e-10, reltol = 1e-10, isoutofdomain = isoutofdomain)
-
-# Manifolds
 manifolds = computestablemanifolds(
 	F!, DF!, equilibria, [m, l];
-	tend = 21.
+	alg = Rosenbrock23(), abstol = abstol, reltol = reltol,
+	isoutofdomain = isoutofdomain, 
+	tends = timehorizons, maxiters = 1e7,
+	T = 2_000,
+	h = 1e-3
 )
 
+
+# Plotting manifolds over (x, c), (λ, e), (x, λ), (c, e)
+
 begin
-	temperaturespan = (280, 300)
-	concentrationspan = (300, 600)
+	# -- (x, c)
+	xspace = range(xₛ - 2, 299; length = 2001)
+	csteadystate = (x -> φ(x, m)).(xspace)
 
-	tnullcline = range(temperaturespan..., length = 1001)
+	xticks = (280.5:5:295.5, (280:5:300) .- 273.5)
+	aspect_ratio = (maximum(csteadystate) - minimum(csteadystate)) / (xspace[end] - xspace[1])
 
-	fig = plot(xlims = concentrationspan, ylims = temperaturespan, xlabel = "Concentration CO\$_2\$", ylabel = "Temperature")
+	xcfig = plot(
+		xlims = extrema(csteadystate), ylims = extrema(xspace), 
+		aspect_ratio = aspect_ratio,
+		xlabel = "Carbon concentration \$c\$ in p.p.m.", 
+		ylabel = "Temperature \$x\$ in °C",
+		yticks = xticks
+	)
 
-	plot!(fig, (x -> φ(x, m)).(tnullcline), tnullcline; c = :darkred, label = false)
+	plot!(xcfig, csteadystate, xspace; c = :darkred, label = false)
+	scatter!(xcfig, [c₀], [x₀]; c = :black, label = "Initial state")
 
-	scatter!(fig, [c₀], [x₀]; c = :black, label = false)
+	# -- (λ, e)
+	espace = range(-25, 50; length = 1001)
+	λspace = range(-650, 0; length = 1001)
+
+	λefig = plot(
+		xlims = extrema(λspace), ylims = extrema(espace), 
+		aspect_ratio = (λspace[end] - λspace[1]) / (espace[end] - espace[1]),
+		xlabel = "Shadow price \$\\lambda_x\$", ylabel = "Emissions \$e\$"
+	)
+
+	actionnullcine = ϕ.(espace)
+
+	plot!(λefig, actionnullcine, espace; c = :darkred, label = false)
+
+	# -- (x, λ)	
+	xλfig = plot(
+		xlims = extrema(xspace), ylims = extrema(λspace), 
+		aspect_ratio = (xspace[end] - xspace[1]) / (λspace[end] - λspace[1]),
+		ylabel = "Shadow price \$\\lambda_x\$", xlabel = "Temperature \$x\$",
+		xticks = xticks
+	)
+
+	plot!(xλfig, xspace, ω; c = :darkred, label = nothing)
+	vline!(xλfig, [x₀]; c = :black, linestyle = :dash, label = "Initial state")
+
+	# -- (c, e)
+	cspace = range(100, 1000, length = 1001)
+	cefig = plot(
+		ylims = extrema(espace), xlims = extrema(cspace), 
+		aspect_ratio = (cspace[end] - cspace[1]) / (espace[end] - espace[1]),
+		xlabel = "Carbon concentration \$c\$ in p.p.m.", 
+		ylabel = "Emissions \$e\$"
+	)
+
+	plot!(cefig, cspace, c -> c * m.δ; c = :darkred, label = false)
+	vline!(cefig, [c₀]; c = :black, linestyle = :dash, label = "Initial state")
 
 
+	# Manifolds and steady states
+	figures = [xcfig, λefig, xλfig, cefig]
 
-	for (x̄, mₓ) in manifolds
-		# scatter!(fig, [x̄[2]], [x̄[1]]; c = :green, label = false)
+	colors = [:darkgreen, :darkorange, :darkblue]
+
+	for (i, ū) ∈ enumerate(equilibria)
+		x, c, λ, e = ū
 		
-		for stablemanifold in mₓ
-			plot!(fig, stablemanifold[2, :, 2], stablemanifold[2, :, 1]; c = :green, label = false)
-			plot!(fig, stablemanifold[1, :, 2], stablemanifold[1, :, 1]; c = :green, label = false)
+		stablemanifolds = manifolds[i]
+		
+		# -- (x, c)
+		for (dir, curve) ∈ stablemanifolds
+			plot!(xcfig, curve[:, 2], curve[:, 1]; c = colors[i], label = nothing)
 		end
+		scatter!(xcfig, [c], [x]; c = colors[i], label = nothing)
+
+		# -- (λ, e)
+		for (dir, curve) ∈ stablemanifolds
+			plot!(λefig, curve[:, 3], curve[:, 4]; c = colors[i], label = nothing)
+		end
+		scatter!(λefig, [λ], [e]; c = colors[i], label = nothing)
+		
+		# -- (x, λ)
+		for (dir, curve) ∈ stablemanifolds
+			plot!(xλfig, curve[:, 1], curve[:, 3]; c = colors[i], label = nothing)
+		end
+		scatter!(xλfig, [x], [λ]; c = colors[i], label = nothing)
+		
+		# -- (c, e)
+		for (dir, curve) ∈ stablemanifolds
+			plot!(cefig, curve[:, 2], curve[:, 4]; c = colors[i], label = nothing)
+		end
+		scatter!(cefig, [c], [e]; c = colors[i], label = nothing)
 	end
 
-	fig
+	jointfig = plot(figures..., layout = (2, 2), size = (1200, 1200))
 end

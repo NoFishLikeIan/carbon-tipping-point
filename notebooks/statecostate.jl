@@ -26,7 +26,7 @@ using PlutoUI
 # ╔═╡ 09589e67-c55e-44a5-bd51-37a53e8a8585
 begin
 	using Plots
-	default(size = 600 .* (√2, 1), dpi = 180, margins = 10Plots.mm, linewidth = 2)
+	default(size = 600 .* (√2, 1), dpi = 300, margins = 5Plots.mm, linewidth = 1.5)
 end
 
 # ╔═╡ c1fc4206-5541-4c8e-92f3-7e072fd17a5d
@@ -108,7 +108,10 @@ end
 climate = ingredients("../model/climate.jl");
 
 # ╔═╡ 8d16ec1e-e16f-45d4-93a4-1cc1a18fb487
-economic = ingredients("../model/economic.jl");
+economy = ingredients("../model/economic.jl");
+
+# ╔═╡ 241e7857-3178-44de-9b4e-85f0b717d131
+dsutils = ingredients("../utils/dynamicalsystems.jl");
 
 # ╔═╡ b78704bf-bcc4-4859-8978-fcde1a64dafb
 gigatonco2toppm = 7.821;
@@ -127,6 +130,13 @@ Originally the paper uses the function $\Sigma$ function to model the ice meltin
 # ╔═╡ 6fcf3aca-84a6-4d71-a498-fff91ffae7f2
 m = climate.MendezFarazmand();
 
+# ╔═╡ bd97a765-f358-4400-b013-3c592bd864fe
+begin
+	a(x, m) = m.q₀ * ((1 - m.α₁) + (m.α₁ - m.α₂) * climate.σ(x, m))
+	a′(x, m) = m.q₀ * (m.α₁ - m.α₂) * climate.σ′(x, m)
+	a′′(x, m) = m.q₀ * (m.α₁ - m.α₂) * climate.σ′′(x, m)
+end;
+
 # ╔═╡ 5a2c219a-a727-44dd-917b-759667911d77
 let
 	(; α₁, α₂, x₁, x₂, q₀) = m
@@ -144,7 +154,7 @@ let
 	vline!(basefig, [m.x₂]; label = false, c = :black, linestyle = :dash)
 	vline!(basefig, [(m.x₂ + m.x₁) / 2]; label = false, c = :black, linestyle = :solid)
 
-	plot!(basefig, xs, x -> q₀ * ((1 - α₁) + (α₁ - α₂) * climate.σ(x, m)); label = "This paper", c = :darkred)
+	plot!(basefig, xs, x -> a(x, m); label = "This paper", c = :darkred)
 
 	savefig(basefig, "../docs/figures/baseline-temperature.png")
 
@@ -154,11 +164,14 @@ end
 # ╔═╡ 82d4835a-2a2f-4208-ad23-9e4c9ac2cba0
 current_emissions = 2.59 + m.δ * m.c₀
 
+# ╔═╡ 54b0c489-3c22-4206-8af3-d4cc8a372c17
+tipping_points = find_zeros(x -> a′(x, m) - 4m.η * x^3, (290, 300))
+
 # ╔═╡ ad1738b0-8f7c-4c91-92a6-ad4bc096a98d
 md"## Economic model"
 
 # ╔═╡ 60a24b1b-d933-45bb-8638-9167ab9dd520
-l = economic.LinearQuadratic(γ = 0.5, τ = 0., xₛ = 280);
+Llinear = economy.LinearQuadratic(γ = 0.5, τ = 0., xₛ = 280);
 
 # ╔═╡ eca60d2f-b7c1-4153-8a1f-268b94f66a2a
 md"
@@ -166,14 +179,14 @@ md"
 
 A simplified linear model
 
-- Climate damages $\gamma_c$ $(@bind γc Slider(0:0.01:1, show_value = true, default = 0.001))
+- Climate damages $\gamma_c$ $(@bind γc Slider(0:0.001:1, show_value = true, default = 0.01))
 
 "
 
 # ╔═╡ 85d4cad2-9f17-41cf-9b27-d3accb7057e8
 begin
 	(; κ, A, δ) = m
-	(; β₀, β₁, ρ, τ, xₛ) = l
+	(; β₀, β₁, ρ, τ, xₛ) = Llinear
 	
 	cₛ = m.cₚ
 	eᵤ = (β₀ - τ) / β₁
@@ -196,7 +209,7 @@ end
 # ╔═╡ 314c6433-27ca-4aba-bd41-0e80f5c1118f
 let
 	(; δ, cₚ) = m
-	(; ρ, β₁, β₀) = l
+	(; ρ, β₁, β₀) = Llinear
 	c̄(γ, τ) = (β₀ - τ - γ * cₚ) / (β₁ * δ + γ / (ρ + δ))
 
 	γspace = range(0.0001, 0.0008; length = 1001)
@@ -209,13 +222,16 @@ let
 	css
 end
 
-# ╔═╡ 7646b79b-e215-4486-bac5-b85772452ba0
-
-
 # ╔═╡ b17c0b74-40a4-4d90-a664-7025c44fef06
 md"
 ## State costate
 "
+
+# ╔═╡ f3bd2d72-5b85-48b9-982e-782d096d5e4e
+γ₀ = 0.000751443;
+
+# ╔═╡ 4f8e9996-1e1a-4794-ac5c-f3706abbf151
+γ₀ + 1e-4
 
 # ╔═╡ 4f9964b2-05fa-4c01-b003-7a3ca32041b4
 begin
@@ -244,6 +260,8 @@ let
 	plot!(ssfig, css, xspace; label = "\$\\mu(x, c) = 0\$", c = :darkred)
 	scatter!(ssfig, [m.c₀], [x₀]; c = :black, label = "Current \$(c_0, x_0)\$", marker = 3.5)
 
+	hline!(ssfig, tipping_points; label = "Tipping points", c = :black, linestyle = :dash)
+
 	# savefig(ssfig, "../docs/figures/temperature-dynamics.png")
 
 	ssfig
@@ -252,7 +270,9 @@ end
 
 # ╔═╡ cae95c3f-698c-4287-8c68-c91186c63dc0
 let
-	b(e, x) = (l.β₀ - l.τ) * e - (l.β₁ / 2) * e^2 - (l.γ / 2) * (x - l.xₛ)^2 
+	(; β₀, τ, β₁, xₛ, γ) = Llinear
+	
+	b(e, x) = (β₀ - τ) * e - (β₁ / 2) * e^2 - (γ / 2) * (x - xₛ)^2 
 
 	xspace = range(285, 297; length = 101)
 	espace = range(-20, 20; length = 101)
@@ -297,16 +317,62 @@ let
 	scatter!(vecfig, [0], [0]; c = :black, label = false)
 end
 
-# ╔═╡ 1206ce34-d491-44ab-84fe-54b7d4afb502
-u₀ = [x₀, c₀, λ₀, e₀];
+# ╔═╡ 4a6c00dc-3382-4460-9ebc-40be27f22dd3
+begin
+	function F!(dz, z, p, t)
+		m, l = p # Unpack LinearQuadratic and climate model
+		(; κ, A, δ, η, S, A, cₚ) = m
+		(; β₀, β₁, τ, γ, ρ, xₛ) = l
+	
+		x, c, λ, e = z # Unpack state
+		eᵤ = (β₀ - τ) / β₁
+		
+		dz[1] = κ * (a(x, m) - η * x^4 + S + A * log(c / cₚ)) # Temperature 
+		dz[2] = e - δ * c # Concentration 
+	
+		dz[3] = (ρ - κ * a′(x, m) + κ * 4η * x^3) * λ + γ * (x - xₛ) # Shadow price of temperature
+		dz[4] = (ρ + δ) * (e - eᵤ) - (λ / c) * (κ * A) / β₁ # Emissions
+	
+		return dz
+	end
+	
+	function DF!(D, z, p, t)
+		m, l = p # Unpack a LinearQuadratic model
+		(; κ, A, δ, η) = m
+		(; β₀, β₁, τ, γ, ρ, xₛ) = l
+	
+		x, c, λ, e = z # Unpack state
+	
+		J = zeros(4, 4)
+	
+		J[1, 1] = κ * (a′(x, m) - 4η * x^3)
+		J[1, 2] = κ * A / c
+	
+		J[2, 2] = -δ
+		J[2, 4] = 1
+		
+		J[3, 1] = κ * (-a′′(x, m) + 12η * x^2) * λ + γ
+		J[3, 3] = ρ - κ * (a′(x, m) - 4η * x^3)
+	
+		J[4, 2] = -(κ * A / β₁) * (λ / c^2)
+		J[4, 3] = -(κ * A / β₁) * (1 / c)
+		J[4, 4] = ρ + δ
+	
+		D .= J
+	
+		return J
+	end
+
+	F!, DF!
+end
 
 # ╔═╡ 75daf019-f422-4623-9418-c3992fa55897
 function getequilibria(m, l; xₗ = 220, xᵤ = 320)
-	(; κ, A, δ) = m
+	(; κ, A, δ, η) = m
 	(; β₀, β₁, τ, γ, ρ, xₛ) = l
 
 	ψ(x) = climate.φ(x, m) * δ
-	ω(x) = γ * (x - xₛ) / (κ * climate.μₓ(x, m) - ρ)
+	ω(x) = γ * (x - xₛ) / (κ * (a′(x, m) -  4η * x^3) - ρ)
 	ϕ(e) = (β₁ * e) / (κ * A * δ) * (ρ + δ) * (e - (β₀ - τ) / β₁)
 	
 	equilibriumcond(x) = ω(x) - (ϕ ∘ ψ)(x)
@@ -330,154 +396,215 @@ function getequilibria(m, l; xₗ = 220, xᵤ = 320)
 	end
 
 	(ψ, ω, ϕ), equilibria
-end;
+end
 
-# ╔═╡ 4a6c00dc-3382-4460-9ebc-40be27f22dd3
-begin
-	function F!(dz, z, p, t)
-		m, l = p # Unpack a LinearQuadratic model
-		(; κ, A, δ) = m
-		(; β₀, β₁, τ, γ, ρ, xₛ) = l
-	
-		x, c, λ, e = z # Unpack state
-		
-		dz[1] = κ * climate.μ(x, c, m) # Temperature 
-		dz[2] = e - δ * c # Concentration 
-	
-		dz[3] = (ρ - κ * climate.μₓ(x, m)) * λ + γ * (x - xₛ) # Shadow price of temperature
-		dz[4] = (ρ + δ) * (e - (β₀ - τ) / β₁) - (λ / c) * (κ * A) / β₁ # Emissions
-	
-		return dz
+# ╔═╡ 4f9e8361-7a24-4c56-a948-057d300f3378
+function computestablemanifolds(
+	    F!::Function, DF!::Function,
+	    steadystates::Vector{Vector{Float64}},
+	    p::Vector{Any};
+		alg = Tsit5(), abstol = 1.0e-10, reltol = 1.0e-10,
+		h = 1e-3, tends = repeat([(10., 10.)], length(steadystates)), 
+		T = 100,
+		isoutofdomain = (u, p, t) -> false,
+		verbose = false,
+	    solverargs...)
+
+	n = length(first(steadystates))
+
+	function Finv!(dz, z, p, t)
+		F!(dz, z, p, t)
+		dz .= -dz
 	end
-	
-	function DF!(D, z, p, t)
-		m, l = p # Unpack a LinearQuadratic model
-		(; κ, A, δ) = m
-		(; β₀, β₁, τ, γ, ρ, xₛ) = l
-	
-		x, c, λ, e = z # Unpack state
-	
-		J = zeros(4, 4)
-	
-		J[1, 1] = κ * climate.μₓ(x, m)
-		J[1, 2] = κ * A / c
-	
-		J[2, 2] = -δ
-		J[2, 4] = 1
-		
-		J[3, 1] = γ - κ * climate.μₓₓ(x, m) * λ
-		J[3, 3] = ρ - κ * climate.μₓ(x, m)
-	
-		J[4, 2] = -(κ * A / β₁) * (λ / c^2)
-		J[4, 3] = -(κ * A / β₁) * (1 / c)
-		J[4, 4] = ρ + δ
-	
-		D .= J
-	
-		return J
+
+	function DFinv!(J, z, p, t)
+		DF!(J, z, p, t)
+		J .= -J
 	end
-end;
+
+	odefn = ODEFunction(Finv!; jac = DFinv!)
+	equil = []
+		
+	for (j, x̄) ∈ enumerate(steadystates)
+		verbose && println("Computing manifolds for steady state: ", x̄)
+
+		J = zeros(n, n); DF!(J, x̄, p, 0.0)
+		λ, V = eigen(J)
+
+		stabledirs = findall(λᵢ -> real(λᵢ) < 0, λ)
+
+		manifolds = Dict()
+
+		for i ∈ stabledirs
+			vᵢ = real.(V[:, i])
+
+			negtend = tends[j][1]
+			negprob = ODEProblem(odefn, x̄ - h * vᵢ, (0.0, negtend), p)
+			negsol = solve(negprob, alg; reltol = reltol, abstol = abstol, isoutofdomain = isoutofdomain, solverargs...)
+
+			if negsol.retcode == ReturnCode.Success
+				timespan = range(0.0, negtend, length = T)
+				manifolds[:n] = hcat((t -> negsol(negtend - t)).(timespan)...)'
+			else
+				manifolds[:n] = NaN * ones(T, n)
+			end
+
+
+			postend = tends[j][2]
+			posprob = ODEProblem(odefn, x̄ + h * vᵢ, (0.0, postend), p)
+			possol = solve(posprob, alg; reltol = reltol, abstol = abstol, isoutofdomain = isoutofdomain, solverargs...)
+
+			if possol.retcode == ReturnCode.Success
+				timespan = range(0.0, postend, length = T)
+				manifolds[:p] = hcat((t -> possol(postend - t)).(timespan)...)'
+			else
+				manifolds[:p] = NaN * ones(T, n)
+			end
+
+		end		
+
+		push!(equil, manifolds)
+	end
+
+	return equil
+end
 
 # ╔═╡ dd8b41b7-71d5-4f4f-97e4-6d5ca8906521
-function isoutofdomain(u, p, t)
-	c, x, λ, e = u
-	stateout = c < 0 || x < 0 || λ > 0
+begin
+	reltol = 1e-10
+	abstol = 1e-10
+	isoutofdomain = (u, p, t) -> begin
+		c, x, λ, e = u
+		m, l = p
+	
+		stateout = c ≤ m.cₚ || x < l.xₛ || λ > 0
+		emissionsout = e > eᵤ
+	
+		return stateout && emissionsout
+	end
 
-	return stateout
+	timehorizons = [
+		(135., 110.),
+		(67., 110.),
+		(30., 28.)
+	]
+
 end;
+
+# ╔═╡ 695e0698-2772-42df-a467-53d79b1bbe1c
+l = economy.LinearQuadratic(τ = 0, xₛ = 287.3, γ = γ₀);
 
 # ╔═╡ 331cadc1-57af-4199-b113-8f2696708916
 begin
-	nullfns, equilibria = getequilibria(m, l)
+	nullfns, equilibria = getequilibria(m, l; xₗ = 100, xᵤ = 900)
 
 	ψ, ω, ϕ = nullfns
 end;
 
-# ╔═╡ 0c162fce-29d8-4fb8-ac3b-5f99a3b83ff0
-tend = 100.;
+# ╔═╡ 568417ca-cb93-42d3-a795-eb8bef188bec
+manifolds = computestablemanifolds(
+	F!, DF!, equilibria, [m, l];
+	alg = Rosenbrock23(), abstol = abstol, reltol = reltol,
+	isoutofdomain = isoutofdomain, 
+	tends = timehorizons,
+	T = 2_000, maxiters = 1e7,
+	h = 1e-3
+);
 
-# ╔═╡ 94340814-0996-49db-8655-fd2a4ddd2473
-prob = ODEProblem(ODEFunction(F!, jac = DF!), u₀, (0., tend), [m, l]);
-
-# ╔═╡ 7c720d93-e01c-4bb8-81ab-14d16acd550f
-current_emissions = 2.59 + m.δ * m.c₀
-
-- Emissions $e_0$ $(@bind e₀ Slider(-1000:0.1:1000, show_value = true, default = 0.))
-- Shadow cost of emissions $\lambda_0$ $(@bind λ₀ Slider(-50:0.01:ω(x₀), show_value = true, default = 0))
-"
-
-# ╔═╡ 4e61bbe7-a651-4f11-a280-6788bff784a2
-sol = solve(prob, Tsit5(), abstol = 1e-10, reltol = 1e-10, isoutofdomain = isoutofdomain); sol.retcode
-
-# ╔═╡ e125196e-8646-4f14-8beb-720e4518d9e7
-orbit = hcat((t -> sol(t)).(range(0, tend; length = 1001))...)';
-
-# ╔═╡ fc002126-03c7-4906-8fce-cd58cf36f5e3
+# ╔═╡ fb94e31a-cc84-45c9-a3c4-481972982bb5
 begin
-	clims = (0, 1000)
-	xlims = (280, 300)
-	elims = (-30, 30)
-	λlims = (-100, 0)
+	# -- (x, c)
+	xspace = range(xₛ - 2, 299; length = 2001)
+	csteadystate = (x -> climate.φ(x, m)).(xspace)
 
+	xticks = (280.5:5:295.5, (280:5:300) .- 273.5)
+	aspect_ratio = (maximum(csteadystate) - minimum(csteadystate)) / (xspace[end] - xspace[1])
 
-	sratio = (clims[2] - clims[1]) / (xlims[2] - xlims[1])
-	aratio = (λlims[2] - λlims[1]) / (elims[2] - elims[1]) 
+	xcfig = plot(
+		xlims = extrema(csteadystate), ylims = extrema(xspace), 
+		aspect_ratio = aspect_ratio,
+		xlabel = "Carbon concentration \$c\$ in p.p.m.", 
+		ylabel = "Temperature \$x\$ in °C",
+		yticks = xticks
+	)
 
+	plot!(xcfig, csteadystate, xspace; c = :darkred, label = false)
+	scatter!(xcfig, [c₀], [x₀]; c = :black, label = "Initial state")
 
-	# c - x figure
-	statefig = plot(
-		xlims = clims, ylims = xlims, aspect_ratio = sratio, 
-		xlabel = "CO\$_2\$ concentration \$c\$", ylabel = "Temperature \$x\$")
-	
+	# -- (λ, e)
+	espace = range(-25, 50; length = 1001)
+	λspace = range(-650, 0; length = 1001)
 
-	temperaturespace = range(xlims..., length = 1001)
-	statenullcline = (x -> climate.φ(x, m)).(temperaturespace)
-
-	plot!(statefig, statenullcline, temperaturespace; c = :darkblue, label = "\$\\varphi\$")
-	plot!(statefig, orbit[:, 2], orbit[:, 1]; c = :darkred, label = false)
-	scatter!(statefig, [orbit[1, 2]], [orbit[1, 1]]; c = :black, label = false)
-
-
-	# λ - e figure
-	actionfig = plot(
-		xlims = λlims, ylims = elims, aspect_ratio = aratio,
+	λefig = plot(
+		xlims = extrema(λspace), ylims = extrema(espace), 
+		aspect_ratio = (λspace[end] - λspace[1]) / (espace[end] - espace[1]),
 		xlabel = "Shadow price \$\\lambda_x\$", ylabel = "Emissions \$e\$"
 	)
-	
 
-	emissionsspace = range(elims...; length = 1001)
-	actionnullcine = ϕ.(emissionsspace)
+	actionnullcine = ϕ.(espace)
 
-	plot!(actionfig, actionnullcine, emissionsspace; c = :darkblue, label = "\$\\phi\$")
-	plot!(actionfig, orbit[:, 3], orbit[:, 4]; c = :darkred, label = false)
-	scatter!(actionfig, [orbit[1, 3]], [orbit[1, 4]]; c = :black, label = false)
+	plot!(λefig, actionnullcine, espace; c = :darkred, label = false)
 
-	# x - λ figure
-	xλratio = (xlims[2] - xlims[1]) / (λlims[2] - λlims[1])
-		
-	shadowcostfig = plot(
-		xlims = xlims, ylims = λlims, aspect_ratio = xλratio,
-		ylabel = "Shadow price \$\\lambda_x\$", xlabel = "Temperature \$x\$"
+	# -- (x, λ)	
+	xλfig = plot(
+		xlims = extrema(xspace), ylims = extrema(λspace), 
+		aspect_ratio = (xspace[end] - xspace[1]) / (λspace[end] - λspace[1]),
+		ylabel = "Shadow price \$\\lambda_x\$", xlabel = "Temperature \$x\$",
+		xticks = xticks
 	)
-	
-	shadownullprice = ω.(temperaturespace)
 
-	plot!(shadowcostfig, temperaturespace, shadownullprice; c = :darkblue, label = "\$\\omega\$")
-	plot!(shadowcostfig, orbit[:, 1], orbit[:, 3]; c = :darkred, label = false)
-	scatter!(shadowcostfig, [orbit[1, 1]], [orbit[1, 3]]; c = :black, label = false)
+	plot!(xλfig, xspace, ω; c = :darkred, label = nothing)
+	vline!(xλfig, [x₀]; c = :black, linestyle = :dash, label = "Initial state")
 
-	
-	# Equilibria
+	# -- (c, e)
+	cspace = range(100, 1000, length = 1001)
+	cefig = plot(
+		ylims = extrema(espace), xlims = extrema(cspace), 
+		aspect_ratio = (cspace[end] - cspace[1]) / (espace[end] - espace[1]),
+		xlabel = "Carbon concentration \$c\$ in p.p.m.", 
+		ylabel = "Emissions \$e\$"
+	)
 
-	for (i, u) ∈ enumerate(equilibria)
-		x, c, λ, e = u
+	plot!(cefig, cspace, c -> c * m.δ; c = :darkred, label = false)
+	vline!(cefig, [c₀]; c = :black, linestyle = :dash, label = "Initial state")
 
-		scatter!(statefig, [c], [x]; c = palette(:tab10)[i], label = false)
-		scatter!(actionfig, [λ], [e]; c = palette(:tab10)[i], label = false)
-		scatter!(shadowcostfig, [x], [λ]; c = palette(:tab10)[i], label = false)
+
+	# Manifolds and steady states
+	figures = [xcfig, λefig, xλfig, cefig]
+
+	colors = [:darkgreen, :darkorange, :darkblue]
+
+	for (i, ū) ∈ enumerate(equilibria)
+		x, c, λ, e = ū
+		
+		stablemanifolds = manifolds[i]
+		
+		# -- (x, c)
+		for (dir, curve) ∈ stablemanifolds
+			plot!(xcfig, curve[:, 2], curve[:, 1]; c = colors[i], label = nothing)
+		end
+		scatter!(xcfig, [c], [x]; c = colors[i], label = nothing)
+
+		# -- (λ, e)
+		for (dir, curve) ∈ stablemanifolds
+			plot!(λefig, curve[:, 3], curve[:, 4]; c = colors[i], label = nothing)
+		end
+		scatter!(λefig, [λ], [e]; c = colors[i], label = nothing)
+		
+		# -- (x, λ)
+		for (dir, curve) ∈ stablemanifolds
+			plot!(xλfig, curve[:, 1], curve[:, 3]; c = colors[i], label = nothing)
+		end
+		scatter!(xλfig, [x], [λ]; c = colors[i], label = nothing)
+		
+		# -- (c, e)
+		for (dir, curve) ∈ stablemanifolds
+			plot!(cefig, curve[:, 2], curve[:, 4]; c = colors[i], label = nothing)
+		end
+		scatter!(cefig, [c], [e]; c = colors[i], label = nothing)
 	end
 
-	plot(statefig, actionfig, shadowcostfig; layout = (2, 2), size = (900, 600), margins = Plots.mm)
+	jointfig = plot(figures..., layout = (2, 2), size = (1200, 1200))
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -2434,34 +2561,35 @@ version = "1.4.1+0"
 # ╠═9bc05e95-a185-43b6-afe6-4707d4cefc2f
 # ╠═61b868ce-b080-471d-8de8-edf807b253ce
 # ╠═8d16ec1e-e16f-45d4-93a4-1cc1a18fb487
+# ╠═241e7857-3178-44de-9b4e-85f0b717d131
 # ╠═b78704bf-bcc4-4859-8978-fcde1a64dafb
 # ╠═519620d9-c504-40ff-998e-262dbe3caeb0
 # ╟─3fe60d4b-6d9d-4dbb-9f99-cbae81ef6cd3
 # ╟─ff62d855-fccf-4418-b255-333832c58f29
 # ╠═6fcf3aca-84a6-4d71-a498-fff91ffae7f2
+# ╠═bd97a765-f358-4400-b013-3c592bd864fe
 # ╟─5a2c219a-a727-44dd-917b-759667911d77
 # ╠═82d4835a-2a2f-4208-ad23-9e4c9ac2cba0
+# ╠═54b0c489-3c22-4206-8af3-d4cc8a372c17
 # ╠═7b56773e-7d5f-411e-a5de-541ba6e7e0b0
 # ╟─ad1738b0-8f7c-4c91-92a6-ad4bc096a98d
 # ╠═60a24b1b-d933-45bb-8638-9167ab9dd520
-# ╠═cae95c3f-698c-4287-8c68-c91186c63dc0
+# ╟─cae95c3f-698c-4287-8c68-c91186c63dc0
 # ╟─eca60d2f-b7c1-4153-8a1f-268b94f66a2a
-# ╠═85d4cad2-9f17-41cf-9b27-d3accb7057e8
+# ╟─85d4cad2-9f17-41cf-9b27-d3accb7057e8
 # ╟─9f888b0c-7d8b-4213-8820-f584b3a36500
-# ╠═314c6433-27ca-4aba-bd41-0e80f5c1118f
-# ╠═7646b79b-e215-4486-bac5-b85772452ba0
+# ╟─314c6433-27ca-4aba-bd41-0e80f5c1118f
 # ╟─b17c0b74-40a4-4d90-a664-7025c44fef06
+# ╠═f3bd2d72-5b85-48b9-982e-782d096d5e4e
+# ╠═4f8e9996-1e1a-4794-ac5c-f3706abbf151
 # ╠═4f9964b2-05fa-4c01-b003-7a3ca32041b4
-# ╠═1206ce34-d491-44ab-84fe-54b7d4afb502
-# ╠═75daf019-f422-4623-9418-c3992fa55897
-# ╠═4a6c00dc-3382-4460-9ebc-40be27f22dd3
+# ╟─4a6c00dc-3382-4460-9ebc-40be27f22dd3
+# ╟─75daf019-f422-4623-9418-c3992fa55897
+# ╟─4f9e8361-7a24-4c56-a948-057d300f3378
 # ╠═dd8b41b7-71d5-4f4f-97e4-6d5ca8906521
+# ╠═695e0698-2772-42df-a467-53d79b1bbe1c
 # ╠═331cadc1-57af-4199-b113-8f2696708916
-# ╠═0c162fce-29d8-4fb8-ac3b-5f99a3b83ff0
-# ╠═94340814-0996-49db-8655-fd2a4ddd2473
-# ╠═7c720d93-e01c-4bb8-81ab-14d16acd550f
-# ╠═4e61bbe7-a651-4f11-a280-6788bff784a2
-# ╠═e125196e-8646-4f14-8beb-720e4518d9e7
-# ╟─fc002126-03c7-4906-8fce-cd58cf36f5e3
+# ╠═568417ca-cb93-42d3-a795-eb8bef188bec
+# ╟─fb94e31a-cc84-45c9-a3c4-481972982bb5
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

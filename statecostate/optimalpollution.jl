@@ -9,7 +9,7 @@ function Fexogenousemissions!(dz, z, p, t)
 end
 
 function F!(dz, z, p, t)
-	m, l = p # Unpack a LinearQuadratic model
+	m, l = p # Unpack LinearQuadratic and climate model
 	(; κ, A, δ) = m
 	(; β₀, β₁, τ, γ, ρ, xₛ) = l
 
