@@ -55,7 +55,7 @@ end
 """
 Get the equilibria of the deterministic climate-economy model.
 """
-function getequilibria(m, l)
+function getequilibria(m, l; xlims = (280, 310))
 	(; κ, A, δ) = m
 	(; β₀, β₁, τ, γ, ρ, xₛ) = l
 
@@ -65,12 +65,12 @@ function getequilibria(m, l)
 	
 	equilibriumcond(x) = ω(x) - (ϕ ∘ ψ)(x)
 	
-	asymptotesω = find_zeros(x -> κ * μₓ(x, m) - ρ, xₗ, xᵤ)
+	asymptotesω = find_zeros(x -> κ * μₓ(x, m) - ρ, xlims[1], xlims[2])
 	
 	regions = [
-		(xₗ, asymptotesω[1]),
+		(xlims[1], asymptotesω[1]),
 		(asymptotesω[1], asymptotesω[2]),
-		(asymptotesω[2], xᵤ)
+		(asymptotesω[2], xlims[2])
 	]
 	
 	

@@ -4,7 +4,11 @@ using Roots
 using LinearAlgebra
 
 using Plots
-default(size = 600 .* (√2, 1), dpi = 300, margins = 5Plots.mm, linewidth = 1.5)
+default(
+	size = 600 .* (√2, 1), 
+	dpi = 300, 
+	margins = 5Plots.mm, 
+	linewidth = 1.5)
 
 include("utils/plotting.jl")
 include("utils/dynamicalsystems.jl")
@@ -22,26 +26,26 @@ x₀ = first(φ⁻¹(c₀, m)) # Current temperature
 xₛ = first(φ⁻¹(m.cₚ, m)) # Surely safe temperature
 γ₀ = 7.51443e-4
 
-l = LinearQuadratic(τ = 0., γ = 1e-3, xₛ = xₛ) # Social planner
+l = LinearQuadratic(τ = 0., γ = γ₀, xₛ = xₛ) # Social planner
 eᵤ = (l.β₀ - l.τ) / l.β₁ # Unconstrained emissions
-xₗ, xᵤ = l.xₛ, 1.5l.xₛ # Bounds on temperature
 
 nullclines, equilibria = getequilibria(m, l)
 ψ, ω, ϕ = nullclines 
 
+tipping_points = find_zeros(x -> μₓ(x, m), (290, 300))
+
 # Finding boundaries via shooting
-reltol = 1e-10
-abstol = 1e-10
-isoutofdomain = (u, p, t) -> begin
-	c, x, λ, e = u
-	m, l = p
 
-	stateout = c ≤ m.cₚ || x < l.xₛ || λ > 0
-	emissionsout = e > eᵤ
+affect!(integrator) = terminate!(integrator, SciMLBase.ReturnCode.Success)
+function instabilitycondition(u, t, integrator)
+	λcond = u[3] > ω(u[1]) ? 0.0 : 1.0
+	xcond = u[1] ≤ xₛ ? 0.0 : 1.0
+	ccond = u[2] ≤ m.cₚ ? 0.0 : 1.0
 
-	return stateout && emissionsout
+	return λcond * xcond * ccond
 end
 
+# FIXME: Is there a better way rather than fine tuning these?
 timehorizons = [
 	(135., 110.),
 	(67., 110.),
@@ -50,16 +54,13 @@ timehorizons = [
 
 manifolds = computestablemanifolds(
 	F!, DF!, equilibria, [m, l];
-	alg = Rosenbrock23(), abstol = abstol, reltol = reltol,
-	isoutofdomain = isoutofdomain, 
-	tends = timehorizons, maxiters = 1e7,
-	T = 2_000,
-	h = 1e-3
+	alg = Rosenbrock23(), 
+	tends = timehorizons, T = 2_000, h = 1e-3,
+	# callback = ContinuousCallback(instabilitycondition, affect!),
+	abstol = 1e-10, reltol = 1e-10, maxiters = 1e7
 )
 
-
 # Plotting manifolds over (x, c), (λ, e), (x, λ), (c, e)
-
 begin
 	# -- (x, c)
 	xspace = range(xₛ - 2, 299; length = 2001)
@@ -79,21 +80,23 @@ begin
 	plot!(xcfig, csteadystate, xspace; c = :darkred, label = false)
 	scatter!(xcfig, [c₀], [x₀]; c = :black, label = "Initial state")
 
-	# -- (λ, e)
-	espace = range(-25, 50; length = 1001)
-	λspace = range(-650, 0; length = 1001)
 
-	λefig = plot(
-		xlims = extrema(λspace), ylims = extrema(espace), 
-		aspect_ratio = (λspace[end] - λspace[1]) / (espace[end] - espace[1]),
-		xlabel = "Shadow price \$\\lambda_x\$", ylabel = "Emissions \$e\$"
+	# -- (e, x)
+	espace = range(-30, 45; length = 1001)
+
+	xefig = plot(
+		xlims = extrema(espace), ylims = extrema(xspace), 
+		aspect_ratio = (espace[end] - espace[1]) / (xspace[end] - xspace[1]) ,
+		ylabel = "Temperature \$x\$ in °C", xlabel = "Emissions \$e\$",
+		yicks = xticks
+		
 	)
-
-	actionnullcine = ϕ.(espace)
-
-	plot!(λefig, actionnullcine, espace; c = :darkred, label = false)
+	
+	hline!(xefig, [x₀]; c = :black, label = "Initial state", linestyle = :dash)
+	
 
 	# -- (x, λ)	
+	λspace = range(-650, 0; length = 1001)
 	xλfig = plot(
 		xlims = extrema(xspace), ylims = extrema(λspace), 
 		aspect_ratio = (xspace[end] - xspace[1]) / (λspace[end] - λspace[1]),
@@ -103,6 +106,7 @@ begin
 
 	plot!(xλfig, xspace, ω; c = :darkred, label = nothing)
 	vline!(xλfig, [x₀]; c = :black, linestyle = :dash, label = "Initial state")
+	vline!(xλfig, tipping_points, c = :black, label = "Tipping points")
 
 	# -- (c, e)
 	cspace = range(100, 1000, length = 1001)
@@ -118,12 +122,12 @@ begin
 
 
 	# Manifolds and steady states
-	figures = [xcfig, λefig, xλfig, cefig]
+	figures = [xcfig, xefig, xλfig, cefig]
 
 	colors = [:darkgreen, :darkorange, :darkblue]
 
-	for (i, ū) ∈ enumerate(equilibria)
-		x, c, λ, e = ū
+	for (i, ū) ∈ enumerate(equilibria)
+		x, c, λ, e = ū
 		
 		stablemanifolds = manifolds[i]
 		
@@ -133,11 +137,11 @@ begin
 		end
 		scatter!(xcfig, [c], [x]; c = colors[i], label = nothing)
 
-		# -- (λ, e)
+		# -- (x, e)
 		for (dir, curve) ∈ stablemanifolds
-			plot!(λefig, curve[:, 3], curve[:, 4]; c = colors[i], label = nothing)
+			plot!(xefig, curve[:, 4], curve[:, 1]; c = colors[i], label = nothing)
 		end
-		scatter!(λefig, [λ], [e]; c = colors[i], label = nothing)
+		scatter!(xefig, [e], [x]; c = colors[i], label = nothing)
 		
 		# -- (x, λ)
 		for (dir, curve) ∈ stablemanifolds

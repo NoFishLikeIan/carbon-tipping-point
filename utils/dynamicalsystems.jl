@@ -1,13 +1,11 @@
-# FIXME: How to deal with dimensions larger than 2
 computestablemanifolds(F!, DF!, steadystates; kwargs...) = computestablemanifolds(F!, DF!, steadystates, Float64[]; kwargs...)
 function computestablemanifolds(
 	    F!::Function, DF!::Function,
 	    steadystates::Vector{Vector{Float64}},
 	    p::Vector{Any};
-		alg = Tsit5(), abstol = 1.0e-10, reltol = 1.0e-10,
-		h = 1e-3, tends = repeat([(10., 10.)], length(steadystates)), 
-		T = 100,
-		isoutofdomain = (u, p, t) -> false,
+		alg = Tsit5(),
+		h = 1e-3, T = 100,
+		tends = repeat([(10., 10.)], length(steadystates)),
 		verbose = false,
 	    solverargs...)
 
@@ -39,23 +37,24 @@ function computestablemanifolds(
 		for i ∈ stabledirs
 			vᵢ = real.(V[:, i])
 
+			# Negative direction
 			negtend = tends[j][1]
 			negprob = ODEProblem(odefn, x̄ - h * vᵢ, (0.0, negtend), p)
-			negsol = solve(negprob, alg; reltol = reltol, abstol = abstol, isoutofdomain = isoutofdomain, solverargs...)
+			negsol = solve(negprob, alg; solverargs...)
 
-			if negsol.retcode == ReturnCode.Success
+			if SciMLBase.successful_retcode(negsol.retcode)
 				timespan = range(0.0, negtend, length = T)
 				manifolds[:n] = hcat((t -> negsol(negtend - t)).(timespan)...)'
 			else
 				manifolds[:n] = NaN * ones(T, n)
 			end
 
-
+			# Positive direction
 			postend = tends[j][2]
 			posprob = ODEProblem(odefn, x̄ + h * vᵢ, (0.0, postend), p)
-			possol = solve(posprob, alg; reltol = reltol, abstol = abstol, isoutofdomain = isoutofdomain, solverargs...)
+			possol = solve(posprob, alg; solverargs...)
 
-			if possol.retcode == ReturnCode.Success
+			if SciMLBase.successful_retcode(possol.retcode)
 				timespan = range(0.0, postend, length = T)
 				manifolds[:p] = hcat((t -> possol(postend - t)).(timespan)...)'
 			else

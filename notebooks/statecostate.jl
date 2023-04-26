@@ -230,9 +230,6 @@ md"
 # ╔═╡ f3bd2d72-5b85-48b9-982e-782d096d5e4e
 γ₀ = 0.000751443;
 
-# ╔═╡ 4f8e9996-1e1a-4794-ac5c-f3706abbf151
-γ₀ + 1e-4
-
 # ╔═╡ 4f9964b2-05fa-4c01-b003-7a3ca32041b4
 begin
 	c₀ = 410 # Current carbon concentration
@@ -469,6 +466,16 @@ function computestablemanifolds(
 	return equil
 end
 
+# ╔═╡ 695e0698-2772-42df-a467-53d79b1bbe1c
+l = economy.LinearQuadratic(τ = 0, xₛ = 287.3, γ = γ₀);
+
+# ╔═╡ 331cadc1-57af-4199-b113-8f2696708916
+begin
+	nullfns, equilibria = getequilibria(m, l; xₗ = 100, xᵤ = 900)
+
+	ψ, ω, ϕ = nullfns
+end;
+
 # ╔═╡ dd8b41b7-71d5-4f4f-97e4-6d5ca8906521
 begin
 	reltol = 1e-10
@@ -489,16 +496,15 @@ begin
 		(30., 28.)
 	]
 
-end;
+	affect!(integrator) = terminate!(integrator, SciMLBase.ReturnCode.Success)
+	function instabilitycondition(u, t, integrator)
+		λcond = u[3] > ω(u[1]) ? 0.0 : 1.0
+		xcond = u[1] ≤ xₛ ? 0.0 : 1.0
+		ccond = u[2] ≤ m.cₚ ? 0.0 : 1.0
+	
+		return λcond * xcond * ccond
+	end
 
-# ╔═╡ 695e0698-2772-42df-a467-53d79b1bbe1c
-l = economy.LinearQuadratic(τ = 0, xₛ = 287.3, γ = γ₀);
-
-# ╔═╡ 331cadc1-57af-4199-b113-8f2696708916
-begin
-	nullfns, equilibria = getequilibria(m, l; xₗ = 100, xᵤ = 900)
-
-	ψ, ω, ϕ = nullfns
 end;
 
 # ╔═╡ 568417ca-cb93-42d3-a795-eb8bef188bec
@@ -531,21 +537,23 @@ begin
 	plot!(xcfig, csteadystate, xspace; c = :darkred, label = false)
 	scatter!(xcfig, [c₀], [x₀]; c = :black, label = "Initial state")
 
-	# -- (λ, e)
-	espace = range(-25, 50; length = 1001)
-	λspace = range(-650, 0; length = 1001)
 
-	λefig = plot(
-		xlims = extrema(λspace), ylims = extrema(espace), 
-		aspect_ratio = (λspace[end] - λspace[1]) / (espace[end] - espace[1]),
-		xlabel = "Shadow price \$\\lambda_x\$", ylabel = "Emissions \$e\$"
+	# -- (e, x)
+	espace = range(-30, 45; length = 1001)
+
+	xefig = plot(
+		xlims = extrema(espace), ylims = extrema(xspace), 
+		aspect_ratio = (espace[end] - espace[1]) / (xspace[end] - xspace[1]) ,
+		ylabel = "Temperature \$x\$ in °C", xlabel = "Emissions \$e\$",
+		yicks = xticks
+		
 	)
-
-	actionnullcine = ϕ.(espace)
-
-	plot!(λefig, actionnullcine, espace; c = :darkred, label = false)
+	
+	hline!(xefig, [x₀]; c = :black, label = "Initial state", linestyle = :dash)
+	
 
 	# -- (x, λ)	
+	λspace = range(-650, 0; length = 1001)
 	xλfig = plot(
 		xlims = extrema(xspace), ylims = extrema(λspace), 
 		aspect_ratio = (xspace[end] - xspace[1]) / (λspace[end] - λspace[1]),
@@ -555,6 +563,7 @@ begin
 
 	plot!(xλfig, xspace, ω; c = :darkred, label = nothing)
 	vline!(xλfig, [x₀]; c = :black, linestyle = :dash, label = "Initial state")
+	vline!(xλfig, tipping_points, c = :black, label = "Tipping points")
 
 	# -- (c, e)
 	cspace = range(100, 1000, length = 1001)
@@ -570,7 +579,7 @@ begin
 
 
 	# Manifolds and steady states
-	figures = [xcfig, λefig, xλfig, cefig]
+	figures = [xcfig, xefig, xλfig, cefig]
 
 	colors = [:darkgreen, :darkorange, :darkblue]
 
@@ -585,11 +594,11 @@ begin
 		end
 		scatter!(xcfig, [c], [x]; c = colors[i], label = nothing)
 
-		# -- (λ, e)
+		# -- (x, e)
 		for (dir, curve) ∈ stablemanifolds
-			plot!(λefig, curve[:, 3], curve[:, 4]; c = colors[i], label = nothing)
+			plot!(xefig, curve[:, 4], curve[:, 1]; c = colors[i], label = nothing)
 		end
-		scatter!(λefig, [λ], [e]; c = colors[i], label = nothing)
+		scatter!(xefig, [e], [x]; c = colors[i], label = nothing)
 		
 		# -- (x, λ)
 		for (dir, curve) ∈ stablemanifolds
@@ -2581,7 +2590,6 @@ version = "1.4.1+0"
 # ╟─314c6433-27ca-4aba-bd41-0e80f5c1118f
 # ╟─b17c0b74-40a4-4d90-a664-7025c44fef06
 # ╠═f3bd2d72-5b85-48b9-982e-782d096d5e4e
-# ╠═4f8e9996-1e1a-4794-ac5c-f3706abbf151
 # ╠═4f9964b2-05fa-4c01-b003-7a3ca32041b4
 # ╟─4a6c00dc-3382-4460-9ebc-40be27f22dd3
 # ╟─75daf019-f422-4623-9418-c3992fa55897
@@ -2590,6 +2598,6 @@ version = "1.4.1+0"
 # ╠═695e0698-2772-42df-a467-53d79b1bbe1c
 # ╠═331cadc1-57af-4199-b113-8f2696708916
 # ╠═568417ca-cb93-42d3-a795-eb8bef188bec
-# ╟─fb94e31a-cc84-45c9-a3c4-481972982bb5
+# ╠═fb94e31a-cc84-45c9-a3c4-481972982bb5
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
