@@ -8,7 +8,7 @@ Base.@kwdef struct LinearQuadratic
 
     τ::Float64 = 0.0 # Carbon tax $ / ppm
 
-    γ::Float64 = 0.15 # Damage $ / K^2
+    γ::Float64 = 7.51443e-4 # Damage $ / K^2
     xₛ::Float64 = 289 # Surely safe temperature
 end
 

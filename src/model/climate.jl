@@ -1,8 +1,8 @@
 sectoyear = 3.154e7
 
 Base.@kwdef struct MendezFarazmand
-    cₚ::Float64 = 280 # Preindustrial concentration
     c₀::Float64 = 410 # Current concentration
+    cₚ::Float64 = 280 # Preindustrial concentration
     
     q₀::Float64 = 342 # Solar constant
     κ::Float64 = inv(5e8) * sectoyear # Scale of temperature change
@@ -12,6 +12,9 @@ Base.@kwdef struct MendezFarazmand
     S::Float64 = 150 # Intercept of concentration effect
     
     δ::Float64 = 2.37e-10 * sectoyear # Concentration delay per year
+
+    x₀::Float64 = 289 # Current temperature
+    xₚ::Float64 = 287 # Pre-industrial temperature
 
     xₐ::Float64 = 3 # Transition rate
 	x₁::Float64 = 289 # Pre-transition temperature
