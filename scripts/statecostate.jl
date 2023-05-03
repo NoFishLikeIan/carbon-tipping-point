@@ -5,6 +5,8 @@ using DifferentialEquations
 using Roots
 using LinearAlgebra
 
+using Interpolations
+
 using Plots
 default(size = 600 .* (√2, 1), dpi = 300, margins = 5Plots.mm, linewidth = 1.5)
 
@@ -53,9 +55,19 @@ function computemanifolds(params::Dict; timehorizons = timehorizons)
 
 end
 
-# Plotting manifolds over (x, c), (λ, e), (x, λ), (c, e)
+lowmanifolds = vcat(manifolds[1][:n], reverse(manifolds[1][:p], dims = 1))
+
+nodes = (lowmanifolds[:, 1], lowmanifolds[:, 2])
+glinear = (Gridded(Linear()), Gridded(Linear()))
+
+λ(x, c) = interpolate(nodes, lowmanifolds[:, 3], glinear)(x, c)
+
+
 params = Dict("γ" => 7.51443e-4, "τ" => 0.0)
 results = computemanifolds(params)
 
+manifolds = results["manifolds"]
+
+# Saving results
 filename = savename(params, "jld2")
 wsave(datadir("manifolds", filename), results)
