@@ -32,7 +32,7 @@ function computestablemanifolds(
 
 		stabledirs = findall(λᵢ -> real(λᵢ) < 0, λ)
 
-		manifolds = Dict()
+		manifolds = []
 
 		for i ∈ stabledirs
 			vᵢ = real.(V[:, i])
@@ -44,9 +44,9 @@ function computestablemanifolds(
 
 			if SciMLBase.successful_retcode(negsol.retcode)
 				timespan = range(0.0, negtend, length = T)
-				manifolds[:n] = hcat((t -> negsol(negtend - t)).(timespan)...)'
+				negmanifold = hcat((t -> negsol(negtend - t)).(timespan)...)'
 			else
-				manifolds[:n] = NaN * ones(T, n)
+				negmanifold = NaN * ones(T, n)
 			end
 
 			# Positive direction
@@ -56,11 +56,13 @@ function computestablemanifolds(
 
 			if SciMLBase.successful_retcode(possol.retcode)
 				timespan = range(0.0, postend, length = T)
-				manifolds[:p] = hcat((t -> possol(postend - t)).(timespan)...)'
+				posmanifold = hcat((t -> possol(postend - t)).(timespan)...)'
 			else
-				manifolds[:p] = NaN * ones(T, n)
+				posmanifold = NaN * ones(T, n)
 			end
-
+			
+			mᵢ = vcat(posmanifold, reverse(negmanifold, dims = 1))
+			push!(manifolds, mᵢ)
 		end		
 
 		push!(equil, manifolds)

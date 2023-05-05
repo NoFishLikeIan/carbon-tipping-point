@@ -3,7 +3,6 @@ using DrWatson; @quickactivate "scc-tipping-points"
 using Roots
 using ApproxFun
 using Interpolations
-using DomainSets: ×
 using StaticArrays
 
 using Plots

@@ -21,17 +21,11 @@ include("../src/statecostate/optimalpollution.jl")
 # State costate dynamics
 m = MendezFarazmand() # Climate model
 
-timehorizons = [
-	(135., 110.),
-	(67., 110.),
-	(30., 28.)
-]
-
-function computemanifolds(params::Dict; timehorizons = timehorizons)
+function computemanifolds(params::Dict, timehorizons; kwargs...)
 	@unpack γ, τ = params
 
 	l = LinearQuadratic(τ = τ, γ = γ, xₛ = m.xₚ) # Social planner
-	nullclines, equilibria = getequilibria(m, l)
+	_, equilibria = getequilibria(m, l)
 
 	tipping_points = find_zeros(x -> μₓ(x, m), (290, 300))
 
@@ -39,7 +33,8 @@ function computemanifolds(params::Dict; timehorizons = timehorizons)
 		F!, DF!, equilibria, [m, l];
 		alg = Rosenbrock23(), 
 		tends = timehorizons, T = 2_000, h = 1e-3,
-		abstol = 1e-10, reltol = 1e-10, maxiters = 1e7
+		abstol = 1e-10, reltol = 1e-10, maxiters = 1e7,
+		kwargs...
 	)
 
 	results = Dict()
@@ -55,16 +50,15 @@ function computemanifolds(params::Dict; timehorizons = timehorizons)
 
 end
 
-lowmanifolds = vcat(manifolds[1][:n], reverse(manifolds[1][:p], dims = 1))
-
-nodes = (lowmanifolds[:, 1], lowmanifolds[:, 2])
-glinear = (Gridded(Linear()), Gridded(Linear()))
-
-λ(x, c) = interpolate(nodes, lowmanifolds[:, 3], glinear)(x, c)
-
-
 params = Dict("γ" => 7.51443e-4, "τ" => 0.0)
-results = computemanifolds(params)
+
+tends = [
+	(135., 110.),
+	(67., 110.),
+	(30., 28.)
+]
+
+results = computemanifolds(params, tends; verbose = true)
 
 manifolds = results["manifolds"]
 
