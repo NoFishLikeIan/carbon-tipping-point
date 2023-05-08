@@ -9,7 +9,9 @@ Base.@kwdef struct LinearQuadratic
     τ::Float64 = 0.0 # Carbon tax $ / ppm
 
     γ::Float64 = 7.51443e-4 # Damage $ / K^2
-    xₛ::Float64 = 289 # Surely safe temperature
+    xₛ::Float64 = 287. # Surely safe temperature
+
+    ē::Float64 = 200. # Maximum emissions
 end
 
 function d(x, l::LinearQuadratic)

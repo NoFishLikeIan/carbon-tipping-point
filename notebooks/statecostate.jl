@@ -14,9 +14,6 @@ macro bind(def, element)
     end
 end
 
-# ╔═╡ 83e33f5e-354d-4296-aafc-e8778d4839fb
-using DrWatson
-
 # ╔═╡ 14b581f5-a235-47d2-baf3-065cffff6f51
 @quickactivate "scc-tipping-points"
 
@@ -150,6 +147,7 @@ begin
 end;
 
 # ╔═╡ 5a2c219a-a727-44dd-917b-759667911d77
+#=╠═╡
 let
 	(; α₁, α₂, x₁, x₂, q₀) = m
 	
@@ -172,12 +170,17 @@ let
 
 	basefig
 end
+  ╠═╡ =#
 
 # ╔═╡ 82d4835a-2a2f-4208-ad23-9e4c9ac2cba0
+#=╠═╡
 current_emissions = 2.59 + m.δ * m.c₀
+  ╠═╡ =#
 
 # ╔═╡ 54b0c489-3c22-4206-8af3-d4cc8a372c17
+#=╠═╡
 tipping_points = find_zeros(x -> a′(x, m) - 4m.η * x^3, (290, 300))
+  ╠═╡ =#
 
 # ╔═╡ ad1738b0-8f7c-4c91-92a6-ad4bc096a98d
 md"## Economic model"
@@ -196,6 +199,7 @@ A simplified linear model
 "
 
 # ╔═╡ 85d4cad2-9f17-41cf-9b27-d3accb7057e8
+#=╠═╡
 begin
 	(; κ, A, δ) = m
 	(; β₀, β₁, ρ, τ, xₛ) = Llinear
@@ -217,8 +221,10 @@ begin
 	optimalemissions(c) = inv(δ + ηₛ) * c
 
 end
+  ╠═╡ =#
 
 # ╔═╡ 314c6433-27ca-4aba-bd41-0e80f5c1118f
+#=╠═╡
 let
 	(; δ, cₚ) = m
 	(; ρ, β₁, β₀) = Llinear
@@ -233,6 +239,7 @@ let
 	
 	css
 end
+  ╠═╡ =#
 
 # ╔═╡ b17c0b74-40a4-4d90-a664-7025c44fef06
 md"
@@ -249,6 +256,7 @@ begin
 end;
 
 # ╔═╡ 7b56773e-7d5f-411e-a5de-541ba6e7e0b0
+#=╠═╡
 let
 	xspace = range(285, 297; length = 101)
 	css = (x -> climate.φ(x, m)).(xspace)
@@ -276,8 +284,10 @@ let
 	ssfig
 		
 end
+  ╠═╡ =#
 
 # ╔═╡ cae95c3f-698c-4287-8c68-c91186c63dc0
+#=╠═╡
 let
 	(; β₀, τ, β₁, xₛ, γ) = Llinear
 	
@@ -301,8 +311,10 @@ let
 	
 	lfig
 end
+  ╠═╡ =#
 
 # ╔═╡ 9f888b0c-7d8b-4213-8820-f584b3a36500
+#=╠═╡
 let
 	
 	narrows = 22
@@ -325,6 +337,7 @@ let
 
 	scatter!(vecfig, [0], [0]; c = :black, label = false)
 end
+  ╠═╡ =#
 
 # ╔═╡ 4a6c00dc-3382-4460-9ebc-40be27f22dd3
 begin
@@ -482,13 +495,16 @@ end
 l = economy.LinearQuadratic(τ = 0, xₛ = 287.3, γ = γ₀);
 
 # ╔═╡ 331cadc1-57af-4199-b113-8f2696708916
+#=╠═╡
 begin
 	nullfns, equilibria = getequilibria(m, l; xₗ = 100, xᵤ = 900)
 
 	ψ, ω, ϕ = nullfns
 end;
+  ╠═╡ =#
 
 # ╔═╡ dd8b41b7-71d5-4f4f-97e4-6d5ca8906521
+#=╠═╡
 begin
 	reltol = 1e-10
 	abstol = 1e-10
@@ -518,8 +534,10 @@ begin
 	end
 
 end;
+  ╠═╡ =#
 
 # ╔═╡ 568417ca-cb93-42d3-a795-eb8bef188bec
+#=╠═╡
 manifolds = computestablemanifolds(
 	F!, DF!, equilibria, [m, l];
 	alg = Rosenbrock23(), abstol = abstol, reltol = reltol,
@@ -528,8 +546,10 @@ manifolds = computestablemanifolds(
 	T = 2_000, maxiters = 1e7,
 	h = 1e-3
 );
+  ╠═╡ =#
 
 # ╔═╡ fb94e31a-cc84-45c9-a3c4-481972982bb5
+#=╠═╡
 begin
 	# -- (x, c)
 	xspace = range(xₛ - 2, 299; length = 2001)
@@ -627,10 +647,10 @@ begin
 
 	jointfig = plot(figures..., layout = (2, 2), size = (1200, 1200))
 end
+  ╠═╡ =#
 
 # ╔═╡ Cell order:
 # ╟─24b43a3d-d657-44e4-8aca-995ee007ebb2
-# ╠═83e33f5e-354d-4296-aafc-e8778d4839fb
 # ╠═14b581f5-a235-47d2-baf3-065cffff6f51
 # ╠═94078a8e-c9ee-4351-8d4d-c9656024934d
 # ╠═fe8e8cc9-8547-4eba-8120-e4d6632fe9b8

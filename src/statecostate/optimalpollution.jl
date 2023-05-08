@@ -1,49 +1,61 @@
-function Fexogenousemissions!(dz, z, p, t)
-	m, e = p
-	x, c = z
+function hₑ(pc, l::LinearQuadratic)
+    (; ē, β₁, β₀, τ) = l
 
-	dz[1] = m.κ * μ(x, c, m) # Temperature
-	dz[2] = e(x, c) - m.δ * c # Concentration
-	
-	return dz
+    if pc ≤ τ - β₀
+        return 0.
+    elseif pc ≥ β₁ * ē + τ - β₀
+        return ē
+    else
+        return (β₀ - τ + pc) / β₁
+    end
+end
+
+function hₑ′(pc, l::LinearQuadratic)
+	(; ē, β₁, β₀, τ) = l
+
+	if pc ≥ β₁ * ē + τ - β₀ || pc ≤ τ - β₀
+		return 0.
+	end
+
+	return 1 / β₁
 end
 
 function F!(dz, z, p, t)
 	m, l = p # Unpack LinearQuadratic and climate model
 	(; κ, A, δ) = m
-	(; β₀, β₁, τ, γ, ρ, xₛ) = l
+	(; γ, ρ, xₛ) = l
 
-	x, c, λ, e = z # Unpack state
+	x, c, λx, λc = z # Unpack state
 	
-	dz[1] = κ * μ(x, c, m) # Temperature 
-	dz[2] = e - δ * c # Concentration 
+	dz[1] = μ(x, c, m) # Temperature 
+	dz[2] = hₑ(λc, l) - δ * c # Concentration 
 
-	dz[3] = (ρ - κ * μₓ(x, m)) * λ + γ * (x - xₛ) # Shadow price of temperature
-	dz[4] = (ρ + δ) * (e - (β₀ - τ) / β₁) - (λ / c) * (κ * A) / β₁ # Emissions
+	dz[3] = (ρ - κ * g′(x, m)) * λx + γ * (x - xₛ) # Shadow price of temperature
+	dz[4] = (ρ + δ) * λc - (κ * A) * λx / c # Emissions
 
 	return dz
 end
 
 function DF!(D, z, p, t)
-	m, l = p # Unpack a LinearQuadratic model
+	m, l = p # Unpack LinearQuadratic and climate model
 	(; κ, A, δ) = m
-	(; β₀, β₁, τ, γ, ρ, xₛ) = l
+	(; γ, ρ) = l
 
-	x, c, λ, e = z # Unpack state
+	x, c, λx, λc = z # Unpack state
 
 	J = zeros(4, 4)
 
-	J[1, 1] = κ * μₓ(x, m)
+	J[1, 1] = κ * g′(x, m)
 	J[1, 2] = κ * A / c
 
 	J[2, 2] = -δ
-	J[2, 4] = 1
+	J[2, 4] = hₑ′(λc, l)
 	
-	J[3, 1] = γ - κ * μₓₓ(x, m) * λ
-	J[3, 3] = ρ - κ * μₓ(x, m)
+	J[3, 1] = γ - κ * g′′(x, m) * λx
+	J[3, 3] = ρ - κ * g′(x, m)
 
-	J[4, 2] = -(κ * A / β₁) * (λ / c^2)
-	J[4, 3] = -(κ * A / β₁) * (1 / c)
+	J[4, 2] = (κ * A) * (λx / c^2)
+	J[4, 3] = -(κ * A) / c
 	J[4, 4] = ρ + δ
 
 	D .= J
@@ -51,37 +63,44 @@ function DF!(D, z, p, t)
 	return J
 end
 
+function H(x, c, px, pc, m::MendezFarazmand, l::LinearQuadratic)
+	e = h(pc, l)
+	u(e, l) - d(x, l) + px * μ(x, c, m) + pc * (e - δ * c)
+end
+
 # Equilibrium relations assuming ċ = 0 ⟺ e = δc
 """
 Get the equilibria of the deterministic climate-economy model.
 """
-function getequilibria(m, l; xlims = (280, 310))
+function computesteadystates(m, l; xlimits = (280, 310), ε = 1e-9)
 	(; κ, A, δ) = m
-	(; β₀, β₁, τ, γ, ρ, xₛ) = l
+	(; γ, ρ, xₛ) = l
 
-	ψ(x) = φ(x, m) * δ
-	ω(x) = γ * (x - xₛ) / (κ * μₓ(x, m) - ρ)
-	ϕ(e) = (β₁ * e) / (κ * A * δ) * (ρ + δ) * (e - (β₀ - τ) / β₁)
-	
-	equilibriumcond(x) = ω(x) - (ϕ ∘ ψ)(x)
-	
-	asymptotesω = find_zeros(x -> κ * μₓ(x, m) - ρ, xlims[1], xlims[2])
-	
+	function o(x)
+		c = φ(x, m)
+		λx = γ * (x - xₛ) / (κ * g′(x, m) - ρ)
+		λc = (κ * A * λx) / (c * (ρ + δ))
+
+		return hₑ(λc, l) - δ * c
+	end
+
+	asymptotes = find_zeros(x -> κ * g′(x, m) - ρ, xlimits...)	
+	tipping_points = find_zeros(x -> g′(x, m), xlimits...)
 	regions = [
-		(xlims[1], asymptotesω[1]),
-		(asymptotesω[1], asymptotesω[2]),
-		(asymptotesω[2], xlims[2])
+		(xlimits[1], asymptotes[1]),
+		(tipping_points[1], asymptotes[1]),
+		(asymptotes[2], tipping_points[2]),
+		(asymptotes[2], xlimits[2])
 	]
 	
 	
 	equilibria = Vector{Float64}[]
-	for (l, u) ∈ regions, x ∈ find_zeros(equilibriumcond, l, u)
-		e = ψ(x)
-		λ = ω(x)
-		c = e / δ
-	
-		push!(equilibria, [x, c, λ, e])
+	for (xl, xu) ∈ regions, x ∈ find_zero(o, (xl, xu))
+		c = φ(x, m)
+		λx = γ * (x - xₛ) / (κ * g′(x, m) - ρ)
+		λc = (κ * A * λx) / (c * (ρ + δ))	
+		push!(equilibria, [x, c, λx, λc])
 	end
 
-	(ψ, ω, ϕ), equilibria
+	return equilibria
 end

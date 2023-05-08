@@ -5,11 +5,6 @@ using DifferentialEquations
 using Roots
 using LinearAlgebra
 
-using Interpolations
-
-using Plots
-default(size = 600 .* (√2, 1), dpi = 300, margins = 5Plots.mm, linewidth = 1.5)
-
 include("../src/utils/dynamicalsystems.jl")
 
 include("../src/model/climate.jl")
@@ -19,20 +14,22 @@ include("../src/statecostate/optimalpollution.jl")
 
 
 # State costate dynamics
+
 m = MendezFarazmand() # Climate model
 
 function computemanifolds(params::Dict, timehorizons; kwargs...)
 	@unpack γ, τ = params
 
 	l = LinearQuadratic(τ = τ, γ = γ, xₛ = m.xₚ) # Social planner
-	_, equilibria = getequilibria(m, l)
+	steadystates = computesteadystates(m, l)
 
-	tipping_points = find_zeros(x -> μₓ(x, m), (290, 300))
+	tipping_points = find_zeros(x -> g′(x, m), (290, 300))
+
 
 	manifolds = computestablemanifolds(
-		F!, DF!, equilibria, [m, l];
+		F!, DF!, steadystates, [m, l];
 		alg = Rosenbrock23(), 
-		tends = timehorizons, T = 2_000, h = 1e-3,
+		tends = timehorizons, T = 2_000, h = 1e-6,
 		abstol = 1e-10, reltol = 1e-10, maxiters = 1e7,
 		kwargs...
 	)
@@ -50,11 +47,13 @@ function computemanifolds(params::Dict, timehorizons; kwargs...)
 
 end
 
+l = LinearQuadratic()
+
 params = Dict("γ" => 7.51443e-4, "τ" => 0.0)
 
 tends = [
-	(135., 110.),
-	(67., 110.),
+	(110., 140.),
+	(110., 110.),
 	(30., 28.)
 ]
 
@@ -65,3 +64,13 @@ manifolds = results["manifolds"]
 # Saving results
 filename = savename(params, "jld2")
 wsave(datadir("manifolds", filename), results)
+
+
+tspace = range(290, 300, length = 1001)
+
+plot(tspace, x -> ρ - κ * g′(x, m))
+vline!([tipping_points[1]])
+vline!([find_zero(x -> ρ - κ * g′(x, m), extrema(tspace))])
+
+vline!([equilibria[1][1]]; label = "Stable")
+vline!([equilibria[2][1]]; label = "Unstable")

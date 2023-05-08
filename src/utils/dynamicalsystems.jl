@@ -1,4 +1,3 @@
-computestablemanifolds(F!, DF!, steadystates; kwargs...) = computestablemanifolds(F!, DF!, steadystates, Float64[]; kwargs...)
 function computestablemanifolds(
 	    F!::Function, DF!::Function,
 	    steadystates::Vector{Vector{Float64}},
