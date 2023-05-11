@@ -1,4 +1,7 @@
-function hₑ(pc, l::LinearQuadratic)
+"""
+Policy function
+"""
+function φ(pc, l::LinearQuadratic)
     (; ē, β₁, β₀, τ) = l
 
     if pc ≤ τ - β₀
@@ -10,7 +13,7 @@ function hₑ(pc, l::LinearQuadratic)
     end
 end
 
-function hₑ′(pc, l::LinearQuadratic)
+function φ′(pc, l::LinearQuadratic)
 	(; ē, β₁, β₀, τ) = l
 
 	if pc ≥ β₁ * ē + τ - β₀ || pc ≤ τ - β₀
@@ -20,6 +23,9 @@ function hₑ′(pc, l::LinearQuadratic)
 	return 1 / β₁
 end
 
+"""
+State costate dynamics
+"""
 function F!(dz, z, p, t)
 	m, l = p # Unpack LinearQuadratic and climate model
 	(; κ, A, δ) = m
@@ -28,7 +34,7 @@ function F!(dz, z, p, t)
 	x, c, λx, λc = z # Unpack state
 	
 	dz[1] = μ(x, c, m) # Temperature 
-	dz[2] = hₑ(λc, l) - δ * c # Concentration 
+	dz[2] = φ(λc, l) - δ * c # Concentration 
 
 	dz[3] = (ρ - κ * g′(x, m)) * λx + γ * (x - xₛ) # Shadow price of temperature
 	dz[4] = (ρ + δ) * λc - (κ * A) * λx / c # Emissions
@@ -49,7 +55,7 @@ function DF!(D, z, p, t)
 	J[1, 2] = κ * A / c
 
 	J[2, 2] = -δ
-	J[2, 4] = hₑ′(λc, l)
+	J[2, 4] = φ′(λc, l)
 	
 	J[3, 1] = γ - κ * g′′(x, m) * λx
 	J[3, 3] = ρ - κ * g′(x, m)
@@ -63,9 +69,12 @@ function DF!(D, z, p, t)
 	return J
 end
 
+"""
+Hamiltonian
+"""
 function H(x, c, px, pc, m::MendezFarazmand, l::LinearQuadratic)
-	e = h(pc, l)
-	u(e, l) - d(x, l) + px * μ(x, c, m) + pc * (e - δ * c)
+	e = φ(pc, l)
+	return u(e, l) - d(x, l) + px * μ(x, c, m) + pc * (e - m.δ * c)
 end
 
 # Equilibrium relations assuming ċ = 0 ⟺ e = δc
@@ -81,7 +90,7 @@ function computesteadystates(m, l; xlimits = (280, 310), ε = 1e-9)
 		λx = γ * (x - xₛ) / (κ * g′(x, m) - ρ)
 		λc = (κ * A * λx) / (c * (ρ + δ))
 
-		return hₑ(λc, l) - δ * c
+		return φ(λc, l) - δ * c
 	end
 
 	asymptotes = find_zeros(x -> κ * g′(x, m) - ρ, xlimits...)	

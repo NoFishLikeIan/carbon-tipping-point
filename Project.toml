@@ -3,9 +3,11 @@ authors = ["Andrea Titton"]
 
 [deps]
 ApproxFun = "28f2ccd6-bb30-5033-b560-165f7b14dc2f"
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 DifferentialEquations = "0c46a032-eb83-5123-abaf-570d42b7fbaa"
 DomainSets = "5b8099bc-c8ec-5219-889f-1d9e522a28bf"
 DrWatson = "634d3b9d-ee7a-5ddf-bec9-22491ea816e1"
+FiniteDifferences = "26cc04aa-876d-5657-8c51-4c34ba976000"
 Interpolations = "a98d9a8b-a2ab-59e6-89dd-64a1c18fca59"
 Roots = "f2b01f46-fcfa-551c-844a-d8ac1e96c665"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"

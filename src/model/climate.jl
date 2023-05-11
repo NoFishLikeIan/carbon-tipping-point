@@ -52,10 +52,10 @@ g′′(x, m::MendezFarazmand) = m.q₀ * (m.α₁ - m.α₂) * σ′′(x, m) -
 """
 Compute CO₂ concentration consistent with temperature x
 """
-function φ(x, m::MendezFarazmand)
+function nullcline(x, m::MendezFarazmand)
     (; S, A, cₚ) = m
 
     return cₚ * exp( - (g(x, m) + S) / A ) 
 end
 
-φ⁻¹(c, m::MendezFarazmand) = find_zeros(x -> φ(x, m) - c, (200, 400)) # This is not a function
+inversenullcline(c, m::MendezFarazmand) = find_zeros(x -> φ(x, m) - c, (200, 400)) # This is not a function

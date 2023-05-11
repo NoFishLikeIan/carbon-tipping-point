@@ -255,39 +255,6 @@ $\begin{equation}
 
 """
 
-# ╔═╡ 22304421-8b8d-4576-ac1c-4d000e1f9840
-md"
-## State-costate
-"
-
-# ╔═╡ 53fbd96b-707d-4a28-a957-f34bbf0fe0be
-TwoColumn(
-	md"""
-	$\begin{align}
-		\dot{\lambda}_x &= \big(\rho - \kappa \ g'(x) \big) \ \lambda_x + \gamma \ (x - x_p) \\
-		\dot{\lambda}_c &= \big(\rho + \delta \big) \ \lambda_c - \kappa a  \frac{\lambda_x}{c}
-	\end{align}$
-	""",
-	let
-		xspace = range(291, 293.3; length = 1001)
-		
-		h(x) = l.ρ - m.κ * climate.g′(x, m)
-		tipping_points = find_zeros(x -> climate.g′(x, m), extrema(xspace)...)
-		xs = find_zeros(h, extrema(xspace)...)
-
-		lxfig = plot(xspace, h; label = false, c = :darkgreen, linewidth = 2, title = "\$\\rho - \\kappa g\\prime(x)\$", xlabel = "\$x\$")
-		hline!(lxfig, [0.]; c = :black, label = false)
-		for (i, x) ∈ enumerate(xs)
-			label = i > 1 ? false : "\$g\\prime(x) = \\rho / \\kappa\$"
-			
-			scatter!(lxfig, [x], [h(x)]; c = :black, label = label)
-		end
-		vline!(lxfig, tipping_points, label = "Tipping points", c = :darkred, linestyle = :dash)
-
-		lxfig
-	end
-)
-
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
@@ -307,7 +274,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.5"
 manifest_format = "2.0"
-project_hash = "551c9d46aacb222cd0efe3a262511a8c4d2ce2dc"
+project_hash = "6460df405e92f52a3a5afa3cce89439631949e56"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
@@ -1322,7 +1289,7 @@ version = "1.4.1+0"
 # ╠═3bef3cc7-dc93-4733-b5fe-ce512c278f95
 # ╟─3cc6addb-a9e3-4872-8205-ca306c307686
 # ╟─83ba6f59-dc71-47bc-8a75-b67580adbc4d
-# ╟─d2d44b83-9072-4a33-ab20-60896896b9d4
+# ╠═d2d44b83-9072-4a33-ab20-60896896b9d4
 # ╟─fde31542-93ac-4b6b-8c39-2d5b589d7acd
 # ╟─b3a083db-3a01-4f2b-a86b-6ac7e9fac4f9
 # ╟─a9a14b7e-1c32-481b-b4d0-16cf226489fb
@@ -1330,7 +1297,5 @@ version = "1.4.1+0"
 # ╠═9e64b198-282e-4f81-82d6-2633325a4496
 # ╟─1a822bc4-216f-41e5-8c28-bdccd40e8aac
 # ╟─5bd913fe-f4c8-4b35-9c1a-e38f66e96a9a
-# ╟─22304421-8b8d-4576-ac1c-4d000e1f9840
-# ╟─53fbd96b-707d-4a28-a957-f34bbf0fe0be
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
