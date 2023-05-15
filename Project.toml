@@ -3,8 +3,10 @@ authors = ["Andrea Titton"]
 
 [deps]
 ApproxFun = "28f2ccd6-bb30-5033-b560-165f7b14dc2f"
+ArgParse = "c7e460c6-2fb9-53a9-8c5b-16f535851c63"
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 DifferentialEquations = "0c46a032-eb83-5123-abaf-570d42b7fbaa"
+Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 DomainSets = "5b8099bc-c8ec-5219-889f-1d9e522a28bf"
 DrWatson = "634d3b9d-ee7a-5ddf-bec9-22491ea816e1"
 FiniteDifferences = "26cc04aa-876d-5657-8c51-4c34ba976000"
