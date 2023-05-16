@@ -13,7 +13,7 @@ function constructinterpolation(X, C, V)
     return extrapolate(itp, Flat())
 end
 
-function valuefunctioniteration(m::MendezFarazmand, l::LinearQuadratic, n::Int64, emissionspace::Vector{Float64}; h = 1e-2, maxiter = 100_000, tol = 1e-2, verbose = true, cmax = 800., xmax = 350.)
+function valuefunctioniteration(m::MendezFarazmand, l::LinearQuadratic, n::Int64, emissionspace; h = 1e-2, maxiter = 100_000, tol = 1e-2, verbose = true, cmax = 800., xmax = 350.)
     β = exp(-l.ρ * h)
 
     # State space
@@ -55,7 +55,7 @@ function valuefunctioniteration(m::MendezFarazmand, l::LinearQuadratic, n::Int64
     return Vᵢ, Eᵢ
 end
 
-function damagevaluefunctioniteration(Γ, n, emissionspace, m::MendezFarazmand; xmax = xmax, cmax = cmax, verbose = true, kwargs...)
+function damagevaluefunctioniteration(Γ, m::MendezFarazmand, n::Int64, emissionspace; xmax = xmax, cmax = cmax, verbose = true, kwargs...)
     p = length(Γ)
     V = Array{Float64, 3}(undef, n, n + 1, p)
     E = Array{Float64, 3}(undef, n, n + 1, p)
@@ -99,10 +99,10 @@ C = range(m.cₚ, cmax, length = n + 1)
 Γ = range(5, 60; length = p)
 
 println("Computing value function, parameter space $n × $(n+1) × $p = $(p * n * (n + 1))...")
-v, e = damagevaluefunctioniteration(Γ, n, k, E; verbose = false, h = 1e-2)
+v, e = damagevaluefunctioniteration(Γ, m, n, E; verbose = false, h = 1e-2)
 
 println("Computing value function, with action constraint, parameter space $n × $(n+1) × $p = $(p * n * (n + 1))...")
-v₊, e₊ = damagevaluefunctioniteration(Γ, n, k, E₊; verbose = false, h = 1e-2)
+v₊, e₊ = damagevaluefunctioniteration(Γ, m, n, E₊; verbose = false, h = 1e-2)
 
 println("Saving...")
 
