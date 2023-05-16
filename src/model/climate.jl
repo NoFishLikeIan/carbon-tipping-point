@@ -13,7 +13,7 @@ Base.@kwdef struct MendezFarazmand
     
     δ::Float64 = 2.37e-10 * sectoyear # Concentration delay per year
 
-    x₀::Float64 = 287.05 # Current temperature
+    x₀::Float64 = 288.15 # Current temperature
     xₚ::Float64 = 287 # Pre-industrial temperature
 
     xₐ::Float64 = 1 # Transition rate
