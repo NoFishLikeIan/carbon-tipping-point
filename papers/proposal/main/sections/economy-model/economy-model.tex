@@ -1,24 +1,38 @@
 \documentclass[../../main.tex]{subfiles}
 \begin{document}
 
-For illustration purposes, we are going to solve a social planner model with linear quadratic benefits from emissions and quadratic damages of temperature. Namely, the benefit functional is \begin{equation}
-    l(x, e) = (\beta_0 - \tau) e - \frac{1}{2}\beta_1 e^2 - \frac{1}{2} \gamma \ (x - x_p)^2
-\end{equation} 
+We consider a social planner that seeks to maximise the functional \begin{equation}
+    J(e; x_0, c_0) = \mathbb{E}_{x} \int^{\infty}_0 e^{-\rho t} \Big(u(e) - d(x)\Big) \text{d} t,
+\end{equation}
 
-where $x_p$ is the pre-industrial temperature and $\tau$ is an exogenous carbon tax. 
+subject to the dynamics $\text{d}x$ and $\text{d}c$, with respect to an emission path $e$, which we assume to be a continuously differentiable function of time taking values in an interval $\mathcal{E} = [e_l, e_u]$. We will consider both the case in which carbon capture technology is, $e_l < 0$, or is not, $e_l = 0$, available to the planner. Furthermore, we assume benefits of emission to be concave, $u^{\prime \prime} < 0$, and temperature damages to be convex, $d^{\prime \prime} > 0$.
 
+We approach the problem by deriving a small-noise approximation of the value function, as in \citein{grass_small-noise_2015}. Namely, rewriting the temperature process as \begin{equation}
+    \text{d} x = \Big(\mu(x) + C_0 + C_1 \log(c / c_p)\Big) \text{d} t + \sqrt{2\varepsilon \sigma^2} \text{d}w,
+\end{equation}
 
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.9\linewidth]{../figures/benefit-functional.png}
-    \caption{Benefit functional $l$}
-    \label{fig:benefit-functional}
-\end{figure}
+we seek to compute the value function \begin{equation}
+    v(x, c, \varepsilon) = \sup_{e} J(e; x, c).
+\end{equation}
 
-I assume the social planner maximises the functional \begin{equation}
-    J(e) = \int_0^\infty  \exp(-\rho t) \ l(x, e) \ dt
-\end{equation} with respect to $e \in \mathcal{C}\Big([0, \infty), [-\underline{e}, \overline{e}]\Big)$ given an initial condition $(x_0, c_0)$ and the evolution $\text{d}c$ and $\text{d}x$.
+For each temperature and carbon concentration pair, $(x, c) \in \mathcal{X} \times \mathcal{C}$, and vector of shadow prices $(p_x, p_c) \in \mathbb{R}^2$, let the maximised current value Hamiltonian be \begin{equation}
+    \mathcal{H}(x, c, p_x, p_c) = \max_e \Big\{u(e) + p_c e \Big\} - p_c \ \delta c - d(x) + p_x \Big(\mu(x) + C_0 + C_1 \log(c / c_p)\Big),
+\end{equation} then the Hamilton–Jacobi–Bellman states that for all $\varepsilon > 0$ there exist an optimal emission schedule $e = \varphi(x, c, \varepsilon)$, such that the value function satisfies the following partial differential equation \begin{equation} \label{eq:hbj}
+    \rho \ v = \varepsilon \sigma^2 \ \partial_{x x} v + \mathcal{H}(x, c, \partial_x v, \partial_c v).
+\end{equation}
 
-To compute the optimal carbon tax we first solve the social planner problem with $\tau = 0$ and then, using $\gamma = 0$, compute the functional $\tau(x, e)$ that yields the same path of temperature and emissions.  
+We assume that there exist an asymptotic expansion \begin{equation}
+    v(x, c, \varepsilon) = v_0(x, c) + \varepsilon v_1(x, c) + \varepsilon^2 v_2(x, c) + \ldots
+\end{equation} with $v_j$ twice continuously differentiable functions.
+\subsection{Deterministic problem}
+
+We will first study the dynamics in absence of noise, that is with $\varepsilon = 0$, such that the value function reduces to $v(x, c, 0) = v_0(x, c)$. Then the Hamilton-Bellman-Jacobi equation (\ref{eq:hbj}) reduces to \begin{equation}
+    \rho \ v_0(x, c) = \mathcal{H}(x, c, \partial_x v_0, \partial_c v_0).
+\end{equation}
+
+\subsection{An Illustrative Example}
+
+Consider the simple case $u(e) = \beta_0 e - \frac{1}{2} \beta_1 e^2$ and $d(x) = \frac{1}{2}\gamma (x - x_p)^2$ where $x_p$ is the pre-industrial temperature level.
+
 
 \end{document}
