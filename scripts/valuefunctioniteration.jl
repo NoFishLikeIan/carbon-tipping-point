@@ -82,9 +82,9 @@ end
 m = MendezFarazmand() # Climate model
 l = LinearQuadratic() # Economic model
 
-n = 20 # size of state space n²
-k = 100 # size of action space
-p = 55
+n = 40 # size of state space n²
+k = 40 * 41 # size of action space
+p = 10
 
 xmax = 299.5
 cmax = 800.
@@ -96,7 +96,7 @@ E₊ = range(0, emax; length = k)
 X = range(m.xₚ, xmax, length = n)
 C = range(m.cₚ, cmax, length = n + 1)
 
-Γ = range(5, 60; length = p)
+Γ = range(20, 30; length = p)
 
 println("Computing value function, parameter space $n × $(n+1) × $p = $(p * n * (n + 1))...")
 v, e = damagevaluefunctioniteration(Γ, m, n, E; verbose = false, h = 1e-2)
