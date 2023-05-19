@@ -47,6 +47,11 @@
 
     % Math commands
 
+    \newcommand{\Dx}{\partial_x}
+    \newcommand{\Dc}{\partial_c} 
+
+    \renewcommand{\H}{\mathcal{H}}
+
     % Bibliography
 
     \usepackage[bibencoding=utf8, style=apa, backend=biber, eprint=false]{biblatex}
@@ -82,14 +87,9 @@ Tipping points in temperature affect the SCC in three ways. First, they introduc
 
 \subfile{sections/economy-model/economy-model.tex}
 
-\section{Model without Tipping Point}
+\section{Asymptotic Solution}
 
-\subfile{sections/linear-model/linear-model.tex}
-
-\section{Model with Tipping Points}
-
-\subsection{Deterministic skeleton}
-\subfile{sections/deterministic-skeleton/deterministic-skeleton.tex}
+\subfile{sections/solution/solution.tex}
 
 \nocite{*}
 \newpage
