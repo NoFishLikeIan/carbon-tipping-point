@@ -107,6 +107,12 @@ md"
 # Climate dynamics
 "
 
+# ╔═╡ b26d145f-046b-47d3-ac1e-078bfb121c09
+m = climate.MendezFarazmand();
+
+# ╔═╡ e5056d0a-11a1-48c7-9f48-176a7232ce99
+cnull = (x -> climate.nullcline(x, m)).(X);
+
 # ╔═╡ b1f21aac-a6e8-4894-b018-3e4541453f11
 begin
 	ktocelsius = 273.15
@@ -120,18 +126,6 @@ begin
 		temperaturelabels(s; bounds...)
 	)
 end;
-
-# ╔═╡ c97a1cf3-88db-4ab6-b294-3509e7a932c2
-
-
-# ╔═╡ 01625759-be87-406e-b5ae-472a771e7ac4
-md"# Value function"
-
-# ╔═╡ b26d145f-046b-47d3-ac1e-078bfb121c09
-m = climate.MendezFarazmand();
-
-# ╔═╡ e5056d0a-11a1-48c7-9f48-176a7232ce99
-cnull = (x -> climate.nullcline(x, m)).(X);
 
 # ╔═╡ d0a8dcb5-af0f-4e98-9e47-b28a50ab2308
 begin
@@ -194,7 +188,7 @@ begin
 		cnull, X,
 		c = :black, linestyle = :dash, 
 		ylabel = "\$x\$", xlabel = "\$c\$",
-		xlims = (400, 650), ylims = (xlims[1], 296),
+		xlims = (m.cₚ, 650), ylims = (xlims[1], 300),
 		yticks = temperaturelabelticks(0.5)
 	)
 
@@ -231,7 +225,7 @@ begin
 	
 	output_func = (sol, i) -> (sol[end], false)
 	
-	cspace = [600, 499, 450]
+	cspace = [500, 445, m.c₀]
 	K = length(cspace)
 	
 	xprob = SDEProblem(f, g, m.x₀, (0.0, 100.0), m.c₀)
@@ -277,6 +271,9 @@ let
 	densfig
 
 end
+
+# ╔═╡ 01625759-be87-406e-b5ae-472a771e7ac4
+md"# Value function"
 
 # ╔═╡ 2de5ab1b-6e0e-40cf-9f7b-000ee3bb6793
 function Fₒ!(dz, z, p, t)
@@ -2582,19 +2579,18 @@ version = "1.4.1+0"
 # ╠═5efef3c5-838b-486e-b28d-30257e780748
 # ╠═e5056d0a-11a1-48c7-9f48-176a7232ce99
 # ╟─4af48c24-2bb9-4c64-94db-49961123a5f6
+# ╠═b26d145f-046b-47d3-ac1e-078bfb121c09
 # ╠═13f7e6d4-ae99-4a94-9a9c-07bbbf2dd525
 # ╠═b1f21aac-a6e8-4894-b018-3e4541453f11
-# ╠═c97a1cf3-88db-4ab6-b294-3509e7a932c2
-# ╠═d0a8dcb5-af0f-4e98-9e47-b28a50ab2308
+# ╟─d0a8dcb5-af0f-4e98-9e47-b28a50ab2308
 # ╠═fb01b8b0-9d6e-4cd2-be5b-59aa43ef6bc4
 # ╠═da1d3f13-a807-4954-abd2-bccfc1daf06f
-# ╟─be99b40d-1b10-484d-af1b-6a61c349d6f3
+# ╠═be99b40d-1b10-484d-af1b-6a61c349d6f3
 # ╠═e8c4a4ee-d8e8-41ba-944e-bc1a0f1cb032
 # ╠═d5fb378d-036e-478f-995c-03e30c872f6d
 # ╠═20bbb10f-ad05-4578-9a8b-6ac8fa5bb89b
-# ╟─e0ad58a1-43ed-4571-bcf4-8ceaaf3eb96b
+# ╠═e0ad58a1-43ed-4571-bcf4-8ceaaf3eb96b
 # ╟─01625759-be87-406e-b5ae-472a771e7ac4
-# ╠═b26d145f-046b-47d3-ac1e-078bfb121c09
 # ╠═2de5ab1b-6e0e-40cf-9f7b-000ee3bb6793
 # ╠═4a086a99-a24f-4d9c-9b1f-344244af1fe1
 # ╠═4a29005d-a732-4fb2-800b-c3e78025543a
