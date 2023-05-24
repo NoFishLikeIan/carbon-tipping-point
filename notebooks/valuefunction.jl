@@ -27,7 +27,7 @@ using Plots
 using KernelDensity
 
 # ╔═╡ e0703ea6-9f03-446f-96eb-a7841f9d1c61
-using JLD2, Interpolations
+using JLD2, Interpolations, Dierckx
 
 # ╔═╡ 27c64c33-75f2-4ec7-8521-e7f6b648db51
 using Roots
@@ -40,6 +40,19 @@ using Colors
 
 # ╔═╡ 13f7e6d4-ae99-4a94-9a9c-07bbbf2dd525
 using DifferentialEquations.EnsembleAnalysis
+
+# ╔═╡ 2cbb7789-d932-47b0-96c0-e737ccaa5353
+html"""
+<style>
+	main {
+		margin: 0 auto;
+		max-width: 1200px;
+    	padding-left: max(160px, 10%);
+    	padding-right: max(160px, 10%);
+	}
+</style>
+"""
+
 
 # ╔═╡ 809cb15c-a96d-45f4-b580-cb0d66608a77
 function ingredients(path::String)
@@ -78,29 +91,28 @@ begin
 	keys(results)
 end
 
+# ╔═╡ b69354b9-55f2-4f82-a52c-842e952e0912
+controltype = "unconstrained";
+
 # ╔═╡ c028e90b-14d4-40e8-802c-358d696e366f
 begin
-	vinner = results["v"]
-    einner = results["e"]
+	valuecontrol = Dict()
 
-	v = extrapolate(vinner, Flat())
-	e = extrapolate(einner, Flat())
+	for sim in results[controltype]
+		γ = sim["γ"]
+		
+		ematrix = sim["E"]
+		vmatrix = sim["V"]
+
+		e = Spline2D(results["X"], results["C"], ematrix)
+		v = Spline2D(results["X"], results["C"], vmatrix)
+
+		valuecontrol[γ] = (v, e)
+	end
 end;
 
-# ╔═╡ 5efef3c5-838b-486e-b28d-30257e780748
-begin
-	xlims = extrema(results["X"])
-	X = range(xlims...; length = 201)
-	
-	clims = extrema(results["C"])
-	C = range(clims...; length = 201)
-
-	llims = extrema(results["Γ"])
-	Γ = range(llims...; length = 50)
-
-	xmax = maximum(first.(vcat(knots(v)...)))
-	cmax = 1000
-end;
+# ╔═╡ ed76a6db-bc6d-4b6b-811d-a87674a497f7
+Γ = valuecontrol |> keys |> collect |> sort;
 
 # ╔═╡ 4af48c24-2bb9-4c64-94db-49961123a5f6
 md"
@@ -110,8 +122,19 @@ md"
 # ╔═╡ b26d145f-046b-47d3-ac1e-078bfb121c09
 m = climate.MendezFarazmand();
 
-# ╔═╡ e5056d0a-11a1-48c7-9f48-176a7232ce99
-cnull = (x -> climate.nullcline(x, m)).(X);
+# ╔═╡ 5efef3c5-838b-486e-b28d-30257e780748
+begin
+	xlims = extrema(results["X"])
+	X = range(xlims...; length = 201)
+	
+	clims = extrema(results["C"])
+	C = range(clims...; length = 201)
+
+	xmax = xlims[2]
+	cmax = 1000
+
+	cnull = (x -> climate.nullcline(x, m)).(X);
+end;
 
 # ╔═╡ b1f21aac-a6e8-4894-b018-3e4541453f11
 begin
@@ -150,7 +173,7 @@ end
 
 # ╔═╡ fb01b8b0-9d6e-4cd2-be5b-59aa43ef6bc4
 begin
-	Tsim = 100.
+	Tsim = 110.
 	
 	function Fₑ!(du, u, e, t)
 		x, c = u
@@ -159,11 +182,11 @@ begin
 		du[2] = e - m.δ * c
 	end
 	function Gₑ!(du, u, p, t)
-		du[1] = 0.2
+		du[1] = 0.1
 		du[2] = 0.0
 	end
 
-	probefixed = SDEProblem(Fₑ!, Gₑ!, [m.x₀, m.c₀], (0., Tsim), 3. + m.δ * m.c₀)
+	probefixed = SDEProblem(Fₑ!, Gₑ!, [m.x₀, m.c₀], (0., Tsim), 1.9 + m.δ * m.c₀)
 	ensamblefixed = EnsembleProblem(probefixed)
 
 	simefixed = solve(ensamblefixed, SRIW1(), trajectories = 1_000)
@@ -188,8 +211,8 @@ begin
 		cnull, X,
 		c = :black, linestyle = :dash, 
 		ylabel = "\$x\$", xlabel = "\$c\$",
-		xlims = (m.cₚ, 650), ylims = (xlims[1], 300),
-		yticks = temperaturelabelticks(0.5)
+		xlims = (m.cₚ, 650), ylims = (xlims[1], 298),
+		yticks = temperaturelabelticks(1)
 	)
 
 	soltime = range(0, Tsim, length = 201)
@@ -277,14 +300,14 @@ md"# Value function"
 
 # ╔═╡ 2de5ab1b-6e0e-40cf-9f7b-000ee3bb6793
 function Fₒ!(dz, z, p, t)
-	γ = p[1]
+	e = p[1]
 	
 	x, c′ = z
 	c = max(c′, m.cₚ) # Not defined for c < cₚ
 	
 	dz[1] = climate.μ(x, c, m)
 
-	emissions = e(x, c, γ)
+	emissions = evaluate(e, x, c)
 	
 	dz[2] = emissions - m.δ * c
 end
@@ -293,12 +316,15 @@ end
 md"
 - Initial temperature $x_0$ $(@bind x₀ Slider(range(extrema(X)..., length = 101), show_value = true, default = m.x₀))
 - Initial concentration $c_0$ $(@bind c₀ Slider(range(extrema(C)..., length = 101), show_value = true, default = m.c₀))
-- Damage $\gamma$ $(@bind γ Slider(Γ, show_value = true, default = 27.5))
+- Damage $\gamma$ $(@bind γ Slider(collect(keys(valuecontrol)), show_value = true, default = 20))
 "
+
+# ╔═╡ 742dd502-562f-44ed-ab29-28c2f27372cc
+v, e = valuecontrol[γ];
 
 # ╔═╡ 4a086a99-a24f-4d9c-9b1f-344244af1fe1
 begin
-	prob = ODEProblem(Fₒ!, [x₀, c₀], (0., 50.), [γ])
+	prob = ODEProblem(Fₒ!, [x₀, c₀], (0., 50.), [e])
 	sol = solve(prob)
 
 	traj = hcat(sol.(0:0.01:50)...)'
@@ -306,7 +332,7 @@ end;
 
 # ╔═╡ 4a29005d-a732-4fb2-800b-c3e78025543a
 function cutoff(x)
-	g = c -> e(x, c, γ)
+	g(c) = evaluate(e, x, c)
 
 	zeros = find_zeros(g, m.cₚ, 800.)
 
@@ -330,10 +356,10 @@ begin
 		yticks = temperaturelabelticks(2)
 	)
 	
-	contourf!(vfig, C, X, (c, x) -> v(x, c, γ);  aspect_ratio = aspect_ratio, c = :viridis, linewidth = 0, levels = 10)
+	contourf!(vfig, C, X, (c, x) -> evaluate(v, x, c);  aspect_ratio = aspect_ratio, c = :viridis, linewidth = 0, levels = 10)
 	plot!(vfig, cnull, X; label = nothing, c = :black, linewidth = 2, linestyle = :dash)
 
-	plot!(cbarrier, X; c = :darkred, label = nothing, linestyle = :dot)
+	plot!(cbarrier, X; c = :darkred, label = nothing)
 
 	
 	plot!(vfig, traj[:, 2], traj[:, 1]; c = :black, linewidth = 2, label = "Optimal trajectory")
@@ -350,7 +376,7 @@ begin
 	)
 	
 	contourf!(efig, 
-		C, X, (c, x) -> e(x, c, γ) - m.δ * c;  
+		C, X, (c, x) -> evaluate(e, x, c)c - m.δ * c;  
 		aspect_ratio = aspect_ratio, c = :vik, 
 		linewidth = 0, levels = 200, alpha = 0.2,
 		cbar = false
@@ -375,13 +401,11 @@ end
 # ╔═╡ 61882374-b45c-4975-9b04-b871745c79f7
 md"## Trajectory"
 
-# ╔═╡ 4ade739d-1adf-47df-92a7-66580e97fef3
-Γcomp = range(27.35, 27.5; length = 200);
-
 # ╔═╡ a193dc39-c332-467a-a89c-02a45ef6e5e9
 function prob_func(prob, i, repeat)
-	γ = Γcomp[i]
-	newprob = remake(prob, p = [γ])
+	γ = Γ[i]
+	v, e = valuecontrol[γ]
+	newprob = remake(prob, p = [e])
 	
 	return newprob
 end;
@@ -390,17 +414,17 @@ end;
 damageprob = EnsembleProblem(prob; prob_func = prob_func);
 
 # ╔═╡ 6f3f1b18-674a-4d36-bbfe-e17eab8321de
-sim = solve(damageprob, Tsit5(); trajectories = length(Γcomp));
+sim = solve(damageprob, Tsit5(); trajectories = length(Γ));
 
 # ╔═╡ 1dac3cd2-66bb-45ed-b8e5-6dfd291d94b7
 begin
-	c = palette([:darkred, :darkblue], length(Γcomp))
+	c = palette([:darkred, :darkblue], length(Γ))
 
 	u = 2
-	l = 0.5
+	l = 0
 
-	tlims = (0, 40)
-	xticks = tlims[1]:10:tlims[2]
+	tlims = (0, 30)
+	xticks = tlims[1]:5:tlims[2]
 	
 	damagefig = plot(
 		xticks = (xticks, xticks .+ 2020),
@@ -417,9 +441,12 @@ begin
 		temperature = series[1, :]
 		carbon = series[2, :]
 
-		emissions = [e(x, c, Γcomp[i]) for (x, c) ∈ zip(temperature, carbon)]
+		γ = Γ[i]
+		v, e = valuecontrol[γ]
 		
-		plot!(damagefig, t, temperature, c = c[i], alpha = 0.1, linewidth = 2)
+		emissions = [evaluate(e, x, c) for (x, c) ∈ zip(temperature, carbon)]
+		
+		plot!(damagefig, t, temperature, c = c[i], alpha = 0.5, linewidth = 2)
 	end
 
 	damagefig
@@ -429,6 +456,7 @@ end
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 Colors = "5ae59095-9a9b-59fe-a467-6f913c188581"
+Dierckx = "39dd38d3-220a-591b-8e3c-4c3a8c710a94"
 DifferentialEquations = "0c46a032-eb83-5123-abaf-570d42b7fbaa"
 DynamicalSystems = "61744808-ddfa-5f27-97ff-6e42cc95d634"
 Interpolations = "a98d9a8b-a2ab-59e6-89dd-64a1c18fca59"
@@ -441,6 +469,7 @@ Roots = "f2b01f46-fcfa-551c-844a-d8ac1e96c665"
 
 [compat]
 Colors = "~0.12.10"
+Dierckx = "~0.5.3"
 DifferentialEquations = "~7.7.0"
 DynamicalSystems = "~3.0.0"
 Interpolations = "~0.14.7"
@@ -457,7 +486,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.9.0"
 manifest_format = "2.0"
-project_hash = "a5aa97af0b25fb4492fac5a2fb3077cfa575cc7c"
+project_hash = "b5621ec46d366d04fa457a0f2edb5bfbcbc02f8c"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -781,6 +810,18 @@ deps = ["Mmap"]
 git-tree-sha1 = "9e2f36d3c96a820c678f2f1f1782582fcf685bae"
 uuid = "8bb1440f-4735-579b-a4ab-409b98df4dab"
 version = "1.9.1"
+
+[[deps.Dierckx]]
+deps = ["Dierckx_jll"]
+git-tree-sha1 = "d1ea9f433781bb6ff504f7d3cb70c4782c504a3a"
+uuid = "39dd38d3-220a-591b-8e3c-4c3a8c710a94"
+version = "0.5.3"
+
+[[deps.Dierckx_jll]]
+deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "6596b96fe1caff3db36415eeb6e9d3b50bfe40ee"
+uuid = "cd4c43a9-7502-52ba-aa6d-59fb2a88580b"
+version = "0.1.0+0"
 
 [[deps.DiffEqBase]]
 deps = ["ArrayInterface", "ChainRulesCore", "DataStructures", "DocStringExtensions", "EnumX", "FastBroadcast", "ForwardDiff", "FunctionWrappers", "FunctionWrappersWrappers", "LinearAlgebra", "Logging", "Markdown", "MuladdMacro", "Parameters", "PreallocationTools", "Printf", "RecursiveArrayTools", "Reexport", "Requires", "SciMLBase", "Setfield", "SparseArrays", "Static", "StaticArraysCore", "Statistics", "Tricks", "TruncatedStacktraces", "ZygoteRules"]
@@ -2563,6 +2604,7 @@ version = "1.4.1+0"
 """
 
 # ╔═╡ Cell order:
+# ╟─2cbb7789-d932-47b0-96c0-e737ccaa5353
 # ╟─809cb15c-a96d-45f4-b580-cb0d66608a77
 # ╠═e6f98eae-43ce-47ce-b560-f9fde1d370d4
 # ╠═43d41c4f-7079-469c-9b44-5d2f58fed693
@@ -2575,15 +2617,16 @@ version = "1.4.1+0"
 # ╠═9415e59d-3cd3-4e4c-b591-9d2df23576b1
 # ╠═2ab60d76-2e62-4765-ae2a-44f1076f7154
 # ╠═be4d7051-bda0-4094-a3a9-966298c7e7bf
-# ╠═c028e90b-14d4-40e8-802c-358d696e366f
 # ╠═5efef3c5-838b-486e-b28d-30257e780748
-# ╠═e5056d0a-11a1-48c7-9f48-176a7232ce99
+# ╠═b69354b9-55f2-4f82-a52c-842e952e0912
+# ╠═c028e90b-14d4-40e8-802c-358d696e366f
+# ╠═ed76a6db-bc6d-4b6b-811d-a87674a497f7
 # ╟─4af48c24-2bb9-4c64-94db-49961123a5f6
 # ╠═b26d145f-046b-47d3-ac1e-078bfb121c09
 # ╠═13f7e6d4-ae99-4a94-9a9c-07bbbf2dd525
 # ╠═b1f21aac-a6e8-4894-b018-3e4541453f11
 # ╟─d0a8dcb5-af0f-4e98-9e47-b28a50ab2308
-# ╠═fb01b8b0-9d6e-4cd2-be5b-59aa43ef6bc4
+# ╟─fb01b8b0-9d6e-4cd2-be5b-59aa43ef6bc4
 # ╠═da1d3f13-a807-4954-abd2-bccfc1daf06f
 # ╠═be99b40d-1b10-484d-af1b-6a61c349d6f3
 # ╠═e8c4a4ee-d8e8-41ba-944e-bc1a0f1cb032
@@ -2591,15 +2634,15 @@ version = "1.4.1+0"
 # ╠═20bbb10f-ad05-4578-9a8b-6ac8fa5bb89b
 # ╠═e0ad58a1-43ed-4571-bcf4-8ceaaf3eb96b
 # ╟─01625759-be87-406e-b5ae-472a771e7ac4
-# ╠═2de5ab1b-6e0e-40cf-9f7b-000ee3bb6793
+# ╟─2de5ab1b-6e0e-40cf-9f7b-000ee3bb6793
+# ╟─456e97ef-3fd2-4eb6-8f62-039fab6e42b1
+# ╠═742dd502-562f-44ed-ab29-28c2f27372cc
 # ╠═4a086a99-a24f-4d9c-9b1f-344244af1fe1
 # ╠═4a29005d-a732-4fb2-800b-c3e78025543a
 # ╠═e72066ce-c427-4461-bc99-ecacfd436ca1
-# ╟─456e97ef-3fd2-4eb6-8f62-039fab6e42b1
-# ╠═756abab7-5f49-4c47-8d09-6c46a76e0bf7
-# ╠═a56590ea-a7a4-4f40-b99f-312ac832f99a
+# ╟─756abab7-5f49-4c47-8d09-6c46a76e0bf7
+# ╟─a56590ea-a7a4-4f40-b99f-312ac832f99a
 # ╟─61882374-b45c-4975-9b04-b871745c79f7
-# ╠═4ade739d-1adf-47df-92a7-66580e97fef3
 # ╠═a193dc39-c332-467a-a89c-02a45ef6e5e9
 # ╠═2f1999df-2a78-410c-9d94-ac4d3f8eecf3
 # ╠═6f3f1b18-674a-4d36-bbfe-e17eab8321de
