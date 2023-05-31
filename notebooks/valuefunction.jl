@@ -82,6 +82,14 @@ begin
 	economic = ingredients("../src/model/economic.jl")
 end
 
+# ╔═╡ 694e150d-691a-4692-8136-62bb01515805
+function φ₀(p, l::economic.LinearQuadratic; elims = (-Inf, Inf))
+	(; β₁, β₀) = l
+	eₗ, eᵤ = elims
+
+    return clamp((β₀ + p) / β₁, eₗ, eᵤ)
+end;
+
 # ╔═╡ be4d7051-bda0-4094-a3a9-966298c7e7bf
 begin
 	simpath = "../data/sims/valuefunction.jld2"
@@ -97,15 +105,17 @@ controltype = "unconstrained";
 # ╔═╡ c028e90b-14d4-40e8-802c-358d696e366f
 begin
 	valuecontrol = Dict()
+	eₗ = controltype == "constrained" ? 0 : -Inf
 
 	for sim in results[controltype]
 		γ = sim["γ"]
 		
-		ematrix = sim["E"]
 		vmatrix = sim["V"]
 
-		e = Spline2D(results["X"], results["C"], ematrix)
 		v = Spline2D(results["X"], results["C"], vmatrix)
+		∂cv(x, c) = derivative(v, x, c, nux = 0, nuy = 1)
+		
+		e(x, c) = φ₀(∂cv(x, c), economic.LinearQuadratic(γ = γ); elims = (eₗ, Inf))
 
 		valuecontrol[γ] = (v, e)
 	end
@@ -126,6 +136,7 @@ m = climate.MendezFarazmand();
 begin
 	xlims = extrema(results["X"])
 	X = range(xlims...; length = 201)
+	Xdense = range(xlims...; length = 1001)
 	
 	clims = extrema(results["C"])
 	C = range(clims...; length = 201)
@@ -173,7 +184,7 @@ end
 
 # ╔═╡ fb01b8b0-9d6e-4cd2-be5b-59aa43ef6bc4
 begin
-	Tsim = 110.
+	Tsim = 100.
 	
 	function Fₑ!(du, u, e, t)
 		x, c = u
@@ -186,7 +197,7 @@ begin
 		du[2] = 0.0
 	end
 
-	probefixed = SDEProblem(Fₑ!, Gₑ!, [m.x₀, m.c₀], (0., Tsim), 1.9 + m.δ * m.c₀)
+	probefixed = SDEProblem(Fₑ!, Gₑ!, [m.x₀, m.c₀], (0., Tsim), 3. + m.δ * m.c₀)
 	ensamblefixed = EnsembleProblem(probefixed)
 
 	simefixed = solve(ensamblefixed, SRIW1(), trajectories = 1_000)
@@ -211,7 +222,7 @@ begin
 		cnull, X,
 		c = :black, linestyle = :dash, 
 		ylabel = "\$x\$", xlabel = "\$c\$",
-		xlims = (m.cₚ, 650), ylims = (xlims[1], 298),
+		xlims = (400., 650), ylims = (xlims[1], 298),
 		yticks = temperaturelabelticks(1)
 	)
 
@@ -305,105 +316,70 @@ function Fₒ!(dz, z, p, t)
 	x, c′ = z
 	c = max(c′, m.cₚ) # Not defined for c < cₚ
 	
-	dz[1] = climate.μ(x, c, m)
-
-	emissions = evaluate(e, x, c)
-	
-	dz[2] = emissions - m.δ * c
+	dz[1] = climate.μ(x, c, m)	
+	dz[2] = e(x, c) - m.δ * c
 end
 
 # ╔═╡ 456e97ef-3fd2-4eb6-8f62-039fab6e42b1
 md"
 - Initial temperature $x_0$ $(@bind x₀ Slider(range(extrema(X)..., length = 101), show_value = true, default = m.x₀))
 - Initial concentration $c_0$ $(@bind c₀ Slider(range(extrema(C)..., length = 101), show_value = true, default = m.c₀))
-- Damage $\gamma$ $(@bind γ Slider(collect(keys(valuecontrol)), show_value = true, default = 20))
+- Damage $\gamma$ $(@bind γ Slider(Γ, show_value = true, default = 14))
 "
 
 # ╔═╡ 742dd502-562f-44ed-ab29-28c2f27372cc
 v, e = valuecontrol[γ];
 
-# ╔═╡ 4a086a99-a24f-4d9c-9b1f-344244af1fe1
-begin
-	prob = ODEProblem(Fₒ!, [x₀, c₀], (0., 50.), [e])
-	sol = solve(prob)
-
-	traj = hcat(sol.(0:0.01:50)...)'
+# ╔═╡ f5b9ab3c-5170-4755-840f-2fc586338459
+function ecnull(x)
+	ċ = c -> e(x, c) - c * m.δ
+	return ċ(m.cₚ) * ċ(2m.cₚ) < 0 ?  find_zero(ċ, (m.cₚ, 2m.cₚ)) : NaN
 end;
 
-# ╔═╡ 4a29005d-a732-4fb2-800b-c3e78025543a
-function cutoff(x)
-	g(c) = evaluate(e, x, c)
+# ╔═╡ 4a086a99-a24f-4d9c-9b1f-344244af1fe1
+begin
+	prob = ODEProblem(Fₒ!, [x₀, c₀], (0., 100.), [e])
+	sol = solve(prob)
 
-	zeros = find_zeros(g, m.cₚ, 800.)
-
-	if length(zeros) == 2
-		return zeros
-	else
-		return [NaN, NaN]
-	end
-end
-
-# ╔═╡ e72066ce-c427-4461-bc99-ecacfd436ca1
-cbarrier = hcat(cutoff.(X)...)';
+	traj = hcat(sol.(0:0.01:100)...)'
+end;
 
 # ╔═╡ a56590ea-a7a4-4f40-b99f-312ac832f99a
 begin
-	aspect_ratio = (C[end] - C[1]) / (X[end] - X[1]) 
+	clowlims = (m.cₚ, 800)
+	aspect_ratio = (clowlims[end] - clowlims[1]) / (X[end] - X[1]) 
 
 	vfig = plot(
-		xlabel = "\$c\$", ylabel = "\$x\$", 
-		title = "\$v(c, x)\$", xlims = extrema(C), ylims = extrema(X),
-		yticks = temperaturelabelticks(2)
+		xlabel = "Carbon concentration, \$c\$", ylabel = "Temperature in dev. from preindustrial, \$x\$", 
+		title = "Deterministic value function, \$v_0(c, x)\$", 
+		xlims = clowlims, ylims = extrema(X),
+		yticks = temperaturelabelticks(2, u = 12),
+		legend = :topleft
 	)
 	
-	contourf!(vfig, C, X, (c, x) -> evaluate(v, x, c);  aspect_ratio = aspect_ratio, c = :viridis, linewidth = 0, levels = 10)
-	plot!(vfig, cnull, X; label = nothing, c = :black, linewidth = 2, linestyle = :dash)
-
-	plot!(cbarrier, X; c = :darkred, label = nothing)
+	contourf!(vfig,
+		C, X, (c, x) -> evaluate(v, x, c);  
+		aspect_ratio = aspect_ratio, c = :viridis, linewidth = 0
+	)
+	
+	plot!(vfig, cnull, X; c = :red, linewidth = 2.5,  label = "Nullcline state, \$\\psi^x\$")
+	plot!(vfig, ecnull.(X), X; c = :blue, linewidth = 2.5, label = "Nullcline control, \$\\psi^c\$")
 
 	
-	plot!(vfig, traj[:, 2], traj[:, 1]; c = :black, linewidth = 2, label = "Optimal trajectory")
+	plot!(vfig, traj[:, 2], traj[:, 1]; c = :black, linewidth = 2, label = "Opt. trajectory")
 	scatter!(vfig, [traj[1, 2]], [traj[1, 1]]; c = :black, label = nothing)
 	scatter!(vfig, [traj[end, 2]], [traj[end, 1]]; c = :black, label = nothing)
-end
-
-# ╔═╡ 756abab7-5f49-4c47-8d09-6c46a76e0bf7
-begin
-	efig = plot(
-		xlabel = "\$c\$", ylabel = "\$x\$", title = "\$e(c, x) - \\delta c\$", 
-		xlims = extrema(C), ylims = extrema(X),
-		yticks = temperaturelabelticks(2)
-	)
-	
-	contourf!(efig, 
-		C, X, (c, x) -> evaluate(e, x, c)c - m.δ * c;  
-		aspect_ratio = aspect_ratio, c = :vik, 
-		linewidth = 0, levels = 200, alpha = 0.2,
-		cbar = false
-	)
-	
-	plot!(efig, 
-		cnull, X; 
-		label = false, c = :black, 
-		linewidth = 2, linestyle = :dash
-	)
-
-	plot!(efig, 
-		traj[:, 2], traj[:, 1]; 
-		c = :black, linewidth = 2, label = "Optimal trajectory"
-	)
-	
-	scatter!(efig, [traj[1, 2]], [traj[1, 1]]; c = :black, label = nothing)
-	scatter!(efig, [traj[end, 2]], [traj[end, 1]]; c = :black, label = nothing)
-	
 end
 
 # ╔═╡ 61882374-b45c-4975-9b04-b871745c79f7
 md"## Trajectory"
 
+# ╔═╡ 73ecc77c-0604-452b-a241-91ae819036d5
+Γopt = [14, 16, 20];
+
 # ╔═╡ a193dc39-c332-467a-a89c-02a45ef6e5e9
 function prob_func(prob, i, repeat)
-	γ = Γ[i]
+	γ = Γopt[i]
 	v, e = valuecontrol[γ]
 	newprob = remake(prob, p = [e])
 	
@@ -414,23 +390,32 @@ end;
 damageprob = EnsembleProblem(prob; prob_func = prob_func);
 
 # ╔═╡ 6f3f1b18-674a-4d36-bbfe-e17eab8321de
-sim = solve(damageprob, Tsit5(); trajectories = length(Γ));
+sim = solve(damageprob, Tsit5(); trajectories = length(Γopt));
 
 # ╔═╡ 1dac3cd2-66bb-45ed-b8e5-6dfd291d94b7
 begin
-	c = palette([:darkred, :darkblue], length(Γ))
+	c = palette(:berlin, length(Γopt))
 
-	u = 2
-	l = 0
+	u = 1.75
+	l = 0.75
 
 	tlims = (0, 30)
 	xticks = tlims[1]:5:tlims[2]
 	
-	damagefig = plot(
+	opttempfig = plot(
 		xticks = (xticks, xticks .+ 2020),
 		yticks = temperaturelabelticks(0.25, l = l, u = u),
-		xlabel = "Year", ylabel = "Temperature (deviation from pre-industrial)",
-		ylims = (xlims[1] + l, xlims[1] + u)
+		xlabel = "Year", ylabel = "Optimal temperature path",
+		ylims = (xlims[1] + l, xlims[1] + u),
+		legendtitle = "Damage \$\\gamma \$",
+		legend = false
+	)
+
+	optemfig = plot(
+		xticks = (xticks, xticks .+ 2020),
+		xlabel = "Year", ylabel = "Optimal emission path",
+		legendtitle = "Damage \$\\gamma \$",
+		legend = :bottomright
 	)
 	
 	t = range(tlims..., length = 1001) 
@@ -441,15 +426,16 @@ begin
 		temperature = series[1, :]
 		carbon = series[2, :]
 
-		γ = Γ[i]
+		γ = Γopt[i]
 		v, e = valuecontrol[γ]
 		
-		emissions = [evaluate(e, x, c) for (x, c) ∈ zip(temperature, carbon)]
+		emissions = [e(x, c) for (x, c) ∈ zip(temperature, carbon)]
 		
-		plot!(damagefig, t, temperature, c = c[i], alpha = 0.5, linewidth = 2)
+		plot!(opttempfig, t, temperature, c = c[i], alpha = .8, linewidth = 3)
+		plot!(optemfig, t, emissions, c = c[i], alpha = .8, linewidth = 3, label = Γopt[i])
 	end
 
-	damagefig
+	plot(opttempfig, optemfig; layout = (1, 2), size = 450 .* (2√2, 1))
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -2616,6 +2602,7 @@ version = "1.4.1+0"
 # ╠═bca7a8f6-ffe3-48f3-9605-8dc4948b3ec0
 # ╠═9415e59d-3cd3-4e4c-b591-9d2df23576b1
 # ╠═2ab60d76-2e62-4765-ae2a-44f1076f7154
+# ╠═694e150d-691a-4692-8136-62bb01515805
 # ╠═be4d7051-bda0-4094-a3a9-966298c7e7bf
 # ╠═5efef3c5-838b-486e-b28d-30257e780748
 # ╠═b69354b9-55f2-4f82-a52c-842e952e0912
@@ -2626,26 +2613,25 @@ version = "1.4.1+0"
 # ╠═13f7e6d4-ae99-4a94-9a9c-07bbbf2dd525
 # ╠═b1f21aac-a6e8-4894-b018-3e4541453f11
 # ╟─d0a8dcb5-af0f-4e98-9e47-b28a50ab2308
-# ╟─fb01b8b0-9d6e-4cd2-be5b-59aa43ef6bc4
-# ╠═da1d3f13-a807-4954-abd2-bccfc1daf06f
-# ╠═be99b40d-1b10-484d-af1b-6a61c349d6f3
+# ╠═fb01b8b0-9d6e-4cd2-be5b-59aa43ef6bc4
+# ╟─da1d3f13-a807-4954-abd2-bccfc1daf06f
+# ╟─be99b40d-1b10-484d-af1b-6a61c349d6f3
 # ╠═e8c4a4ee-d8e8-41ba-944e-bc1a0f1cb032
 # ╠═d5fb378d-036e-478f-995c-03e30c872f6d
 # ╠═20bbb10f-ad05-4578-9a8b-6ac8fa5bb89b
-# ╠═e0ad58a1-43ed-4571-bcf4-8ceaaf3eb96b
+# ╟─e0ad58a1-43ed-4571-bcf4-8ceaaf3eb96b
 # ╟─01625759-be87-406e-b5ae-472a771e7ac4
-# ╟─2de5ab1b-6e0e-40cf-9f7b-000ee3bb6793
+# ╠═2de5ab1b-6e0e-40cf-9f7b-000ee3bb6793
 # ╟─456e97ef-3fd2-4eb6-8f62-039fab6e42b1
 # ╠═742dd502-562f-44ed-ab29-28c2f27372cc
+# ╠═f5b9ab3c-5170-4755-840f-2fc586338459
 # ╠═4a086a99-a24f-4d9c-9b1f-344244af1fe1
-# ╠═4a29005d-a732-4fb2-800b-c3e78025543a
-# ╠═e72066ce-c427-4461-bc99-ecacfd436ca1
-# ╟─756abab7-5f49-4c47-8d09-6c46a76e0bf7
 # ╟─a56590ea-a7a4-4f40-b99f-312ac832f99a
 # ╟─61882374-b45c-4975-9b04-b871745c79f7
+# ╠═73ecc77c-0604-452b-a241-91ae819036d5
 # ╠═a193dc39-c332-467a-a89c-02a45ef6e5e9
 # ╠═2f1999df-2a78-410c-9d94-ac4d3f8eecf3
 # ╠═6f3f1b18-674a-4d36-bbfe-e17eab8321de
-# ╠═1dac3cd2-66bb-45ed-b8e5-6dfd291d94b7
+# ╟─1dac3cd2-66bb-45ed-b8e5-6dfd291d94b7
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
