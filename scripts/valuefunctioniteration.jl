@@ -68,8 +68,8 @@ end
     n = 40 # size of state space n²
     k = 150 # size of action space
 
-    xmax = 299.5
-    cmax = 800.
+    xmax = 300
+    cmax = 1200.
 
     emax = (l.β₀ - l.τ) / l.β₁
     E = range(-emax, emax; length = k)
@@ -79,7 +79,7 @@ end
     C = range(m.cₚ, cmax, length = n + 1)
 end
 
-Γ = [1, 5, 10, 20, 100]
+Γ = range(10, 20; length = 41)
 p = length(Γ)
 
 println("Computing value function, parameter space $n × $(n+1) × $p = $(p * n * (n + 1))...")

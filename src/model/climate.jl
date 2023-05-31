@@ -23,6 +23,8 @@ Base.@kwdef struct MendezFarazmand
     # Ice melting coefficients
     α₁::Float64 = 0.31
     α₂::Float64 = 0.2
+
+    σ²ₓ::Float64 = 1.0
 end
 
 H(x, m) = (1 + tanh(x / m.xₐ)) / 2
