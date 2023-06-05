@@ -14,7 +14,7 @@ end
     m = MendezFarazmand() # Climate model
     l = LinearQuadratic() # Economic model
 
-    n₀ = 20 # size of state space n²
+    n₀ = 12 # size of state space n²
     k₀ = 50 # size of action space
 end
 
