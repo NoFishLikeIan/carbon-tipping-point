@@ -1,7 +1,5 @@
-using ScatteredInterpolation
+using Interpolations
 using StatsBase
-
-using Plots
 
 include("../src/model/climate.jl")
 include("../src/model/economic.jl")
@@ -12,13 +10,15 @@ include("../src/utils/grid.jl")
 function valuefunctioniter(
     m::MendezFarazmand, l::LinearQuadratic, 
     Γ::Grid, Ω, 
-    V₀::Vector{<:Real}, E₀::Vector{<:Real}; 
-    h₀ = 1 / 20, maxiter = 100_000, 
+    V₀::Matrix{<:Real}, E₀::Matrix{<:Real}; 
+    h₀ = 1e-2, maxiter = 100_000, 
     vtol = 1e-2, verbose = true)
 
     h = h₀ # TODO: Make adaptive step size
     β = exp(-l.ρ * h)
-    L = ((s, e) -> u(e, l) - d(s[1], l)).(Γ, Ω')
+    Γvec = Base.product(Γ...) |> collect |> vec
+
+    L = ((s, e) -> u(e, l) - d(s[1], l)).(Γvec, Ω')
     
     Vᵢ = copy(V₀)
     Eᵢ = copy(E₀)
@@ -27,12 +27,12 @@ function valuefunctioniter(
         v = constructinterpolation(Γ, Vᵢ)
 
         v′(s, e) = v(s[1] + h * μ(s[1], s[2], m), s[2] + h * (e - m.δ * s[2]))
-        Vₑ = h * L + β * v′.(Γ, Ω')
+        Vₑ = h * L + β * v′.(Γvec, Ω')
         
         optimalpolicy = argmax(Vₑ, dims = 2)
         
-        Vᵢ₊₁ = vec(Vₑ[optimalpolicy])
-        Eᵢ₊₁ = vec([Ω[index[2]] for index ∈ optimalpolicy] )
+        Vᵢ₊₁ = unvec(Vₑ[optimalpolicy], Γ)
+        Eᵢ₊₁ = unvec([Ω[index[2]] for index ∈ optimalpolicy], Γ)
         η = abs.(Vᵢ₊₁ - Vᵢ)
 
         ε = maximum(η)
@@ -41,7 +41,6 @@ function valuefunctioniter(
 
         if ε < vtol
             verbose && print("\nDone at iteration $i with ε = $(round(ε, digits = 4)) \r")
-            e = constructinterpolation(Γ, Eᵢ₊₁)
             return Vᵢ₊₁, Eᵢ₊₁, η
         end
 
@@ -55,7 +54,7 @@ end
 function adapativevaluefunctioniter(
     m::MendezFarazmand, l::LinearQuadratic, 
     n₀::Int64, k₀::Int64; 
-    constrained = false, θ = 0.1, ctol = 1e-3,
+    constrained = false, θ = 0.1,
     maxrefinementiters = 100, maxgridsize = 401,
     verbose = true, 
     iterationkwargs...)
@@ -63,23 +62,25 @@ function adapativevaluefunctioniter(
     emax = (l.β₀ - l.τ) / l.β₁
     emin = constrained ? 0 : -emax
     
-    X₀ = range(m.xₚ, 310; length = n₀)
-    C₀ = range(m.cₚ, 2000; length = n₀)
+    X₀ = range(m.xₚ, 310; length = n₀) |> collect 
+    C₀ = range(m.cₚ, 2000; length = n₀) |> collect
 
-    Γ = Base.product(X₀, C₀) |> collect |> vec # State space
+    Γ = (X₀, C₀) # State space
     Ω = range(emin, emax; length = k₀) |> collect # Start with equally space partition
-    η = zeros(length(Γ))
+    η = zeros(length.(Γ)...)
 
-    V = [H(x, c, 0, 0, m, l) for (x, c) ∈ Γ]
-    E = zeros(length(Γ))
+    V = ((x, c) -> H(x, c, 0, 0, m, l)).(X₀, C₀') # Initial value function guess
+    E = copy(η)
+
+    verbose && println("Starting refinement with $(gridsize(Γ)) states and $(length(Ω)) policies...")
 
     for refj ∈ 1:maxrefinementiters
-        if length(Γ) > maxgridsize 
-            verbose && println("...done refinement $(length(Γ)) states and $(length(Ω)) states!")
+        iseveniter = (refj % 2 == 0)
+
+        if iseveniter && (gridsize(Γ) > maxgridsize) 
+            verbose && println("...done refinement $(gridsize(Γ)) states and $(length(Ω)) states!")
             return V, E, Γ, η
         end
-
-        verbose && println("Starting refinement $refj with $(length(Γ)) states and $(length(Ω)) policies...")
 
         # Run value function iteration
         V′, E′, η = valuefunctioniter(
@@ -90,69 +91,27 @@ function adapativevaluefunctioniter(
 
         verbose && print("\n")
 
-        # Coarser step
-        Γᶜ, coarseridx = coarserΓ(Γ, V′, η, θ, ctol)
-
-        verbose && println("...removing $(length(Γ) - length(Γᶜ)) states...")
-        η = η[coarseridx]
-
-        # Denser step
-        Γ′ = denserΓ(Γᶜ, η, θ)
-
-        verbose && println("...adding $(length(Γ′) - length(Γᶜ)) states...")
-
-        Ω′ = updateΩ(E′, Ω)
-        verbose && println("...adding $(length(Ω′) - length(Ω)) policies...")
-        Ω = Ω′
-    
-        # Interpolate value and policy on old grid
-        v = constructinterpolation(Γ, V′)
-        e = constructinterpolation(Γ, E′)
-
-        # Update grid and make new value function initial value
-        V = [v(x, c) for (x, c) ∈ Γ′]
-        E = [e(x, c) for (x, c) ∈ Γ′]
-        Γ = Γ′
+        # Refine state space
+        if iseveniter
+            Ω′ = refineΩ(Ω, E, θ)
+            verbose && println("...policy refinement: $(length(Ω)) ->  $(length(Ω′)) states...")
+            
+            Ω = Ω′
+        else
+            Γ′ = refineΓ(Γ, η, θ)
+            verbose && println("...grid refinement: $(gridsize(Γ)) ->  $(gridsize(Γ′)) states...")
+            
+            # Interpolate value and policy on old grid
+            v = constructinterpolation(Γ, V′)
+            e = constructinterpolation(Γ, E′)
+            # Update grid and make new value function initial value
+            Γ = Γ′
+            V = v.(Γ[1], Γ[2]')
+            E = e.(Γ[1], Γ[2]')
+        end
     end    
 
     @warn "Maximum number of grid refinement iterations reached."
 
     return V, E, Γ
 end
-
-m = MendezFarazmand() # Climate model
-l = LinearQuadratic(γ = 16.) # Economic model
-
-n₀ = 5 # size of state space n²
-k₀ = 10 # size of action space
-
-V, E, Γ = adapativevaluefunctioniter(
-    m, l, n₀, k₀; 
-    verbose = true, maxgridsize = 500,
-    ctol = 0.05, θ = 0.2
-)
-
-
-# Plotting
-
-
-X₀ = range(m.xₚ, 310; length = n₀)
-C₀ = range(m.cₚ, 2000; length = n₀)
-
-Γ₀ = Base.product(X₀, C₀) |> collect |> vec # State space
-
-plotupdate(Γ, Γ₀, ones(length(Γ₀)))
-
-v = constructinterpolation(Γ, V)
-X = range(m.xₚ, 310; length = 301)
-C = range(m.cₚ, 2000; length = 301)
-
-contourf(C, X, (c, x) -> e(x, c), 
-    ylabel = "Temperature", xlabel = "Consumption", 
-    title = "Value function", 
-    colorbar = :none, 
-    fillalpha = 0.5, 
-    framestyle = :box
-)
-
-plotupdate(Γ, [], V)

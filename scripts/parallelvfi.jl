@@ -4,57 +4,42 @@ println("Running with $(nprocs()) processes...")
 
 @everywhere begin # Imports
     using JLD2, Printf
-    using ScatteredInterpolation
+    using Interpolations
 
     include("../src/vfi.jl")
 end
 
 
 @everywhere begin
+
     m = MendezFarazmand() # Climate model
     l = LinearQuadratic() # Economic model
+    
+    n₀ = 40 # size of state space n²
+    k₀ = 100 # size of action space
 
-    n₀ = 12 # size of state space n²
-    k₀ = 50 # size of action space
+    θ = 0.1
+    maxrefinementiters = 100
+    maxgridsize = 1500
 end
 
+p = 40 # size of parameter space
+γspace = range(15, 25; length = p)
 
-Γ = range(10, 20; length = 41)
-p = length(Γ)
-
-println("Computing value function, parameter space $n × $(n+1) × $p = $(p * n * (n + 1))...")
-
-@everywhere function unconstrainedvalue(γ)
-    Vᵧ, Eᵧ = valuefunctioniter(
-        m, LinearQuadratic(γ = γ), n, E; 
-        cmax = cmax, xmax = xmax, h = 1e-2, verbose = false
-    )
-
-    return Dict(
-        "γ" => γ, 
-        "V" => reshape(Vᵧ, length(X), length(C)),
-        "E" => reshape(Eᵧ, length(X), length(C)), 
-    )
+@everywhere function adaptivevaluefunction(γ, constrained)
+    V, E = adapativevaluefunctioniter(
+        m, LinearQuadratic(γ = γ), n₀, k₀;
+        maxgridsize, maxrefinementiters, θ,
+        constrained = constrained, verbose = false)
+    
+    return Dict("γ" => γ, "V" => V, "E" => E)
 end
 
-unconstrainedsol = pmap(unconstrainedvalue, Γ)
+println("Unconstrained problem...")
+unconstrainedsol = pmap(γ -> adaptivevaluefunction(γ, false), γspace)
 
-println("Computing value function, with action constraint, parameter space $n × $(n+1) × $p = $(p * n * (n + 1))...")
-
-@everywhere function constrainedvalue(γ)
-    Vᵧ, Eᵧ = valuefunctioniter(
-        m, LinearQuadratic(γ = γ), n, E₊; 
-        cmax = cmax, xmax = xmax, h = 1e-2, verbose = false
-    )
-
-    return Dict(
-        "γ" => γ, 
-        "V" => reshape(Vᵧ, length(X), length(C)),
-        "E" => reshape(Eᵧ, length(X), length(C)), 
-    )
-end
-
-constrainedsol = pmap(constrainedvalue, Γ)
+println("Constrained problem...")
+constrained = pmap(γ -> adaptivevaluefunction(γ, true), γspace)
 
 println("Saving...")
 

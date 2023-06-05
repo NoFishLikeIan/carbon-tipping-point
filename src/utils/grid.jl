@@ -1,99 +1,90 @@
-Cell = Tuple{T, T} where T <: Real
-Grid = Vector{T} where T <: Cell
+Grid = Tuple{Vector{T}, Vector{T}} where T <: Real
+gridsize(Γ::Grid) = prod(length.(Γ))
 
-function neighbours(cell::Cell, Γ::Grid)::Tuple{Grid, Grid}
-    xₗ, cₗ = cell
-    
-    X = first.(filter(p -> p[2] ≈ cₗ, Γ))
-    C = last.(filter(p -> p[1] ≈ xₗ, Γ))
+function subsequentintervals(idxlist)
+    isedge = diff(idxlist) .> 1
+    leftedge = [1; findall(isedge) .+ 1] 
+    rightedge = [findall(isedge); length(idxlist)]
 
-    N, M = length(X), length(C)
-
-    xidx = findfirst(x -> x > xₗ, X)
-    cidx = findfirst(c -> c > cₗ, C)
-
-    xneighbour = Base.product(X[findneighbour(xidx, N)], [cₗ]) |> collect |> vec  
-    cneighbour = Base.product([xₗ], C[findneighbour(cidx, M)]) |> collect |> vec 
-
-    return xneighbour, cneighbour
+    return zip(idxlist[leftedge], idxlist[rightedge]) |> collect
 end
 
-function findneighbour(upperidx::Union{Int64, Nothing}, n::Int64)::Vector{Int64}
-    if isnothing(upperidx)
-        [n - 1]
-    elseif upperidx == 2
-        [upperidx]
-    else
-        [upperidx - 2, upperidx]
-    end
-end
+function refinegrid(Y::Vector{<:Real}, ηʸ::Vector{<:Real}, θ::Float64)
+    n = length(Y)
+    ηᵤ = quantile(ηʸ, 1 - θ)
+    ηₗ = quantile(ηʸ, θ)
 
-function denserΓ(Γ::Grid, η::Vector{Float64}, θ::Float64)::Grid
-    errordict = Dict(Γ .=> η)
-    ε = maximum(η)
-    Γ′ = copy(Γ)
+    Y′ = Y[ηₗ .< ηʸ .< ηᵤ]
 
-    for cell ∈ Γ[η .≥ θ * ε]
-        xₗ, cₗ = cell
-        xneighbours, cneighbours = neighbours(cell, Γ)
-
-        ηˣ = maximum(errordict[node] for node in xneighbours)
-        ηᶜ = maximum(errordict[node] for node in cneighbours)
-        η̃ = max(ηˣ, ηᶜ)
-
-        if ηˣ ≥ θ * η̃
-            for node in xneighbours
-                xⁿ = (xₗ + node[1]) / 2
-                push!(Γ′, (xⁿ, cₗ))
-            end         
+    coarseridx = (1:n)[ηʸ .≤ ηₗ]
+    for (l, r) ∈ subsequentintervals(coarseridx)
+        if r > l        
+            Δ = max(((r - l) + 1) ÷ 2, 2)
+            newsubinterval = range(Y[l], Y[r]; length = Δ)
+            push!(Y′, newsubinterval...)
         end
+    end
 
-        if ηᶜ ≥ θ * η̃
-            for node in cneighbours
-                cⁿ = (cₗ + node[2]) / 2
-                push!(Γ′, (xₗ, cⁿ))
+    denseridxs = (1:n)[ηʸ .≥ ηᵤ] 
+
+    for (l, r) ∈ subsequentintervals(denseridxs)
+        if r > l
+            Δ = 2((r - l) + 1) 
+            newsubinterval = range(Y[l], Y[r]; length = Δ)
+            push!(Y′, newsubinterval...)
+        else
+            for j ∈ neighbours(l, n)
+                push!(Y′,mean([Y[l], Y[j]]))
             end
         end
     end
-
-    return sort(Γ′)
+    
+    return sort(Y′)
 end
 
-function coarserΓ(Γ::Grid, V::Vector{<:Real}, η::Vector{Float64}, θ::Float64, ctol::Float64)::Tuple{Grid, Vector{Int64}}
-    coarseridx = Integer[]
-    η̃ = maximum(η)
+function refineΩ(Ω::Vector{<:Real}, E::Matrix{Float64}, θ::Float64)
+    counter = countmap(E)
+    ηᵉ = [inv(1 + exp(-get(counter, e, 0))) for e ∈ Ω] |> vec
+    return refinegrid(Ω, ηᵉ, θ)
+end
 
-    for (j, cell) ∈ enumerate(Γ)
-        if η[j] ≥ θ * η̃
-            push!(coarseridx, j)
-            continue
-        end
+function refineΓ(Γ::Grid, η::Matrix{Float64}, θ::Float64)::Grid
+    X, C = Γ
 
-        xⱼ, cⱼ = cell
-        idxs = vcat(1:(j - 1), (j + 1):length(Γ))
+    ηˣ = mean.(eachrow(η))
+    ηᶜ = mean.(eachcol(η))
+    
+    return (refinegrid(X, ηˣ, θ), refinegrid(C, ηᶜ, θ))
+end
 
-        ṽⱼ = constructinterpolation(Γ[idxs], V[idxs])(xⱼ, cⱼ)
-        if abs(ṽⱼ - V[j]) ≥ ctol 
-            push!(coarseridx, j)
-        end
-    end
+function neighbours(i::Int64, n::Int64)
+    if i == 1 return [2] end
+    if i == n return [n - 1] end
 
-    return Γ[coarseridx], coarseridx
+    return [i - 1, i + 1]
 end
     
 
-function constructinterpolation(Γ::Grid, V::Vector{<:Real})
-    points = vcat(first.(Γ)', last.(Γ)')
-    itp = ScatteredInterpolation.interpolate(Shepard(), points, V)
-    return (x, c) -> first(evaluate(itp, [x; c]))
+function constructinterpolation(Γ::Grid, V::Matrix{<:Real})
+    X, C = Γ
+    itp = interpolate((X, C), V, Gridded(Linear()))
+    etp = extrapolate(itp, Line())
+
+    return (x, c) -> etp(x, c)
 end
 
-plotupdate(Γ, Γ′) = plotupdate(Γ, Γ′, ones(length(Γ)))
-function plotupdate(Γ, Γ′, η)
-    colors = [cgrad(:Reds, [0, maximum(η)])[ηᵢ] for ηᵢ ∈ η]
+function plotupdate(Γ::Grid, Γ′::Grid; plotkwargs...) 
+    plotupdate(Γ, Γ′, ones(length.(Γ)...); plotkwargs...)
+end
 
-    xl, xu = extrema(first.(Γ))
-    cl, cu = extrema(last.(Γ))
+function plotupdate(Γ::Grid, Γ′::Grid, η::Matrix{<:Real}; beforemarkersize = 4, aftermarkersize = 1, plotkwargs...)
+    colors = [cgrad(:Reds, [0, maximum(η)])[ηᵢ] for ηᵢ ∈ vec(η)]
+
+    Γp = Base.product(Γ...) |> collect |> vec
+    Γ′p = Base.product(Γ′...) |> collect |> vec
+
+    xl, xu = extrema(first.(Γp))
+    cl, cu = extrema(last.(Γp))
 
     Δx = xu - xl
     Δc = cu - cl
@@ -104,32 +95,15 @@ function plotupdate(Γ, Γ′, η)
         xlabel = "\$x\$", ylabel = "\$c\$",
         xlims = (xl - xmar, xu + xmar),
         ylims = (cl - cmar, cu + cmar),
-        aspect_ratio = Δx / Δc
+        aspect_ratio = Δx / Δc; 
+        plotkwargs...
     )
 
-    scatter!(updatefig, first.(Γ′), last.(Γ′), color = :black, label = nothing)
-    scatter!(updatefig, first.(Γ), last.(Γ), color = colors, label = nothing)
+    scatter!(updatefig, first.(Γ′p), last.(Γ′p), color = :black, label = nothing, markersize = aftermarkersize)
+    scatter!(updatefig, first.(Γp), last.(Γp), color = colors, label = nothing, markersize = beforemarkersize)
 
     return updatefig
 end
 
-function updateΩ(E′::Vector{<:Real}, Ω::Vector{<:Real})
-    emap = countmap(E′)
-    Ω′ = copy(Ω)
 
-    for (emissions, counter) ∈ emap
-        prop = counter / length(E′)
-
-        eupper = findfirst(>(emissions), Ω)
-        neighbs = findneighbour(eupper, length(Ω))
-
-        Δe = abs(emissions - Ω[neighbs[1]])
-        newpoints = floor(Int64, length(E′) * prop * 0.5)
-    
-        newgridpoints = range(emissions - Δe, emissions + Δe; length = 2 * (1 + newpoints))[2:end-1] |> collect
-
-        push!(Ω′, newgridpoints...)
-    end
-
-    return sort(Ω′)
-end
+unvec(M::Matrix{Float64}, Γ::Grid) = reshape(M, length.(Γ)...)
