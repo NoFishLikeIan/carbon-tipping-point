@@ -13,42 +13,42 @@ end
 @everywhere begin
 
     m = MendezFarazmand() # Climate model
-    l = LinearQuadratic() # Economic model
     
-    n₀ = 40 # size of state space n²
+    n₀ = 15 # size of state space n²
     k₀ = 100 # size of action space
 
     θ = 0.1
     maxrefinementiters = 100
-    maxgridsize = 1500
+    maxgridsize = 1000
 end
 
 p = 40 # size of parameter space
 γspace = range(15, 25; length = p)
 
-@everywhere function adaptivevaluefunction(γ, constrained)
-    V, E = adapativevaluefunctioniter(
-        m, LinearQuadratic(γ = γ), n₀, k₀;
+@everywhere function adaptivevaluefunction(γ; constrained = false, kwargs...)
+    l = LinearQuadratic(γ = γ)
+
+    V, E, Γ = adapativevaluefunctioniter(
+        m, l, n₀, k₀;
         maxgridsize, maxrefinementiters, θ,
-        constrained = constrained, verbose = false)
+        constrained = constrained, verbose = false, kwargs...)
     
-    return Dict("γ" => γ, "V" => V, "E" => E)
+    return Dict("γ" => γ, "V" => V, "E" => E, "Γ" => Γ)
 end
 
 println("Unconstrained problem...")
-unconstrainedsol = pmap(γ -> adaptivevaluefunction(γ, false), γspace)
+unconstrainedsol = pmap(γ -> adaptivevaluefunction(γ; constrained = false), γspace)
 
 println("Constrained problem...")
-constrained = pmap(γ -> adaptivevaluefunction(γ, true), γspace)
+constrainedsol = pmap(γ -> adaptivevaluefunction(γ; constrained = true), γspace)
 
 println("Saving...")
 
-filename = "valuefunction.jld2"
+filename = "test.jld2"
 simpath = joinpath("data", "sims", filename)
 save(simpath, Dict(
     "constrained" => constrainedsol, 
-    "unconstrained" => unconstrainedsol,
-    "X" => X, "C" => C, "Γ" => Γ
+    "unconstrained" => unconstrainedsol
 ))
 
 println("...done!")

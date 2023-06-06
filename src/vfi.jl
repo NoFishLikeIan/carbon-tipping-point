@@ -79,7 +79,7 @@ function adapativevaluefunctioniter(
 
         if iseveniter && (gridsize(Γ) > maxgridsize) 
             verbose && println("...done refinement $(gridsize(Γ)) states and $(length(Ω)) states!")
-            return V, E, Γ, η
+            return V, E, Γ
         end
 
         # Run value function iteration
