@@ -14,41 +14,51 @@ end
 
     m = MendezFarazmand() # Climate model
     
-    n₀ = 15 # size of state space n²
+    n₀ = 100 # size of state space n²
     k₀ = 100 # size of action space
 
-    verbose = true
+    outerverbose = true
+    verbose = false
 
     θ = 0.1
     maxrefinementiters = 100
-    maxiters = 5000
+    maxiters = 100_000
     maxgridsize = 1000
 end
 
-p = 40 # size of parameter space
-γspace = [15.]# range(15, 25; length = p)
+γspace = 10:5:80
+p = length(γspace) # size of parameter space
 
-@everywhere function adaptivevaluefunction(γ; constrained = false, verbose = false, kwargs...)
+@everywhere function adaptivevaluefunction(γ; constrained = false, outerverbose = true, verbose = false, kwargs...)
     l = LinearQuadratic(γ = γ)
 
-    verbose && println("Computing value function for γ = $γ")
+    outerverbose && println("Computing value function for γ = $γ...")
 
-    V, E, Γ = adapativevaluefunctioniter(
+    V, E, Γ, η = adapativevaluefunctioniter(
         m, l, n₀, k₀;
         maxgridsize, maxrefinementiters, θ,
         constrained = constrained, verbose = verbose,
         maxiters = maxiters, kwargs...)
+
+    ε = maximum(η)
+    outerverbose && println("...done γ = $γ with error ε = $ε.")
     
     return Dict("γ" => γ, "V" => V, "E" => E, "Γ" => Γ)
 end
 
-println("Unconstrained problem...")
-unconstrainedsol = pmap(γ -> adaptivevaluefunction(γ; constrained = false, verbose = verbose), γspace)
+outerverbose && println("Unconstrained problem...")
+unconstrainedsol = pmap(
+    γ -> adaptivevaluefunction(γ; 
+        constrained = false, verbose = verbose, outerverbose = outerverbose), 
+γspace)
 
-println("Constrained problem...")
-constrainedsol = pmap(γ -> adaptivevaluefunction(γ; constrained = true, verbose = verbose), γspace)
+outerverbose && println("Constrained problem...")
+constrainedsol = pmap(
+    γ -> adaptivevaluefunction(γ; 
+        constrained = true, verbose = verbose, outerverbose = outerverbose), 
+γspace)
 
-println("Saving...")
+outerverbose && println("Saving...")
 
 filename = "valuefunction.jld2"
 simpath = joinpath("data", "sims", filename)
@@ -57,5 +67,5 @@ save(simpath, Dict(
     "unconstrained" => unconstrainedsol
 ))
 
-println("...done!")
+outerverbose && println("...done!")
 exit()

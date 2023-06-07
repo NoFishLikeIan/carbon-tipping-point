@@ -82,7 +82,7 @@ function adapativevaluefunctioniter(
 
         if iseveniter && (gridsize(Γ) > maxgridsize) 
             verbose && println("...done refinement $(gridsize(Γ)) states and $(length(Ω)) states!")
-            return V, E, Γ
+            return V, E, Γ, η
         end
 
         # Run value function iteration
@@ -114,7 +114,7 @@ function adapativevaluefunctioniter(
         end
     end    
 
-    @warn "Maximum number of grid refinement iterations reached."
+    verbose && @warn "Maximum number of grid refinement iterations reached."
 
-    return V, E, Γ
+    return V, E, Γ, η
 end

@@ -80,9 +80,15 @@ default(
 begin
 	climate = ingredients("../src/model/climate.jl")
 	economic = ingredients("../src/model/economic.jl")
-end
+end;
 
-# ╔═╡ 694e150d-691a-4692-8136-62bb01515805
+# ╔═╡ be4d7051-bda0-4094-a3a9-966298c7e7bf
+simulationresults = load("../data/sims/valuefunction.jld2");
+
+# ╔═╡ b69354b9-55f2-4f82-a52c-842e952e0912
+CONTROL = "constrained";
+
+# ╔═╡ 58e7e1d9-20da-4114-9de0-95e7b6c3498d
 function φ₀(p, l::economic.LinearQuadratic; elims = (-Inf, Inf))
 	(; β₁, β₀) = l
 	eₗ, eᵤ = elims
@@ -90,39 +96,42 @@ function φ₀(p, l::economic.LinearQuadratic; elims = (-Inf, Inf))
     return clamp((β₀ + p) / β₁, eₗ, eᵤ)
 end;
 
-# ╔═╡ be4d7051-bda0-4094-a3a9-966298c7e7bf
-begin
-	simpath = "../data/sims/valuefunction.jld2"
-	
-	results = load(simpath)
+# ╔═╡ f2a10cde-9da8-4591-b564-033eac1a7f0f
+begin # This assumes that all simulations have the same limits in (x, c)
+	X₁, C₁ = first(simulationresults[CONTROL])["Γ"]
 
-	keys(results)
-end
+	xₗ, xᵤ = extrema(X₁)
+	cₗ, cᵤ = extrema(C₁)
 
-# ╔═╡ b69354b9-55f2-4f82-a52c-842e952e0912
-controltype = "unconstrained";
+	X = range(xₗ, xᵤ; length = 201)
+	C = range(cₗ, cᵤ; length = 201)
+end;
 
 # ╔═╡ c028e90b-14d4-40e8-802c-358d696e366f
 begin
-	valuecontrol = Dict()
-	eₗ = controltype == "constrained" ? 0 : -Inf
+	resultbycost = Dict()
 
-	for sim in results[controltype]
+	for sim in simulationresults[CONTROL]
+		
 		γ = sim["γ"]
-		
+		Γ = sim["Γ"]
+		X, C = Γ
 		vmatrix = sim["V"]
+		ematrix = sim["E"]
 
-		v = Spline2D(results["X"], results["C"], vmatrix)
+		v = Spline2D(Γ[1], Γ[2], vmatrix)
 		∂cv(x, c) = derivative(v, x, c, nux = 0, nuy = 1)
-		
-		e(x, c) = φ₀(∂cv(x, c), economic.LinearQuadratic(γ = γ); elims = (eₗ, Inf))
 
-		valuecontrol[γ] = (v, e)
+		e = Spline2D(Γ[1], Γ[2], ematrix)
+		
+		# φ₀(∂cv(x, c), economic.LinearQuadratic(γ = γ); elims = (CONTROL == "constrained" ? 0 : -Inf, Inf))
+
+		resultbycost[γ] = (v, e, Γ)
 	end
 end;
 
 # ╔═╡ ed76a6db-bc6d-4b6b-811d-a87674a497f7
-Γ = valuecontrol |> keys |> collect |> sort;
+γspace = resultbycost |> keys |> collect |> sort;
 
 # ╔═╡ 4af48c24-2bb9-4c64-94db-49961123a5f6
 md"
@@ -132,20 +141,8 @@ md"
 # ╔═╡ b26d145f-046b-47d3-ac1e-078bfb121c09
 m = climate.MendezFarazmand();
 
-# ╔═╡ 5efef3c5-838b-486e-b28d-30257e780748
-begin
-	xlims = extrema(results["X"])
-	X = range(xlims...; length = 201)
-	Xdense = range(xlims...; length = 1001)
-	
-	clims = extrema(results["C"])
-	C = range(clims...; length = 201)
-
-	xmax = xlims[2]
-	cmax = 1000
-
-	cnull = (x -> climate.nullcline(x, m)).(X);
-end;
+# ╔═╡ b77a50b2-aeab-4d6e-a6ba-1d9ee50e2457
+Cnullcline = (x -> climate.nullcline(x, m)).(X);
 
 # ╔═╡ b1f21aac-a6e8-4894-b018-3e4541453f11
 begin
@@ -219,10 +216,10 @@ end;
 # ╔═╡ be99b40d-1b10-484d-af1b-6a61c349d6f3
 begin
 	fixedefig = plot(
-		cnull, X,
+		Cnullcline, X,
 		c = :black, linestyle = :dash, 
 		ylabel = "\$x\$", xlabel = "\$c\$",
-		xlims = (400., 650), ylims = (xlims[1], 298),
+		xlims = (cₗ, 650), ylims = (xₗ, 300),
 		yticks = temperaturelabelticks(1)
 	)
 
@@ -245,7 +242,7 @@ begin
 end
 
 # ╔═╡ e8c4a4ee-d8e8-41ba-944e-bc1a0f1cb032
-savefig(fixedefig, "../plots/simulation-costante-e.png")
+savefig(fixedefig, "../plots/simulation-costante-e.png");
 
 # ╔═╡ d5fb378d-036e-478f-995c-03e30c872f6d
 begin
@@ -254,10 +251,8 @@ begin
 end;
 
 # ╔═╡ 20bbb10f-ad05-4578-9a8b-6ac8fa5bb89b
-begin
+begin # Simulation for unconditional distributions
 	T = 100_000
-	
-	output_func = (sol, i) -> (sol[end], false)
 	
 	cspace = [500, 445, m.c₀]
 	K = length(cspace)
@@ -267,7 +262,7 @@ begin
 
 	for (i, c) in enumerate(cspace)
 		cprob = remake(xprob, p = c)
-		ensemble_prob = EnsembleProblem(cprob; output_func = output_func)
+		ensemble_prob = EnsembleProblem(cprob; output_func = (sol, i) -> (sol[end], false))
 
 		sim = solve(ensemble_prob, SRIW1(), trajectories = T)
 		simulations[i, :] = sim[:]
@@ -279,8 +274,8 @@ let
 	z = ones(length(X))
 	
 	densfig = plot(
-		X, cnull, 0 * z;
-		ylims = extrema(cspace), xlims = xlims, zlims = (0, 0.04),
+		X, Cnullcline, 0 * z;
+		ylims = extrema(cspace), xlims = (xₗ, 300), zlims = (0, 0.06),
 		c = :black, linewidth = 2, label = nothing,
 		legendtitle = "Density at \$c\$", fontsizes = 2,
 		zlabel = "Conditional density of \$x\$",
@@ -324,15 +319,15 @@ end
 md"
 - Initial temperature $x_0$ $(@bind x₀ Slider(range(extrema(X)..., length = 101), show_value = true, default = m.x₀))
 - Initial concentration $c_0$ $(@bind c₀ Slider(range(extrema(C)..., length = 101), show_value = true, default = m.c₀))
-- Damage $\gamma$ $(@bind γ Slider(Γ, show_value = true, default = 14))
+- Damage $\gamma$ $(@bind γ Slider(γspace, show_value = true, default = γspace[end]))
 "
 
 # ╔═╡ 742dd502-562f-44ed-ab29-28c2f27372cc
-v, e = valuecontrol[γ];
+v, e, _ = resultbycost[γ];
 
 # ╔═╡ f5b9ab3c-5170-4755-840f-2fc586338459
-function ecnull(x)
-	ċ = c -> e(x, c) - c * m.δ
+function emissionnullcline(x)
+	ċ = c -> evaluate(e, x, c) - c * m.δ
 	return ċ(m.cₚ) * ċ(2m.cₚ) < 0 ?  find_zero(ċ, (m.cₚ, 2m.cₚ)) : NaN
 end;
 
@@ -346,14 +341,14 @@ end;
 
 # ╔═╡ a56590ea-a7a4-4f40-b99f-312ac832f99a
 begin
-	clowlims = (m.cₚ, 800)
+	clowlims = (C[1], 600)
 	aspect_ratio = (clowlims[end] - clowlims[1]) / (X[end] - X[1]) 
 
 	vfig = plot(
 		xlabel = "Carbon concentration, \$c\$", ylabel = "Temperature in dev. from preindustrial, \$x\$", 
 		title = "Deterministic value function, \$v_0(c, x)\$", 
 		xlims = clowlims, ylims = extrema(X),
-		yticks = temperaturelabelticks(2, u = 12),
+		yticks = temperaturelabelticks(2, u = 20),
 		legend = :topleft
 	)
 	
@@ -362,8 +357,8 @@ begin
 		aspect_ratio = aspect_ratio, c = :viridis, linewidth = 0
 	)
 	
-	plot!(vfig, cnull, X; c = :red, linewidth = 2.5,  label = "Nullcline state, \$\\psi^x\$")
-	plot!(vfig, ecnull.(X), X; c = :blue, linewidth = 2.5, label = "Nullcline control, \$\\psi^c\$")
+	plot!(vfig, Cnullcline, X; c = :red, linewidth = 2.5,  label = "Nullcline state, \$\\psi^x\$")
+	# plot!(vfig, emissionnullcline.(X), X; c = :blue, linewidth = 2.5, label = "Nullcline control, \$\\psi^c\$")
 
 	
 	plot!(vfig, traj[:, 2], traj[:, 1]; c = :black, linewidth = 2, label = "Opt. trajectory")
@@ -375,12 +370,12 @@ end
 md"## Trajectory"
 
 # ╔═╡ 73ecc77c-0604-452b-a241-91ae819036d5
-Γopt = [14, 16, 20];
+γtraj = γspace[1:5:end];
 
 # ╔═╡ a193dc39-c332-467a-a89c-02a45ef6e5e9
 function prob_func(prob, i, repeat)
-	γ = Γopt[i]
-	v, e = valuecontrol[γ]
+	γ = γtraj[i]
+	v, e, _ = resultbycost[γ]
 	newprob = remake(prob, p = [e])
 	
 	return newprob
@@ -390,23 +385,23 @@ end;
 damageprob = EnsembleProblem(prob; prob_func = prob_func);
 
 # ╔═╡ 6f3f1b18-674a-4d36-bbfe-e17eab8321de
-sim = solve(damageprob, Tsit5(); trajectories = length(Γopt));
+sim = solve(damageprob, Tsit5(); trajectories = length(γtraj));
 
 # ╔═╡ 1dac3cd2-66bb-45ed-b8e5-6dfd291d94b7
 begin
-	c = palette(:berlin, length(Γopt))
+	c = palette(:berlin, length(γtraj))
 
-	u = 1.75
-	l = 0.75
+	lower = 0.
+	upper = 5
 
 	tlims = (0, 30)
 	xticks = tlims[1]:5:tlims[2]
 	
 	opttempfig = plot(
 		xticks = (xticks, xticks .+ 2020),
-		yticks = temperaturelabelticks(0.25, l = l, u = u),
+		yticks = temperaturelabelticks(0.25, l = lower, u = upper),
 		xlabel = "Year", ylabel = "Optimal temperature path",
-		ylims = (xlims[1] + l, xlims[1] + u),
+		ylims = (xₗ, xₗ + upper),
 		legendtitle = "Damage \$\\gamma \$",
 		legend = false
 	)
@@ -426,13 +421,13 @@ begin
 		temperature = series[1, :]
 		carbon = series[2, :]
 
-		γ = Γopt[i]
-		v, e = valuecontrol[γ]
+		γ = γtraj[i]
+		v, e, _ = resultbycost[γ]
 		
-		emissions = [e(x, c) for (x, c) ∈ zip(temperature, carbon)]
+		emissions = [evaluate(e, x, c) for (x, c) ∈ zip(temperature, carbon)]
 		
 		plot!(opttempfig, t, temperature, c = c[i], alpha = .8, linewidth = 3)
-		plot!(optemfig, t, emissions, c = c[i], alpha = .8, linewidth = 3, label = Γopt[i])
+		plot!(optemfig, t, emissions, c = c[i], alpha = .8, linewidth = 3, label = γtraj[i])
 	end
 
 	plot(opttempfig, optemfig; layout = (1, 2), size = 450 .* (2√2, 1))
@@ -2602,31 +2597,32 @@ version = "1.4.1+0"
 # ╠═bca7a8f6-ffe3-48f3-9605-8dc4948b3ec0
 # ╠═9415e59d-3cd3-4e4c-b591-9d2df23576b1
 # ╠═2ab60d76-2e62-4765-ae2a-44f1076f7154
-# ╠═694e150d-691a-4692-8136-62bb01515805
 # ╠═be4d7051-bda0-4094-a3a9-966298c7e7bf
-# ╠═5efef3c5-838b-486e-b28d-30257e780748
 # ╠═b69354b9-55f2-4f82-a52c-842e952e0912
+# ╠═58e7e1d9-20da-4114-9de0-95e7b6c3498d
+# ╠═f2a10cde-9da8-4591-b564-033eac1a7f0f
 # ╠═c028e90b-14d4-40e8-802c-358d696e366f
 # ╠═ed76a6db-bc6d-4b6b-811d-a87674a497f7
 # ╟─4af48c24-2bb9-4c64-94db-49961123a5f6
 # ╠═b26d145f-046b-47d3-ac1e-078bfb121c09
+# ╠═b77a50b2-aeab-4d6e-a6ba-1d9ee50e2457
 # ╠═13f7e6d4-ae99-4a94-9a9c-07bbbf2dd525
 # ╠═b1f21aac-a6e8-4894-b018-3e4541453f11
 # ╟─d0a8dcb5-af0f-4e98-9e47-b28a50ab2308
 # ╠═fb01b8b0-9d6e-4cd2-be5b-59aa43ef6bc4
-# ╟─da1d3f13-a807-4954-abd2-bccfc1daf06f
+# ╠═da1d3f13-a807-4954-abd2-bccfc1daf06f
 # ╟─be99b40d-1b10-484d-af1b-6a61c349d6f3
 # ╠═e8c4a4ee-d8e8-41ba-944e-bc1a0f1cb032
 # ╠═d5fb378d-036e-478f-995c-03e30c872f6d
 # ╠═20bbb10f-ad05-4578-9a8b-6ac8fa5bb89b
 # ╟─e0ad58a1-43ed-4571-bcf4-8ceaaf3eb96b
 # ╟─01625759-be87-406e-b5ae-472a771e7ac4
-# ╠═2de5ab1b-6e0e-40cf-9f7b-000ee3bb6793
-# ╟─456e97ef-3fd2-4eb6-8f62-039fab6e42b1
 # ╠═742dd502-562f-44ed-ab29-28c2f27372cc
+# ╠═2de5ab1b-6e0e-40cf-9f7b-000ee3bb6793
 # ╠═f5b9ab3c-5170-4755-840f-2fc586338459
 # ╠═4a086a99-a24f-4d9c-9b1f-344244af1fe1
-# ╟─a56590ea-a7a4-4f40-b99f-312ac832f99a
+# ╟─456e97ef-3fd2-4eb6-8f62-039fab6e42b1
+# ╠═a56590ea-a7a4-4f40-b99f-312ac832f99a
 # ╟─61882374-b45c-4975-9b04-b871745c79f7
 # ╠═73ecc77c-0604-452b-a241-91ae819036d5
 # ╠═a193dc39-c332-467a-a89c-02a45ef6e5e9
