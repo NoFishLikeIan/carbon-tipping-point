@@ -11,19 +11,20 @@ function valuefunctioniter(
     m::MendezFarazmand, l::LinearQuadratic, 
     Γ::Grid, Ω, 
     V₀::Matrix{<:Real}, E₀::Matrix{<:Real}; 
-    h₀ = 1e-2, maxiter = 100_000, 
+    h₀ = 1e-2, maxiters = 100_000, 
     vtol = 1e-2, verbose = true)
 
     h = h₀ # TODO: Make adaptive step size
     β = exp(-l.ρ * h)
     Γvec = Base.product(Γ...) |> collect |> vec
-
+    
     L = ((s, e) -> u(e, l) - d(s[1], l)).(Γvec, Ω')
     
+    ηᵢ = Inf .* V₀
     Vᵢ = copy(V₀)
     Eᵢ = copy(E₀)
 
-    for i ∈ 1:maxiter
+    for iter ∈ 1:maxiters
         v = constructinterpolation(Γ, Vᵢ)
 
         v′(s, e) = v(s[1] + h * μ(s[1], s[2], m), s[2] + h * (e - m.δ * s[2]))
@@ -33,22 +34,24 @@ function valuefunctioniter(
         
         Vᵢ₊₁ = unvec(Vₑ[optimalpolicy], Γ)
         Eᵢ₊₁ = unvec([Ω[index[2]] for index ∈ optimalpolicy], Γ)
-        η = abs.(Vᵢ₊₁ - Vᵢ)
+        ηᵢ = abs.(Vᵢ₊₁ - Vᵢ)
 
-        ε = maximum(η)
+        ε = maximum(ηᵢ)
 
-        verbose && print("$i / $maxiter: ε = $(round(ε, digits = 4))\r")
+        verbose && print("$iter / $maxiters: ε = $(round(ε, digits = 4))\r")
 
         if ε < vtol
-            verbose && print("\nDone at iteration $i with ε = $(round(ε, digits = 4)) \r")
-            return Vᵢ₊₁, Eᵢ₊₁, η
+            verbose && print("\nDone at iteration $iter with ε = $(round(ε, digits = 4)) \r")
+            return Vᵢ₊₁, Eᵢ₊₁, ηᵢ
         end
 
         Eᵢ .= Eᵢ₊₁
         Vᵢ .= Vᵢ₊₁
     end
 
-    throw("Value function iteration did not converge in $maxiter iterations.")
+    verbose && "Value function iteration did not converge in $maxiters iterations with ε = $(round(maximum(ηᵢ), digits = 4))"
+
+    return Vᵢ, Eᵢ, ηᵢ
 end
 
 function adapativevaluefunctioniter(
