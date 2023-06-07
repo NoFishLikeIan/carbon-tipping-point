@@ -29,7 +29,7 @@ end
 γspace = 10:5:80
 p = length(γspace) # size of parameter space
 
-@everywhere function adaptivevaluefunction(γ; constrained = false, outerverbose = true, verbose = false, kwargs...)
+@everywhere function adaptivevaluefunction(γ, constrained; outerverbose = true, verbose = false, kwargs...)
     l = LinearQuadratic(γ = γ)
 
     outerverbose && println("Computing value function for γ = $γ...")
@@ -43,29 +43,20 @@ p = length(γspace) # size of parameter space
     ε = maximum(η)
     outerverbose && println("...done γ = $γ with error ε = $ε.")
     
-    return Dict("γ" => γ, "V" => V, "E" => E, "Γ" => Γ)
+    return Dict(:γ => γ, :V => V, :E => E, :Γ => Γ, :constrained => constrained)
 end
 
-outerverbose && println("Unconstrained problem...")
-unconstrainedsol = pmap(
-    γ -> adaptivevaluefunction(γ; 
-        constrained = false, verbose = verbose, outerverbose = outerverbose), 
-γspace)
+paramspace = Iterators.product(γspace, [false, true])
 
-outerverbose && println("Constrained problem...")
-constrainedsol = pmap(
-    γ -> adaptivevaluefunction(γ; 
-        constrained = true, verbose = verbose, outerverbose = outerverbose), 
-γspace)
+solution = pmap(
+    (γ, constrained) -> adaptivevaluefunction(γ, constrained; verbose = verbose, outerverbose = outerverbose), 
+paramspace)
 
 outerverbose && println("Saving...")
 
 filename = "valuefunction.jld2"
 simpath = joinpath("data", "sims", filename)
-save(simpath, Dict(
-    "constrained" => constrainedsol, 
-    "unconstrained" => unconstrainedsol
-))
+save(simpath, Dict( "solution" => solution,))
 
 outerverbose && println("...done!")
 exit()
