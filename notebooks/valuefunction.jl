@@ -14,6 +14,9 @@ macro bind(def, element)
     end
 end
 
+# ╔═╡ f3ea7fd0-e0c3-485b-8712-6873d48dca89
+using UnPack
+
 # ╔═╡ e6f98eae-43ce-47ce-b560-f9fde1d370d4
 using PlutoUI
 
@@ -77,16 +80,40 @@ default(
 )
 
 # ╔═╡ 2ab60d76-2e62-4765-ae2a-44f1076f7154
-begin
-	climate = ingredients("../src/model/climate.jl")
-	economic = ingredients("../src/model/economic.jl")
-end;
+climate = ingredients("../src/model/climate.jl");
 
-# ╔═╡ be4d7051-bda0-4094-a3a9-966298c7e7bf
-simulationresults = load("../data/sims/valuefunction.jld2");
+# ╔═╡ 31b74174-6400-4fa9-aafa-f6d23762e1d5
+economic = ingredients("../src/model/economic.jl");
+
+# ╔═╡ 642b5259-e456-430f-9484-7a477e1b835c
+md"## Data import"
 
 # ╔═╡ b69354b9-55f2-4f82-a52c-842e952e0912
-CONTROL = "constrained";
+CONSTRAINED = false;
+
+# ╔═╡ f56a9594-6c08-47f3-9642-eba138552df5
+datapath = "../data/sims"; @assert ispath(datapath)
+
+# ╔═╡ 335f9003-c6f1-4c5c-bad1-f5b03c8990ed
+function gettimestamp(filepath)
+	filename = replace(filepath, ".jld2" => "")
+	timestamp = eachsplit(filename, "_") |> collect |> last
+	inttimestamp = parse(Int, timestamp)
+
+	return inttimestamp
+end;
+
+# ╔═╡ 866fad20-bba2-4fe6-8795-eab610d48872
+latestfile = "valuefunction_$(maximum(map(gettimestamp, readdir(datapath)))).jld2";
+
+# ╔═╡ 234adfd0-26de-43c6-a003-2743e41ac79a
+data = load(joinpath(datapath, latestfile));
+
+# ╔═╡ 4f7d7064-c9bd-4d40-a852-7de68a478007
+parameters = data["parameters"]
+
+# ╔═╡ be4d7051-bda0-4094-a3a9-966298c7e7bf
+simulationresults = data["solution"];
 
 # ╔═╡ 58e7e1d9-20da-4114-9de0-95e7b6c3498d
 function φ₀(p, l::economic.LinearQuadratic; elims = (-Inf, Inf))
@@ -98,7 +125,7 @@ end;
 
 # ╔═╡ f2a10cde-9da8-4591-b564-033eac1a7f0f
 begin # This assumes that all simulations have the same limits in (x, c)
-	X₁, C₁ = first(simulationresults[CONTROL])["Γ"]
+	X₁, C₁ = first(simulationresults)[:Γ]
 
 	xₗ, xᵤ = extrema(X₁)
 	cₗ, cᵤ = extrema(C₁)
@@ -111,27 +138,20 @@ end;
 begin
 	resultbycost = Dict()
 
-	for sim in simulationresults[CONTROL]
+	for (i, sim) in enumerate(simulationresults)
 		
-		γ = sim["γ"]
-		Γ = sim["Γ"]
-		X, C = Γ
-		vmatrix = sim["V"]
-		ematrix = sim["E"]
-
-		v = Spline2D(Γ[1], Γ[2], vmatrix)
+		@unpack Γ, V, E = sim
+		
+		v = Spline2D(Γ[1], Γ[2], V)
 		∂cv(x, c) = derivative(v, x, c, nux = 0, nuy = 1)
 
-		e = Spline2D(Γ[1], Γ[2], ematrix)
+		e = Spline2D(Γ[1], Γ[2], E)
 		
 		# φ₀(∂cv(x, c), economic.LinearQuadratic(γ = γ); elims = (CONTROL == "constrained" ? 0 : -Inf, Inf))
 
-		resultbycost[γ] = (v, e, Γ)
+		resultbycost[parameters[i]] = (v, e, Γ)
 	end
 end;
-
-# ╔═╡ ed76a6db-bc6d-4b6b-811d-a87674a497f7
-γspace = resultbycost |> keys |> collect |> sort;
 
 # ╔═╡ 4af48c24-2bb9-4c64-94db-49961123a5f6
 md"
@@ -147,7 +167,7 @@ Cnullcline = (x -> climate.nullcline(x, m)).(X);
 # ╔═╡ b1f21aac-a6e8-4894-b018-3e4541453f11
 begin
 	ktocelsius = 273.15
-	xpreindustrial = 13.85 + ktocelsius
+	xpreindustrial = 14 + ktocelsius
 	
 	temperaturelabels(s; l = 0, u = 15) = l:s:u
 	
@@ -161,10 +181,10 @@ end;
 # ╔═╡ d0a8dcb5-af0f-4e98-9e47-b28a50ab2308
 begin
 		
-	newticks = [temperatureticks(2)..., m.x₀]
-	newlabels = [temperaturelabels(2)..., "Current\n temperature"]
+	newticks = [temperatureticks(2, u = 20)..., m.x₀]
+	newlabels = [temperaturelabels(2, u = 20)..., "Current\n temperature"]
 	
-	albedofig = plot(X, x -> climate.g(x, m) + m.η * x^4; xlabel = "Temperature from pre-industrial levels", ylabel = "Energy input given albedo effect \$a(x)\$, (\$W/ m^{2}\$)", c = :black)
+	albedofig = plot(X, x -> climate.g(x, m) + m.η * x^4; xlabel = "\$x\$, temperature deviation", ylabel = "Energy input given albedo effect \$a(x)\$, (\$W/ m^{2}\$)", c = :black)
 
 
 	idxs = sortperm(newticks) # ticks have to be sorted
@@ -218,9 +238,9 @@ begin
 	fixedefig = plot(
 		Cnullcline, X,
 		c = :black, linestyle = :dash, 
-		ylabel = "\$x\$", xlabel = "\$c\$",
-		xlims = (cₗ, 650), ylims = (xₗ, 300),
-		yticks = temperaturelabelticks(1)
+		ylabel = "\$x\$, temperature deviation", xlabel = "\$c\$, carbon concentration",
+		xlims = (400, 650), ylims = (xₗ, 298),
+		yticks = temperaturelabelticks(1, u = 10.5)
 	)
 
 	soltime = range(0, Tsim, length = 201)
@@ -244,63 +264,6 @@ end
 # ╔═╡ e8c4a4ee-d8e8-41ba-944e-bc1a0f1cb032
 savefig(fixedefig, "../plots/simulation-costante-e.png");
 
-# ╔═╡ d5fb378d-036e-478f-995c-03e30c872f6d
-begin
-	f(x, c, t) = climate.μ(x, c, m)
-	g(x, c, t) = 0.5
-end;
-
-# ╔═╡ 20bbb10f-ad05-4578-9a8b-6ac8fa5bb89b
-begin # Simulation for unconditional distributions
-	T = 100_000
-	
-	cspace = [500, 445, m.c₀]
-	K = length(cspace)
-	
-	xprob = SDEProblem(f, g, m.x₀, (0.0, 100.0), m.c₀)
-	simulations = Matrix{Float64}(undef, K, T)
-
-	for (i, c) in enumerate(cspace)
-		cprob = remake(xprob, p = c)
-		ensemble_prob = EnsembleProblem(cprob; output_func = (sol, i) -> (sol[end], false))
-
-		sim = solve(ensemble_prob, SRIW1(), trajectories = T)
-		simulations[i, :] = sim[:]
-	end
-end
-
-# ╔═╡ e0ad58a1-43ed-4571-bcf4-8ceaaf3eb96b
-let
-	z = ones(length(X))
-	
-	densfig = plot(
-		X, Cnullcline, 0 * z;
-		ylims = extrema(cspace), xlims = (xₗ, 300), zlims = (0, 0.06),
-		c = :black, linewidth = 2, label = nothing,
-		legendtitle = "Density at \$c\$", fontsizes = 2,
-		zlabel = "Conditional density of \$x\$",
-		xlabel = "\$x\$", ylabel = "\$c\$",
-		dpi = 300, xflip = true, camera = (40, 25),
-		linestyle = :dash, xticks = temperaturelabelticks(2)
-	)
-
-	colors = [:darkred, :darkorange, :darkgreen]
-
-	for (k, c) ∈ enumerate(cspace)
-
-		density = x -> pdf(kde(simulations[k, :]), x)
-		cdens = density.(X)
-	
-		plot!(densfig, X, c * z, cdens ./ sum(cdens), c = colors[k], linewidth = 3, label = "\$$c\$")
-		plot!(densfig, X, c * z, 0 * z, c = colors[k], linewidth = 2.5, label = nothing, linestyle = :dash)
-	end
-
-	savefig("../plots/density_process.png")
-	
-	densfig
-
-end
-
 # ╔═╡ 01625759-be87-406e-b5ae-472a771e7ac4
 md"# Value function"
 
@@ -315,15 +278,24 @@ function Fₒ!(dz, z, p, t)
 	dz[2] = e(x, c) - m.δ * c
 end
 
+# ╔═╡ e84a6816-47f8-40f6-bcb5-c3d31248fafb
+begin
+	γspace = first.(parameters)
+	σspace = (x -> x[2]).(parameters)
+end;
+
 # ╔═╡ 456e97ef-3fd2-4eb6-8f62-039fab6e42b1
 md"
-- Initial temperature $x_0$ $(@bind x₀ Slider(range(extrema(X)..., length = 101), show_value = true, default = m.x₀))
-- Initial concentration $c_0$ $(@bind c₀ Slider(range(extrema(C)..., length = 101), show_value = true, default = m.c₀))
 - Damage $\gamma$ $(@bind γ Slider(γspace, show_value = true, default = γspace[end]))
+- Noise $\sigma^2_x$ $(@bind σ²ₓ Slider(σspace, show_value = true, default = γspace[end]))
+- Constrained $(@bind constrained CheckBox())
 "
 
+# ╔═╡ e5944590-b525-4cfe-b14d-a995d3e7df12
+parameter = (γ, σ²ₓ, constrained)
+
 # ╔═╡ 742dd502-562f-44ed-ab29-28c2f27372cc
-v, e, _ = resultbycost[γ];
+v, e, _ = resultbycost[parameter];
 
 # ╔═╡ f5b9ab3c-5170-4755-840f-2fc586338459
 function emissionnullcline(x)
@@ -333,7 +305,7 @@ end;
 
 # ╔═╡ 4a086a99-a24f-4d9c-9b1f-344244af1fe1
 begin
-	prob = ODEProblem(Fₒ!, [x₀, c₀], (0., 100.), [e])
+	prob = ODEProblem(Fₒ!, [m.x₀, m.c₀], (0., 100.), [e])
 	sol = solve(prob)
 
 	traj = hcat(sol.(0:0.01:100)...)'
@@ -369,13 +341,9 @@ end
 # ╔═╡ 61882374-b45c-4975-9b04-b871745c79f7
 md"## Trajectory"
 
-# ╔═╡ 73ecc77c-0604-452b-a241-91ae819036d5
-γtraj = γspace[1:5:end];
-
 # ╔═╡ a193dc39-c332-467a-a89c-02a45ef6e5e9
 function prob_func(prob, i, repeat)
-	γ = γtraj[i]
-	v, e, _ = resultbycost[γ]
+	v, e, _ = resultbycost[parameters[i]]
 	newprob = remake(prob, p = [e])
 	
 	return newprob
@@ -385,11 +353,11 @@ end;
 damageprob = EnsembleProblem(prob; prob_func = prob_func);
 
 # ╔═╡ 6f3f1b18-674a-4d36-bbfe-e17eab8321de
-sim = solve(damageprob, Tsit5(); trajectories = length(γtraj));
+sim = solve(damageprob, Tsit5(); trajectories = length(parameters));
 
 # ╔═╡ 1dac3cd2-66bb-45ed-b8e5-6dfd291d94b7
 begin
-	c = palette(:berlin, length(γtraj))
+	c = palette(:berlin, length(parameters))
 
 	lower = 0.
 	upper = 5
@@ -402,14 +370,14 @@ begin
 		yticks = temperaturelabelticks(0.25, l = lower, u = upper),
 		xlabel = "Year", ylabel = "Optimal temperature path",
 		ylims = (xₗ, xₗ + upper),
-		legendtitle = "Damage \$\\gamma \$",
+		legendtitle = "Params \$\\gamma, \\sigma^2_x\$, constrained",
 		legend = false
 	)
 
 	optemfig = plot(
 		xticks = (xticks, xticks .+ 2020),
 		xlabel = "Year", ylabel = "Optimal emission path",
-		legendtitle = "Damage \$\\gamma \$",
+		legendtitle = "Params \$\\gamma, \\sigma^2_x\$, constrained",
 		legend = :bottomright
 	)
 	
@@ -421,13 +389,15 @@ begin
 		temperature = series[1, :]
 		carbon = series[2, :]
 
-		γ = γtraj[i]
-		v, e, _ = resultbycost[γ]
+		γ, σ²ₓ, constrained = parameters[i]
+		v, e, _ = resultbycost[parameters[i]]
+
+		label = "$γ, $σ²ₓ, $(constrained ? "true" : "false")"
 		
 		emissions = [evaluate(e, x, c) for (x, c) ∈ zip(temperature, carbon)]
 		
 		plot!(opttempfig, t, temperature, c = c[i], alpha = .8, linewidth = 3)
-		plot!(optemfig, t, emissions, c = c[i], alpha = .8, linewidth = 3, label = γtraj[i])
+		plot!(optemfig, t, emissions, c = c[i], alpha = .8, linewidth = 3, label = label)
 	end
 
 	plot(opttempfig, optemfig; layout = (1, 2), size = 450 .* (2√2, 1))
@@ -447,6 +417,7 @@ Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 Roots = "f2b01f46-fcfa-551c-844a-d8ac1e96c665"
+UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
 
 [compat]
 Colors = "~0.12.10"
@@ -459,6 +430,7 @@ KernelDensity = "~0.6.7"
 Plots = "~1.38.11"
 PlutoUI = "~0.7.51"
 Roots = "~2.0.14"
+UnPack = "~1.0.2"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -467,7 +439,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.9.0"
 manifest_format = "2.0"
-project_hash = "b5621ec46d366d04fa457a0f2edb5bfbcbc02f8c"
+project_hash = "73be8e471e2a64a932d04b3716c4de6f994ac2d0"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -2587,6 +2559,7 @@ version = "1.4.1+0"
 # ╔═╡ Cell order:
 # ╟─2cbb7789-d932-47b0-96c0-e737ccaa5353
 # ╟─809cb15c-a96d-45f4-b580-cb0d66608a77
+# ╠═f3ea7fd0-e0c3-485b-8712-6873d48dca89
 # ╠═e6f98eae-43ce-47ce-b560-f9fde1d370d4
 # ╠═43d41c4f-7079-469c-9b44-5d2f58fed693
 # ╠═41da2b40-f313-11ed-2be5-6fce137b9933
@@ -2597,34 +2570,38 @@ version = "1.4.1+0"
 # ╠═bca7a8f6-ffe3-48f3-9605-8dc4948b3ec0
 # ╠═9415e59d-3cd3-4e4c-b591-9d2df23576b1
 # ╠═2ab60d76-2e62-4765-ae2a-44f1076f7154
-# ╠═be4d7051-bda0-4094-a3a9-966298c7e7bf
+# ╠═31b74174-6400-4fa9-aafa-f6d23762e1d5
+# ╟─642b5259-e456-430f-9484-7a477e1b835c
 # ╠═b69354b9-55f2-4f82-a52c-842e952e0912
+# ╠═f56a9594-6c08-47f3-9642-eba138552df5
+# ╠═335f9003-c6f1-4c5c-bad1-f5b03c8990ed
+# ╠═866fad20-bba2-4fe6-8795-eab610d48872
+# ╠═234adfd0-26de-43c6-a003-2743e41ac79a
+# ╠═4f7d7064-c9bd-4d40-a852-7de68a478007
+# ╠═be4d7051-bda0-4094-a3a9-966298c7e7bf
 # ╠═58e7e1d9-20da-4114-9de0-95e7b6c3498d
 # ╠═f2a10cde-9da8-4591-b564-033eac1a7f0f
 # ╠═c028e90b-14d4-40e8-802c-358d696e366f
-# ╠═ed76a6db-bc6d-4b6b-811d-a87674a497f7
 # ╟─4af48c24-2bb9-4c64-94db-49961123a5f6
 # ╠═b26d145f-046b-47d3-ac1e-078bfb121c09
 # ╠═b77a50b2-aeab-4d6e-a6ba-1d9ee50e2457
 # ╠═13f7e6d4-ae99-4a94-9a9c-07bbbf2dd525
 # ╠═b1f21aac-a6e8-4894-b018-3e4541453f11
 # ╟─d0a8dcb5-af0f-4e98-9e47-b28a50ab2308
-# ╠═fb01b8b0-9d6e-4cd2-be5b-59aa43ef6bc4
-# ╠═da1d3f13-a807-4954-abd2-bccfc1daf06f
+# ╟─fb01b8b0-9d6e-4cd2-be5b-59aa43ef6bc4
+# ╟─da1d3f13-a807-4954-abd2-bccfc1daf06f
 # ╟─be99b40d-1b10-484d-af1b-6a61c349d6f3
 # ╠═e8c4a4ee-d8e8-41ba-944e-bc1a0f1cb032
-# ╠═d5fb378d-036e-478f-995c-03e30c872f6d
-# ╠═20bbb10f-ad05-4578-9a8b-6ac8fa5bb89b
-# ╟─e0ad58a1-43ed-4571-bcf4-8ceaaf3eb96b
 # ╟─01625759-be87-406e-b5ae-472a771e7ac4
+# ╠═e5944590-b525-4cfe-b14d-a995d3e7df12
 # ╠═742dd502-562f-44ed-ab29-28c2f27372cc
 # ╠═2de5ab1b-6e0e-40cf-9f7b-000ee3bb6793
 # ╠═f5b9ab3c-5170-4755-840f-2fc586338459
 # ╠═4a086a99-a24f-4d9c-9b1f-344244af1fe1
+# ╠═e84a6816-47f8-40f6-bcb5-c3d31248fafb
 # ╟─456e97ef-3fd2-4eb6-8f62-039fab6e42b1
-# ╠═a56590ea-a7a4-4f40-b99f-312ac832f99a
+# ╟─a56590ea-a7a4-4f40-b99f-312ac832f99a
 # ╟─61882374-b45c-4975-9b04-b871745c79f7
-# ╠═73ecc77c-0604-452b-a241-91ae819036d5
 # ╠═a193dc39-c332-467a-a89c-02a45ef6e5e9
 # ╠═2f1999df-2a78-410c-9d94-ac4d3f8eecf3
 # ╠═6f3f1b18-674a-4d36-bbfe-e17eab8321de
