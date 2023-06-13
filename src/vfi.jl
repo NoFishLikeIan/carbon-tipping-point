@@ -26,15 +26,18 @@ function valuefunctioniter(
     for iter ∈ 1:maxiters
         v = constructinterpolation(Γ, Vᵢ)
 
-        if m.σ²ₓ > 0
-            v′₊(s, e) = v(s[1] + h * μ(s[1], s[2], m) + √h * m.σ²ₓ, s[2] + h * (e - m.δ * s[2]))
-
-            v′₋(s, e) = v(s[1] + h * μ(s[1], s[2], m) - √h * m.σ²ₓ, s[2] + h * (e - m.δ * s[2]))
-
-            v′(s, e) = (v′₋(s, e) + v′₊(s, e)) / 2
-        else
-            v′(s, e) = v(s[1] + h * μ(s[1], s[2], m), s[2] + h * (e - m.δ * s[2]))
+        function v′(s, e)
+            if m.σ²ₓ > 0
+                v′₊(s, e) = v(s[1] + h * μ(s[1], s[2], m) + √h * m.σ²ₓ, s[2] + h * (e - m.δ * s[2]))
+    
+                v′₋(s, e) = v(s[1] + h * μ(s[1], s[2], m) - √h * m.σ²ₓ, s[2] + h * (e - m.δ * s[2]))
+    
+                (v′₋(s, e) + v′₊(s, e)) / 2
+            else
+                v(s[1] + h * μ(s[1], s[2], m), s[2] + h * (e - m.δ * s[2]))
+            end
         end
+
         Vₑ = h * L + β * v′.(Γvec, Ω')
         
         optimalpolicy = argmax(Vₑ, dims = 2)

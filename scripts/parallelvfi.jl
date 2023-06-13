@@ -1,5 +1,6 @@
 using Distributed
 
+addprocs(10, exeflags = "--project")
 println("Running with $(nprocs()) processes...")
 
 @everywhere begin # Imports
