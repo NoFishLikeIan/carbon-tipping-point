@@ -441,3 +441,5 @@ docs/site/
 # environment.
 Manifest.toml
 logs
+.token
+
