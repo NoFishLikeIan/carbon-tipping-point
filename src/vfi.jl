@@ -11,10 +11,9 @@ function valuefunctioniter(
     m::MendezFarazmand, l::LinearQuadratic, 
     Γ::Grid, Ω, 
     V₀::Matrix{<:Real}, E₀::Matrix{<:Real}; 
-    h₀ = 1e-2, maxiters = 100_000, 
+    h = 1e-2, maxiters = 100_000, 
     vtol = 1e-2, verbose = true)
 
-    h = h₀ # TODO: Make adaptive step size
     β = exp(-l.ρ * h)
     Γvec = Base.product(Γ...) |> collect |> vec
     
@@ -27,7 +26,15 @@ function valuefunctioniter(
     for iter ∈ 1:maxiters
         v = constructinterpolation(Γ, Vᵢ)
 
-        v′(s, e) = v(s[1] + h * μ(s[1], s[2], m), s[2] + h * (e - m.δ * s[2]))
+        if m.σ²ₓ > 0
+            v′₊(s, e) = v(s[1] + h * μ(s[1], s[2], m) + √h * m.σ²ₓ, s[2] + h * (e - m.δ * s[2]))
+
+            v′₋(s, e) = v(s[1] + h * μ(s[1], s[2], m) - √h * m.σ²ₓ, s[2] + h * (e - m.δ * s[2]))
+
+            v′(s, e) = (v′₋(s, e) + v′₊(s, e)) / 2
+        else
+            v′(s, e) = v(s[1] + h * μ(s[1], s[2], m), s[2] + h * (e - m.δ * s[2]))
+        end
         Vₑ = h * L + β * v′.(Γvec, Ω')
         
         optimalpolicy = argmax(Vₑ, dims = 2)
@@ -118,3 +125,10 @@ function adapativevaluefunctioniter(
 
     return V, E, Γ, η
 end
+
+# Remove below
+l = LinearQuadratic(γ = 18.)
+m = MendezFarazmand()
+
+n₀ = 20
+k₀ = 20
