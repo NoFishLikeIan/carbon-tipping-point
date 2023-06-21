@@ -12,7 +12,7 @@ function valuefunctioniter(
     Γ::Grid, Ω, 
     V₀::Matrix{<:Real}, E₀::Matrix{<:Real}; 
     h = 1e-2, maxiters = 100_000, 
-    vtol = 1e-2, verbose = true)
+    vtol = 1e-2, verbose = false)
 
     β = exp(-l.ρ * h)
     Γvec = Base.product(Γ...) |> collect |> vec
@@ -69,7 +69,7 @@ function adapativevaluefunctioniter(
     n₀::Int64, k₀::Int64; 
     constrained = false, θ = 0.1,
     maxrefinementiters = 100, maxgridsize = 401,
-    verbose = true, 
+    verbose = false, 
     iterationkwargs...)
 
     emax = (l.β₀ - l.τ) / l.β₁
@@ -85,13 +85,13 @@ function adapativevaluefunctioniter(
     V = ((x, c) -> H(x, c, 0, 0, m, l)).(X₀, C₀') # Initial value function guess
     E = copy(η)
 
-    verbose && println("Starting refinement with $(gridsize(Γ)) states and $(length(Ω)) policies...")
+    verbose && println("--- Starting refinement with $(gridsize(Γ)) states and $(length(Ω)) policies...")
 
     for refj ∈ 1:maxrefinementiters
         iseveniter = (refj % 2 == 0)
 
         if iseveniter && (gridsize(Γ) > maxgridsize) 
-            verbose && println("...done refinement $(gridsize(Γ)) states and $(length(Ω)) states!")
+            verbose && println("--- ...done refinement $(gridsize(Γ)) states and $(length(Ω)) states!")
             return V, E, Γ, η
         end
 
@@ -107,12 +107,12 @@ function adapativevaluefunctioniter(
         # Refine state space
         if iseveniter
             Ω′ = refineΩ(Ω, E, θ)
-            verbose && println("...policy refinement: $(length(Ω)) ->  $(length(Ω′)) states...")
+            verbose && println("--- ...policy refinement: $(length(Ω)) ->  $(length(Ω′)) states...")
             
             Ω = Ω′
         else
             Γ′ = refineΓ(Γ, η, θ)
-            verbose && println("...grid refinement: $(gridsize(Γ)) ->  $(gridsize(Γ′)) states...")
+            verbose && println("--- ...grid refinement: $(gridsize(Γ)) ->  $(gridsize(Γ′)) states...")
             
             # Interpolate value and policy on old grid
             v = constructinterpolation(Γ, V′)
@@ -128,10 +128,3 @@ function adapativevaluefunctioniter(
 
     return V, E, Γ, η
 end
-
-# Remove below
-l = LinearQuadratic(γ = 18.)
-m = MendezFarazmand()
-
-n₀ = 20
-k₀ = 20

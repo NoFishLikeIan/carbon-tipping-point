@@ -1,6 +1,5 @@
 using Distributed
 
-addprocs(10, exeflags = "--project")
 println("Running with $(nprocs()) processes...")
 
 @everywhere begin # Imports
@@ -16,23 +15,23 @@ end
 
     m = MendezFarazmand() # Climate model
     
-    n₀ = 40 # size of state space n²
+    n₀ = 20 # size of state space n²
     k₀ = 100 # size of action space
 
     outerverbose = true # Verbosity outside of parallel loop
     verbose = false # Verbosity inside of parallel loop
 
     θ = 0.1
-    maxrefinementiters = 100
+    maxrefinementiters = 1 # 100
     maxiters  = 100_000
-    maxgridsize = 5000
+    maxgridsize = 2000
 end
 
 
 @everywhere function adaptivevaluefunction(l::LinearQuadratic, m::MendezFarazmand, constrained::Bool; outerverbose = true, verbose = false, kwargs...)
     label = constrained ? "constrained" : "unconstrained"
 
-    outerverbose && println("Computing $label value function for γ = $(l.γ) and σ²ₓ = $(m.σ²ₓ)...")
+    outerverbose && println("-- Computing $label value function for γ = $(l.γ) and σ²ₓ = $(m.σ²ₓ)...")
 
     V, E, Γ, η = adapativevaluefunctioniter(
         m, l, n₀, k₀;
@@ -41,27 +40,32 @@ end
         maxiters = maxiters, kwargs...)
     
     ε = maximum(η)
-    outerverbose && println("...done $label problem with γ = $l.γ and σ²ₓ = $(m.σ²ₓ) with error ε = $ε.")
+    outerverbose && println("-- ...done $label problem with γ = $(l.γ) and σ²ₓ = $(m.σ²ₓ) with error ε = $ε.")
     
     return Dict(:γ => l.γ, :V => V, :E => E, :Γ => Γ, :constrained => constrained)
 end
 
-γspace = 10:5:40
-σspace = [0., 3., 10.]
+@everywhere begin
+    γspace = 22:0.5:28
+    σspace = 0:0.1:1
+    constraints = [false, true]
+    p = length(γspace) * length(σspace) * length(constraints) # size of parameter space
+end
 
-p = length(γspace) * length(σspace) * 2 # size of parameter space
+paramspace = Iterators.product(γspace, σspace, constraints) |> collect |> vec
 
-paramspace = Iterators.product(γspace, σspace, [false, true]) |> collect |> vec
-
-@everywhere function pmapfn(params)
+@everywhere function pmapfn(input)
+    index, params = input
     γ, σ²ₓ, constrained = params
     l = LinearQuadratic(γ = γ)
     m = MendezFarazmand(σ²ₓ = σ²ₓ)
 
-    return adaptivevaluefunction(l, m, constrained; verbose = true, outerverbose = outerverbose)
+    outerverbose && println("Iteration $index of $p...")
+
+    return adaptivevaluefunction(l, m, constrained; verbose = verbose, outerverbose = outerverbose)
 end
 
-solution = pmap(pmapfn, paramspace)
+solution = pmap(pmapfn, enumerate(paramspace))
 
 outerverbose && println("Saving...")
 

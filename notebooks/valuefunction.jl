@@ -280,8 +280,8 @@ end
 
 # ╔═╡ e84a6816-47f8-40f6-bcb5-c3d31248fafb
 begin
-	γspace = first.(parameters)
-	σspace = (x -> x[2]).(parameters)
+	γspace = first.(parameters) |> unique |> sort
+	σspace = (x -> x[2]).(parameters) |> unique |> sort
 end;
 
 # ╔═╡ 456e97ef-3fd2-4eb6-8f62-039fab6e42b1
@@ -318,7 +318,7 @@ begin
 
 	vfig = plot(
 		xlabel = "Carbon concentration, \$c\$", ylabel = "Temperature in dev. from preindustrial, \$x\$", 
-		title = "Deterministic value function, \$v_0(c, x)\$", 
+		title = "Deterministic value function, \$v(c, x)\$", 
 		xlims = clowlims, ylims = extrema(X),
 		yticks = temperaturelabelticks(2, u = 20),
 		legend = :topleft
@@ -338,12 +338,58 @@ begin
 	scatter!(vfig, [traj[end, 2]], [traj[end, 1]]; c = :black, label = nothing)
 end
 
+# ╔═╡ 5e117ffa-7f0a-4fbb-a48b-ec926a450de7
+function meshvaluefunction(f; n = 31, kwargs...)
+	fig = plot(
+		xlabel = "\$c\$", ylabel = "\$x\$",  
+		xlims = clowlims, ylims = extrema(X),
+		yticks = temperaturelabelticks(2, u = 20),
+		camera = (55, 40); kwargs...
+	)
+
+	wireframe!(fig,
+		range(extrema(C)...; length = n),
+		range(extrema(X)...; length = n),
+		(c, x) -> f(x, c);  
+		aspect_ratio = aspect_ratio
+	)
+
+	return fig
+end;
+
+# ╔═╡ 03fb91f4-7701-4b03-b847-88d52fdc76fe
+md"
+- rotate $(@bind rot Slider(-180:180, show_value = true, default = 60))
+- tilt $(@bind tilt Slider(0:180, show_value = true, default = 30))
+- Damage $\gamma$ $(@bind γmesh Slider(γspace, show_value = true, default = γspace[end]))
+- Noise $\sigma^2_x$ $(@bind σmesh Slider(σspace, show_value = true, default = 0.5))
+- Constrained $(@bind constrainedmesh CheckBox())
+"
+
+# ╔═╡ d602c864-fd95-4c80-be21-0be3bf59304c
+begin
+	v₀, e₀, _ = resultbycost[(γmesh, 0, constrainedmesh)]
+	v₁, e₁, _ = resultbycost[(γmesh, σmesh, constrainedmesh)]
+end;
+
+# ╔═╡ ad1b8b7b-5244-4b89-b6aa-633e50af3c34
+begin
+	emfig = meshvaluefunction((x, c) -> e₁(x, c); zlabel = "\$e(c, x)\$", n = 101, camera = (rot, tilt))
+	valfig = meshvaluefunction((x, c) -> v₁(x, c); zlabel = "\$v(c, x)\$", n = 101, camera = (rot, tilt))
+
+	# plot(emfig, valfig)
+	emfig
+end
+
 # ╔═╡ 61882374-b45c-4975-9b04-b871745c79f7
 md"## Trajectory"
 
+# ╔═╡ f705d17b-6fb4-463b-af92-e2982fa5f28b
+trajparams = filter(p -> p[1] == 25 && p[3] == false, parameters);
+
 # ╔═╡ a193dc39-c332-467a-a89c-02a45ef6e5e9
 function prob_func(prob, i, repeat)
-	v, e, _ = resultbycost[parameters[i]]
+	v, e, _ = resultbycost[trajparams[i]]
 	newprob = remake(prob, p = [e])
 	
 	return newprob
@@ -353,14 +399,14 @@ end;
 damageprob = EnsembleProblem(prob; prob_func = prob_func);
 
 # ╔═╡ 6f3f1b18-674a-4d36-bbfe-e17eab8321de
-sim = solve(damageprob, Tsit5(); trajectories = length(parameters));
+sim = solve(damageprob, Tsit5(); trajectories = length(trajparams));
 
 # ╔═╡ 1dac3cd2-66bb-45ed-b8e5-6dfd291d94b7
 begin
-	c = palette(:berlin, length(parameters))
+	c = palette(:coolwarm, length(trajparams))
 
-	lower = 0.
-	upper = 5
+	lower = -0.25
+	upper = 3.5
 
 	tlims = (0, 30)
 	xticks = tlims[1]:5:tlims[2]
@@ -369,16 +415,14 @@ begin
 		xticks = (xticks, xticks .+ 2020),
 		yticks = temperaturelabelticks(0.25, l = lower, u = upper),
 		xlabel = "Year", ylabel = "Optimal temperature path",
-		ylims = (xₗ, xₗ + upper),
+		ylims = (xₗ + lower, xₗ + upper),
 		legendtitle = "Params \$\\gamma, \\sigma^2_x\$, constrained",
 		legend = false
 	)
 
 	optemfig = plot(
 		xticks = (xticks, xticks .+ 2020),
-		xlabel = "Year", ylabel = "Optimal emission path",
-		legendtitle = "Params \$\\gamma, \\sigma^2_x\$, constrained",
-		legend = :bottomright
+		xlabel = "Year", ylabel = "Optimal emission path"
 	)
 	
 	t = range(tlims..., length = 1001) 
@@ -389,10 +433,10 @@ begin
 		temperature = series[1, :]
 		carbon = series[2, :]
 
-		γ, σ²ₓ, constrained = parameters[i]
-		v, e, _ = resultbycost[parameters[i]]
+		γ, σ²ₓ, constrained = trajparams[i]
+		v, e, _ = resultbycost[trajparams[i]]
 
-		label = "$γ, $σ²ₓ, $(constrained ? "true" : "false")"
+		label = "$σ²ₓ"
 		
 		emissions = [evaluate(e, x, c) for (x, c) ∈ zip(temperature, carbon)]
 		
@@ -2601,7 +2645,12 @@ version = "1.4.1+0"
 # ╠═e84a6816-47f8-40f6-bcb5-c3d31248fafb
 # ╟─456e97ef-3fd2-4eb6-8f62-039fab6e42b1
 # ╟─a56590ea-a7a4-4f40-b99f-312ac832f99a
+# ╠═d602c864-fd95-4c80-be21-0be3bf59304c
+# ╠═5e117ffa-7f0a-4fbb-a48b-ec926a450de7
+# ╟─03fb91f4-7701-4b03-b847-88d52fdc76fe
+# ╠═ad1b8b7b-5244-4b89-b6aa-633e50af3c34
 # ╟─61882374-b45c-4975-9b04-b871745c79f7
+# ╠═f705d17b-6fb4-463b-af92-e2982fa5f28b
 # ╠═a193dc39-c332-467a-a89c-02a45ef6e5e9
 # ╠═2f1999df-2a78-410c-9d94-ac4d3f8eecf3
 # ╠═6f3f1b18-674a-4d36-bbfe-e17eab8321de
