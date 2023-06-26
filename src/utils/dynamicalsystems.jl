@@ -1,71 +1,52 @@
-function computestablemanifolds(
-	    F!::Function, DF!::Function,
-	    steadystates::Vector{Vector{Float64}},
-	    p::Vector{Any};
-		alg = Tsit5(),
-		h = 1e-3, T = 100,
-		tends = repeat([(10., 10.)], length(steadystates)),
-		verbose = false,
-	    solverargs...)
-
-	n = length(first(steadystates))
-
-	function Finv!(dz, z, p, t)
-		F!(dz, z, p, t)
-		dz .= -dz
+function simulateclimatepath(
+	σₓ::Real, γ::Real, m::MendezFarazmand, e::Function; 
+	T = 80, ntraj = 1000
+)
+	function F!(du, u, p, t)
+		γ, σₓ = p
+		x, c = u
+	
+		du[1] = μ(x, max(c, m.cₚ), m)
+		du[2] = e(x, c, σₓ, γ) - m.δ * c
 	end
 
-	function DFinv!(J, z, p, t)
-		DF!(J, z, p, t)
-		J .= -J
+	function G!(du, u, p, t)
+		σₓ = p[2]
+		du[1] = σₓ
+		du[2] = 0.
 	end
 
-	odefn = ODEFunction(Finv!; jac = DFinv!)
-	equil = []
+	prob = SDEProblem(F!, G!, [m.x₀, m.c₀], (0, T), [γ, σₓ])
+	ensprob = EnsembleProblem(prob)
+	sim = solve(ensprob, SRIW1(), trajectories = ntraj)
+	
+	return sim
+end
+
+function computeoptimalemissions(σₓ, γ, sim, e::Function; Tsim = 1001)
+	T = first(sim).t |> last
+	timespan = range(0, T; length = Tsim)
+	nsim = size(sim, 3)
+
+	optemissions = Matrix{Float64}(undef, Tsim, nsim)
+
+	for idxsim in 1:nsim
+		optemissions[:, idxsim] .= [e(x, c, σₓ, γ) for (x, c) in sim[idxsim](timespan).u]
+	end
+
+	return optemissions
+end
+
+function extractquartiles(ensamblesim, quartile; Tsim = 2001)
+	T = first(ensamblesim).t |> last
+	timespan = range(0, T; length = Tsim)
+	upperq(t) = EnsembleAnalysis.timepoint_meanvar(ensamblesim, t)[2][1]
+	lowerq(t) = EnsembleAnalysis.timepoint_quantile(ensamblesim, 1 - quartile, t)[1]
+	upperq(t) = EnsembleAnalysis.timepoint_quantile(ensamblesim, quartile, t)[1]
 		
-	for (j, x̄) ∈ enumerate(steadystates)
-		verbose && println("Computing manifolds for steady state: ", x̄)
+	mediansim = hcat([EnsembleAnalysis.timepoint_median(ensamblesim, t) for t in timespan]...)'
+	lowerqsim = lowerq.(timespan)
+	upperqsim = upperq.(timespan)
 
-		J = zeros(n, n); DF!(J, x̄, p, 0.0)
-		λ, V = eigen(J)
-
-		stabledirs = findall(λᵢ -> real(λᵢ) < 0, λ)
-
-		manifolds = []
-
-		for i ∈ stabledirs
-			vᵢ = real.(V[:, i])
-
-			# Negative direction
-			negtend = tends[j][1]
-			negprob = ODEProblem(odefn, x̄ - h * vᵢ, (0.0, negtend), p)
-			negsol = solve(negprob, alg; solverargs...)
-
-			if SciMLBase.successful_retcode(negsol.retcode)
-				timespan = range(0.0, negtend, length = T)
-				negmanifold = hcat((t -> negsol(negtend - t)).(timespan)...)'
-			else
-				negmanifold = NaN * ones(T, n)
-			end
-
-			# Positive direction
-			postend = tends[j][2]
-			posprob = ODEProblem(odefn, x̄ + h * vᵢ, (0.0, postend), p)
-			possol = solve(posprob, alg; solverargs...)
-
-			if SciMLBase.successful_retcode(possol.retcode)
-				timespan = range(0.0, postend, length = T)
-				posmanifold = hcat((t -> possol(postend - t)).(timespan)...)'
-			else
-				posmanifold = NaN * ones(T, n)
-			end
-			
-			mᵢ = vcat(posmanifold, reverse(negmanifold, dims = 1))
-			push!(manifolds, mᵢ)
-		end		
-
-		push!(equil, manifolds)
-	end
-
-	return equil
+	return lowerqsim, mediansim, upperqsim	
 end

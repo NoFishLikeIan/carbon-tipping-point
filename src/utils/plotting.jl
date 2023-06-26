@@ -1,37 +1,25 @@
-function plotvectorfield(xs, ys, g::Function; plotkwargs...)
-    fig = plot()
-    plotvectorfield!(fig, xs, ys, g; plotkwargs...)
-    return fig
+kelvintocelsius = 273.15
+xpreindustrial = 14 + kelvintocelsius
+
+function stringtempdev(x::Real; digits = 2)
+    fsign = x > 0 ? "+" : ""
+    fmt = Printf.Format("$fsign%0.$(digits)f")
+    return Printf.format(fmt, x)
 end
 
-function plotvectorfield!(figure, xs, ys, g::Function; rescale = 1, plotkwargs...)
+function makedevxlabels(from, to, m::MendezFarazmand; step = 0.5, withcurrent = false, digits = 2)
+    preindustrialx = range(from, to; step = step)
+    xticks = preindustrialx .+ xpreindustrial
 
-    xlims = extrema(xs)
-    ylims = extrema(ys)
-    
-    N, M = length(xs), length(ys)
-    xm = repeat(xs, outer=M)
-    ym = repeat(ys, inner=N)
-    
-    field = g.(xm, ym)
-    
-    scale = rescale * (xlims[2] - xlims[1]) / min(N, M)
-    u = @. scale * first(field)
-    v = @. scale * last(field)
-    
-    steadystates = @. (u ≈ 0) * (v ≈ 0)
-    
-    u[steadystates] .= NaN
-    v[steadystates] .= NaN
-    
-    z = (x -> √(x'x)).(field)
-    
-    quiver!(
-        figure, xm, ym;
-        quiver = (u, v), line_z=repeat(z, inner=4),
-        xlims = xlims, ylims = ylims,
-        c = :batlow, colorbar = false,
-        plotkwargs...
-    )
+    xlabels = [stringtempdev(x, digits = digits) for x in preindustrialx]
 
+    if !withcurrent
+        return (xticks, xlabels)
+    end
+
+    xlabels = [xlabels..., "\$x_0\$"]
+    xticks = [xticks..., m.x₀]
+    idxs = sortperm(xticks)
+    
+    return (xticks[idxs], xlabels[idxs])
 end
