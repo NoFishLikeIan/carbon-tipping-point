@@ -52,6 +52,8 @@
 
     \renewcommand{\H}{\mathcal{H}}
 
+    \newtheorem{proposition}{Proposition}
+
     % Bibliography
 
     \usepackage[bibencoding=utf8, style=apa, backend=biber, eprint=false]{biblatex}
@@ -62,23 +64,22 @@
     % Make title page
 
     \author{Andrea Titton}
-    \title{Climate Tipping Points and\\the Social Cost of Carbon}
+    \title{Climate Tipping Points and\\ Optimal Emissions}
     
 \begin{document}
 
 \maketitle
 
-As the world temperature rises, due to carbon dioxide (CO2) emissions from human economic activities, the risk of tipping points in the climate system becomes more concrete. This risk affects the social cost of carbon (SCC), that is, the marginal economic damage of a increasing carbon emissions. In this paper, I study the relationship between the risk of tipping and the SCC. To do so, I solve a simple planner economy interacting with a with a climate model
-with glacial-interglacial transitions (\cite{sellers_global_1969,mcgehee_quadratic_2014}). 
+As the world temperature rises, due to carbon dioxide (CO2) emissions from human economic activities, the risk of tipping points in the climate system becomes more concrete (\cite{ashwin_extreme_2020,sledd_cloudier_2021}). This risk affects the social cost of carbon, that is, the marginal economic damage of a increasing carbon emissions. In this paper, I study the relationship between the risk of tipping and the SCC. To do so, I solve a stylised social-planner integrated model with glacial-interglacial transitions (\cite{sellers_global_1969,mcgehee_quadratic_2014}). In particular, I model a tipping point induced by the ice–albedo feedback and study how this affects the optimal emission path and the social cost of carbon. The tipping point affects temperature dynamics, and as a consequence optimal emissions, in three ways. First, it introduces a non-linear increase in temperature. Second, it makes positive temperature shocks more persistent than negative ones. Third, it introduces a jump in the abatement necessary to revert temperatures to the level pre-tipping point. 
 
-% TODO: Talk more about climate tipping points
+The importance of modelling precise climate dynamics and tipping points when determining optimal emission paths has been increasingly recognised in economics (\cite{van_den_bremer_risk-adjusted_2021,dietz_economic_2021,dietz_are_2020,taconet_social_2021,lontzek_stochastic_2015}). Previous approaches have mostly focused on the stochastic nature of tipping points, by modelling temperature dynamics or damages as jump processes, with arrival rates increasing in emissions. Yet, many tipping points in the climate system are caused by bifurcation (\cite{ashwin_extreme_2020,ashwin_tipping_2012}). In this paper, I show that these two tipping points yield different optimal emission paths.
 
-Tipping points in temperature affect the SCC in three ways. First, they introduce a discontinuous jump in economic damages as temperature increases. Second, they make it more costly to revert temperature back to pre-tipping level. Third, they make warm shocks in temperature more persistent, also known as critical slowdown. Previous approaches in modelling tipping points have been to introduce Poisson jumps, with emission-dependant probabilities, in the temperature process. Yet, these cannot accommodate for the latter two effects of climate tipping points (cite). In this paper, I address this problem.
+To tease out this difference, I study a stylised economy where emission give instantaneous benefits and temperature instantaneous damages, and there are no intertemporal economic decisions. This is highly stylised but it is done to obtain, at least partly, tractable results. An important next step would be to computationally study tipping points dynamics in a DICE model (\cite{nordhaus_estimates_2014,nordhaus_optimal_1992,nordhaus_question_2008,nordhaus_revisiting_2017}) or an asset pricing model (\cite{duffie_asset_1992,olijslagers_discounting_2019}).
 
 
 \subfile{sections/introduction/introduction.tex}
+% \section{Related literature}
 
-\section{Related literature}
 \section{Climate Model}
 
 \subfile{sections/climate-model/climate-model.tex}
@@ -86,10 +87,6 @@ Tipping points in temperature affect the SCC in three ways. First, they introduc
 \section{Economy}
 
 \subfile{sections/economy-model/economy-model.tex}
-
-\section{Asymptotic Solution}
-
-\subfile{sections/solution/solution.tex}
 
 \nocite{*}
 \newpage
