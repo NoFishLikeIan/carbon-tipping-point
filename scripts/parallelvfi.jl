@@ -46,7 +46,7 @@ end
 end
 
 @everywhere begin
-    γspace = 22:0.5:28
+    γspace = 22:1:30
     σspace = 0:0.1:1
     constraints = [false, true]
     p = length(γspace) * length(σspace) * length(constraints) # size of parameter space

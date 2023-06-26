@@ -199,6 +199,9 @@ begin
 
 end
 
+# ╔═╡ 8a86532c-1bdf-4994-9bd9-076eff589dd1
+m.x₀ - xpreindustrial
+
 # ╔═╡ fb01b8b0-9d6e-4cd2-be5b-59aa43ef6bc4
 begin
 	Tsim = 100.
@@ -2631,10 +2634,11 @@ version = "1.4.1+0"
 # ╠═b77a50b2-aeab-4d6e-a6ba-1d9ee50e2457
 # ╠═13f7e6d4-ae99-4a94-9a9c-07bbbf2dd525
 # ╠═b1f21aac-a6e8-4894-b018-3e4541453f11
-# ╟─d0a8dcb5-af0f-4e98-9e47-b28a50ab2308
-# ╟─fb01b8b0-9d6e-4cd2-be5b-59aa43ef6bc4
-# ╟─da1d3f13-a807-4954-abd2-bccfc1daf06f
-# ╟─be99b40d-1b10-484d-af1b-6a61c349d6f3
+# ╠═d0a8dcb5-af0f-4e98-9e47-b28a50ab2308
+# ╠═8a86532c-1bdf-4994-9bd9-076eff589dd1
+# ╠═fb01b8b0-9d6e-4cd2-be5b-59aa43ef6bc4
+# ╠═da1d3f13-a807-4954-abd2-bccfc1daf06f
+# ╠═be99b40d-1b10-484d-af1b-6a61c349d6f3
 # ╠═e8c4a4ee-d8e8-41ba-944e-bc1a0f1cb032
 # ╟─01625759-be87-406e-b5ae-472a771e7ac4
 # ╠═e5944590-b525-4cfe-b14d-a995d3e7df12
