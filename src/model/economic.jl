@@ -15,10 +15,18 @@ Base.@kwdef struct LinearQuadratic
 end
 
 function d(x, l::LinearQuadratic)
+    if x ≤ l.xₛ
+        return 0.
+    end
+
     (l.γ / 2) * (x - l.xₛ)^2
 end
 
 function d′(x, l::LinearQuadratic)
+    if x ≤ l.xₛ
+        return 0.
+    end
+
     l.γ * (x - l.xₛ)
 end
 
