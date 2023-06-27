@@ -1,15 +1,35 @@
 \documentclass[../../main.tex]{subfiles}
 \begin{document}
 
-I consider a social planner that seeks to maximise the functional \begin{equation}
-    J(e; x_0, c_0) = \mathbb{E}_{x} \int^{\infty}_0 e^{-\rho t} \Big(u(e) - d(x)\Big) \text{d} t,
-\end{equation} subject to the dynamics $\text{d}x$ and $\text{d}c$. To do so, she picks an emission path $e$, which I assume to be a continuously differentiable function of time taking values in an interval $\mathcal{E} = [e_l, e_u]$. I will consider both the case in which carbon capture technology is, $e_l < 0$, or is not, $e_l = 0$, available to the planner. Furthermore, I assume benefits of emission to be concave, $u^{\prime \prime} < 0$, and temperature damages to be convex, $d^{\prime \prime} > 0$. 
+To keep the analysis tractable and tease out the role of tipping points in the social cost of carbon, I assume a Ramsey economy always in equilibrium and with constant productivity. Namely, output is a concave function of capital, $y = A k^\alpha$, where $A$ is total factor productivity. We assume the depreciation rate of capital to be $d(x)$, where the temperature damage function $d$ is increasing in temperature. At all time output is employed to either replace depreciated capital or for consumption \begin{equation}
+    d(x) \ k = y - c.
+\end{equation}
 
-For a given admissible state $s = (x, c)$, I define the value function to be \begin{equation}
-    v(s) = \sup_{e \in \mathcal{E}} J(e; s).
-\end{equation} Furthermore, for a given vector of shadow prices $p = (p_x, p_c)$, let the maximised current value Hamiltonian be \begin{equation}
-    \H(s, p) = \max_e \Big\{u(e) + p_c e \Big\} - p_c \ \delta c - d(x) + p_x \Big(\mu(x) + S + C \log(c / c_p)\Big),
+Finally, to link output $y$ and C0$_2$ emissions $e$ we use the [\textbf{Forgot the name}] formula \begin{equation}
+    e = y \overbrace{\underbrace{\beta_m}_{\substack{\text{Energy} \\ \text{intensity} \\ \text{of output}}} \underbrace{\beta_e,}_{\substack{\text{Emission} \\ \text{intensity} \\ \text{of energy}}}}^{\beta}
+\end{equation} such that consumption can be written in terms of CO$_2$ emissions as \begin{equation}
+    c(e, x) = e \beta - d(x) \; \left(\frac{e \beta}{A}\right)^{1 / \alpha}. 
+\end{equation}
+
+I study the social planner problem, who seeks to maximise the expected discounted stream of utility of consumption \begin{equation}
+    J(e \colon x_0, c_0) = \mathbb{E}_{x} \int^{\infty}_0 \mathrm{e}^{-\rho t} \ u\Big(c(e, x)\Big) \ \text{d} t,
+\end{equation} subject to the dynamics of temperature $\text{d}x$ and carbon concentration $\text{d}c$. To do so, she picks an emission path $e$, which I assume to be a continuously differentiable function of time taking values in an interval $\mathcal{E} = [0, \overline{e}]$. Notice that here we are assuming no possibility of negative emission. Furthermore, I assume benefits of emission to be increasing $u^\prime > 0$ and concave $u^{\prime \prime} < 0$. 
+
+For a given admissible state $(x, m)$, the value function is \begin{equation}
+    v(x, m) = \sup_{e \in \mathcal{E}} J(e; x, m).
 \end{equation} 
+
+\begin{definition}
+    Let the maximised current value Hamiltonian be \begin{equation}
+        \begin{split}
+            \H(x, m, \mathbf{\lambda}) = \ &u\Big(c\big(\varphi(\lambda_m, m), x \big) \Big) \\
+            + \ &\lambda_m \Big(\varphi(\lambda_m, m) - \delta m\Big) \\
+            + \ &\lambda_x \Big(\mu(x) + S + M \log(m / m_p)\Big),
+        \end{split}
+    \end{equation} where \begin{equation}
+        \varphi(\lambda_m, x) = \arg\max_{e \in \mathcal{E}} \Big\{ u(c(e, x)) - \lambda_m e \Big\},
+    \end{equation} is the optimal emission schedule.
+\end{definition}
 
 \begin{proposition}
     The value function $v$ satisfies the Hamilton-Bellman-Jacobi partial differential equation, \begin{equation} \label{eq:hbj}
@@ -17,14 +37,10 @@ For a given admissible state $s = (x, c)$, I define the value function to be \be
     \end{equation} where $\nabla v$ is the vector of partial derivatives of $v$ with respect to $x$ and $c$.
 \end{proposition}
 
-\subsection{Deterministic Problem}
+\subsection{Optimal Emissions}
 
-Before studying the stochastic problem it is useful to establish a deterministic benchmark, considering the case $\sigma^2_x = 0$. Let the optimal emission schedule $\varphi$ be such that the first order condition is satisfied, namely \begin{equation}
-    u^\prime\left( \varphi(s) \right) + \partial_c v(s) = 0.
-\end{equation}
- 
-Using this, we can rewrite (\ref{eq:hbj}) as \begin{equation}
-    \rho v(s) = u(\varphi(s)) - d(x) + \partial_c v(s) \Big( \varphi(s) - \delta c \Big) + \partial_x v(x) \Big(\mu(x) + S + C \log(c / c_p)\Big).
-\end{equation}
+In the rest of the paper and in the calibration, we take $u(c) = \log c$.
+
+
 
 \end{document}

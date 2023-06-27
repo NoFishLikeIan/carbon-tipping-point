@@ -1,20 +1,21 @@
 \documentclass[../../main.tex]{subfiles}
 \begin{document}
 
-The climate model employed here, and its calibration, is a variant of the Budyko–Sellers-type model developed by \citein{mendez_investigating_2021}, without carbon concentration delay in decay. The model consists in a coupled system of stochastic differential equations (SDEs) for atmospheric carbon concentration $c$, in p.p.m. of CO$_2$, and average world temperature $x$, in Celsius deviation from pre-industrial levels. Carbon concentration evolves as \begin{equation} \label{eq:climate-model-c}
-    \text{d}c = (e - \delta c) \ \text{d} t,
+The climate model employed here, and its calibration, is a variant of the Budyko–Sellers-type model developed by \citein{mendez_investigating_2021}, without carbon concentration delay in decay. The model consists in a coupled system of stochastic differential equations (SDEs) for atmospheric carbon concentration $m$, in p.p.m. of CO$_2$, and average world temperature $x$, in Celsius deviation from pre-industrial levels. Carbon concentration evolves as \begin{equation} \label{eq:climate-model-c}
+    \text{d}m = (e - \delta m) \ \text{d} t,
 \end{equation} where $e$ is the level of emissions and $\delta$ is a natural decay rate. Temperature evolves as \begin{equation} \label{eq:climate-model-x}
-    \frac{1}{\kappa} \text{d}x = \Big( \mu(x) + S + C \log(c / c_p) \Big) \text{d} t + \sigma^2 \text{d}w
-\end{equation} where $c_p$ is the pre-industrial level of carbon concentration, $C$ is the direct forcing of CO$_2$, and $w$ is a Wiener process. The non-linearity in temperature dynamics is given by the function \begin{equation}
+    \frac{1}{\kappa} \text{d}x = \Big( \mu(x) + S + M \log(m / m_{pre}) \Big) \text{d} t + \sigma^2 \text{d}w
+\end{equation} where $m_{pre}$ is the pre-industrial level of carbon concentration, $M$ is the direct forcing of CO$_2$, and $w$ is a Wiener process. The non-linearity in temperature dynamics is given by the function \begin{equation}
     \mu(x) = a(x) - \eta x^4,
 \end{equation} which models the ice-albedo effect. As temperatures rise, ice melts and the surface of the earth covered by ice decreases. The reduced reflecting surface yields an increased heat intake by oceans, which increases temperatures. Using the calibration by \citein{mendez_investigating_2021}, in Figure \ref{fig:albedo} I plot the baseline energy input\begin{equation}
     a(x) = a_1 (1 - \sigma(x)) + a_2 \ \sigma(x)
 \end{equation} where $\sigma(x)$ is a smooth transition function\footnote{
+    The transition function $\sigma$ has the form,
     \begin{equation}
         \sigma(x) = \frac{x - x_1}{x_2 - x_1} H(x - x_1) H(x_2 - x) + H(x - x_2)
     \end{equation}
     where $H = \frac{1 + \tanh(x / x_a)}{2} $
-}. As temperature rises, the albedo coefficient of earth's surface transitions from $a_1$ to $a_2$ with $a_1 > a_2$. It is important to stress that the calibration in the current model is done to match current temperature and carbon concentration levels $(x_0, c_0)$, assuming that those are in equilibrium, hence there is still high uncertainty around the parameters.
+}. As temperature rises, the albedo coefficient of earth's surface transitions from $a_1$ to $a_2$ with $a_1 > a_2$. It is important to stress that the calibration in the current model is done to match current temperature and carbon concentration levels $(x_0, m_0)$, assuming that those are in equilibrium, hence there is still high uncertainty around the parameters.
 
 \begin{figure}[H]
     \centering
