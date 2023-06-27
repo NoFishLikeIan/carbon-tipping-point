@@ -15,7 +15,7 @@ default(
 
 PLOTPATH = "plots"
 SAVEFIG = true 
-CONSTRAINED = true
+CONSTRAINED = false
 
 include("../src/model/climate.jl")
 include("../src/model/economic.jl")
@@ -142,12 +142,12 @@ begin # Emission deviations
         zeros(frames ÷ 4)...
     ]
 
-    function plotemissionssurface(σₓ; xᵤ = 6, cᵤ = 1000)
+    function plotemissionssurface(σₓ; xᵤ = 6, cᵤ = 1000, l = 20)
         temperatureticks = makedevxlabels(0, xᵤ, m; step = 1, digits = 0)
 
-        efig = wireframe(
-            range(xₗ, xᵤ + xpreindustrial; length = 61),
-            range(cₗ, cᵤ; length = 61), 
+        efig = contour(
+            range(xₗ, xᵤ + xpreindustrial; length = 100),
+            range(cₗ, cᵤ; length = 100), 
             (x, c) -> e(x, c, σₓ, γ); 
             xlabel = "Temperature", zlabel = "Optimal emissions", ylabel = "CO\$_2\$ (p.p.m.)",
             xlims = (xₗ, xᵤ + xpreindustrial), ylims = (cₗ, cᵤ), 
@@ -155,7 +155,7 @@ begin # Emission deviations
             title = "Temperature variance, \$\\sigma^2_x = $(round(σₓ, digits = 2))\$",
             zlims = (-100, 100), camera = (45, 21),
             xlabelfontsize = 9, ylabelfontsize = 9, zlabelfontsize = 9,
-            size = 600 .* (√2, 1)
+            size = 600 .* (√2, 1), levels = l, c = :coolwarm
         )
 
         efig

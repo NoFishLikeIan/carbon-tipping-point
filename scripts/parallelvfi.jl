@@ -3,6 +3,7 @@ using Distributed
 println("Running with $(nprocs()) processes...")
 
 @everywhere begin # Imports
+    using UnPack
     using JLD2
     using Dates, Printf
     using Interpolations
@@ -16,19 +17,19 @@ end
     m = MendezFarazmand() # Climate model
     
     n₀ = 20 # size of state space n²
-    k₀ = 100 # size of action space
+    k₀ = 20 # size of action space
 
     outerverbose = true # Verbosity outside of parallel loop
     verbose = false # Verbosity inside of parallel loop
 
     θ = 0.1
-    maxrefinementiters = 1 # 100
+    maxrefinementiters = 10
     maxiters  = 100_000
-    maxgridsize = 2000
+    maxgridsize = 1001
 end
 
 
-@everywhere function adaptivevaluefunction(l::LinearQuadratic, m::MendezFarazmand, constrained::Bool; outerverbose = true, verbose = false, kwargs...)
+@everywhere function adaptivevaluefunction(l::EconomicModel, m::MendezFarazmand, constrained::Bool; outerverbose = true, verbose = false, kwargs...)
     label = constrained ? "constrained" : "unconstrained"
 
     outerverbose && println("-- Computing $label value function for γ = $(l.γ) and σ²ₓ = $(m.σ²ₓ)...")
@@ -46,18 +47,19 @@ end
 end
 
 @everywhere begin
-    γspace = 22:1:30
-    σspace = 0:0.1:1
-    constraints = [false, true]
-    p = length(γspace) * length(σspace) * length(constraints) # size of parameter space
+    γspace = 25:1:28
+    σspace = 0:0.25:1
+    constrained = [true]
+    p = length(γspace) * length(σspace) * length(constrained) # size of parameter space
 end
 
-paramspace = Iterators.product(γspace, σspace, constraints) |> collect |> vec
+outerverbose && println("Running parallel simulation with $p parameter combinations...")
+paramspace = Iterators.product(γspace, σspace, constrained) |> collect |> vec
 
 @everywhere function pmapfn(input)
     index, params = input
     γ, σ²ₓ, constrained = params
-    l = LinearQuadratic(γ = γ)
+    l = Ramsey(γ = γ)
     m = MendezFarazmand(σ²ₓ = σ²ₓ)
 
     outerverbose && println("Iteration $index of $p...")

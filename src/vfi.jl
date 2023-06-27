@@ -1,5 +1,7 @@
-using Interpolations
+using UnPack
+using Interpolations 
 using StatsBase
+using Roots
 
 include("../src/model/climate.jl")
 include("../src/model/economic.jl")
@@ -8,16 +10,19 @@ include("../src/statecostate/optimalpollution.jl")
 include("../src/utils/grid.jl")
 
 function valuefunctioniter(
-    m::MendezFarazmand, l::LinearQuadratic, 
+    climate::Climate, economy::EconomicModel, 
     Γ::Grid, Ω, 
     V₀::Matrix{<:Real}, E₀::Matrix{<:Real}; 
     h = 1e-2, maxiters = 100_000, 
     vtol = 1e-2, verbose = false)
 
-    β = exp(-l.ρ * h)
+    @unpack ρ = economy
+    @unpack δ, σ²ₓ = climate
+
+    β = exp(-ρ * h)
     Γvec = Base.product(Γ...) |> collect |> vec
     
-    L = ((s, e) -> u(e, l) - d(s[1], l)).(Γvec, Ω')
+    L = ((s, e) -> u(e, s[1], l)).(Γvec, Ω')
     
     ηᵢ = Inf .* V₀
     Vᵢ = copy(V₀)
@@ -65,24 +70,23 @@ function valuefunctioniter(
 end
 
 function adapativevaluefunctioniter(
-    m::MendezFarazmand, l::LinearQuadratic, 
+    climate::Climate, economy::EconomicModel, 
     n₀::Int64, k₀::Int64; 
-    constrained = false, θ = 0.1,
-    maxrefinementiters = 100, maxgridsize = 401,
+    θ = 0.1, maxrefinementiters = 100, maxgridsize = 401,
     verbose = false, 
     iterationkwargs...)
 
-    emax = (l.β₀ - l.τ) / l.β₁
-    emin = constrained ? 0 : -emax
+    @unpack x₀, m₀ = climate
+    @unpack ē = economy
     
-    X₀ = range(m.xₚ, 310; length = n₀) |> collect 
-    C₀ = range(m.cₚ, 2000; length = n₀) |> collect
+    X₀ = range(x₀, x₀ + 10.; length = n₀) |> collect 
+    M₀ = range(m₀, nullcline(x₀ + 6, climate); length = n₀) |> collect
 
-    Γ = (X₀, C₀) # State space
-    Ω = range(emin, emax; length = k₀) |> collect # Start with equally space partition
-    η = zeros(length.(Γ)...)
+    Γ = (X₀, M₀) # State space
+    Ω = range(0, ē; length = k₀) |> collect # Start with equally space partition
+    η = zeros(n₀, n₀)
 
-    V = ((x, c) -> H(x, c, 0, 0, m, l)).(X₀, C₀') # Initial value function guess
+    V = ((x, m) -> H(x, m, 0, -0.01, climate, economy)).(X₀, M₀') # Initial value function guess
     E = copy(η)
 
     verbose && println("--- Starting refinement with $(gridsize(Γ)) states and $(length(Ω)) policies...")
@@ -97,7 +101,7 @@ function adapativevaluefunctioniter(
 
         # Run value function iteration
         V′, E′, η = valuefunctioniter(
-            m, l, # Model  
+            climate, economy, # Model  
             Γ, Ω, # Grid
             V, E; # Initial value function
             verbose = verbose, iterationkwargs...)

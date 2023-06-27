@@ -1,14 +1,14 @@
 sectoyear = 3.154e7
 
 Base.@kwdef struct MendezFarazmand
-    c₀::Float64 = 410 # Current concentration
-    cₚ::Float64 = 280 # Preindustrial concentration
+    m₀::Float64 = 410 # Current concentration
+    mₚ::Float64 = 280 # Preindustrial concentration
     
     q₀::Float64 = 342 # Solar constant
     κ::Float64 = inv(5e8) * sectoyear # Scale of temperature change
     η::Float64 = 5.67e-8 # Cubic decay of temperature
     
-    A::Float64 = 20.5 # Slope of concentration effect
+    M::Float64 = 20.5 # Slope of concentration effect
     S::Float64 = 150 # Intercept of concentration effect
     
     δ::Float64 = 2.37e-10 * sectoyear # Concentration delay per year
@@ -27,43 +27,35 @@ Base.@kwdef struct MendezFarazmand
     σ²ₓ::Float64 = 1.0
 end
 
-H(x, m) = (1 + tanh(x / m.xₐ)) / 2
-H′(x, m) = (1 / 2m.xₐ) * (1 - tanh(x / m.xₐ)^2)
+Climate = Union{MendezFarazmand}
 
-Σ(x, m) = ((x - m.x₁) / (m.x₂ - m.x₁)) * H(x - m.x₁, m) * H(m.x₂ - x, m) + H(x - m.x₂, m)
-Σ′(x, m) = H(x - m.x₁, m) * H(m.x₂ - x, m) / (m.x₂ - m.x₁) + ((x - m.x₁) / (m.x₂ - m.x₁)) * H′(x - m.x₁, m) * H(m.x₂ - x, m) - ((x - m.x₁) / (m.x₂ - m.x₁)) * H(x - m.x₁, m) * H′(m.x₂ - x, m) - H′(x - m.x₂, m)
+H(x, climate::MendezFarazmand) = (1 + tanh(x / climate.xₐ)) / 2
 
-σ(x) = inv(1 + exp(-x))
-σ(x, m::MendezFarazmand) = σ(x - (m.x₂ + m.x₁) / 2) # Approximate Σ
-σ′(x, m::MendezFarazmand) = σ(x, m) * (1 - σ(x, m))
-σ′′(x, m::MendezFarazmand) = σ′(x, m) * (1 - 2σ(x, m))
+Σ(x, climate::MendezFarazmand) = ((x - climate.x₁) / (climate.x₂ - climate.x₁)) * H(x - climate.x₁, climate) * H(climate.x₂ - x, climate) + H(x - climate.x₂, climate)
 
-α(x, m::MendezFarazmand) = m.α₁ - (m.α₁ - m.α₂) * σ(x, m)
+a(x, climate::MendezFarazmand) = climate.α₁ - (climate.α₁ - climate.α₂) * σ(x, climate)
 
-function g(x, m::MendezFarazmand)
-    (; q₀, α₁, α₂, η) = m
-    q₀ * (1 - α₁) + q₀ * (α₁ - α₂) * Σ(x, m) - η * x^4
+"""Baseline temperature dynamics"""
+function g(x, climate::Climate)
+    @unpack q₀, α₁, α₂, η = climate
+    q₀ * (1 - α₁) + q₀ * (α₁ - α₂) * Σ(x, climate) - η * x^4
 end
 
-function μ(x, c, m::MendezFarazmand)
-    (; S, A, cₚ, κ) = m
+"""Temperature dynamics with CO₂ concentration"""
+function μ(x, m, climate::Climate)
+    @unpack S, M, mₚ, κ = climate
 
-    dc = S + A * log(c / cₚ) # contribution of CO₂ concentration
+    dm = S + M * log(m / mₚ) # contribution of CO₂ concentration
 
-    return (g(x, m) + dc) * κ
+    return (g(x, climate) + dm) * κ
 end
 
-g′(x, m::MendezFarazmand) = m.q₀ * (m.α₁ - m.α₂) * Σ′(x, m) - 4 * m.η * x^3
-g′′(x, m::MendezFarazmand) = m.q₀ * (m.α₁ - m.α₂) * σ′′(x, m) - 12 * m.η * x^2
 
+"""Compute CO₂ concentration consistent with temperature x"""
+function nullcline(x, climate::Climate)
+    @unpack S, M, mₚ = climate
 
-"""
-Compute CO₂ concentration consistent with temperature x
-"""
-function nullcline(x, m::MendezFarazmand)
-    (; S, A, cₚ) = m
-
-    return cₚ * exp( - (g(x, m) + S) / A ) 
+    return mₚ * exp( - (g(x, climate) + S) / M ) 
 end
 
-inversenullcline(c, m::MendezFarazmand) = find_zeros(x -> nullcline(x, m) - c, (200, 400)) # This is not a function
+inversenullcline(m, climate::Climate) = find_zeros(x -> nullcline(x, climate) - m, (200, 400)) # This is not a function
