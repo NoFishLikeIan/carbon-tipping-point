@@ -18,9 +18,3 @@ function H(x, m, λₓ, λₘ, climate::Climate, economy::EconomicModel)
 	e = φ(λₘ, x, economy)
 	return u(e, x, economy) + λₓ * μ(x, m, climate) + λₘ * (e - climate.δ * m)
 end
-
-
-economy = Ramsey()
-climate = MendezFarazmand()
-λₘ = -1.
-x = economy.xₛ

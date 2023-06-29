@@ -1,19 +1,19 @@
 \documentclass[../../main.tex]{subfiles}
 \begin{document}
 
-To keep the analysis tractable and tease out the role of tipping points in the social cost of carbon, I assume a Ramsey economy always in equilibrium and with constant productivity. Namely, output is a concave function of capital, $y = A k^\alpha$, where $A$ is total factor productivity. We assume the depreciation rate of capital to be $d(x)$, where the temperature damage function $d$ is increasing in temperature. At all time output is employed to either replace depreciated capital or for consumption \begin{equation}
-    d(x) \ k = y - c.
+To keep the analysis tractable and tease out the role of tipping points in the social cost of carbon, I assume a Ramsey economy always in equilibrium and with constant productivity. Namely, output is a Cobb-Douglas function of capital, $y = A k^\alpha l^{1 - \alpha}$, where $A$ is total factor productivity. We assume the depreciation rate of capital to be $\delta_k$ and  $d(x) \in [0, 1]$ be an increasing and convex damage function of temperature. At all time, the remaining output is employed to either replace depreciated capital or for consumption \begin{equation}
+    (1 - d(x)) y = \delta_k \ k + c.
 \end{equation}
 
-Finally, to link output $y$ and C0$_2$ emissions $e$ we use the [\textbf{Forgot the name}] formula \begin{equation}
-    e = y \overbrace{\underbrace{\beta_m}_{\substack{\text{Energy} \\ \text{intensity} \\ \text{of output}}} \underbrace{\beta_e,}_{\substack{\text{Emission} \\ \text{intensity} \\ \text{of energy}}}}^{\beta}
+Finally, to link output $y$ and C0$_2$ emissions $e$ we use the Kaya identity \begin{equation}
+    e = y \beta  \text{ where } \beta \coloneqq \underbrace{\beta_m}_{\substack{\text{Energy} \\ \text{intensity} \\ \text{of output}}} \underbrace{\beta_e,}_{\substack{\text{Emission} \\ \text{intensity} \\ \text{of energy}}}
 \end{equation} such that consumption can be written in terms of CO$_2$ emissions as \begin{equation}
-    c(e, x) = e \beta - d(x) \; \left(\frac{e \beta}{A}\right)^{1 / \alpha}. 
+    c(e, x) = (1 - d(x)) \; e \beta - \delta_k \; \left(\frac{e \beta}{A \; l^{(1 - \alpha)}}\right)^{1 / \alpha}. 
 \end{equation}
 
 I study the social planner problem, who seeks to maximise the expected discounted stream of utility of consumption \begin{equation}
-    J(e \colon x_0, c_0) = \mathbb{E}_{x} \int^{\infty}_0 \mathrm{e}^{-\rho t} \ u\Big(c(e, x)\Big) \ \text{d} t,
-\end{equation} subject to the dynamics of temperature $\text{d}x$ and carbon concentration $\text{d}c$. To do so, she picks an emission path $e$, which I assume to be a continuously differentiable function of time taking values in an interval $\mathcal{E} = [0, \overline{e}]$. Notice that here we are assuming no possibility of negative emission. Furthermore, I assume benefits of emission to be increasing $u^\prime > 0$ and concave $u^{\prime \prime} < 0$. 
+    J(e; x_0, m_0) = \mathbb{E}_{x} \int^{\infty}_0 \mathrm{e}^{-\rho t} \ u\Big(c(e, x)\Big) \ \text{d} t,
+\end{equation} subject to the dynamics of temperature $\text{d}x$ and carbon concentration $\text{d}m$. To do so, she picks an emission path $e$, which I assume to be a continuously differentiable function of time taking values in an interval $\mathcal{E} = [0, \overline{e}]$. Notice that here we are assuming no possibility of negative emission. Furthermore, I assume benefits of emission to be increasing $u^\prime > 0$ and concave $u^{\prime \prime} < 0$. 
 
 For a given admissible state $(x, m)$, the value function is \begin{equation}
     v(x, m) = \sup_{e \in \mathcal{E}} J(e; x, m).
@@ -22,25 +22,26 @@ For a given admissible state $(x, m)$, the value function is \begin{equation}
 \begin{definition}
     Let the maximised current value Hamiltonian be \begin{equation}
         \begin{split}
-            \H(x, m, \mathbf{\lambda}) = \ &u\Big(c\big(\varphi(\lambda_m, m), x \big) \Big) \\
+            \H(x, m, \mathbf{\lambda}) = \ &u\Big(c\big(\varphi(\lambda_m, m), ƒx \big) \Big) \\
             + \ &\lambda_m \Big(\varphi(\lambda_m, m) - \delta m\Big) \\
             + \ &\lambda_x \Big(\mu(x) + S + M \log(m / m_p)\Big),
         \end{split}
     \end{equation} where \begin{equation}
-        \varphi(\lambda_m, x) = \arg\max_{e \in \mathcal{E}} \Big\{ u(c(e, x)) - \lambda_m e \Big\},
+        \varphi(\lambda_m, x) = \arg\max_{e \in \mathcal{E}} \Big\{ u(c(e, x)) + \lambda_m e \Big\},
     \end{equation} is the optimal emission schedule.
 \end{definition}
 
 \begin{proposition}
     The value function $v$ satisfies the Hamilton-Bellman-Jacobi partial differential equation, \begin{equation} \label{eq:hbj}
-        \rho \ v(s) = \sigma^2_x \ \partial_{x x} v(s) + \H(s, \nabla v(s)),
+        \rho \ v(x, m) = \sigma^2_x \ \partial_{x x} v(x, m) + \H(x, m, \nabla v(x, m)),
     \end{equation} where $\nabla v$ is the vector of partial derivatives of $v$ with respect to $x$ and $c$.
 \end{proposition}
 
 \subsection{Optimal Emissions}
 
-In the rest of the paper and in the calibration, we take $u(c) = \log c$.
-
+In the rest of the paper and in the calibration, we take $u(c) = \log c$. In this case, optimal emissions $\varphi$ as a function of the shadow price of carbon concentration $\lambda_m$ and temperature $x$, solves the first order condition \begin{equation}
+    \partial_e c \Big(\varphi(\lambda_m, x), x\Big) + \lambda_m \; c\Big(\varphi(\lambda_m, x), x\Big) = 0.
+\end{equation}
 
 
 \end{document}

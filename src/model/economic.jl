@@ -13,7 +13,7 @@ Base.@kwdef struct LinearQuadratic
 end
 
 Base.@kwdef struct Ramsey
-    ρ::Float64 = 0.03 # Discount rate
+    ρ::Float64 = 0.024 # Discount rate
 
     α::Float64 = 0.4 # Capital share
     A::Float64 = 21.3 # Capital productivity

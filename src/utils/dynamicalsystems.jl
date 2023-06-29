@@ -1,29 +1,27 @@
 function simulateclimatepath(
-	σₓ::Real, γ::Real, m::MendezFarazmand, e::Function; 
+	σₓ::Real, climate::MendezFarazmand, e::Function; 
 	T = 80, ntraj = 1000
 )
-	function F!(du, u, p, t)
-		γ, σₓ = p
-		x, c = u
+	function F!(du, u, σₓ, t)
+		x, m = u
 	
-		du[1] = μ(x, max(c, m.cₚ), m)
-		du[2] = e(x, c, σₓ, γ) - m.δ * c
+		du[1] = μ(x, max(m, climate.mₚ), climate)
+		du[2] = e(x, m, σₓ) - climate.δ * m
 	end
 
-	function G!(du, u, p, t)
-		σₓ = p[2]
+	function G!(du, u, σₓ, t)
 		du[1] = σₓ
 		du[2] = 0.
 	end
 
-	prob = SDEProblem(F!, G!, [m.x₀, m.c₀], (0, T), [γ, σₓ])
+	prob = SDEProblem(F!, G!, [climate.x₀, climate.mₚ], (0, T), σₓ)
 	ensprob = EnsembleProblem(prob)
 	sim = solve(ensprob, SRIW1(), trajectories = ntraj)
 	
 	return sim
 end
 
-function computeoptimalemissions(σₓ, γ, sim, e::Function; Tsim = 1001)
+function computeoptimalemissions(σₓ, sim, e::Function; Tsim = 1001)
 	T = first(sim).t |> last
 	timespan = range(0, T; length = Tsim)
 	nsim = size(sim, 3)
@@ -31,7 +29,7 @@ function computeoptimalemissions(σₓ, γ, sim, e::Function; Tsim = 1001)
 	optemissions = Matrix{Float64}(undef, Tsim, nsim)
 
 	for idxsim in 1:nsim
-		optemissions[:, idxsim] .= [e(x, c, σₓ, γ) for (x, c) in sim[idxsim](timespan).u]
+		optemissions[:, idxsim] .= [e(x, m, σₓ) for (x, m) in sim[idxsim](timespan).u]
 	end
 
 	return optemissions

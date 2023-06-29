@@ -92,14 +92,15 @@ function plotupdate(Γ::Grid, Γ′::Grid, η::Matrix{<:Real}; beforemarkersize 
     cmar = Δc * 0.05
 
     updatefig = plot(
-        xlabel = "\$x\$", ylabel = "\$c\$",
+        xlabel = "\$x,\$ temperature deviations", ylabel = "\$m,\$ carbon concentration",
         xlims = (xl - xmar, xu + xmar),
         ylims = (cl - cmar, cu + cmar),
-        aspect_ratio = Δx / Δc; 
+        aspect_ratio = Δx / Δc,
         plotkwargs...
     )
 
-    scatter!(updatefig, first.(Γ′p), last.(Γ′p), color = :black, label = nothing, markersize = aftermarkersize)
+    scatter!(updatefig, first.(Γ′p), last.(Γ′p), color = :black, label = "New points", markersize = aftermarkersize)
+
     scatter!(updatefig, first.(Γp), last.(Γp), color = colors, label = nothing, markersize = beforemarkersize)
 
     return updatefig

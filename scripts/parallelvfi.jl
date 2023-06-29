@@ -17,63 +17,57 @@ end
     m = MendezFarazmand() # Climate model
     
     n₀ = 20 # size of state space n²
-    k₀ = 20 # size of action space
+    k₀ = 40 # size of action space
 
     outerverbose = true # Verbosity outside of parallel loop
     verbose = false # Verbosity inside of parallel loop
 
     θ = 0.1
-    maxrefinementiters = 10
-    maxiters  = 100_000
-    maxgridsize = 1001
+    maxrefinementiters = 100
+    maxiters  = 50_000
+    maxgridsize = 1500
 end
 
 
-@everywhere function adaptivevaluefunction(l::EconomicModel, m::MendezFarazmand, constrained::Bool; outerverbose = true, verbose = false, kwargs...)
-    label = constrained ? "constrained" : "unconstrained"
+@everywhere function adaptivevaluefunction(economy::EconomicModel, climate::MendezFarazmand; outerverbose = true, verbose = false, kwargs...)
+    outerverbose && println("-- Computing σ²ₓ = $(climate.σ²ₓ)...")
 
-    outerverbose && println("-- Computing $label value function for γ = $(l.γ) and σ²ₓ = $(m.σ²ₓ)...")
-
-    V, E, Γ, η = adapativevaluefunctioniter(
-        m, l, n₀, k₀;
+    V, E, Γ, η, refj = adapativevaluefunctioniter(
+        climate, economy, n₀, k₀;
         maxgridsize, maxrefinementiters, θ,
-        constrained = constrained, verbose = verbose,
+        verbose = verbose,
         maxiters = maxiters, kwargs...)
     
     ε = maximum(η)
-    outerverbose && println("-- ...done $label problem with γ = $(l.γ) and σ²ₓ = $(m.σ²ₓ) with error ε = $ε.")
+    outerverbose && println("-- ...done with σ²ₓ = $(climate.σ²ₓ) with error ε = $ε in $refj refinement iterations.")
     
-    return Dict(:γ => l.γ, :V => V, :E => E, :Γ => Γ, :constrained => constrained)
+    return Dict(:economy => economy, :climate => climate, :V => V, :E => E, :Γ => Γ)
 end
 
 @everywhere begin
-    γspace = 25:1:28
-    σspace = 0:0.25:1
-    constrained = [true]
-    p = length(γspace) * length(σspace) * length(constrained) # size of parameter space
+    σspace = 0:0.1:1
+    p = length(σspace) # size of parameter space
 end
 
 outerverbose && println("Running parallel simulation with $p parameter combinations...")
-paramspace = Iterators.product(γspace, σspace, constrained) |> collect |> vec
 
 @everywhere function pmapfn(input)
-    index, params = input
-    γ, σ²ₓ, constrained = params
-    l = Ramsey(γ = γ)
-    m = MendezFarazmand(σ²ₓ = σ²ₓ)
+    index, σ²ₓ = input
+    economy = Ramsey()
+    climate = MendezFarazmand(σ²ₓ = σ²ₓ)
 
     outerverbose && println("Iteration $index of $p...")
 
-    return adaptivevaluefunction(l, m, constrained; verbose = verbose, outerverbose = outerverbose)
+    return adaptivevaluefunction(economy, climate; verbose = verbose, outerverbose = outerverbose)
 end
 
-solution = pmap(pmapfn, enumerate(paramspace))
+solution = pmap(pmapfn, enumerate(σspace))
 
 outerverbose && println("Saving...")
 
 filename = "valuefunction_$(now().instant.periods.value).jld2"
 simpath = joinpath("data", "sims", filename)
-save(simpath, Dict( "solution" => solution, "parameters" => paramspace))
+save(simpath, Dict( "solution" => solution, "parameters" => σspace))
 
 outerverbose && println("...done!")
 exit()

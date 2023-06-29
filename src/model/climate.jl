@@ -11,7 +11,7 @@ Base.@kwdef struct MendezFarazmand
     M::Float64 = 20.5 # Slope of concentration effect
     S::Float64 = 150 # Intercept of concentration effect
     
-    δ::Float64 = 2.37e-10 * sectoyear # Concentration delay per year
+    δ::Float64 = 2.3669e-10 * sectoyear # Concentration decay per year
 
     x₀::Float64 = 288.56 # Current temperature
     xₚ::Float64 = 287 # Pre-industrial temperature
