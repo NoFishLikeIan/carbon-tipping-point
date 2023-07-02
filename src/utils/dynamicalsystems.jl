@@ -1,3 +1,12 @@
+"""
+Drift dynamics of (x, m̂) given an abatement function α(x, m̂) and a business as usual growth rate g(t).
+"""
+function F!(du, u, parameters, dt)
+	climate, α, g = parameters
+	
+
+end
+
 function simulateclimatepath(
 	σₓ::Real, climate::MendezFarazmand, e::Function; 
 	T = 80, ntraj = 1000
@@ -21,7 +30,7 @@ function simulateclimatepath(
 	return sim
 end
 
-function computeoptimalemissions(σₓ, sim, e::Function; Tsim = 1001)
+function extractoptimalemissions(σₓ, sim, e::Function; Tsim = 1001)
 	T = first(sim).t |> last
 	timespan = range(0, T; length = Tsim)
 	nsim = size(sim, 3)
@@ -48,3 +57,4 @@ function extractquartiles(ensamblesim, quartile; Tsim = 2001)
 
 	return lowerqsim, mediansim, upperqsim	
 end
+

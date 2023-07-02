@@ -7,7 +7,8 @@ function stringtempdev(x::Real; digits = 2)
     return Printf.format(fmt, x)
 end
 
-function makedevxlabels(from, to, m::MendezFarazmand; step = 0.5, withcurrent = false, digits = 2)
+function makedevxlabels(from, to, climate::ClimateModel; step = 0.5, withcurrent = false, digits = 2)
+
     preindustrialx = range(from, to; step = step)
     xticks = preindustrialx .+ xpreindustrial
 
@@ -18,7 +19,7 @@ function makedevxlabels(from, to, m::MendezFarazmand; step = 0.5, withcurrent = 
     end
 
     xlabels = [xlabels..., "\$x_0\$"]
-    xticks = [xticks..., m.x₀]
+    xticks = [xticks..., first(climate).x₀]
     idxs = sortperm(xticks)
     
     return (xticks[idxs], xlabels[idxs])
