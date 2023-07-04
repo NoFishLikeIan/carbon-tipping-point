@@ -1,8 +1,8 @@
-secondtoyears = 3.154e7
+secondtoyears = 60 * 60 * 24 * 365.25
 
 Base.@kwdef struct Albedo
     xₐ::Float64 = 3. # Transition rate
-	x₁::Float64 = 289 # Pre-transition temperature
+	x₁::Float64 = 290.5 # Pre-transition temperature
     x₂::Float64 = 295 # Post-transition temeprature 
      
     a₁::Float64 = 0.31 # Pre-transition albedo
@@ -16,15 +16,14 @@ Base.@kwdef struct Hogg
     m₀::Float64 = 410 # [p.p.m.]
     mₚ::Float64 = 280 # [p.p.m.]
 
-
     # Volatility
-    σ²ₓ = 1.0
+    σ²ₓ = 0.3
     σ²ₘ = 0.0
 
     # Climate sensitivity
     S::Float64 = 342 # [W / m²] Mean solar radiation
 
-    ε::Float64 = 1.7e10 # [J / m² / K] Heat capacity of the ocean
+    ϵ::Float64 = 5e8 # [J / m² K] Heat capacity of the ocean
     η::Float64 = 5.67e-8 # Stefan-Boltzmann constant 
     
     M₁::Float64 = 20.5 # [W / m²] Effect of CO₂ on radiation budget
@@ -43,6 +42,12 @@ function δₘ(m, baseline::Hogg)
     @unpack aδ, bδ, cδ = baseline    
 
     return aδ * exp(-(m - cδ)^2 / bδ^2)
+end
+
+function δₘ⁻¹(δ, baseline::Hogg)
+    @unpack aδ, bδ, cδ = baseline    
+
+    return cδ + bδ * √(log(aδ / δ))
 end
 
 # Albedo functions
@@ -83,8 +88,7 @@ end
 "Drift temperature dynamics"
 function μ(x, m̂, climate::ClimateModel)
     baseline = first(climate)
-    @unpack ε = baseline
-    return (μₓ(x, climate) + μₘ(m̂, baseline)) / ε
+    return μₓ(x, climate) + μₘ(m̂, baseline)
 end
 
 
@@ -95,17 +99,3 @@ function m̂stable(x, climate::ClimateModel)
 end
 
 mstable(x, climate::ClimateModel) = exp(m̂stable(x, climate)) 
-
-
-begin
-    baseline = Hogg()
-    albedo = Albedo()
-    climate = (baseline, albedo)
-
-    X = range(baseline.xₚ, baseline.xₚ +  10.; length = 101)
-    M = range(baseline.mₚ, 2baseline.mₚ; length = 101)
-    M̂ = log.(M)
-
-    plot(X, x -> exp(m̂stable(x, climate)))
-
-end

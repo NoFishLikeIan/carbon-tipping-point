@@ -1,28 +1,25 @@
 using UnPack
+
+using Dierckx
+using LinearAlgebra
+
 using DifferentialEquations
-using JLD2
-using Interpolations, Dierckx
+using DifferentialEquations.EnsembleAnalysis
+using DiffEqParamEstim, Optimization, OptimizationOptimJL
 
-using KernelDensity
+using CSV, DataFrames, JLD2
 
-using CSV, DataFrames
+using Plots, Printf, PGFPlotsX, Colors
 
-using StatsBase
+begin # Global variables
+    PALETTE = color.(["#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7"])
 
-using Plots, Printf
+    BASELINE_YEAR = 2020 # Year for data
 
-default(
-    size = 800 .* (√2, 1), dpi = 320, 
-    margins = 5Plots.mm, 
-    linewidth = 1.5, thickness_scaling = 1.5
-)
-
-BASELINE_YEAR = 2020
-
-PLOTPATH = "plots"
-DATAPATH = "data/climate-data"
-SAVEFIG = false 
-CONSTRAINED = false
+    PLOTPATH = "plots"
+    DATAPATH = "data/climate-data"
+    SAVEFIG = false 
+end
 
 include("../src/model/climate.jl")
 include("../src/model/economic.jl")
@@ -41,280 +38,244 @@ function gettimestamp(filepath)
     return inttimestamp
 end
 
-begin # Load the latest simulation
+if false # Load the latest simulation
     datapath = "data/sims"; @assert ispath(datapath)
     availablesims = map(gettimestamp, readdir(datapath))
 
     data = load(joinpath(datapath, "valuefunction_$(maximum(availablesims)).jld2"))
     parameters = get(data, "parameters",  [])
     simulationresults = get(data, "solution",  [])
+    @unpack Γ = first(simulationresults)
 end
 
 begin # This assumes that all simulations have the same limits in (x, c)
-    @unpack Γ = first(simulationresults)
 
-    climate = MendezFarazmand()
-    xₗ, xᵤ = climate.xₚ, climate.xₚ + 13
-    cₗ, cᵤ = extrema(Γ[2])
+    albedo = Albedo()
+    baseline = Hogg(σ²ₓ = 0.1)
+    climate = (baseline, albedo)
+
+    xₗ, xᵤ = baseline.xₚ, baseline.xₚ + 13
+    
+    mₗ, mᵤ = baseline.mₚ, mstable(xₗ, climate)
+    
     X = range(xₗ, xᵤ; length = 201)
-    C = range(cₗ, cᵤ; length = 201)
-
-    v, e = extractpoliciesfromsim(simulationresults)
+    M = range(mₗ, mᵤ; length = 201)
+    
+    nullclinecarbon = (x -> mstable(x, climate)).(X)
+    # v, e = extractpoliciesfromsim(simulationresults)
 
     economy = Ramsey()
-    σ²ₓ = 0.2
 end
 
 # -- Climate dynamics plots
-nullclinecarbon = (x -> nullcline(x, climate)).(X)
 
 begin # Albedo plot
-    a(x) = g(x, climate) + climate.η * x^4
 
-    albedofig = plot(
-        X, a; 
-        xlabel = "\$x\$, temperature deviations", 
-        ylabel = "Energy input given albedo effect \$a(x)\$, (\$W/ m^{2}\$)", 
-        c = :black, xticks = makedevxlabels(0., 15, climate; step = 1, digits = 0), xlims = (xpreindustrial, xpreindustrial + 15), legend = false
+    Δxᵤ = last(X) - baseline.xₚ
+    
+    a₂map = [Albedo().a₂, 0.23, 0.28]
+    
+    Xₚ = collect(X .- baseline.xₚ)
+    temperatureticks = makedevxlabels(0., Δxᵤ, climate; step = 1, digits = 0)
+    albedovariation = [(x -> a(x, Albedo(a₂ = a₂))).(X) for a₂ ∈ a₂map]
+
+
+    axis = @pgf Axis(
+        {
+            width = raw"1\textwidth",
+            height = raw"0.6\textwidth",
+            grid = "both",
+            xlabel = "Temperature deviations",
+            ylabel = raw"Albedo coefficient $a(x)$",
+            xticklabels = temperatureticks[2],
+            xtick = 0:1:Δxᵤ,
+            no_markers,
+            very_thick,
+            xmin = 0, xmax = Δxᵤ
+        }
     )
 
-    vline!(albedofig, [climate.x₀]; linewidth = 1.5, linestyle = :dash, c = :black)
+    @pgf for (i, albedodata) in enumerate(albedovariation)
+        curve = Plot(
+            {color=PALETTE[i]}, 
+            Coordinates(
+                collect(zip(Xₚ, albedodata))
+            )
+        ) 
 
-    scatter!(albedofig, [climate.x₀], [a(climate.x₀)]; c = :black)
+        legend = LegendEntry("$(a₂map[i])")
 
-    if SAVEFIG  savefig(joinpath(PLOTPATH, "albedo.png")) end
-    albedofig
+        push!(axis, curve, legend)
+    end
+
+    if SAVEFIG PGFPlotsX.save(joinpath(PLOTPATH, "albedo.tikz"), axis; include_preamble = true) end
+
+    axis
 end
 
-ipccdatapath = joinpath(DATAPATH, "proj-median.csv")
-ipccproj = CSV.read(ipccdatapath, DataFrame)
-ssp3data = filter(:Scenario => isequal("SSP3 - Baseline"), ipccproj)
+begin # Nullcline plot
+    nullclinevariation = [(x -> mstable(x, (baseline, Albedo(a₂ = a₂)))).(X) for a₂ ∈ a₂map]
 
-ipccemissions = @. ssp3data[:, "CO2 emissions"] * Gtonoverppm / 1e9
-timeproj = ssp3data.Year
-T = 80
-timesimulation = range(0, T; length = 101) .+ BASELINE_YEAR
-ssp3median = ssp3data.Temperature .+ xpreindustrial
 
-ssp1median = filter(:Scenario => isequal("SSP1 - 1.9"), ipccproj).Temperature .+ xpreindustrial
+    nullclinefig = @pgf Axis(
+        {
+            width = raw"0.7\textwidth",
+            height = raw"0.7\textwidth",
+            grid = "both",
+            ylabel = raw"Temperature deviations $x$",
+            xlabel = raw"Carbon concentration $m$",
+            xmax = 1200,
+            xtick = 0:300:1200,
+            yticklabels = temperatureticks[2],
+            ytick = 0:1:Δxᵤ,
+            ymin = 0, ymax = Δxᵤ,
+            very_thick, 
+        }
+    )
 
-itp = linear_interpolation(timeproj .- timeproj[1], ipccemissions, extrapolation_bc = Line())
-eᵢ = t -> itp(t)
+    @pgf for (i, nullclinedata) in enumerate(nullclinevariation)
+        coords = Coordinates(collect(zip(nullclinedata, Xₚ)))
 
-begin # Business as Usual, ensemble simulation
-    e₀ = economy.e₀
+        curve = Plot({color = PALETTE[i]}, coords) 
+
+        legend = LegendEntry("$(a₂map[i])")
+
+        push!(nullclinefig, curve, legend)
+    end
+
+    initscatter = @pgf Plot({mark = "*", color = "black"},
+        Table(
+            x = [baseline.m₀],
+            y = [baseline.x₀ - xpreindustrial],
+        )
+    )
+
+    push!(nullclinefig, initscatter)
+
+    if SAVEFIG PGFPlotsX.save(joinpath(PLOTPATH, "nullcline.tikz"), nullclinefig; include_preamble = true) end
+
+    nullclinefig
+end
+
+begin # Import IPCC data
+    ipccdatapath = joinpath(DATAPATH, "proj-median.csv")
+    ipccproj = CSV.read(ipccdatapath, DataFrame)
     
-    function Fₑ!(du, u, p, t)
-        x, m = u
-        du[1] = μ(x, m, climate)
-        du[2] = eᵢ(t) - climate.δ * m
+    getscenario(s::Int64) = filter(:Scenario => isequal("SSP$(s) - Baseline"), ipccproj)
+
+    bauscenario = getscenario(5)
+    ipcctime = bauscenario.Year .- BASELINE_YEAR
+    T = last(ipcctime)
+
+    mbau = bauscenario[:, "CO2 concentration"]
+    xbau = bauscenario[:, "Temperature"]
+    Ebau = (Gtonoverppm / 1e9) * bauscenario[:, "CO2 emissions"]
+
+    # Calibrate g
+    gcalib_data = Array(log.(mbau)')
+    t0 = first(ipcctime)
+    gp(t, p) = p[1] + p[2] * (t - t0) + p[3] * (t - t0)^2
+   
+    function Fbau!(du, u, p, t)
+        du[1] = gp(t, p)
     end
 
-    function Gₑ!(du, u, p, t)
-        du[1] = σ²ₓ
-        du[2] = 0.
-    end
+    gcalib_problem = ODEProblem(Fbau!, [gcalib_data[1]], extrema(ipcctime))
+    cost = build_loss_objective(
+        gcalib_problem, Tsit5(), L2Loss(ipcctime, gcalib_data), 
+        Optimization.AutoForwardDiff();
+        maxiters = 10000, verbose = false
+    )
 
-    problembse = SDEProblem(Fₑ!, Gₑ!, [climate.x₀, climate.m₀], (0, T), e₀)
+    optprob = Optimization.OptimizationProblem(cost, zeros(3))
+    gcalibrated = solve(optprob, BFGS())
+
+    g(t) = gp(t, gcalibrated.u)
+
+    # Initial mₛ
+    baseidx = findfirst(==(0), ipcctime)
+    mₛ₀ = δₘ⁻¹(Ebau[baseidx] / mbau[baseidx] - g(0), baseline)
+end
+
+function simulatebau(a₂; trajectories = 1000) # Business as Usual, ensemble simulation    
+    αbau = (x, m̂) -> 0.
+    baualbedo = Albedo(a₂ = a₂)
+
+    bauparameters = ((Hogg(), baualbedo), g, αbau)
+
+    SDEFunction(F!, G!, mass_matrix = mass_matrix(baseline))
+
+    problembse = SDEProblem(SDEFunction(F!, G!, mass_matrix = mass_matrix(baseline)), G!, [baseline.x₀, log(baseline.m₀), mₛ₀], (0, T), bauparameters)
+
     ensemblebse = EnsembleProblem(problembse)
 
-    bausim = solve(ensemblebse, SRIW1(), trajectories = 1000)
+    bausim = solve(ensemblebse, trajectories = trajectories)
+    baunullcline = (x -> mstable(x, (baseline, baualbedo))).(X)
+
+    return bausim, baunullcline
 end
+
+bausim, baunullcline = simulatebau(0.21; trajectories = 30)
 
 begin # BaU figure
-    baulowerq, baumedian, bauupperq = extractquartiles(bausim, 0.1)
-    xupper = 298
+    yearlytime = 0:1:T
+    medianbau = [timepoint_median(bausim, t) for t in yearlytime]
 
-    Tsim = length(baulowerq)
-    bauticks = makedevxlabels(0., xupper - xpreindustrial, climate; step = 1, withcurrent = true)
+    baumedianm = @. exp([u[2] for u in medianbau])
+    baumedianx = @. first(medianbau) - xpreindustrial
 
-    bsefig = plot(
-        nullclinecarbon, X;
-        c = :black, linestyle = :dash, 
-        ylabel = "\$x\$ temperature",
-        xlabel = "\$m\$ carbon concentration",
-        xlims = (minimum(nullclinecarbon), maximum(baumedian[:, 2])), ylims = (climate.xₚ, xupper),
-        yticks = bauticks, 
-        linewidth = 2, label = false
+    mediancolor = PALETTE[end - 1]
+
+    baufig = @pgf Axis(
+        {
+            width = raw"1\textwidth",
+            height = raw"0.707\textwidth",
+            grid = "both",
+            ylabel = raw"Temperature deviations $x$",
+            xlabel = raw"Carbon concentration $m$",
+            yticklabels = temperatureticks[2],
+            ytick = 0:1:Δxᵤ,
+            ymin = 0, ymax = Δxᵤ,
+            xmin = baseline.mₚ, xmax = 1200
+        }
     )
+
     
-    for simulation in bausim
-        pathi = simulation(range(0, T; length = 101))
-        
-        plot!(bsefig, last.(pathi.u), first.(pathi.u); label = false, c = :darkred, alpha = 0.01)
-    end
-    plot!(bsefig, baumedian[:, 2], baumedian[:, 1]; c = :darkred, label = "Model with SSP3 - Baseline emissions", linewidth = 3)
 
-    scatter!(bsefig, baumedian[1:(Tsim ÷ 10):end, 2], baumedian[1:(Tsim ÷ 10):end, 1]; c = :darkred, label = false)
+    ipccbau = @pgf Plot({ultra_thick, color = "black", mark = "*"}, Coordinates(zip(mbau[3:end], xbau[3:end])))
 
-	scatter!(bsefig, [climate.m₀], [climate.x₀]; c = :darkred, label = false)
+    baulegend = @pgf LegendEntry("SSP5 - Baseline")
 
-    if SAVEFIG  savefig(bsefig, joinpath(PLOTPATH, "sim-bse.png")) end
+    push!(baufig, ipccbau, baulegend)
 
-    bsefig
-end
-
-
-begin # BaU time
-
-    ipccfig = plot(
-        timeproj, ssp3median;
-        c = :black, marker = :o, 
-        ylabel = "\$x\$ temperature deviations",
-        xlabel = "Year",
-        yticks = bauticks, linewidth = 2, 
-        label = "SSP3 - Baseline temperature"
-    )
-    
-    for simulation in bausim
-        pathi = simulation(range(0, T; length = 101))
-        
-        plot!(ipccfig, timesimulation, first.(pathi.u); label = false, c = :darkred, alpha = 0.01)
-    end
-
-    scatter!(ipccfig, [BASELINE_YEAR], [climate.x₀]; c = :darkred, label = false)
-
-    if SAVEFIG  savefig(ipccfig, joinpath(PLOTPATH, "ipcc-compare.png")) end
-
-    ipccfig
-end
-
-begin # Damage function
-    damagefig = plot(
-        X, x -> d(x, economy); 
-        xlabel = "\$x\$ temperature deviations", 
-        ylabel = "\$d(x)\$ damage function", 
-        c = :black, xticks = makedevxlabels(0., 15, climate; step = 1, digits = 0), xlims = (xpreindustrial, xpreindustrial + 12), legend = false
-    )
-
-    vline!(damagefig, [climate.x₀]; linewidth = 1.5, linestyle = :dash, c = :black)
-
-    scatter!(damagefig, [climate.x₀], [d(climate.x₀, economy)]; c = :black)
-
-    if SAVEFIG  savefig(damagefig, joinpath(PLOTPATH, "damagefig.png")) end
-    damagefig
-end
-
-begin # Distribution of damages
-    timedamagedens = 10:10:50
-    D = Matrix{Float64}(undef, length(timedamagedens), length(bausim))
-
-    for (i, simulation) in enumerate(bausim)
-        pathi = simulation(timedamagedens)
-        
-        D[:, i] = (x -> d(x, economy)).(first.(pathi.u))
-    end
-end
-
-begin
-    damagedensities = kde.(eachrow(D))
-    damagedensitiesfig = plot(xlabel = "Damage distribution", legendtitle = "Year")
-
-    damagecolors = palette(:coolwarm, length(timedamagedens))
-
-    unit = range(0, 1; length = 1001)
-
-    for (i, t) in enumerate(timedamagedens)
-        idens = (d -> pdf(damagedensities[i], d)).(unit)
-        plot!(damagedensitiesfig, unit, idens ./ sum(idens), label = Int(BASELINE_YEAR + t), c = damagecolors[i], linewidth = 3)
-    end
-
-    if SAVEFIG  savefig(damagedensitiesfig, joinpath(PLOTPATH, "damagedensitiesfig.png")) end
-
-    damagedensitiesfig
-end
-
-# -- Value function plots
-# Optimal paths
-
-begin # Emission deviations
-    frames = 60
-    gifσspace = [
-        range(0, 1; length = frames)..., 
-        ones(frames ÷ 4)..., 
-        reverse(range(0, 1; length = frames))...,
-        zeros(frames ÷ 4)...
-    ]
-
-    function plotemissionssurface(σₓ; xᵤ = 6, cᵤ = 1000, l = 20)
-        temperatureticks = makedevxlabels(0, xᵤ, climate; step = 1, digits = 0)
-        temp = range(xₗ, xᵤ + xpreindustrial; length = 31)
-        carbon = range(cₗ, cᵤ; length = 31)
-
-        efig = wireframe(
-            temp, carbon, (x, c) -> e(x, c, σₓ); 
-            xlabel = "Temperature", zlabel = "Optimal emissions", ylabel = "CO\$_2\$ (p.p.m.)",
-            xlims = (xₗ, xᵤ + xpreindustrial), ylims = (cₗ, cᵤ), 
-            xticks = temperatureticks, legend = true,
-            title = "Temperature variance, \$\\sigma^2_x = $(round(σₓ, digits = 2))\$",
-            camera = (45, 21),
-            xlabelfontsize = 9, ylabelfontsize = 9, zlabelfontsize = 9,
-            size = 600 .* (√2, 1), levels = l, c = :coolwarm
+    push!(baufig,
+        @pgf Plot({dashed, color = "black", ultra_thick, forget_plot},
+            Coordinates(collect(zip(baunullcline, Xₚ)))
         )
-
-        surface!(efig, temp, carbon, (x, c) -> e(x, c, σₓ), alpha = 0., c = :coolwarm, colorbar = false)
-
-        efig
-    end
-
-    if SAVEFIG
-        anim = @animate for (i, σₓ) ∈ enumerate(gifσspace)
-            print("Building frame $i / $(length(gifσspace))\r")
-            plotemissionssurface(σₓ)
-        end
-
-        gif(anim, joinpath(PLOTPATH, "emission-deviations.gif"), fps = 15)
-    end
-end
-
-ensemblesim = simulateclimatepath(σ²ₓ, climate, e; T = T, ntraj = 1000) 
-begin
-
-    ensembleemissions = computeoptimalemissions(σ²ₓ, ensemblesim, e; Tsim = length(timesimulation))
-
-    optemissionfig = plot(timesimulation, ensembleemissions, alpha = 0.01, c = :darkblue, label = nothing)
-end
-
-begin # Optimal temperature path
-
-    opttemp = plot(
-        timeproj, ssp3median;
-        c = :black, marker = :o, 
-        ylabel = "\$x\$ temperature deviations",
-        xlabel = "Year",
-        yticks = bauticks, linewidth = 2, 
-        label = "SSP3 - Baseline temperature"
     )
 
-    plot!(opttemp,
-        timeproj, ssp1median;
-        c = :blue, marker = :o, 
-        label = "SSP1 - Baseline temperature"
-    )
-    
-    for simulation in ensemblesim
-        pathi = simulation(range(0, T; length = 101))
-        
-        plot!(opttemp, timesimulation, first.(pathi.u); label = false, c = :darkred, alpha = 0.01)
+    mediancoords = Coordinates(zip(baumedianm, baumedianx))
+    medianbaufig = @pgf Plot({ultra_thick, color = mediancolor}, mediancoords)
+    medianscatter = @pgf Plot({only_marks, mark_options = {fill = mediancolor}, mark_repeat = 10, forget_plot}, mediancoords)
+
+    push!(baufig, medianbaufig, LegendEntry("Business-as-usual"), medianscatter)
+
+
+    @pgf for (i, sim) in enumerate(bausim)
+        path = sim.(yearlytime)
+
+        coords = Coordinates(collect(zip(
+            exp.([u[2] for u in path]),
+            first.(path) .- xpreindustrial    
+        )))
+
+        curve = Plot({opacity = 0.3, color = mediancolor}, coords) 
+
+        push!(baufig, curve)
     end
 
-    scatter!(opttemp, [BASELINE_YEAR], [climate.x₀]; c = :darkred, label = false)
+    @pgf baufig["legend style"] = raw"at = {(0.4, 0.95)}"
 
-    if SAVEFIG  savefig(opttemp, joinpath(PLOTPATH, "optimal-path.png")) end
 
-    opttemp
+    baufig
 end
-
-
-begin # Consumption
-    D = extractecondatafromsim(ensemblesim, e, climate, economy)
-    consumptionplot = plot()
-
-    for i in axes(D, 1)
-        plot!(consumptionplot, first(ensemblesim).t, D[i, :, 2]; label = false, color = :darkred, alpha = 0.01)
-    end
-
-    consumptionplot
-end
-
-opttemp

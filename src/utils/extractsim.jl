@@ -46,22 +46,3 @@ function extractpoliciesfromsim(simulationresults)
 
     return v, e
 end
-
-function extractecondatafromsim(ensemblesim, e, climate::MendezFarazmand, economy::Ramsey)
-
-    consumption(e, x) = c(e ,x, economy)
-
-    nsimulations = length(ensemblesim)
-    timepath = first(ensemblesim).t
-    
-    data = Array{Float64}(undef, nsimulations, length(timepath), 2)
-
-    for (i, sim) in enumerate(ensemblesim)
-        x = first.(sim.u)
-        
-        data[i, :, 1] = [e(x, m, climate.σ²ₓ) for (x, m) in sim.u]
-        data[i, :, 2] = consumption.(data[i, :, 1], x)
-    end
-
-    return data
-end

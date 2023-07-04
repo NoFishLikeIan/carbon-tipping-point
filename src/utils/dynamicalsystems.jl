@@ -1,33 +1,25 @@
-"""
-Drift dynamics of (x, m̂) given an abatement function α(x, m̂) and a business as usual growth rate g(t).
-"""
-function F!(du, u, parameters, dt)
-	climate, α, g = parameters
-	
+mass_matrix(baseline) = diagm([baseline.ϵ / secondtoyears, 1., 1.])
 
+"""
+Drift dynamics of (x, m̂, mₛ) given an abatement function α(x, m̂) and a business as usual growth rate g(t).
+"""
+function F!(du, u, parameters, t)
+	# Parameters
+	climate, g, α = parameters
+	
+	x, m̂, mₛ = @view u[1:3]
+
+	du[1] = μ(x, m̂, climate)
+	du[2] = g(t) - α(x, m̂)
+	du[3] = δₘ(mₛ, first(climate)) * exp(m̂)
 end
 
-function simulateclimatepath(
-	σₓ::Real, climate::MendezFarazmand, e::Function; 
-	T = 80, ntraj = 1000
-)
-	function F!(du, u, σₓ, t)
-		x, m = u
-	
-		du[1] = μ(x, max(m, climate.mₚ), climate)
-		du[2] = e(x, m, σₓ) - climate.δ * m
-	end
+function G!(du, u, parameters, t)
+	baseline = parameters[1][1]	
 
-	function G!(du, u, σₓ, t)
-		du[1] = σₓ
-		du[2] = 0.
-	end
-
-	prob = SDEProblem(F!, G!, [climate.x₀, climate.mₚ], (0, T), σₓ)
-	ensprob = EnsembleProblem(prob)
-	sim = solve(ensprob, SRIW1(), trajectories = ntraj)
-	
-	return sim
+	du[1] = baseline.σ²ₓ 
+	du[2] = baseline.σ²ₘ
+	du[3] = 0.
 end
 
 function extractoptimalemissions(σₓ, sim, e::Function; Tsim = 1001)
@@ -42,19 +34,5 @@ function extractoptimalemissions(σₓ, sim, e::Function; Tsim = 1001)
 	end
 
 	return optemissions
-end
-
-function extractquartiles(ensamblesim, quartile; Tsim = 2001)
-	T = first(ensamblesim).t |> last
-	timespan = range(0, T; length = Tsim)
-	upperq(t) = EnsembleAnalysis.timepoint_meanvar(ensamblesim, t)[2][1]
-	lowerq(t) = EnsembleAnalysis.timepoint_quantile(ensamblesim, 1 - quartile, t)[1]
-	upperq(t) = EnsembleAnalysis.timepoint_quantile(ensamblesim, quartile, t)[1]
-		
-	mediansim = hcat([EnsembleAnalysis.timepoint_median(ensamblesim, t) for t in timespan]...)'
-	lowerqsim = lowerq.(timespan)
-	upperqsim = upperq.(timespan)
-
-	return lowerqsim, mediansim, upperqsim	
 end
 
