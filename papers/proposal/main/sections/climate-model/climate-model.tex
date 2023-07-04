@@ -1,46 +1,92 @@
 \documentclass[../../main.tex]{subfiles}
 \begin{document}
 
-The climate model employed here, and its calibration, is a variant of the Budyko–Sellers-type model developed by \citein{mendez_investigating_2021}, without carbon concentration delay in decay. The model consists in a coupled system of stochastic differential equations (SDEs) for atmospheric carbon concentration $m$, in p.p.m. of CO$_2$, and average world temperature $x$, in Celsius deviation from pre-industrial levels. Carbon concentration evolves as \begin{equation} \label{eq:climate-model-c}
-    \text{d}m = (e - \delta m) \ \text{d} t,
-\end{equation} where $e$ is the level of emissions and $\delta$ is a natural decay rate. Temperature evolves as \begin{equation} \label{eq:climate-model-x}
-    \frac{1}{\kappa} \text{d}x = \Big( \mu(x) + S + M \log(m / m_{pre}) \Big) \text{d} t + \sigma^2 \text{d}w
-\end{equation} where $m_{pre}$ is the pre-industrial level of carbon concentration, $M$ is the direct forcing of CO$_2$, and $w$ is a Wiener process. The non-linearity in temperature dynamics is given by the function \begin{equation}
-    \mu(x) = a(x) - \eta x^4,
-\end{equation} which models the ice-albedo effect. As temperatures rise, ice melts and the surface of the earth covered by ice decreases. The reduced reflecting surface yields an increased heat intake by oceans, which increases temperatures. Using the calibration by \citein{mendez_investigating_2021}, in Figure \ref{fig:albedo} I plot the baseline energy input\begin{equation}
-    a(x) = a_1 (1 - \sigma(x)) + a_2 \ \sigma(x)
-\end{equation} where $\sigma(x)$ is a smooth transition function\footnote{
-    The transition function $\sigma$ has the form,
-    \begin{equation}
-        \sigma(x) = \frac{x - x_1}{x_2 - x_1} H(x - x_1) H(x_2 - x) + H(x - x_2)
-    \end{equation}
-    where $H = \frac{1 + \tanh(x / x_a)}{2} $
-}. As temperature rises, the albedo coefficient of earth's surface transitions from $a_1$ to $a_2$ with $a_1 > a_2$. It is important to stress that the calibration in the current model is done to match current temperature and carbon concentration levels $(x_0, m_0)$, assuming that those are in equilibrium, hence there is still high uncertainty around the parameters.
+\subsection{Carbon concentration}
+
+The carbon cycle is assumed to be comprised of two boxes: carbon in the atmosphere $m$ and carbon stored in natural sinks $m_s$. Carbon flows from the atmosphere to natural syncs at a rate $\delta_m(m_s)$, such that \begin{equation} \label{eq:dynamics:sink}
+    \d m_s = \delta_m(m_s) \; m \; \d t.
+\end{equation} The function $\delta_m$ is assumed to be decreasing, to model the reduced capacity of carbon sinks to store carbon.
+
+Carbon concentration $m$ follows \begin{equation} \label{eq:dynamics:m:emissions}
+    \d{m} = \Big(E - m \; \delta_m(m_s)\Big) \; \d{t} + \sigma^2_m \; m \; \d{w}.
+\end{equation}  Following \citein{hambel_optimal_2021}, we rewrite the dynamics of carbon (\ref{eq:dynamics:m:emissions}) in terms of a business-as-usual growth rate $g$ and an abatement effort $\alpha$, by decomposing emissions in \begin{equation}
+    E = m \Big( g + \delta_m(m_s) - \alpha \Big).
+\end{equation} Doing this, allows us to rewrite (\ref{eq:dynamics:m:emissions}) as \begin{equation}\label{eq:dynamics:m:abatement}
+    \frac{\d{m}}{m} = \d{\hat m} = \big(g - \alpha \big) \; \d{t} + \sigma^2_m \; \d w_m,
+\end{equation} where $\hat m = \log m$.
+
+Finally, letting $E_b$ be the business-as-usual emission rate, we let the emission control rate $\varepsilon = 1 - (E / E_b)$, be the percentage reduction of emissions compared to the business-as-usual scenario. As in \citein{hambel_optimal_2021}, we do not allow for negative emissions such that $\alpha \leq g + \delta_m(m_s)$.
+
+\subsection{Temperature}
+
+We employ a stylised Budyko–Ghil–Sellers energy balance model of global mean surface temperature (\cite{hogg_glacial_2008,ashwin_extreme_2020}). Radiative balance implies that incoming mean solar radiation $S_0$ and outgoing long-wave radiation $\eta x^4$ ought to balance. Yet, increasing greenhouse gasses in the atmosphere, compared to pre-industrial level $m_p$, generates additional forcing, $M_0 + M_1 \ln\left(m / m_p\right)$. In addition to these forces, to study the role of tipping points, we introduce the effects of land ice on the radiation balance, as done in (\cite{ghil_topics_2011,dijkstra_sensitivity_2015}). In particular, as temperatures rise, the area of ice caps, glaciers, and sea ice shrinks, which in turn reduces the planetary albedo $a(x)$, that is, the fraction of solar radiation reflected by earths' surface. We model this effect by letting the planetary albedo transition from a high level $a_1$ to a low level $a_2$ via a smooth transition function $\Sigma(x)$, which is equal to $0$ if $x < x_1$ and $1$ if $x > x_2$ for some temperature thresholds $x_1, x_2$\footnote{
+    The function $\Sigma$ takes the form \begin{equation}
+        \Sigma(x) = \frac{x - x_1}{x_2 - x_2} H(x - x_1) H(x_2 - x) + H(x - x_2),
+    \end{equation} with $H(x) = \frac{1 + \tanh(x / x_a)}{2}.$
+}. Under this specification, the albedo coefficient can be written as a function of temperature \begin{equation} \label{eq:assumption:albedo}
+    a(x) = a_1 - \Big(1 - \Sigma(x)\Big) \; \underbrace{(a_1 - a_2)}_{\Delta a}.
+\end{equation} 
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width = 0.7\linewidth]{../../../plots/albedo.png}
-    \caption{The non-linearity of $a(x)$ given by the albedo effect. As temperature rises, more solar radiations are transferred to temperatures.}
-    \label{fig:albedo}
+    \input{../../../plots/albedo.tikz}
+    \caption{Albedo coefficient $a(x)$ for different parametrisations of the long run coefficient $\alpha_2$}
+    \label{fig:albedo_coefficient}
 \end{figure}
 
-To better understand the role of the tipping point in the dynamics, in Figure (\ref{fig:x-sim}) I show the temperature and CO$_2$ dynamics implied by the model if emissions are kept constant at the level of the average emissions of 2022, $e_0$. Each marker represents the value of temperature and carbon concentration every ten years. The dashed line is the curve along which temperature is in equilibrium given a certain level of carbon concentration. Interestingly, as the stock of CO$_2$ concentration $c$ rises, its relationship with temperature might appear linear for up to twenty years, before the ice-albedo feedback effect appears and the temperature rises quickly to its steady state level.
+It is the important to stress that the function $a$ (\ref{eq:assumption:albedo}) is a highly stylised average model for a complex and spatially heterogeneous process, which, in turn, puts a lot of uncertainty around the parameters $x_1, x_2, a_1,$ and $a_2$. In the robustness checks we explore the sensitivity of our results to these parameters.
 
+Putting solar radiation, carbon concentration, and the albedo effect together we obtain the following temperature dynamics \begin{equation} \label{eq:dynamics:x}
+    \epsilon \; \d x = \Big(\mu_x(x) + \mu_m(\hat m)\Big) \; \d t + \sigma^2_x \d w_x
+\end{equation}
+
+where $\epsilon$ is the oceans' heat capacity, \begin{equation}
+    \mu_x(x) = S_0 \; \big(1 - a(x)\big) - \eta x^4,
+\end{equation} and \begin{equation}
+    \mu_m(\hat m) =  M_0 + M_1  \big(\hat m - \hat m_p \big).
+\end{equation}
+
+\subsection{Ice-albedo Feedback and Tipping Points}
+
+The presence of the ice-albedo feedback effect $a(x)$ can introduce tipping points in the temperature dynamics. For higher losses in albedo due to melting of ice sheets, $\Delta a$, we obtain stronger feedbacks, which in turn can generate a regime in which, for a given carbon concentration level, there are two stable temperature regimes. This bifurcation can introduce jumps in the temperature process. To illustrate this, Figure (\ref{fig:nullclines}) depicts the equilibrium values of carbon concentration $x$ and temperature $m$, for four different potential albedo losses $\Delta a$. For low values of albedo loss (dark blue line), as the logarithm of carbon concentration increases, equilibrium temperatures rise linearly. For lower ice-free albedo levels (green line), an equivalent increase in carbon concentration yields larger increases in temperatures. As the loss in albedo rises, a bifurcation occurs and two stable equilibria of temperature arise.
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width = 0.7\linewidth]{../../../plots/sim-bse.png}
-    \caption{Simulated path of temperatures, assuming no change in current emissions $e_0$, under the dynamics $\text{d}x$. Each marker represents the value of $(x, c)$ every ten years.}
-    \label{fig:x-sim}
+    \input{../../../plots/nullcline.tikz}
+    \caption{Nullclines of the dynamics $(x, m)$ for different parametrisations of albedo loss $\Delta a$.}
+    \label{fig:nullclines}
 \end{figure}
 
-The ice-albedo feedback affects not only the level of temperature, but also the distribution of temperature shocks. In the neighbourhood of the tipping point, there are longer lasting warmer periods. This phenomenon is known as critical slowing down. Compared to climate models with jump processes, the asymmetry in the distribution of temperature as the climate approaches the tipping point (see Figure \ref{fig:x-dens}) yields temperature damages that are on average larger, while also displaying increasing tipping probabilities.
+This bifurcation has strong implications for the dynamics of temperature. In Figure \ref{fig:bau:no-albedo}, I simulate the model assuming a business-as-usual scenario, that is, without abatement $\alpha = 0$ and assuming an emission growth consistent with the \textit{SSP5 - Baseline} scenario. Each marker represents a decade Despite its simplicity, the model presented here tracks the temperature and carbon concentration path in the baseline scenario very well.
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width = \linewidth]{../../../plots/density_process.png}
-    \caption{Conditional density of $x$, given a constant carbon concentration $c$.}
-    \label{fig:x-dens}
+    \input{../../../plots/baufig-noalbedo.tikz}
+    \caption{Business as usual path of temperature with no albedo feedback loop, $\Delta a = 0$. Each marker represents the temperature at the start of each decade, starting from $2020$. In black, the \textit{SSP5 - Baseline} model.}
+    \label{fig:bau:no-albedo}
+\end{figure}
+
+Under a larger albedo loss, $\Delta a = 0.08$, keeping the same emissions, the temperature exhibits a very different path. After passing a critical threshold, the temperature rises rapidly to the second steady state.
+
+\textbf{
+    TODO, 
+    \begin{enumerate}
+        \item Talk about the distribution and critical slowdown.
+    \end{enumerate}
+}
+
+\begin{figure}[H]
+    \centering
+    \input{../../../plots/baufig.tikz}
+    \caption{Business as usual path of temperature with positive albedo feedback, $\Delta a = 0.08$. Each marker represents the temperature at the start of each decade, starting from $2020$. In black, the \textit{SSP5 - Baseline} model.}
+    \label{fig:bau:albedo}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \input{../../../plots/xdens.tikz}
+    \caption{Density}
+    \label{fig:bau:density}
 \end{figure}
 
 

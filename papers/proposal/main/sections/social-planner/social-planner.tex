@@ -1,0 +1,19 @@
+\documentclass[../../main.tex]{subfiles}
+\begin{document}
+
+To capture the degree of relative risk aversion of society $\gamma$, we assume a social planner with Epstein-Zin preferences. Here I will consider the case in which the elasticity intertemporal substitution is unit. This is done to simplify notation and to focus on varying the relative risk aversion. Hence, given a level of log-consumption $\hat c$ and of utility $v$ the preference function is \begin{equation}
+    f(\hat c, v) = \hat c - \frac{\gamma}{1 - \gamma} \log (1 - \gamma)v
+\end{equation}
+
+Letting $s = (x, m_s, \hat m, \hat y)$ be the state vector, the social planner's utility at time $t$ is \begin{equation} \label{eq:utility}
+    \begin{split}
+        v_t(\alpha, \chi) &= \E_t \int^{\infty}_t f\Big(\hat c, v_s(\alpha, \chi) \Big) \d s \\
+        &= \E_t \int^{\infty}_t \left( \hat y + \log \chi - \frac{\gamma}{1 - \gamma} \log (1 - \gamma) v_s(\alpha, \chi) \right) \d s.
+    \end{split}
+\end{equation}
+
+The social planner then seeks to maximise, for all $t$, its utility (\ref{eq:utility}), given an admissible abatement strategy $\alpha \in \mathcal{A}$ and consumption $\chi \in \mathcal{C}$\footnote{
+    An admissible path of abatement is a function of time $\mathcal{A} = C([t, \infty), [0, g(t) + \delta_m(m^s)])$ and $\mathcal{C} = C([0, \infty), [0, 1])$.
+}.
+
+\end{document}

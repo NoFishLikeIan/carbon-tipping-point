@@ -7,12 +7,14 @@ using DifferentialEquations
 using DifferentialEquations.EnsembleAnalysis
 using DiffEqParamEstim, Optimization, OptimizationOptimJL
 
+using KernelDensity
+
 using CSV, DataFrames, JLD2
 
 using Plots, Printf, PGFPlotsX, Colors
 
 begin # Global variables
-    PALETTE = color.(["#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7"])
+    PALETTE = color.(["#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7"])
 
     BASELINE_YEAR = 2020 # Year for data
 
@@ -73,7 +75,7 @@ begin # Albedo plot
 
     Δxᵤ = last(X) - baseline.xₚ
     
-    a₂map = [Albedo().a₂, 0.23, 0.28]
+    a₂map = [0.21, 0.23, 0.25, 0.28]
     
     Xₚ = collect(X .- baseline.xₚ)
     temperatureticks = makedevxlabels(0., Δxᵤ, climate; step = 1, digits = 0)
@@ -138,7 +140,7 @@ begin # Nullcline plot
 
         curve = Plot({color = PALETTE[i]}, coords) 
 
-        legend = LegendEntry("$(a₂map[i])")
+        legend = LegendEntry("$(round(albedo.a₁ - a₂map[i], digits = 2))")
 
         push!(nullclinefig, curve, legend)
     end
@@ -151,6 +153,7 @@ begin # Nullcline plot
     )
 
     push!(nullclinefig, initscatter)
+    @pgf nullclinefig["legend style"] = raw"at = {(0.3, 0.95)}"
 
     if SAVEFIG PGFPlotsX.save(joinpath(PLOTPATH, "nullcline.tikz"), nullclinefig; include_preamble = true) end
 
@@ -215,14 +218,14 @@ function simulatebau(a₂; trajectories = 1000) # Business as Usual, ensemble si
     return bausim, baunullcline
 end
 
-bausim, baunullcline = simulatebau(0.21; trajectories = 30)
+bausim, baunullcline = simulatebau(0.23; trajectories = 30)
+yearlytime = 0:1:T
+medianbau = [timepoint_median(bausim, t) for t in yearlytime]
+
+baumedianm = @. exp([u[2] for u in medianbau])
+baumedianx = @. first(medianbau) - xpreindustrial
 
 begin # BaU figure
-    yearlytime = 0:1:T
-    medianbau = [timepoint_median(bausim, t) for t in yearlytime]
-
-    baumedianm = @. exp([u[2] for u in medianbau])
-    baumedianx = @. first(medianbau) - xpreindustrial
 
     mediancolor = PALETTE[end - 1]
 
@@ -242,7 +245,7 @@ begin # BaU figure
 
     
 
-    ipccbau = @pgf Plot({ultra_thick, color = "black", mark = "*"}, Coordinates(zip(mbau[3:end], xbau[3:end])))
+    ipccbau = @pgf Plot({ultra_thick, color = "black", mark = "*", mark_options = {scale = 1.5, draw_opacity = 0}}, Coordinates(zip(mbau[3:end], xbau[3:end])))
 
     baulegend = @pgf LegendEntry("SSP5 - Baseline")
 
@@ -256,7 +259,7 @@ begin # BaU figure
 
     mediancoords = Coordinates(zip(baumedianm, baumedianx))
     medianbaufig = @pgf Plot({ultra_thick, color = mediancolor}, mediancoords)
-    medianscatter = @pgf Plot({only_marks, mark_options = {fill = mediancolor}, mark_repeat = 10, forget_plot}, mediancoords)
+    medianscatter = @pgf Plot({only_marks, mark_options = {fill = mediancolor, scale = 1.5, draw_opacity = 0}, mark_repeat = 10, forget_plot, mark = "*"}, mediancoords)
 
     push!(baufig, medianbaufig, LegendEntry("Business-as-usual"), medianscatter)
 
@@ -278,4 +281,72 @@ begin # BaU figure
 
 
     baufig
+end
+
+bausim, baunullcline = simulatebau(0.23; trajectories = 1001)
+
+yearsofdensity = 10:10:80
+
+decadetemperatures = [first(componentwise_vectors_timepoint(bausim, t)) .- xpreindustrial for t in yearsofdensity]
+dists = (x -> kde(x)).(decadetemperatures)
+densities = [x -> pdf(d, x) for d in dists]
+
+begin
+    densedomain = collect(0:0.1:12)
+    densedomain_ext = [[densedomain[1]]; densedomain; [densedomain[end]]]
+
+    densityfig = @pgf Axis(
+        {
+            width = raw"1\textwidth",
+            height = raw"0.6\textwidth",
+            grid = "both",
+            xmax = densedomain[end], xmin = densedomain[1], 
+            zmin = 0, 
+            ymin = 0, ymax = 90,
+            "axis background/.style" = { fill = "gray!10" }, # add some beauty
+            # this is needed to make the scatter points appear behind the graphs:
+            set_layers,
+            view = "{-28}{50}",   # viewpoint
+            ztick = collect(0:0.25:1.5),
+            ytick = collect(yearsofdensity),
+            x_dir = "reverse",
+            xlabel = raw"Temperature deviations",
+            ylabel = raw"Year",
+            zlabel = raw"Density of temperature",
+            yticklabels = yearsofdensity .+ BASELINE_YEAR
+        },
+    )
+
+    @pgf for i in eachindex(dists)
+    
+        # add a pdf-curve on top of each second data set
+        curve = Plot3(
+            {
+                no_marks,
+                style = {thick},
+                color = PALETTE[end - 2]
+            },
+            Table(
+                x = densedomain,
+                y = 10i * ones(length(densedomain)),
+                z = densities[i].(densedomain)
+            )
+        )
+
+        fill = Plot3(
+            {
+                draw = "none",
+                fill = PALETTE[end - 2],
+                fill_opacity = 0.25
+            },
+            Table(x = densedomain_ext,
+                    y = 10i * ones(length(densedomain_ext)),
+                    z = [[0]; densities[i].(densedomain); [0]])
+        )
+        push!(densityfig, curve, fill)
+    end 
+
+
+
+    densityfig
 end

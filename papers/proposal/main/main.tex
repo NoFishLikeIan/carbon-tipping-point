@@ -43,14 +43,29 @@
     % Graphs
     \usepackage{tikz} 
     \usepackage{tikzit}
+    \usepackage{pgfplots}
     \usetikzlibrary{positioning,fit,calc,decorations.pathreplacing,calligraphy, arrows.meta}
+
+    \pgfplotsset{compat=1.18}
+
+    \newcommand{\inputTikZ}[2]{%  
+
+      \ifdraft{
+        \includegraphics[width=0.5\textwidth]{example-image-a}
+      }{
+        \IfFileExists{#2}{\scalebox{#1}{\input{#2}}}{\includegraphics[width=0.5\textwidth]{example-image-a}}
+      }
+    }
 
     % Math commands
 
     \newcommand{\Dx}{\partial_x}
     \newcommand{\Dc}{\partial_c} 
+    \renewcommand{\d}{\text{d}}
 
     \renewcommand{\H}{\mathcal{H}}
+
+    \newcommand{\E}{\mathbb{E}}
 
     \newtheorem{proposition}{Proposition}
     \newtheorem{definition}{Definition}
@@ -72,15 +87,14 @@
 
 \maketitle
 
-As the world temperature rises, due to carbon dioxide (CO2) emissions from human economic activities, the risk of tipping points in the climate system becomes more concrete (\cite{ashwin_extreme_2020,sledd_cloudier_2021}). This risk affects the social cost of carbon, that is, the marginal economic damage of a increasing carbon emissions. In this paper, I study the relationship between the risk of tipping and the SCC. To do so, I solve a stylised social-planner integrated model with glacial-interglacial transitions (\cite{sellers_global_1969,mcgehee_quadratic_2014}). In particular, I model a tipping point induced by the ice–albedo feedback and study how this affects the optimal emission path and the social cost of carbon. The tipping point affects temperature dynamics, and as a consequence optimal emissions, in three ways. First, it introduces a non-linear increase in temperature. Second, it makes positive temperature shocks more persistent than negative ones. Third, it introduces a jump in the abatement necessary to revert temperatures to the level pre-tipping point. 
+As the world temperature rises, due to carbon dioxide (CO2) emissions from human economic activities, the risk of tipping points in the climate system becomes more concrete (\cite{ashwin_extreme_2020,sledd_cloudier_2021}). This risk affects the social cost of carbon, that is, the marginal economic damage of a increasing carbon emissions. In this paper, I study the relationship between the risk of tipping and the SCC. To do so, I solve a social-planner integrated model with a stylised ice-albedo feedback in the climate dynamics (\cite{hogg_glacial_2008,ashwin_tipping_2012}). In particular, I model a tipping point induced by the ice–albedo feedback and study how this affects the optimal emission path and the social cost of carbon. The tipping point affects temperature dynamics, and as a consequence optimal emissions, in three ways. First, it introduces a non-linear increase in temperature. Second, it makes positive temperature shocks more persistent than negative ones. Third, it introduces a jump in the abatement necessary to revert temperatures to the level pre-tipping point. I show that, in this context, it is crucial not only to quickly reach net-zero emissions, but to also flatten the emission curve to reduce the risk of tipping.
 
-The importance of modelling precise climate dynamics and tipping points when determining optimal emission paths has been increasingly recognised in economics (\cite{van_den_bremer_risk-adjusted_2021,dietz_economic_2021,dietz_are_2020,taconet_social_2021,lontzek_stochastic_2015}). Previous approaches have mostly focused on the stochastic nature of tipping points, by modelling temperature dynamics or damages as jump processes, with arrival rates increasing in emissions. Yet, many tipping points in the climate system are caused by bifurcation (\cite{ashwin_extreme_2020,ashwin_tipping_2012}). In this paper, I show that these two tipping points yield different optimal emission paths.
+The importance of modelling precise climate dynamics and tipping points when determining optimal emission paths has been increasingly recognised in economics (\cite{van_den_bremer_risk-adjusted_2021,dietz_economic_2021,dietz_are_2020,taconet_social_2021,lontzek_stochastic_2015}). Previous approaches have mostly focused on the stochastic nature of tipping points, by modelling temperature dynamics or damages as jump processes, with arrival rates increasing in emissions. Yet, many tipping points in the climate system are caused by bifurcation (\cite{ashwin_extreme_2020,ashwin_tipping_2012}). In this paper, I show that introducing this class of tipping points in an integrated model yields similar prediction in terms of aggregate emissions, but prescribes much steeper reduction of emissions to keep the risk of tipping low.
 
-To tease out this difference, I study a stylised economy where emission give instantaneous benefits and temperature instantaneous damages, and there are no intertemporal economic decisions. This is highly stylised but it is done to obtain, at least partly, tractable results. An important next step would be to computationally study tipping points dynamics in a DICE model (\cite{nordhaus_estimates_2014,nordhaus_optimal_1992,nordhaus_question_2008,nordhaus_revisiting_2017}) or an asset pricing model (\cite{duffie_asset_1992,olijslagers_discounting_2019}).
+To tease out this difference, I study an AK-model in which temperature increases beyond pre-industrial levels reduce economic growth (the model studied here is very similar to the one studied in \cite{pindyck_economic_2013} and \cite{hambel_optimal_2021}). This modelling choice, as opposed to having temperatures wipe-out a fraction of the capital stock, as in Nordhaus (\citeyear{nordhaus_estimates_2014,nordhaus_question_2008,nordhaus_revisiting_2017}), is motivated by recent evidence on the role of temperature in reducing economic growth and productivity (\cite{burke_global_2015}).
 
-
-\subfile{sections/introduction/introduction.tex}
-% \section{Related literature}
+\section{Related literature}
+\textbf{TODO: Add literature}
 
 \section{Climate Model}
 
@@ -90,12 +104,12 @@ To tease out this difference, I study a stylised economy where emission give ins
 
 \subfile{sections/economy-model/economy-model.tex}
 
+\section{Social Planner Problem}
+
+\subfile{sections/social-planner/social-planner.tex}
+
 \nocite{*}
 \newpage
 \printbibliography
-
-\appendix
-\subfile{sections/appendix/appendix.tex}
-
 
 \end{document}

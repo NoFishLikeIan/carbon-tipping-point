@@ -6,7 +6,7 @@ Base.@kwdef struct Albedo
     x₂::Float64 = 295 # Post-transition temeprature 
      
     a₁::Float64 = 0.31 # Pre-transition albedo
-    a₂::Float64 = 0.21 # Post-transition albedo
+    a₂::Float64 = 0.23 # Post-transition albedo
 end
 
 Base.@kwdef struct Hogg
