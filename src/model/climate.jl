@@ -52,18 +52,18 @@ end
 
 # Albedo functions
 "Heaviside function"
-function H(x, albedo::Albedo) 
-    (1 + tanh(x / albedo.xₐ)) / 2
-end
+H(x, xₐ::Real) = (1 + tanh(x / xₐ)) / 2
+H(x, albedo::Albedo) = H(x, albedo.xₐ)
+
 
 "Transition function"
-function Σ(x, albedo::Albedo)
+function L(x, albedo::Albedo)
     @unpack x₁, x₂ = albedo
     ((x - x₁) / (x₂ - x₁)) * H(x - x₁, albedo) * H(x₂ - x, albedo) + H(x - x₂, albedo)
 end
 
 "Albedo coefficient"
-a(x, albedo::Albedo) = albedo.a₁ - (albedo.a₁ - albedo.a₂) * Σ(x, albedo)
+a(x, albedo::Albedo) = albedo.a₁ - (albedo.a₁ - albedo.a₂) * L(x, albedo)
 
 "Radiation dynamics"
 function μₓ(x, climate::ClimateModel)

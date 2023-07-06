@@ -1,4 +1,4 @@
-\documentclass[american, abstract=on]{scrartcl}
+\documentclass[american, abstract=off]{scrartcl}
 
     \newcommand{\lang}{en}
 
@@ -44,28 +44,39 @@
     \usepackage{tikz} 
     \usepackage{tikzit}
     \usepackage{pgfplots}
-    \usetikzlibrary{positioning,fit,calc,decorations.pathreplacing,calligraphy, arrows.meta}
+    \usepackage{ifdraft}
+    \usetikzlibrary{positioning,fit,calc,decorations.pathreplacing,calligraphy, arrows.meta, pgfplots.groupplots}
 
     \pgfplotsset{compat=1.18}
 
-    \newcommand{\inputTikZ}[2]{%  
+    \newcommand{\inputtikz}[1]{%  
 
       \ifdraft{
         \includegraphics[width=0.5\textwidth]{example-image-a}
       }{
-        \IfFileExists{#2}{\scalebox{#1}{\input{#2}}}{\includegraphics[width=0.5\textwidth]{example-image-a}}
+        \IfFileExists{#1}{
+            \input{#1}
+          }{
+            \includegraphics[width=0.5\textwidth]{example-image-a}
+        }
       }
     }
 
     % Math commands
 
-    \newcommand{\Dx}{\partial_x}
-    \newcommand{\Dc}{\partial_c} 
-    \renewcommand{\d}{\text{d}}
+    \DeclareMathOperator{\Dx}{\partial_x}
+    \DeclareMathOperator{\Dc}{\partial_c}
+    
+    \let\d\relax
+    \newcommand{\d}[1]{\mathrm{d}#1}
 
-    \renewcommand{\H}{\mathcal{H}}
+    \let\H\relax
+    \DeclareMathOperator{\H}{\mathcal{H}}
+    \let\Re\relax
+    \DeclareMathOperator{\Re}{\mathbb{R}}
 
-    \newcommand{\E}{\mathbb{E}}
+    \DeclareMathOperator{\E}{\mathbb{E}}
+    \newcommand{\unit}[1]{\text{#1}}
 
     \newtheorem{proposition}{Proposition}
     \newtheorem{definition}{Definition}
@@ -76,7 +87,9 @@
     \usepackage[bibencoding=utf8, style=apa, backend=biber, eprint=false]{biblatex}
     \addbibresource{../scc-tipping-points.bib}
 
-    \newcommand{\citein}[1]{\citeauthor{#1} (\citeyear{#1})}    
+    \newcommand{\citein}[1]{\citeauthor{#1} (\citeyear{#1})}
+    
+    \DeclareCaptionFormat{empty}{#1}
 
     % Make title page
 

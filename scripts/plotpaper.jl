@@ -14,8 +14,12 @@ using CSV, DataFrames, JLD2
 using Plots, Printf, PGFPlotsX, Colors
 
 begin # Global variables
-    PALETTE = color.(["#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7"])
+    PALETTE = color.(["#003366", "#E31B23", "#005CAB", "#DCEEF3", "#FFC325", "#E6F1EE"])
+    SEQPALETTECODE = :YlOrRd
+    generateseqpalette(n) = palette(SEQPALETTECODE, n + 2)[3:end]
 
+    LINESTYLE = ["solid", "dashed", "dotted"]
+    
     BASELINE_YEAR = 2020 # Year for data
 
     PLOTPATH = "plots"
@@ -75,48 +79,51 @@ begin # Albedo plot
 
     Δxᵤ = last(X) - baseline.xₚ
     
-    a₂map = [0.21, 0.23, 0.25, 0.28]
+    Δamap = [0.02, 0.06, 0.08] 
+    seqpaletteΔa = generateseqpalette(length(Δamap))
     
     Xₚ = collect(X .- baseline.xₚ)
     temperatureticks = makedevxlabels(0., Δxᵤ, climate; step = 1, digits = 0)
-    albedovariation = [(x -> a(x, Albedo(a₂ = a₂))).(X) for a₂ ∈ a₂map]
+    albedovariation = [(x -> a(x, Albedo(a₂ = albedo.a₁ - Δa))).(X) for Δa ∈ Δamap]
 
 
-    axis = @pgf Axis(
+    albedofig = @pgf Axis(
         {
             width = raw"1\textwidth",
             height = raw"0.6\textwidth",
             grid = "both",
-            xlabel = "Temperature deviations",
+            xlabel = raw"Temperature deviations $x - x^{\mathtt{p}}$",
             ylabel = raw"Albedo coefficient $a(x)$",
             xticklabels = temperatureticks[2],
             xtick = 0:1:Δxᵤ,
             no_markers,
-            very_thick,
+            ultra_thick,
             xmin = 0, xmax = Δxᵤ
         }
     )
 
     @pgf for (i, albedodata) in enumerate(albedovariation)
         curve = Plot(
-            {color=PALETTE[i]}, 
+            {color=seqpaletteΔa[i], ultra_thick}, 
             Coordinates(
                 collect(zip(Xₚ, albedodata))
             )
         ) 
 
-        legend = LegendEntry("$(a₂map[i])")
+        legend = LegendEntry("$(Δamap[i])")
 
-        push!(axis, curve, legend)
+        push!(albedofig, curve, legend)
     end
 
-    if SAVEFIG PGFPlotsX.save(joinpath(PLOTPATH, "albedo.tikz"), axis; include_preamble = true) end
+    if SAVEFIG
+        PGFPlotsX.save(joinpath(PLOTPATH, "albedo.tikz"), albedofig; include_preamble = true) 
+    end
 
-    axis
+    albedofig
 end
 
 begin # Nullcline plot
-    nullclinevariation = [(x -> mstable(x, (baseline, Albedo(a₂ = a₂)))).(X) for a₂ ∈ a₂map]
+    nullclinevariation = [(x -> mstable(x, (baseline, Albedo(a₂ = albedo.a₁ - Δa)))).(X) for Δa ∈ Δamap]
 
 
     nullclinefig = @pgf Axis(
@@ -124,38 +131,34 @@ begin # Nullcline plot
             width = raw"0.7\textwidth",
             height = raw"0.7\textwidth",
             grid = "both",
-            ylabel = raw"Temperature deviations $x$",
+            ylabel = raw"Temperature deviations $x - x^{\mathtt{p}}$",
             xlabel = raw"Carbon concentration $m$",
             xmax = 1200,
             xtick = 0:300:1200,
             yticklabels = temperatureticks[2],
             ytick = 0:1:Δxᵤ,
             ymin = 0, ymax = Δxᵤ,
-            very_thick, 
+            ultra_thick, 
         }
     )
 
     @pgf for (i, nullclinedata) in enumerate(nullclinevariation)
         coords = Coordinates(collect(zip(nullclinedata, Xₚ)))
 
-        curve = Plot({color = PALETTE[i]}, coords) 
+        curve = Plot({color = seqpaletteΔa[i]}, coords) 
 
-        legend = LegendEntry("$(round(albedo.a₁ - a₂map[i], digits = 2))")
+        legend = LegendEntry("$(Δamap[i])")
 
         push!(nullclinefig, curve, legend)
     end
 
-    initscatter = @pgf Plot({mark = "*", color = "black"},
-        Table(
-            x = [baseline.m₀],
-            y = [baseline.x₀ - xpreindustrial],
-        )
-    )
 
     push!(nullclinefig, initscatter)
     @pgf nullclinefig["legend style"] = raw"at = {(0.3, 0.95)}"
 
-    if SAVEFIG PGFPlotsX.save(joinpath(PLOTPATH, "nullcline.tikz"), nullclinefig; include_preamble = true) end
+    if SAVEFIG
+        PGFPlotsX.save(joinpath(PLOTPATH, "nullcline.tikz"), nullclinefig; include_preamble = true) 
+    end
 
     nullclinefig
 end
@@ -200,99 +203,165 @@ begin # Import IPCC data
     mₛ₀ = δₘ⁻¹(Ebau[baseidx] / mbau[baseidx] - g(0), baseline)
 end
 
-function simulatebau(a₂; trajectories = 1000) # Business as Usual, ensemble simulation    
+
+function simulatebau(Δa; trajectories = 1000) # Business as Usual, ensemble simulation    
     αbau = (x, m̂) -> 0.
-    baualbedo = Albedo(a₂ = a₂)
-
+    baualbedo = Albedo(a₂ = albedo.a₁ - Δa)
+    
     bauparameters = ((Hogg(), baualbedo), g, αbau)
-
+    
     SDEFunction(F!, G!, mass_matrix = mass_matrix(baseline))
-
+    
     problembse = SDEProblem(SDEFunction(F!, G!, mass_matrix = mass_matrix(baseline)), G!, [baseline.x₀, log(baseline.m₀), mₛ₀], (0, T), bauparameters)
-
+    
     ensemblebse = EnsembleProblem(problembse)
-
+    
     bausim = solve(ensemblebse, trajectories = trajectories)
     baunullcline = (x -> mstable(x, (baseline, baualbedo))).(X)
-
+    
     return bausim, baunullcline
 end
 
-bausim, baunullcline = simulatebau(0.23; trajectories = 30)
 yearlytime = 0:1:T
-medianbau = [timepoint_median(bausim, t) for t in yearlytime]
 
-baumedianm = @. exp([u[2] for u in medianbau])
-baumedianx = @. first(medianbau) - xpreindustrial
+begin # Growth of carbon concentration
+    gcolor = first(PALETTE)
 
-begin # BaU figure
-
-    mediancolor = PALETTE[end - 1]
-
-    baufig = @pgf Axis(
+    gfig = @pgf Axis(
         {
-            width = raw"1\textwidth",
-            height = raw"0.707\textwidth",
+            width = raw"0.75\linewidth",
+            height = raw"0.75\linewidth",
             grid = "both",
-            ylabel = raw"Temperature deviations $x$",
-            xlabel = raw"Carbon concentration $m$",
+            ylabel = raw"Growth rate $g^{\mathtt{b}}_t$",
+            xlabel = raw"Year",
+            xtick = 0:20:T,
+            xmin = 0, xmax = T,
+            xticklabels = BASELINE_YEAR .+ (0:20:T),
+            ultra_thick, xticklabel_style = {rotate = 45}
+        }
+    )   
+    
+    gdata = g.(yearlytime)
+    coords = Coordinates(zip(yearlytime, gdata))
+
+    markers = @pgf Plot({ only_marks, mark_options = {fill = gcolor, scale = 1.5, draw_opacity = 0}, mark_repeat = 10}, coords) 
+
+    curve = @pgf Plot({color = gcolor}, coords) 
+
+    push!(gfig, curve, markers)
+
+    if SAVEFIG
+        PGFPlotsX.save(joinpath(PLOTPATH, "gfig.tikz"), gfig; include_preamble = true) 
+    end
+
+    gfig
+end
+
+begin
+    baufig = @pgf GroupPlot(
+        {
+            group_style = { 
+                group_size = "2 by 1", 
+                horizontal_sep="0pt",
+                yticklabels_at="edge left"
+            }, 
+            width = raw"0.6\textwidth",
+            height = raw"0.6\textwidth",
             yticklabels = temperatureticks[2],
             ytick = 0:1:Δxᵤ,
             ymin = 0, ymax = Δxᵤ,
-            xmin = baseline.mₚ, xmax = 1200
+            xmin = baseline.mₚ, xmax = 1200,
+            xtick = 200:100:1100,
+            grid = "both"
         }
     )
 
+    @pgf for (i, Δa) ∈ enumerate([0, 0.08])
+        isfirst = i == 1
+        Δaplots = []
+        timeseriescolor = isfirst ? seqpaletteΔa[1] : seqpaletteΔa[end]
     
-
-    ipccbau = @pgf Plot({ultra_thick, color = "black", mark = "*", mark_options = {scale = 1.5, draw_opacity = 0}}, Coordinates(zip(mbau[3:end], xbau[3:end])))
-
-    baulegend = @pgf LegendEntry("SSP5 - Baseline")
-
-    push!(baufig, ipccbau, baulegend)
-
-    push!(baufig,
-        @pgf Plot({dashed, color = "black", ultra_thick, forget_plot},
-            Coordinates(collect(zip(baunullcline, Xₚ)))
+        # IPCC benchmark line
+        ipccbau = @pgf Plot(
+            {
+                very_thick, 
+                color = "black", 
+                mark = "*", 
+                mark_options = {scale = 1.5, draw_opacity = 0}, 
+                mark_repeat = 2
+            }, 
+            Coordinates(zip(mbau[3:end], xbau[3:end]))
         )
-    )
 
-    mediancoords = Coordinates(zip(baumedianm, baumedianx))
-    medianbaufig = @pgf Plot({ultra_thick, color = mediancolor}, mediancoords)
-    medianscatter = @pgf Plot({only_marks, mark_options = {fill = mediancolor, scale = 1.5, draw_opacity = 0}, mark_repeat = 10, forget_plot, mark = "*"}, mediancoords)
-
-    push!(baufig, medianbaufig, LegendEntry("Business-as-usual"), medianscatter)
+        push!(Δaplots, ipccbau)
+        
+        push!(Δaplots, LegendEntry("SSP5 - Baseline"))
 
 
-    @pgf for (i, sim) in enumerate(bausim)
-        path = sim.(yearlytime)
+        # Data simulation
+        bausim, baunullcline = simulatebau(Δa; trajectories = 20)
+        baumedian = [timepoint_median(bausim, t) for t in yearlytime]
+        baumedianm = @. exp([u[2] for u in baumedian])
+        baumedianx = @. first(baumedian) - xpreindustrial
 
-        coords = Coordinates(collect(zip(
-            exp.([u[2] for u in path]),
-            first.(path) .- xpreindustrial    
-        )))
 
-        curve = Plot({opacity = 0.3, color = mediancolor}, coords) 
+        # Nullcline
+        push!(Δaplots,
+            @pgf Plot({dashed, color = "black", ultra_thick, forget_plot},
+                Coordinates(collect(zip(baunullcline, Xₚ)))
+            )
+        )
 
-        push!(baufig, curve)
+        mediancoords = Coordinates(zip(baumedianm, baumedianx))
+
+        label = isfirst ? raw"$\Delta a = 0.02$" : raw"$\Delta a = 0.08$"
+
+        @pgf begin
+            push!(
+                Δaplots,
+                Plot({ultra_thick, color = timeseriescolor, opacity = 0.8},mediancoords),
+                LegendEntry(label),
+                Plot({only_marks, mark_options = {fill = timeseriescolor, scale = 1.5, draw_opacity = 0, fill_opacity = 0.8}, mark_repeat = 20, forget_plot, mark = "*"}, mediancoords)
+            )
+        end
+
+        @pgf for sim in bausim
+            path = sim.(yearlytime)
+
+            mpath = @. exp([u[2] for u in path])
+            xpath = @. first(path) - xpreindustrial
+
+            push!(
+                Δaplots, 
+                Plot({forget_plot, color = timeseriescolor, opacity = 0.2},
+                    Coordinates(zip(mpath, xpath)),
+                )
+            )
+        end
+        
+        nextgroup = isfirst ? {xlabel = raw"Carbon concentration $m_t$", ylabel = raw"Temperature deviations $x_t - x^{\mathtt{p}}$"} : {xlabel = raw"Carbon concentration $m_t$"}
+
+        push!(baufig, nextgroup, Δaplots...)
     end
 
     @pgf baufig["legend style"] = raw"at = {(0.4, 0.95)}"
 
+    if SAVEFIG
+        PGFPlotsX.save(joinpath(PLOTPATH, "baufig.tikz"), baufig; include_preamble = true) 
+    end
 
     baufig
 end
 
-bausim, baunullcline = simulatebau(0.23; trajectories = 1001)
-
 yearsofdensity = 10:10:80
+densedomain = collect(0:0.1:12)
 
-decadetemperatures = [first(componentwise_vectors_timepoint(bausim, t)) .- xpreindustrial for t in yearsofdensity]
+baupossim, _ = simulatebau(0.08; trajectories = 51)
+decadetemperatures = [first(componentwise_vectors_timepoint(baupossim, t)) .- xpreindustrial for t in yearsofdensity]
 dists = (x -> kde(x)).(decadetemperatures)
 densities = [x -> pdf(d, x) for d in dists]
 
 begin
-    densedomain = collect(0:0.1:12)
     densedomain_ext = [[densedomain[1]]; densedomain; [densedomain[end]]]
 
     densityfig = @pgf Axis(
@@ -303,14 +372,12 @@ begin
             xmax = densedomain[end], xmin = densedomain[1], 
             zmin = 0, 
             ymin = 0, ymax = 90,
-            "axis background/.style" = { fill = "gray!10" }, # add some beauty
-            # this is needed to make the scatter points appear behind the graphs:
             set_layers,
             view = "{-28}{50}",   # viewpoint
             ztick = collect(0:0.25:1.5),
             ytick = collect(yearsofdensity),
             x_dir = "reverse",
-            xlabel = raw"Temperature deviations",
+            xlabel = raw"Temperature deviations $x_t - x^{\mathtt{p}}$",
             ylabel = raw"Year",
             zlabel = raw"Density of temperature",
             yticklabels = yearsofdensity .+ BASELINE_YEAR
@@ -324,7 +391,7 @@ begin
             {
                 no_marks,
                 style = {thick},
-                color = PALETTE[end - 2]
+                color = poscolor
             },
             Table(
                 x = densedomain,
@@ -336,7 +403,7 @@ begin
         fill = Plot3(
             {
                 draw = "none",
-                fill = PALETTE[end - 2],
+                fill = poscolor,
                 fill_opacity = 0.25
             },
             Table(x = densedomain_ext,
@@ -346,7 +413,18 @@ begin
         push!(densityfig, curve, fill)
     end 
 
-
+    if SAVEFIG
+        PGFPlotsX.save(joinpath(PLOTPATH, "bau-x-dens.tikz"), densityfig; include_preamble = true) 
+    end
 
     densityfig
+end
+
+begin
+    Lfig = Plots.plot(xlabel = "Temperature,  \$x [K]\$", legendtitle = "Transition rate \$x_a\$", ylabel = "\$L(x)\$")
+    for xₐ ∈ [1, 1e-1]
+        plot!(Lfig, X, x -> L(x, Albedo(xₐ = xₐ)); label = "\$$(xₐ)\$", linewidth = 2)
+    end
+
+    Lfig
 end
