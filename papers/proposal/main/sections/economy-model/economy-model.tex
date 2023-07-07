@@ -15,13 +15,13 @@ Following Nordhaus [\textbf{cite}] we assume abatement expenditures to be propor
 
 \subsection{Evolution of Capital and Climate Change}
 
-In the last 50 years, in which we have experience the early effects of climate change, as temperatures have risen, productivity in the agricultural sector, net of productivity growth, has decline (\citeauthor{dell_temperature_2012} \citeyear{dell_temperature_2012, dell_temperature_2009}). Given the imperfect substitutability of food, resource have been diverted from other sectors towards agricultural which has increased the opportunity cost of capital investment in manufacturing and services. In this paper, I will abstract from the details of the mechanism (see \cite{dietz_growth_2019} for a more thorough treatment) but keep the role of temperatures in reducing capital growth rate and assume this to be the main damage deriving from climate change. To do so, I simply assume that capital depreciation is given by \begin{equation}
+In the last 50 years, in which we have experience the early effects of climate change, as temperatures have risen, productivity in the agricultural sector, net of productivity growth, has decline (\citeauthor{dell_temperature_2012} \citeyear{dell_temperature_2012, dell_temperature_2009}). Given the imperfect substitutability of food, resource have been diverted from other sectors towards agricultural which has increased the opportunity cost of capital investment in manufacturing and services. In this paper, I will abstract from the details of the mechanism (see \cite{dietz_growth_2019} for a more thorough treatment) but keep the role of temperatures in reducing capital growth rate and assume this to be the main damage deriving from climate change. In the model, capital depreciation is given by \begin{equation}
     \delta_{K} = \delta^{\mathtt{p}}_{K} + (1 - \delta^{\mathtt{p}}_{K}) \; d(x_t)
-\end{equation} where $d(x_t)$ is an increasing function of temperature that ranges between $0$ and $1$. Furthermore, I assume that, at pre-industrial temperature levels $d(x^{\mathtt{p}}) = 0$, such that capital depreciates at a rate of $\delta^{\mathtt{p}}_K$. Finally, I assume that in investing and abating, the economy incurs in adjustment costs proportional to capital $\frac{\kappa_a}{2} \big(I_t + B_t \big)^2 \sqrt{K_t}$. Putting, this all together we obtain the evolution of capital \begin{equation} \label{eq:capital-evolution}
+\end{equation} where $d(x_t)$ is an increasing function of temperature that ranges between $0$ and $1$. At pre-industrial temperatures $x^{\mathtt{p}}$ there are no economic damages $d(x^{\mathtt{p}}) = 0$, such that capital depreciates at a rate of $\delta^{\mathtt{p}}_K$. Finally, in investing and abating the economy incurs in adjustment costs proportional to capital $\frac{\kappa_a}{2} \big(I_t + B_t \big)^2 \sqrt{K_t}$. Putting, this all together we obtain the evolution of capital \begin{equation} \label{eq:capital-evolution}
     \d{K_t} = \left( I_t - \delta_K(x_t) K_t - \frac{\kappa_a}{2} \Big(I_t + B_t\Big)^2 \sqrt{K_t} \right) \d{t}.
 \end{equation} 
 
-As in the climate model, it is convenient to rewrite the dynamics in terms of growth rates. Let $\hat K_t$ be the $\log K_t$, then equation \ref{eq:capital-evolution} can be rewritten as \begin{equation} \label{eq:capital-evolution:log:level}
+As in the climate model, it is convenient to rewrite the dynamics in terms of growth rates. Let $\hat K_t$ be the $\log K_t$, then equation (\ref{eq:capital-evolution}) can be rewritten as \begin{equation} \label{eq:capital-evolution:log:level}
     \text{d}\hat K_t = \left( \frac{I_t}{K_t} - \delta_K(x_t) - \frac{\kappa_a}{2} \left(\frac{I_t}{K_t} + \frac{B_t}{K_t}\right)^2 \right)
 \end{equation}
 
@@ -33,7 +33,7 @@ Using the abatement costs (\ref{eq:abatement-costs}), the abatement expenditure 
     \frac{I_t}{K_t} = A_t \Big(1 - \chi_t - b_t(\varepsilon_t)\Big).
 \end{equation}
 
-These two equations allow us to rewrite the log-growth of capital $\d{\hat K_t}$ (\ref{eq:capital-evolution:log:level}), in terms of the consumption decision $\chi_t$, the abatement decision $\alpha_t$, via the emission reduction rate $\varepsilon_t$, temperature $x_t$, and technological progress in production $A_t$ and abatement $\omega_t$, \begin{equation} \label{eq:capital-evolution:log:growth}
+These two equations allow us to rewrite the log-growth of capital $\d{\hat K_t}$ (\ref{eq:capital-evolution:log:level}), in terms of the consumption decision $\chi_t$, the abatement decision $\alpha_t$, via the emission reduction rate $\varepsilon_t$, temperature $x_t$, and technological progress, in production $A_t$ and abatement $\omega_t$, \begin{equation} \label{eq:capital-evolution:log:growth}
     \d{\hat K_t} = \left( \overbrace{A_t (1 - \chi_t) - \frac{\kappa_a}{2} A^2_t (1 - \chi_t)^2}^{\text{Endogenous economic growth}} - \underbrace{A_t b_t(\varepsilon_t)}_{\text{Abatement}} - \overbrace{\delta_K(x_t)}^{\text{Climate damages}} \right) \; \d{t}
 \end{equation} 
 

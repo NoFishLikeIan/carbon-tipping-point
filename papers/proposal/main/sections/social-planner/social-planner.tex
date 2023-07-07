@@ -1,33 +1,44 @@
 \documentclass[../../main.tex]{subfiles}
 \begin{document}
 
-To ease notation, in this section I will let the vector of state variables \begin{equation}
-    u \coloneqq (x, m_s, \hat m, \hat y).
+To derive the optimal abatement path and the social cost of carbon, I solve the problem of a social planner who derives utility from consumption, is risk averse, and discounts the future. To disentangle this role of these two components I model the social planner as having Epstein-Zin preference. Societal utility $U_t$ at time $t$, given an abatement strategy $\alpha_t$ and a consumption schedule $\chi_t$ is defined recursively as \begin{equation} \label{eq:utility}
+    U_t(\alpha_t, \chi_t) = \E_t \int^{\infty}_t f\left(C_s, U_s(\alpha_s, \chi_s)\right) \; \d{s}
+\end{equation} where $C_s = \chi_s Y_s$ is the consumption path. Introducing the coefficient of relative risk aversion $\gamma > 1$, elasticity of intertemporal substitution $\psi > 0$, and the discount rate $\beta$, the Epstein-Zin aggregator (\cite{duffie_asset_1992}) is defined as \begin{equation} \label{eq:aggregator}
+    f(C, U) = \frac{\beta}{1 - 1 / \psi} \frac{C^{1 - 1 / \psi} - \big((1- \gamma) U\big)^{\frac{1 - \gamma}{1 - 1 / \psi}}}{\big((1- \gamma) U\big)^{\frac{1 - \gamma}{1 - 1 / \psi} - 1}}.
 \end{equation}
 
-To capture the degree of relative risk aversion of society $\gamma$, we assume a social planner with Epstein-Zin preferences. This is done to introduce relative risk aversion $\gamma$ and elasticity of intertemporal substitution $\psi$. Hence, given a level of consumption $c$ and of utility $v$ the preference function $f: \Re^2 \to \Re$ is given by \begin{equation}
-    f(c, v) = \left( \left( \frac{c}{((1 - \gamma) v)^{\frac{1}{1 - \gamma}}} \right)^{1 - \frac{1}{\psi}} - 1 \right) v.
+\subsection{Motivation behind the use of Epstein-Zin preferences}
+
+Utility preferences as specified by (\ref{eq:utility}) and (\ref{eq:aggregator}) where introduce by \citein{epstein_substitution_1989} (discrete time) and \citein{duffie_asset_1992} (continuous time) to circumvent two undesirable features of additive preferences (e.g. CRRA utility) in finance. First, under additive preference the elasticity of intertemporal substitution is the inverse of the coefficient of relative risk aversion. Second, an agent having additive preferences is indifferent between earlier or later resolution of uncertainty. Translated to the integrated models, as the one discussed in this paper, these two features yield a counter-intuitive mechanism: the abatement path becomes less ambitious as agents become more risk averse (\cite{pindyck_economic_2013}). This is because, in a growing economy with rising consumption, future utility decreases in risk aversion, which yields, ceteris paribus, a higher optimal emission path. The use of Epstein-Zin preferences is a common way to overcome this issue (\cite{pindyck_economic_2013, crost_optimal_2013, ackerman_epsteinzin_2013, hambel_optimal_2021,  olijslagers_discounting_2019}).
+
+To make sense of this utility specification it is useful to consider two illustrative parameter cases. First, as the elasticity of intertemporal substitution converges to the inverse  coefficient of relative risk aversion, $\psi \to 1 / \gamma$, the aggregator (\ref{eq:aggregator}) becomes separable \begin{equation}
+    \lim_{\psi \to 1 / \gamma} f(C, U) = \beta \left(\frac{1}{1 - \gamma} C^{1 - \gamma} - U\right),
+\end{equation} and the utility (\ref{eq:utility}) simplifies to the usual time separable formulation \begin{equation}
+    U_t(\alpha_t, \chi_t) = \beta\E_t \int^{\infty}_t \exp\big(-\beta (s - t) \big) \; \frac{1}{1 - \gamma} C_s^{1 - \gamma} \; \d{t}.
+\end{equation} Second, if we let the elasticity of intertemporal substitution converge to one, $\psi \to 1$, we obtain the log-separable aggregator \begin{equation}
+    f(C, U) = \beta (1-  \gamma)U \left(\log(C) - \frac{1}{1 - \gamma} \log\big( (1 - \gamma) U \big) \right).
 \end{equation}
 
-The social planner's utility at time $t$ is \begin{equation} \label{eq:utility}
-    \begin{split}
-        v(u(t); \alpha, \chi) &= \E_t \int^{\infty}_t f\Big(c(u(s); \chi), v(u(s); \alpha, \chi) \Big) \d s.
-    \end{split}
-\end{equation} 
+\textbf{Talk more about these two cases or move to the appendix}
 
-The social planner then seeks to maximise, for all $t$, its utility (\ref{eq:utility}), given an admissible abatement strategy $\alpha \in \mathcal{A}$ and consumption $\chi \in \mathcal{C}$\footnote{
-    An admissible path of abatement is a function of time $\mathcal{A} = C([t, \infty), [0, g(t) + \delta_m(m^s)])$ and $\mathcal{C} = C([0, \infty), [0, 1])$.
-}.
+\subsection{Hamilton-Bellman-Jacobi Equation and the Social Cost of Carbon}
+
+The social planner then seeks to maximise, for all $t$, her utility (\ref{eq:utility}), given a consumption schedule $\chi_t: [0, \infty) \mapsto \mathcal [0, 1]$ and an abatement strategy $\alpha_t: [0, \infty) \mapsto \mathcal{A}_t$. \textbf{This is odd.} Let the value function at time $t$, given a state of CO$_2$ concentration, temperature, CO$_2$ stored in natural syncs, and output $(\hat m_t, x_t, n_t, \hat Y_t)$ be defined as \begin{equation}
+    V_t \coloneqq \sup_{(\alpha_t, \chi_t)} U_t(\alpha_t, \chi_t).
+\end{equation}
 
 \begin{proposition}
     The value function satisfies the Hamilton-Bellman-Jacobi equation \begin{equation}
         \begin{split}
-            0 = \sup_{\alpha, \chi} \; &f(c(u, \alpha), v(u; \alpha, \chi)) \\
-            + \; &(\partial_x v) \; \mu(x, \hat m) + (\partial_{\hat m} v) \; \big(g(t) - \alpha \big) + (\partial_{m^s} v) \; \delta_m(m_s) \\
-            + \; &(\partial_{\hat y} v) \; \big(\rho(t) + \phi(t, \chi) - b(t, u, \alpha) - d(x) \big) \\
-            + \; &\sigma^2_m (\partial^2_{\hat m} v) + \sigma^2_x (\partial^2_x v)
+            0 = \sup_{(\alpha, \chi) \in \mathcal{A} \times \mathcal{C}} \; \Bigg\{&f\left(C_t(\alpha, \chi), V_t\right) + \; \big(\partial_x V_t \big) \; \Big(\mu_x(x) + \mu_{m}(\hat m) \Big) + \; \big(\partial_{\hat m} V_t \big) \; \Big(g^{\mathtt{P}}_t - \alpha \Big) \\
+            + \; &\Big(\partial_{n} V_t\Big) \; \delta_m(n_t) + \; \Big(\partial_{\hat Y} V_t \Big) \; \Big(\rho_t + \phi_t(\chi) - A_t b(t, u, \alpha) - \delta_K(x) \Big) \\
+            + \; &\Big(\partial^2_{m} V_t\Big) \sigma^2_m + \Big(\partial^2_{x} V_t\Big) \sigma^2_x  \Bigg\}
         \end{split}
     \end{equation}
 \end{proposition}
+
+The social cost of carbon is then given by \begin{equation}
+    \text{SCC}_t = - \frac{\partial V_t / \partial e_t}{\partial V_t / \partial Y_t}. 
+\end{equation}
 
 \end{document}
