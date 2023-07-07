@@ -1,87 +1,45 @@
 \documentclass[../../main.tex]{subfiles}
 \begin{document}
 
+In the model, the economy interacts with the climate in two ways. First, the economy alters climate dynamics by emitting carbon dioxide $e_t$ as a by-product of output production $Y_t$. Second, as the climate changes and temperatures $x_t$ rise, the rate of capital depreciation increases, thereby lowering economic growth. This is in line with recent empirical evidence on the role of temperature variations in lowering output growth (\citeauthor{dell_temperature_2012}, \citeyear{dell_temperature_2012, dell_temperature_2009}) 
 
-Following \citein{pindyck_economic_2013} and \cite{hambel_optimal_2021}, I assume output $Y$ to be a linear function of capital $K$ , \begin{equation}
-Y =  A(t) K,
-\end{equation} where $A(t)$ denotes productivity. Output can be used for investment $I$, abatement expenditures $B$, or consumption $C$ \begin{equation}
-    Y = I + B + C.
-\end{equation} More conveniently we normalise abatement expenditures and investment by dividing by the capital stock $K$ \begin{equation}
-    b \coloneqq B / K \text{ and } \; i \coloneqq I / K.
+Following \citein{pindyck_economic_2013} and \citein{hambel_optimal_2021}, I assume output $Y_t$ to be a linear function of capital $K_t$ , \begin{equation}
+Y_t =  A_t K_t,
+\end{equation} where $A_t$ denotes productivity. Output can then be used for investment $I_t$, abatement expenditures $B_t$, or consumption $C_t$ \begin{equation} \label{eq:nominal-budget}
+    Y_t = I_t + B_t + C_t.
 \end{equation}
 
-Following Nordhaus [\textbf{cite}] we assume abatement expenditures to be proportional to output and quadratic in the emission control rate such that we can write \begin{equation}
-    b(t, \varepsilon) = A(t) \frac{\omega(t)}{2} \varepsilon^2
-\end{equation} where $\omega(t)$ is a decreasing exogenous coefficient capturing technological progress.
+Following Nordhaus [\textbf{cite}] we assume abatement expenditures to be proportional to output $Y_t$ and quadratic in the emission reduction rate $\varepsilon_t$ (\ref{eq:emission-reduction-rate}), namely $B_t = b_t(\varepsilon_t) Y_t $ where \begin{equation} \label{eq:abatement-costs}
+    b_t(\varepsilon_t) = \frac{1}{2} \omega_t \varepsilon_t^2.
+\end{equation} The function $b_t(\varepsilon_t)$ captures the idea that, at a time $t$, a marginal reduction in emissions, vis-à-vis the business-as-usual scenario, becomes increasingly costly at a rate $\omega_t \varepsilon_t$. As time progresses, so does abatement technology and a given abatement objective becomes cheaper. We model this by letting the exogenous technological parameter $\omega_t$ decrease over time.
 
 \subsection{Evolution of Capital and Climate Change}
 
-Log-capital evolves as \begin{equation}
-    \d \hat{k} \coloneq \frac{\d K}{K} = \Big( \phi(i) - \frac{\kappa_a}{2} \big(i + b\big)^2 - d(x) \Big) \d t
-\end{equation}
-
-where $d$ is a an increasing damage function of temperature and \begin{equation}
-    \phi(i) = i - \delta_k.
-\end{equation}
-
-Letting $\chi \coloneqq C / Y$ be the consumption share of output we can write the investment ratio as \begin{equation}
-    i = A(t) \left(1 - \chi - \frac{\omega(t)}{2} \varepsilon^2\right)
-\end{equation}
-
-Plugging this back into the evolution of log-capital we obtain \begin{equation}
-    \frac{\d \hat k}{\d t} = A(t) \left(1 - \chi - \frac{\omega(t)}{2} \varepsilon^2\right) - \delta_k - \frac{\kappa_a \; A(t)^2}{2} (1 - \chi)^2 - d(x).
+In the last 50 years, in which we have experience the early effects of climate change, as temperatures have risen, productivity in the agricultural sector, net of productivity growth, has decline (\citeauthor{dell_temperature_2012} \citeyear{dell_temperature_2012, dell_temperature_2009}). Given the imperfect substitutability of food, resource have been diverted from other sectors towards agricultural which has increased the opportunity cost of capital investment in manufacturing and services. In this paper, I will abstract from the details of the mechanism (see \cite{dietz_growth_2019} for a more thorough treatment) but keep the role of temperatures in reducing capital growth rate and assume this to be the main damage deriving from climate change. To do so, I simply assume that capital depreciation is given by \begin{equation}
+    \delta_{K} = \delta^{\mathtt{p}}_{K} + (1 - \delta^{\mathtt{p}}_{K}) \; d(x_t)
+\end{equation} where $d(x_t)$ is an increasing function of temperature that ranges between $0$ and $1$. Furthermore, I assume that, at pre-industrial temperature levels $d(x^{\mathtt{p}}) = 0$, such that capital depreciates at a rate of $\delta^{\mathtt{p}}_K$. Finally, I assume that in investing and abating, the economy incurs in adjustment costs proportional to capital $\frac{\kappa_a}{2} \big(I_t + B_t \big)^2 \sqrt{K_t}$. Putting, this all together we obtain the evolution of capital \begin{equation} \label{eq:capital-evolution}
+    \d{K_t} = \left( I_t - \delta_K(x_t) K_t - \frac{\kappa_a}{2} \Big(I_t + B_t\Big)^2 \sqrt{K_t} \right) \d{t}.
 \end{equation} 
 
-This equation allows us to decompose the growth of log-output $\hat y$ into three components. Namely, letting the productivity growth rate $\rho(t) \d t = \d \log A(t)$ and the capital adjustment in absence of climate change  \begin{align}
-    \phi(t, \chi) = A(t) \big(1 - \chi\big) - \frac{\kappa_a \; A(t)^2}{2} (1 - \chi)^2 - \delta_k,
-\end{align} we can write \begin{equation}
-    \d \hat y = \Big(\rho(t) + \phi(t, \chi) - b(t, \varepsilon) - d(x) \Big) \d t.
+As in the climate model, it is convenient to rewrite the dynamics in terms of growth rates. Let $\hat K_t$ be the $\log K_t$, then equation \ref{eq:capital-evolution} can be rewritten as \begin{equation} \label{eq:capital-evolution:log:level}
+    \text{d}\hat K_t = \left( \frac{I_t}{K_t} - \delta_K(x_t) - \frac{\kappa_a}{2} \left(\frac{I_t}{K_t} + \frac{B_t}{K_t}\right)^2 \right)
 \end{equation}
 
-\iffalse
-    \subsection{Old}
-    To keep the analysis tractable and tease out the role of tipping points in the social cost of carbon, I assume a Ramsey economy always in equilibrium and with constant productivity. Namely, output is a Cobb-Douglas function of capital, $y = A(t) k^\alpha l^{1 - \alpha}$, where $A$ is total factor productivity. We assume the depreciation rate of capital to be $\delta_k$ and  $d(x) \in [0, 1]$ be an increasing and convex damage function of temperature. At all time, the remaining output is employed to either replace depreciated capital or for consumption \begin{equation}
-        (1 - d(x)) y = \delta_k \ k + c.
-    \end{equation}
+Using the abatement costs (\ref{eq:abatement-costs}), the abatement expenditure to capital ratio can be written as \begin{equation}
+    \frac{B_t}{K_t} = A_t b_t(\varepsilon_t).
+\end{equation} Furthermore, letting \begin{equation}
+    \chi_t \coloneqq \frac{C_t}{Y_t} = \frac{C_t}{K_t} \frac{1}{A_t}
+\end{equation} be the consumption share of output we can write the investment to capital ratio, using the budget equation (\ref{eq:nominal-budget}), as \begin{equation}
+    \frac{I_t}{K_t} = A_t \Big(1 - \chi_t - b_t(\varepsilon_t)\Big).
+\end{equation}
 
-    Finally, to link output $y$ and C0$_2$ emissions $e$ we use the Kaya identity \begin{equation}
-        e = y \beta  \text{ where } \beta \coloneqq \underbrace{\beta_m}_{\substack{\text{Energy} \\ \text{intensity} \\ \text{of output}}} \underbrace{\beta_e,}_{\substack{\text{Emission} \\ \text{intensity} \\ \text{of energy}}}
-    \end{equation} such that consumption can be written in terms of CO$_2$ emissions as \begin{equation}
-        c(e, x) = (1 - d(x)) \; e \beta - \delta_k \; \left(\frac{e \beta}{A \; l^{(1 - \alpha)}}\right)^{1 / \alpha}. 
-    \end{equation}
+These two equations allow us to rewrite the log-growth of capital $\d{\hat K_t}$ (\ref{eq:capital-evolution:log:level}), in terms of the consumption decision $\chi_t$, the abatement decision $\alpha_t$, via the emission reduction rate $\varepsilon_t$, temperature $x_t$, and technological progress in production $A_t$ and abatement $\omega_t$, \begin{equation} \label{eq:capital-evolution:log:growth}
+    \d{\hat K_t} = \left( \overbrace{A_t (1 - \chi_t) - \frac{\kappa_a}{2} A^2_t (1 - \chi_t)^2}^{\text{Endogenous economic growth}} - \underbrace{A_t b_t(\varepsilon_t)}_{\text{Abatement}} - \overbrace{\delta_K(x_t)}^{\text{Climate damages}} \right) \; \d{t}
+\end{equation} 
 
-    I study the social planner problem, who seeks to maximise the expected discounted stream of utility of consumption \begin{equation}
-        J(e; x_0, m_0) = \mathbb{E}_{x} \int^{\infty}_0 \mathrm{e}^{-\rho t} \ u\Big(c(e, x)\Big) \ \text{d} t,
-    \end{equation} subject to the dynamics of temperature $\text{d}x$ and carbon concentration $\text{d}m$. To do so, she picks an emission path $e$, which I assume to be a continuously differentiable function of time taking values in an interval $\mathcal{E} = [0, \overline{e}]$. Notice that here we are assuming no possibility of negative emission. Furthermore, I assume benefits of emission to be increasing $u^\prime > 0$ and concave $u^{\prime \prime} < 0$. 
-
-    For a given admissible state $(x, m)$, the value function is \begin{equation}
-        v(x, m) = \sup_{e \in \mathcal{E}} J(e; x, m).
-    \end{equation} 
-
-    \begin{definition}
-        Let the maximised current value Hamiltonian be \begin{equation}
-            \begin{split}
-                \H(x, m, \mathbf{\lambda}) = \ &u\Big(c\big(\varphi(\lambda_m, m), ƒx \big) \Big) \\
-                + \ &\lambda_m \Big(\varphi(\lambda_m, m) - \delta m\Big) \\
-                + \ &\lambda_x \Big(\mu(x) + S + M \log(m / m_p)\Big),
-            \end{split}
-        \end{equation} where \begin{equation}
-            \varphi(\lambda_m, x) = \arg\max_{e \in \mathcal{E}} \Big\{ u(c(e, x)) + \lambda_m e \Big\},
-        \end{equation} is the optimal emission schedule.
-    \end{definition}
-
-    \begin{proposition}
-        The value function $v$ satisfies the Hamilton-Bellman-Jacobi partial differential equation, \begin{equation} \label{eq:hbj}
-            \rho \ v(x, m) = \sigma^2_x \ \partial_{x x} v(x, m) + \H(x, m, \nabla v(x, m)),
-        \end{equation} where $\nabla v$ is the vector of partial derivatives of $v$ with respect to $x$ and $c$.
-    \end{proposition}
-
-    \subsection{Optimal Emissions}
-
-    In the rest of the paper and in the calibration, we take $u(c) = \log c$. In this case, optimal emissions $\varphi$ as a function of the shadow price of carbon concentration $\lambda_m$ and temperature $x$, solves the first order condition \begin{equation}
-        \partial_e c \Big(\varphi(\lambda_m, x), x\Big) + \lambda_m \; c\Big(\varphi(\lambda_m, x), x\Big) = 0.
-    \end{equation}
-\fi
-
-
+The last step is to link this back to log-output growth $\d{\hat Y_t}$. This is easily done by letting the productivity growth rate be defined as $\rho_t \; \d{t} = \d \log A_t$ and, to simplify notation, grouping endogenous economic growth as \begin{equation}
+    \phi_t(\chi_t) \coloneqq A_t (1 - \chi_t) - \frac{\kappa_a}{2} A^2_t (1 - \chi_t)^2.
+\end{equation} Then we can write \begin{equation} \label{eq:output-evolution:log}
+    \d{\hat Y_t} = \Big(\rho_t + \phi_t(\xi_t) - A_t b_t(\varepsilon_t) - \delta_K(x_t) \Big) \; \d{t}.
+\end{equation}
 \end{document}

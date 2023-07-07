@@ -152,8 +152,6 @@ begin # Nullcline plot
         push!(nullclinefig, curve, legend)
     end
 
-
-    push!(nullclinefig, initscatter)
     @pgf nullclinefig["legend style"] = raw"at = {(0.3, 0.95)}"
 
     if SAVEFIG
