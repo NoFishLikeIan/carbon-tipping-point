@@ -69,9 +69,8 @@ begin # This assumes that all simulations have the same limits in (x, c)
     Tspacedev = collect(Tspace .- baseline.Tᵖ)
     
     nullclinecarbon = (x -> mstable(x, climate)).(Tspace)
-    # v, e = extractpoliciesfromsim(simulationresults)
 
-    economy = Ramsey()
+    economy = Economy()
 end
 
 # -- Climate dynamics plots
@@ -427,10 +426,5 @@ begin
 end
 
 begin
-    Lfig = Plots.plot(xlabel = "Temperature,  \$x [K]\$", legendtitle = "Transition rate \$x_a\$", ylabel = "\$L(x)\$")
-    for Tₐ ∈ [1, 1e-1]
-        plot!(Lfig, Tspace, x -> L(x, Albedo(Tₐ = Tₐ)); label = "\$$(Tₐ)\$", linewidth = 2)
-    end
-
-    Lfig
+    
 end

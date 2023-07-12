@@ -3,20 +3,20 @@
 
 To derive the optimal abatement path and the social cost of carbon, I solve the problem of a social planner who derives utility from consumption, is risk averse, and discounts the future. To disentangle the role of these two components I model the social planner as having Epstein-Zin preferences. Societal utility $U$ at time $t$, given an abatement strategy $\control{\alpha}$ and a consumption schedule $\control{\chi}$, is defined recursively by the integral equation as \begin{equation} \label{eq:utility}
     U(t; \control{\alpha}(t), \control{\chi}(t)) = \E \int^{\infty} f\left(C(s), U(s; \control{\alpha}(s), \control{\chi}(s))\right) \; \d{s}
-\end{equation} where $C(s) = \control{\chi}(s) Y(s)$ is the consumption path. Introducing the coefficient of relative risk aversion $\gamma > 1$, elasticity of intertemporal substitution $\psi > 0$, and the discount rate $\rho$, the Epstein-Zin aggregator (\cite{duffie_asset_1992}) is defined as \begin{equation} \label{eq:aggregator}
-    f(C, U) = \frac{\rho}{1 - 1 / \psi} \frac{C^{1 - 1 / \psi} - \big((1- \gamma) U\big)^{\frac{1 - \gamma}{1 - 1 / \psi}}}{\big((1- \gamma) U\big)^{\frac{1 - \gamma}{1 - 1 / \psi} - 1}}.
+\end{equation} where $C(s) = \control{\chi}(s) Y(s)$ is the consumption path. Introducing the coefficient of relative risk aversion $\theta > 1$, elasticity of intertemporal substitution $\psi > 0$, and the discount rate $\rho$, the Epstein-Zin aggregator (\cite{duffie_asset_1992}) is defined as \begin{equation} \label{eq:aggregator}
+    f(C, U) = \frac{\rho}{1 - 1 / \psi} \frac{C^{1 - 1 / \psi} - \big((1- \theta) U\big)^{\frac{1 - \theta}{1 - 1 / \psi}}}{\big((1- \theta) U\big)^{\frac{1 - \theta}{1 - 1 / \psi} - 1}}.
 \end{equation}
 
 \subsection{Motivation behind the use of Epstein-Zin preferences}
 
 Utility preferences as specified by (\ref{eq:utility}) and (\ref{eq:aggregator}) were introduced by \citein{epstein_substitution_1989} (discrete time) and \citein{duffie_asset_1992} (continuous time) to circumvent two undesirable features of additive preferences (e.g. CRRA utility) in finance. First, under additive preferences the elasticity of intertemporal substitution is the inverse of the coefficient of relative risk aversion. Second, an agent having additive preferences is indifferent between earlier or later resolution of uncertainty. Translated to the integrated models, as the one discussed in this paper, these two features yield a counter-intuitive mechanism: the abatement path becomes less ambitious as agents become more risk averse (\cite{pindyck_economic_2013}). This is because, in a growing economy with rising consumption, future utility decreases in risk aversion, which yields, ceteris paribus, a higher optimal emission path. The use of Epstein-Zin preferences is a common way to overcome this issue (\cite{pindyck_economic_2013, crost_optimal_2013, ackerman_epsteinzin_2013, hambel_optimal_2021,  olijslagers_discounting_2019}).
 
-To make sense of this utility specification it is useful to consider two illustrative parameter cases. First, as the elasticity of intertemporal substitution converges to the inverse  coefficient of relative risk aversion, $\psi \to 1 / \gamma$, the aggregator (\ref{eq:aggregator}) becomes separable \begin{equation}
-    \lim_{\psi \to 1 / \gamma} f(C, U) = \rho \left(\frac{1}{1 - \gamma} C^{1 - \gamma} - U\right),
+To make sense of this utility specification it is useful to consider two illustrative parameter cases. First, as the elasticity of intertemporal substitution converges to the inverse  coefficient of relative risk aversion, $\psi \to 1 / \theta$, the aggregator (\ref{eq:aggregator}) becomes separable \begin{equation}
+    \lim_{\psi \to 1 / \theta} f(C, U) = \rho \left(\frac{1}{1 - \theta} C^{1 - \theta} - U\right),
 \end{equation} and the utility (\ref{eq:utility}) simplifies to the usual time separable formulation \begin{equation}
-    U(\control{\alpha}, \control{\chi}) = \rho\E \int^{\infty} \exp\big(-\rho (s - t) \big) \; \frac{1}{1 - \gamma} C(s)^{1 - \gamma} \; \d{t}.
+    U(\control{\alpha}, \control{\chi}) = \rho\E \int^{\infty} \exp\big(-\rho (s - t) \big) \; \frac{1}{1 - \theta} C(s)^{1 - \theta} \; \d{t}.
 \end{equation} Second, if we let the elasticity of intertemporal substitution converge to one, $\psi \to 1$, we obtain the log-separable aggregator \begin{equation}
-    f(C, U) = \rho (1-  \gamma)U \left(\log(C) - \frac{1}{1 - \gamma} \log\big( (1 - \gamma) U \big) \right).
+    f(C, U) = \rho (1 - \theta)U \left(\log(C) - \frac{1}{1 - \theta} \log\big( (1 - \theta) U \big) \right).
 \end{equation}
 
 \textbf{Talk more about these two cases or move to the appendix}
