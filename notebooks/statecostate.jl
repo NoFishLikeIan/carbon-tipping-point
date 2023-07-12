@@ -149,10 +149,10 @@ end;
 # ╔═╡ 5a2c219a-a727-44dd-917b-759667911d77
 #=╠═╡
 let
-	(; α₁, α₂, x₁, x₂, q₀) = m
+	(; α₁, α₂, T₁, T₂, q₀) = m
 	
 	h(x) = (1 + tanh(x / 3)) / 2
-	Σ(x) = ((x - m.x₁) / (m.x₂ - m.x₁)) * h(x - m.x₁) * h(m.x₂ - x) + h(x - m.x₂)
+	Σ(x) = ((x - m.T₁) / (m.T₂ - m.T₁)) * h(x - m.T₁) * h(m.T₂ - x) + h(x - m.T₂)
 	
 	xs = range(280, 310; length = 101)
 	
@@ -160,9 +160,9 @@ let
 	
 	plot!(basefig, xs, x -> q₀ * ((1 - α₁) + (α₁ - α₂) * Σ(x)); c = :darkblue, label = "Mendez and Farazmand")	
 	
-	vline!(basefig, [m.x₁]; label = false, c = :black, linestyle = :dash)
-	vline!(basefig, [m.x₂]; label = false, c = :black, linestyle = :dash)
-	vline!(basefig, [(m.x₂ + m.x₁) / 2]; label = false, c = :black, linestyle = :solid)
+	vline!(basefig, [m.T₁]; label = false, c = :black, linestyle = :dash)
+	vline!(basefig, [m.T₂]; label = false, c = :black, linestyle = :dash)
+	vline!(basefig, [(m.T₂ + m.T₁) / 2]; label = false, c = :black, linestyle = :solid)
 
 	plot!(basefig, xs, x -> a(x, m); label = "This paper", c = :darkred)
 
@@ -252,7 +252,7 @@ md"
 # ╔═╡ 4f9964b2-05fa-4c01-b003-7a3ca32041b4
 begin
 	c₀ = 410 # Current carbon concentration
-	x₀ = 289 # Current temperature
+	T₀ = 289 # Current temperature
 end;
 
 # ╔═╡ 7b56773e-7d5f-411e-a5de-541ba6e7e0b0
@@ -275,7 +275,7 @@ let
 
 
 	plot!(ssfig, css, xspace; label = "\$\\mu(x, c) = 0\$", c = :darkred)
-	scatter!(ssfig, [m.c₀], [x₀]; c = :black, label = "Current \$(c_0, x_0)\$", marker = 3.5)
+	scatter!(ssfig, [m.c₀], [T₀]; c = :black, label = "Current \$(c_0, x_0)\$", marker = 3.5)
 
 	hline!(ssfig, tipping_points; label = "Tipping points", c = :black, linestyle = :dash)
 
@@ -305,7 +305,7 @@ let
 		xlims = extrema(espace), ylims = extrema(xspace), dpi = 300
 	)
 
-	scatter!(lfig, [current_emissions], [x₀]; c = "black", label = "Current emissions and temperature")
+	scatter!(lfig, [current_emissions], [T₀]; c = "black", label = "Current emissions and temperature")
 
 	# savefig(lfig, "../docs/figures/benefit-functional.png")
 	
@@ -343,13 +343,13 @@ end
 begin
 	function F!(dz, z, p, t)
 		m, l = p # Unpack LinearQuadratic and climate model
-		(; κ, A, δ, η, S, A, cₚ) = m
+		(; κ, A, δ, η, S₀, A, cₚ) = m
 		(; β₀, β₁, τ, γ, ρ, xₛ) = l
 	
 		x, c, λ, e = z # Unpack state
 		eᵤ = (β₀ - τ) / β₁
 		
-		dz[1] = κ * (a(x, m) - η * x^4 + S + A * log(c / cₚ)) # Temperature 
+		dz[1] = κ * (a(x, m) - η * x^4 + S₀ + A * log(c / cₚ)) # Temperature 
 		dz[2] = e - δ * c # Concentration 
 	
 		dz[3] = (ρ - κ * a′(x, m) + κ * 4η * x^3) * λ + γ * (x - xₛ) # Shadow price of temperature
@@ -567,7 +567,7 @@ begin
 	)
 
 	plot!(xcfig, csteadystate, xspace; c = :darkred, label = false)
-	scatter!(xcfig, [c₀], [x₀]; c = :black, label = "Initial state")
+	scatter!(xcfig, [c₀], [T₀]; c = :black, label = "Initial state")
 
 
 	# -- (e, x)
@@ -581,7 +581,7 @@ begin
 		
 	)
 	
-	hline!(xefig, [x₀]; c = :black, label = "Initial state", linestyle = :dash)
+	hline!(xefig, [T₀]; c = :black, label = "Initial state", linestyle = :dash)
 	
 
 	# -- (x, λ)	
@@ -594,7 +594,7 @@ begin
 	)
 
 	plot!(xλfig, xspace, ω; c = :darkred, label = nothing)
-	vline!(xλfig, [x₀]; c = :black, linestyle = :dash, label = "Initial state")
+	vline!(xλfig, [T₀]; c = :black, linestyle = :dash, label = "Initial state")
 	vline!(xλfig, tipping_points, c = :black, label = "Tipping points")
 
 	# -- (c, e)

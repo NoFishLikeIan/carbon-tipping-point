@@ -11,7 +11,7 @@ function extractpoliciesfromsim(simulationresults)
     xₗ, xᵤ = extrema(Γ[1])
     cₗ, cᵤ = extrema(Γ[2])
 
-    σspace = [sim[:climate].σ²ₓ for sim in simulationresults] |> unique |> sort
+    σspace = [sim[:climate].σ²ₜ for sim in simulationresults] |> unique |> sort
     vsizes = unique((size(sim[:V]) for sim in simulationresults))
 
     maxgridsize = (maximum(first.(vsizes)), maximum(last.(vsizes)))
@@ -24,7 +24,7 @@ function extractpoliciesfromsim(simulationresults)
     Ea = similar(Va)
 
     for (i, σₓ) in enumerate(σspace)
-        cidx = findfirst(sim -> sim[:climate].σ²ₓ == σₓ, simulationresults)
+        cidx = findfirst(sim -> sim[:climate].σ²ₜ == σₓ, simulationresults)
 
         @unpack Γ, V, E = simulationresults[cidx]
 

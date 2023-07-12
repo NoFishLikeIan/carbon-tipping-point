@@ -20,7 +20,7 @@ m = MendezFarazmand() # Climate model
 function computemanifolds(params::Dict, timehorizons; kwargs...)
 	@unpack γ, τ = params
 
-	l = LinearQuadratic(τ = τ, γ = γ, xₛ = m.xₚ) # Social planner
+	l = LinearQuadratic(τ = τ, γ = γ, xₛ = m.Tᵖ) # Social planner
 	steadystates = computesteadystates(m, l)
 
 	tipping_points = find_zeros(x -> g′(x, m), (290, 300))

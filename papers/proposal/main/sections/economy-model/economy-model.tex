@@ -1,45 +1,45 @@
 \documentclass[../../main.tex]{subfiles}
 \begin{document}
 
-In the model, the economy interacts with the climate in two ways. First, the economy alters climate dynamics by emitting carbon dioxide $e_t$ as a by-product of output production $Y_t$. Second, as the climate changes and temperatures $x_t$ rise, the rate of capital depreciation increases, thereby lowering economic growth. This is in line with recent empirical evidence on the role of temperature variations in lowering output growth (\citeauthor{dell_temperature_2012}, \citeyear{dell_temperature_2012, dell_temperature_2009}) 
+In the model, the economy interacts with the climate in two ways. First, the economy alters climate dynamics by emitting carbon dioxide $E$ as a by-product of output production $Y$. Second, as the climate changes and temperatures $T$ rise, the rate of capital depreciation increases, thereby lowering economic growth. This is in line with recent empirical evidence on the role of temperature variations in lowering output growth (\citeauthor{dellemperature_2012}, \citeyear{dellemperature_2012, dellemperature_2009}) 
 
-Following \citein{pindyck_economic_2013} and \citein{hambel_optimal_2021}, I assume output $Y_t$ to be a linear function of capital $K_t$ , \begin{equation}
-Y_t =  A_t K_t,
-\end{equation} where $A_t$ denotes productivity. Output can then be used for investment $I_t$, abatement expenditures $B_t$, or consumption $C_t$ \begin{equation} \label{eq:nominal-budget}
-    Y_t = I_t + B_t + C_t.
+Following \citein{pindyck_economic_2013} and \citein{hambel_optimal_2021}, I assume output $Y$ to be a linear function of capital $K$ , \begin{equation}
+Y =  A K,
+\end{equation} where $A$ denotes productivity. Output can then be used for investment $I$, abatement expenditures $B$, or consumption $C$ \begin{equation} \label{eq:nominal-budget}
+    Y = I + B + C.
 \end{equation}
 
-Following Nordhaus [\textbf{cite}] we assume abatement expenditures to be proportional to output $Y_t$ and quadratic in the emission reduction rate $\varepsilon_t$ (\ref{eq:emission-reduction-rate}), namely $B_t = b_t(\varepsilon_t) Y_t $ where \begin{equation} \label{eq:abatement-costs}
-    b_t(\varepsilon_t) = \frac{1}{2} \omega_t \varepsilon_t^2.
-\end{equation} The function $b_t(\varepsilon_t)$ captures the idea that, at a time $t$, a marginal reduction in emissions, vis-à-vis the business-as-usual scenario, becomes increasingly costly at a rate $\omega_t \varepsilon_t$. As time progresses, so does abatement technology and a given abatement objective becomes cheaper. We model this by letting the exogenous technological parameter $\omega_t$ decrease over time.
+Following Nordhaus [\textbf{cite}] we assume abatement expenditures to be proportional to output $Y$ and quadratic in the emission reduction rate $\varepsilon$ (\ref{eq:emission-reduction-rate}), namely $B = \beta(\varepsilon) Y $ where \begin{equation} \label{eq:abatement-costs}
+    \beta(\varepsilon) = \frac{1}{2} \omega \varepsilon^2.
+\end{equation} The function $\beta(\varepsilon)$ captures the idea that, at a time $t$, a marginal reduction in emissions, vis-à-vis the business-as-usual scenario, becomes increasingly costly at a rate $\omega \varepsilon$. As time progresses, so does abatement technology and a given abatement objective becomes cheaper. We model this by letting the exogenous technological parameter $\omega$ decrease over time.
 
 \subsection{Evolution of Capital and Climate Change}
 
-In the last 50 years, in which we have experience the early effects of climate change, as temperatures have risen, productivity in the agricultural sector, net of productivity growth, has decline (\citeauthor{dell_temperature_2012} \citeyear{dell_temperature_2012, dell_temperature_2009}). Given the imperfect substitutability of food, resource have been diverted from other sectors towards agricultural which has increased the opportunity cost of capital investment in manufacturing and services. In this paper, I will abstract from the details of the mechanism (see \cite{dietz_growth_2019} for a more thorough treatment) but keep the role of temperatures in reducing capital growth rate and assume this to be the main damage deriving from climate change. In the model, capital depreciation is given by \begin{equation}
-    \delta_{K} = \delta^{\mathtt{p}}_{K} + (1 - \delta^{\mathtt{p}}_{K}) \; d(x_t)
-\end{equation} where $d(x_t)$ is an increasing function of temperature that ranges between $0$ and $1$. At pre-industrial temperatures $x^{\mathtt{p}}$ there are no economic damages $d(x^{\mathtt{p}}) = 0$, such that capital depreciates at a rate of $\delta^{\mathtt{p}}_K$. Finally, in investing and abating the economy incurs in adjustment costs proportional to capital $\frac{\kappa_a}{2} \big(I_t + B_t \big)^2 \sqrt{K_t}$. Putting, this all together we obtain the evolution of capital \begin{equation} \label{eq:capital-evolution}
-    \d{K_t} = \left( I_t - \delta_K(x_t) K_t - \frac{\kappa_a}{2} \Big(I_t + B_t\Big)^2 \sqrt{K_t} \right) \d{t}.
+In the last 50 years, productivity in the agricultural sector, net of technological growth, has declined due to temperature increases (\citeauthor{dellemperature_2012} \citeyear{dellemperature_2012, dellemperature_2009}). Given the imperfect substitutability of food, resources have been diverted from other sectors towards agricolture which has increased the opportunity cost of capital investment in manufacturing and services. For a thorough treatment of this mechanic see \citein{dietz_growth_2019}. In this paper, I will abstract from the details of the mechanism but keep the role of temperatures in reducing capital growth rate and assume this to be the main damage deriving from climate change. In the model, capital depreciation is given by \begin{equation}
+    \delta_k = \delta^{\mathrm{p}}_k + (1 - \delta^{\mathrm{p}}_k) \; d(T)
+\end{equation} where $d(T)$ is an increasing function of temperature that ranges between $0$ and $1$. At pre-industrial temperatures $T^{\mathrm{p}}$ there are no economic damages $d(T^{\mathrm{p}}) = 0$, such that capital depreciates at a rate of $\delta^{\mathrm{p}}_K$. Finally, in investing and abating the economy incurs in adjustment costs proportional to capital $\frac{\kappa}{2} \big(I + B \big)^2 \sqrt{K}$. Putting this all together we obtain the evolution of capital \begin{equation} \label{eq:capital-evolution}
+    \d{K} = \left( I - \delta_k(T) K - \frac{\kappa}{2} \Big(I + B\Big)^2 \sqrt{K} \right) \d{t}.
 \end{equation} 
 
-As in the climate model, it is convenient to rewrite the dynamics in terms of growth rates. Let $\hat K_t$ be the $\log K_t$, then equation (\ref{eq:capital-evolution}) can be rewritten as \begin{equation} \label{eq:capital-evolution:log:level}
-    \text{d}\hat K_t = \left( \frac{I_t}{K_t} - \delta_K(x_t) - \frac{\kappa_a}{2} \left(\frac{I_t}{K_t} + \frac{B_t}{K_t}\right)^2 \right)
+As in the climate model, it is convenient to rewrite the dynamics in terms of growth rates. Let $k$ be the $\log K$, then equation (\ref{eq:capital-evolution}) can be rewritten as \begin{equation} \label{eq:capital-evolution:log:level}
+    \text{d}k = \left( \frac{I}{K} - \delta_k(T) - \frac{\kappa}{2} \left(\frac{I}{K} + \frac{B}{K}\right)^2 \right).
 \end{equation}
 
 Using the abatement costs (\ref{eq:abatement-costs}), the abatement expenditure to capital ratio can be written as \begin{equation}
-    \frac{B_t}{K_t} = A_t b_t(\varepsilon_t).
+    \frac{B}{K} = A \beta(\varepsilon).
 \end{equation} Furthermore, letting \begin{equation}
-    \chi_t \coloneqq \frac{C_t}{Y_t} = \frac{C_t}{K_t} \frac{1}{A_t}
+    \control{\chi} \coloneqq \frac{C}{Y} = \frac{C}{K} \frac{1}{A}
 \end{equation} be the consumption share of output we can write the investment to capital ratio, using the budget equation (\ref{eq:nominal-budget}), as \begin{equation}
-    \frac{I_t}{K_t} = A_t \Big(1 - \chi_t - b_t(\varepsilon_t)\Big).
+    \frac{I}{K} = A \Big(1 - \control{\chi} - \beta(\varepsilon)\Big).
 \end{equation}
 
-These two equations allow us to rewrite the log-growth of capital $\d{\hat K_t}$ (\ref{eq:capital-evolution:log:level}), in terms of the consumption decision $\chi_t$, the abatement decision $\alpha_t$, via the emission reduction rate $\varepsilon_t$, temperature $x_t$, and technological progress, in production $A_t$ and abatement $\omega_t$, \begin{equation} \label{eq:capital-evolution:log:growth}
-    \d{\hat K_t} = \left( \overbrace{A_t (1 - \chi_t) - \frac{\kappa_a}{2} A^2_t (1 - \chi_t)^2}^{\text{Endogenous economic growth}} - \underbrace{A_t b_t(\varepsilon_t)}_{\text{Abatement}} - \overbrace{\delta_K(x_t)}^{\text{Climate damages}} \right) \; \d{t}
+These two equations allow us to rewrite the log-growth of capital $\d{k}$ (\ref{eq:capital-evolution:log:level}), in terms of the consumption decision $\control{\chi}$, the abatement decision $\control{\alpha}$, via the emission reduction rate $\varepsilon$, temperature $T$, and technological progress, in production $A$ and abatement $\omega$, \begin{equation} \label{eq:capital-evolution:log:growth}
+    \d{k} = \left( \overbrace{A (1 - \control{\chi}) - \frac{\kappa}{2} A^2 (1 - \control{\chi})^2}^{\text{Endogenous economic growth}} - \underbrace{A \beta(\varepsilon)}_{\text{Abatement}} - \overbrace{\delta_k(T)}^{\text{Climate damages}} \right) \; \d{t}
 \end{equation} 
 
-The last step is to link this back to log-output growth $\d{\hat Y_t}$. This is easily done by letting the productivity growth rate be defined as $\rho_t \; \d{t} = \d \log A_t$ and, to simplify notation, grouping endogenous economic growth as \begin{equation}
-    \phi_t(\chi_t) \coloneqq A_t (1 - \chi_t) - \frac{\kappa_a}{2} A^2_t (1 - \chi_t)^2.
+The last step is to link this back to log-output growth $\d{y}$. This is easily done by letting the productivity growth rate be defined as $\varrho \; \d{t} = \d \log A$ and, to simplify notation, grouping endogenous economic growth as \begin{equation}
+    \phi(\control{\chi}) \coloneqq A (1 - \control{\chi}) - \frac{\kappa}{2} A^2 (1 - \control{\chi})^2.
 \end{equation} Then we can write \begin{equation} \label{eq:output-evolution:log}
-    \d{\hat Y_t} = \Big(\rho_t + \phi_t(\xi_t) - A_t b_t(\varepsilon_t) - \delta_K(x_t) \Big) \; \d{t}.
+    \d{y} = \Big(\varrho + \phi(\xi) - A \beta(\varepsilon) - \delta_k(T) \Big) \; \d{t}.
 \end{equation}
 \end{document}

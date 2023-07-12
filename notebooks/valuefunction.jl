@@ -125,9 +125,9 @@ end;
 
 # ╔═╡ f2a10cde-9da8-4591-b564-033eac1a7f0f
 begin # This assumes that all simulations have the same limits in (x, c)
-	X₁, C₁ = first(simulationresults)[:Γ]
+	T₁, C₁ = first(simulationresults)[:Γ]
 
-	xₗ, xᵤ = extrema(X₁)
+	xₗ, xᵤ = extrema(T₁)
 	cₗ, cᵤ = extrema(C₁)
 
 	X = range(xₗ, xᵤ; length = 201)
@@ -181,7 +181,7 @@ end;
 # ╔═╡ d0a8dcb5-af0f-4e98-9e47-b28a50ab2308
 begin
 		
-	newticks = [temperatureticks(2, u = 20)..., m.x₀]
+	newticks = [temperatureticks(2, u = 20)..., m.T₀]
 	newlabels = [temperaturelabels(2, u = 20)..., "Current\n temperature"]
 	
 	albedofig = plot(X, x -> climate.g(x, m) + m.η * x^4; xlabel = "\$x\$, temperature deviation", ylabel = "Energy input given albedo effect \$a(x)\$, (\$W/ m^{2}\$)", c = :black)
@@ -191,7 +191,7 @@ begin
 
 	newxticks = (newticks[idxs], newlabels[idxs])
 
-	vline!(albedofig, [m.x₀], linestyle = :dash, linewidth = 2, c = :black, xticks = newxticks)
+	vline!(albedofig, [m.T₀], linestyle = :dash, linewidth = 2, c = :black, xticks = newxticks)
 
 	savefig(albedofig, "../plots/albedo.png")
 
@@ -200,7 +200,7 @@ begin
 end
 
 # ╔═╡ 8a86532c-1bdf-4994-9bd9-076eff589dd1
-m.x₀ - xpreindustrial
+m.T₀ - xpreindustrial
 
 # ╔═╡ fb01b8b0-9d6e-4cd2-be5b-59aa43ef6bc4
 begin
@@ -217,7 +217,7 @@ begin
 		du[2] = 0.0
 	end
 
-	probefixed = SDEProblem(Fₑ!, Gₑ!, [m.x₀, m.c₀], (0., Tsim), 3. + m.δ * m.c₀)
+	probefixed = SDEProblem(Fₑ!, Gₑ!, [m.T₀, m.c₀], (0., Tsim), 3. + m.δ * m.c₀)
 	ensamblefixed = EnsembleProblem(probefixed)
 
 	simefixed = solve(ensamblefixed, SRIW1(), trajectories = 1_000)
@@ -259,7 +259,7 @@ begin
 	# 10 years dots
 	scatter!(fixedefig, mediansim[1:2000:end, 2], mediansim[1:2000:end, 1]; c = :darkred)
 
-	scatter!(fixedefig, [m.c₀], [m.x₀]; c = :darkred)
+	scatter!(fixedefig, [m.c₀], [m.T₀]; c = :darkred)
 
 	fixedefig
 end
@@ -290,12 +290,12 @@ end;
 # ╔═╡ 456e97ef-3fd2-4eb6-8f62-039fab6e42b1
 md"
 - Damage $\gamma$ $(@bind γ Slider(γspace, show_value = true, default = γspace[end]))
-- Noise $\sigma^2_x$ $(@bind σ²ₓ Slider(σspace, show_value = true, default = γspace[end]))
+- Noise $\sigma^2_x$ $(@bind σ²ₜ Slider(σspace, show_value = true, default = γspace[end]))
 - Constrained $(@bind constrained CheckBox())
 "
 
 # ╔═╡ e5944590-b525-4cfe-b14d-a995d3e7df12
-parameter = (γ, σ²ₓ, constrained)
+parameter = (γ, σ²ₜ, constrained)
 
 # ╔═╡ 742dd502-562f-44ed-ab29-28c2f27372cc
 v, e, _ = resultbycost[parameter];
@@ -308,7 +308,7 @@ end;
 
 # ╔═╡ 4a086a99-a24f-4d9c-9b1f-344244af1fe1
 begin
-	prob = ODEProblem(Fₒ!, [m.x₀, m.c₀], (0., 100.), [e])
+	prob = ODEProblem(Fₒ!, [m.T₀, m.c₀], (0., 100.), [e])
 	sol = solve(prob)
 
 	traj = hcat(sol.(0:0.01:100)...)'
@@ -436,10 +436,10 @@ begin
 		temperature = series[1, :]
 		carbon = series[2, :]
 
-		γ, σ²ₓ, constrained = trajparams[i]
+		γ, σ²ₜ, constrained = trajparams[i]
 		v, e, _ = resultbycost[trajparams[i]]
 
-		label = "$σ²ₓ"
+		label = "$σ²ₜ"
 		
 		emissions = [evaluate(e, x, c) for (x, c) ∈ zip(temperature, carbon)]
 		

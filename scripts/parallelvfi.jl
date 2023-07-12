@@ -30,7 +30,7 @@ end
 
 
 @everywhere function adaptivevaluefunction(economy::EconomicModel, climate::MendezFarazmand; outerverbose = true, verbose = false, kwargs...)
-    outerverbose && println("-- Computing σ²ₓ = $(climate.σ²ₓ)...")
+    outerverbose && println("-- Computing σ²ₜ = $(climate.σ²ₜ)...")
 
     V, E, Γ, η, refj = adapativevaluefunctioniter(
         climate, economy, n₀, k₀;
@@ -39,7 +39,7 @@ end
         maxiters = maxiters, kwargs...)
     
     ε = maximum(η)
-    outerverbose && println("-- ...done with σ²ₓ = $(climate.σ²ₓ) with error ε = $ε in $refj refinement iterations.")
+    outerverbose && println("-- ...done with σ²ₜ = $(climate.σ²ₜ) with error ε = $ε in $refj refinement iterations.")
     
     return Dict(:economy => economy, :climate => climate, :V => V, :E => E, :Γ => Γ)
 end
@@ -49,12 +49,12 @@ end
     p = length(σspace) # size of parameter space
 end
 
-outerverbose && println("Running parallel simulation with $p parameter combinations...")
+outerverbose && println("Running parallel simulation with $p  parameter combinations...")
 
 @everywhere function pmapfn(input)
-    index, σ²ₓ = input
+    index, σ²ₜ = input
     economy = Ramsey()
-    climate = MendezFarazmand(σ²ₓ = σ²ₓ)
+    climate = MendezFarazmand(σ²ₜ = σ²ₜ)
 
     outerverbose && println("Iteration $index of $p...")
 

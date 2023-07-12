@@ -1,33 +1,33 @@
 secondtoyears = 60 * 60 * 24 * 365.25
 
 Base.@kwdef struct Albedo
-    xₐ::Float64 = 3. # Transition rate
-	x₁::Float64 = 290.5 # Pre-transition temperature
-    x₂::Float64 = 295 # Post-transition temeprature 
+    Tₐ::Float64 = 3. # Transition rate
+	T₁::Float64 = 290.5 # Pre-transition temperature
+    T₂::Float64 = 295 # Post-transition temeprature 
      
-    a₁::Float64 = 0.31 # Pre-transition albedo
-    a₂::Float64 = 0.23 # Post-transition albedo
+    λ₁::Float64 = 0.31 # Pre-transition albedo
+    λ₂::Float64 = 0.23 # Post-transition albedo
 end
 
 Base.@kwdef struct Hogg
     # Current and pre-industrial data
-    x₀::Float64 = 288.56 # [K]
-    xₚ::Float64 = 287.15 # [K]
-    m₀::Float64 = 410 # [p.p.m.]
-    mₚ::Float64 = 280 # [p.p.m.]
-
+    T₀::Float64 = 288.56 # [K]
+    Tᵖ::Float64 = 287.15 # [K]
+    M₀::Float64 = 410 # [p.p.m.]
+    Mᵖ::Float64 = 280 # [p.p.m.]
+    
     # Volatility
-    σ²ₓ = 0.3
+    σ²ₜ = 0.3
     σ²ₘ = 0.0
 
-    # Climate sensitivity
-    S::Float64 = 342 # [W / m²] Mean solar radiation
+    # Climate sensitwivity
+    S₀::Float64 = 342 # [W / m²] Mean solar radiation
 
     ϵ::Float64 = 5e8 # [J / m² K] Heat capacity of the ocean
     η::Float64 = 5.67e-8 # Stefan-Boltzmann constant 
     
-    M₁::Float64 = 20.5 # [W / m²] Effect of CO₂ on radiation budget
-    M₀::Float64 = 150 # [W / m²] Pre-industrial GHG radiation budget
+    G₁::Float64 = 20.5 # [W / m²] Effect of CO₂ on radiation budget
+    G₀::Float64 = 150 # [W / m²] Pre-industrial GHG radiation budget
     
     # Decay rate of carbon concentration
     aδ::Float64 = 0.0176
@@ -52,50 +52,50 @@ end
 
 # Albedo functions
 "Heaviside function"
-H(x, xₐ::Real) = (1 + tanh(x / xₐ)) / 2
-H(x, albedo::Albedo) = H(x, albedo.xₐ)
+H(T, Tₐ::Real) = (1 + tanh(T / Tₐ)) / 2
+H(T, albedo::Albedo) = H(T, albedo.Tₐ)
 
 
 "Transition function"
-function L(x, albedo::Albedo)
-    @unpack x₁, x₂ = albedo
-    ((x - x₁) / (x₂ - x₁)) * H(x - x₁, albedo) * H(x₂ - x, albedo) + H(x - x₂, albedo)
+function L(T, albedo::Albedo)
+    @unpack T₁, T₂ = albedo
+    ((T - T₁) / (T₂ - T₁)) * H(T - T₁, albedo) * H(T₂ - T, albedo) + H(T - T₂, albedo)
 end
 
 "Albedo coefficient"
-a(x, albedo::Albedo) = albedo.a₁ - (albedo.a₁ - albedo.a₂) * L(x, albedo)
+λ(T, albedo::Albedo) = albedo.λ₁ - (albedo.λ₁ - albedo.λ₂) * L(T, albedo)
 
 "Radiation dynamics"
-function μₓ(x, climate::ClimateModel)
+function fₜ(T, climate::ClimateModel)
     baseline, albedo = climate
-    @unpack S, η = baseline
+    @unpack S₀, η = baseline
 
-    return S * (1 - a(x, albedo)) - η * x^4
+    return S₀ * (1 - λ(T, albedo)) - η * T^4
 end
 
 "CO2 forcing given log of CO2 concentration"
-function μₘ(m̂, baseline::Hogg)
-    @unpack M₀, M₁, mₚ = baseline
-    return M₀ + M₁ * (m̂ - log(mₚ))
+function fₘ(m, baseline::Hogg)
+    @unpack G₀, G₁, Mᵖ = baseline
+    return G₀ + G₁ * (m - log(Mᵖ))
 end
 
-function μₘ⁻¹(r, baseline::Hogg)
-    @unpack M₀, M₁, mₚ = baseline
-    return log(mₚ) + (r - M₀) / M₁
+function fₘ⁻¹(r, baseline::Hogg)
+    @unpack G₀, G₁, Mᵖ = baseline
+    return log(Mᵖ) + (r - G₀) / G₁
 end
 
 
 "Drift temperature dynamics"
-function μ(x, m̂, climate::ClimateModel)
+function μ(T, m, climate::ClimateModel)
     baseline = first(climate)
-    return μₓ(x, climate) + μₘ(m̂, baseline)
+    return fₜ(T, climate) + fₘ(m, baseline)
 end
 
 
-"Compute CO₂ concentration consistent with temperature x"
-function m̂stable(x, climate::ClimateModel)
+"Compute CO₂ concentration consistent with temperature T"
+function mstable(T, climate::ClimateModel)
     baseline = first(climate)
-    μₘ⁻¹(-μₓ(x, climate), baseline)
+    fₘ⁻¹(-fₜ(T, climate), baseline)
 end
 
-mstable(x, climate::ClimateModel) = exp(m̂stable(x, climate)) 
+Mstable(T, climate::ClimateModel) = exp(mstable(T, climate)) 

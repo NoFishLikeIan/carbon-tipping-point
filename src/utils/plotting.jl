@@ -19,7 +19,7 @@ function makedevxlabels(from, to, climate::ClimateModel; step = 0.5, withcurrent
     end
 
     xlabels = [xlabels..., "\$x_0\$"]
-    xticks = [xticks..., first(climate).x₀]
+    xticks = [xticks..., first(climate).T₀]
     idxs = sortperm(xticks)
     
     return (xticks[idxs], xlabels[idxs])

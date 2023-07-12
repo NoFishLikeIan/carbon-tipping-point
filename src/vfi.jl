@@ -17,7 +17,7 @@ function valuefunctioniter(
     vtol = 1e-2, verbose = false)
 
     @unpack ρ = economy
-    @unpack δ, σ²ₓ = climate
+    @unpack δ, σ²ₜ = climate
 
     β = exp(-ρ * h)
     Γvec = Base.product(Γ...) |> collect |> vec
@@ -32,10 +32,10 @@ function valuefunctioniter(
         v = constructinterpolation(Γ, Vᵢ)
 
         function v′(s, e)
-            if climate.σ²ₓ > 0
-                v′₊(s, e) = v(s[1] + h * μ(s[1], s[2], climate) + √h * climate.σ²ₓ, s[2] + h * (e - climate.δ * s[2]))
+            if climate.σ²ₜ > 0
+                v′₊(s, e) = v(s[1] + h * μ(s[1], s[2], climate) + √h * climate.σ²ₜ, s[2] + h * (e - climate.δ * s[2]))
     
-                v′₋(s, e) = v(s[1] + h * μ(s[1], s[2], climate) - √h * climate.σ²ₓ, s[2] + h * (e - climate.δ * s[2]))
+                v′₋(s, e) = v(s[1] + h * μ(s[1], s[2], climate) - √h * climate.σ²ₜ, s[2] + h * (e - climate.δ * s[2]))
     
                 (v′₋(s, e) + v′₊(s, e)) / 2
             else
@@ -76,17 +76,17 @@ function adapativevaluefunctioniter(
     verbose = false, 
     iterationkwargs...)
 
-    @unpack x₀, m₀ = climate
+    @unpack T₀, G₀ = climate
     @unpack ē = economy
     
-    X₀ = range(x₀, x₀ + 10.; length = n₀) |> collect 
-    M₀ = range(m₀, nullcline(x₀ + 15, climate); length = n₀) |> collect
+    X₀ = range(T₀, T₀ + 10.; length = n₀) |> collect 
+    G₀ = range(G₀, nullcline(T₀ + 15, climate); length = n₀) |> collect
 
-    Γ = (X₀, M₀) # State space
+    Γ = (X₀, G₀) # State space
     Ω = range(0, ē; length = k₀) |> collect # Start with equally space partition
     η = zeros(n₀, n₀)
 
-    V = ((x, m) -> H(x, m, 0, -0.01, climate, economy)).(X₀, M₀') # Initial value function guess
+    V = ((x, m) -> H(x, m, 0, -0.01, climate, economy)).(X₀, G₀') # Initial value function guess
     E = copy(η)
 
     verbose && println("--- Starting refinement with $(gridsize(Γ)) states and $(length(Ω)) policies...")

@@ -170,7 +170,7 @@ TwoColumn(md"""
 			title = "Albedo coefficient", label = false
 		)
 
-		vline!([m.x₀]; c = :black, label = "Current temperature, \$x_0\$")
+		vline!([m.T₀]; c = :black, label = "Current temperature, \$x_0\$")
 	end
 )
 
@@ -210,7 +210,7 @@ TwoColumn(md"""
 		cnullcline = (x -> climate.φ(x, m)).(xspace)
 		
 		plot!(cnullcline, xspace; c = :black, label = false)
-		scatter!([m.c₀], [m.x₀]; c = :black, label = "Current state", title = "Dynamics with current emissions")
+		scatter!([m.c₀], [m.T₀]; c = :black, label = "Current state", title = "Dynamics with current emissions")
 	end
 )
 

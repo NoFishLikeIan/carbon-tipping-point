@@ -24,7 +24,7 @@ begin # Global variables
 
     PLOTPATH = "plots"
     DATAPATH = "data/climate-data"
-    SAVEFIG = false 
+    SAVEFIG = true 
 end
 
 include("../src/model/climate.jl")
@@ -57,17 +57,18 @@ end
 begin # This assumes that all simulations have the same limits in (x, c)
 
     albedo = Albedo()
-    baseline = Hogg(σ²ₓ = 0.1)
+    baseline = Hogg(σ²ₜ = 0.1)
     climate = (baseline, albedo)
 
-    xₗ, xᵤ = baseline.xₚ, baseline.xₚ + 13
+    Tₗ, Tᵤ = baseline.Tᵖ, baseline.Tᵖ + 13
     
-    mₗ, mᵤ = baseline.mₚ, mstable(xₗ, climate)
+    Mₗ, Mᵤ = baseline.Mᵖ, mstable(Tₗ, climate)
     
-    X = range(xₗ, xᵤ; length = 201)
-    M = range(mₗ, mᵤ; length = 201)
+    Tspace = range(Tₗ, Tᵤ; length = 201)
+    Mspace = range(Mₗ, Mᵤ; length = 201)
+    Tspacedev = collect(Tspace .- baseline.Tᵖ)
     
-    nullclinecarbon = (x -> mstable(x, climate)).(X)
+    nullclinecarbon = (x -> mstable(x, climate)).(Tspace)
     # v, e = extractpoliciesfromsim(simulationresults)
 
     economy = Ramsey()
@@ -75,16 +76,17 @@ end
 
 # -- Climate dynamics plots
 
+TEMPLABEL = raw"Temperature deviations $T - T^{\mathrm{p}}$"
+
 begin # Albedo plot
 
-    Δxᵤ = last(X) - baseline.xₚ
+    ΔTᵤ = last(Tspace) - baseline.Tᵖ
     
-    Δamap = [0.02, 0.06, 0.08] 
-    seqpaletteΔa = generateseqpalette(length(Δamap))
+    Δλmap = [0.02, 0.06, 0.08] 
+    seqpaletteΔλ = generateseqpalette(length(Δλmap))
     
-    Xₚ = collect(X .- baseline.xₚ)
-    temperatureticks = makedevxlabels(0., Δxᵤ, climate; step = 1, digits = 0)
-    albedovariation = [(x -> a(x, Albedo(a₂ = albedo.a₁ - Δa))).(X) for Δa ∈ Δamap]
+    temperatureticks = makedevxlabels(0., ΔTᵤ, climate; step = 1, digits = 0)
+    albedovariation = [(T -> λ(T, Albedo(λ₂ = albedo.λ₁ - Δλ))).(Tspace) for Δλ ∈ Δλmap]
 
 
     albedofig = @pgf Axis(
@@ -92,25 +94,25 @@ begin # Albedo plot
             width = raw"1\textwidth",
             height = raw"0.6\textwidth",
             grid = "both",
-            xlabel = raw"Temperature deviations $x - x^{\mathtt{p}}$",
-            ylabel = raw"Albedo coefficient $a(x)$",
+            xlabel = TEMPLABEL,
+            ylabel = raw"Albedo coefficient $\lambda(x)$",
             xticklabels = temperatureticks[2],
-            xtick = 0:1:Δxᵤ,
+            xtick = 0:1:ΔTᵤ,
             no_markers,
             ultra_thick,
-            xmin = 0, xmax = Δxᵤ
+            xmin = 0, xmax = ΔTᵤ
         }
     )
 
     @pgf for (i, albedodata) in enumerate(albedovariation)
         curve = Plot(
-            {color=seqpaletteΔa[i], ultra_thick}, 
+            {color=seqpaletteΔλ[i], ultra_thick}, 
             Coordinates(
-                collect(zip(Xₚ, albedodata))
+                collect(zip(Tspacedev, albedodata))
             )
         ) 
 
-        legend = LegendEntry("$(Δamap[i])")
+        legend = LegendEntry("$(Δλmap[i])")
 
         push!(albedofig, curve, legend)
     end
@@ -123,7 +125,7 @@ begin # Albedo plot
 end
 
 begin # Nullcline plot
-    nullclinevariation = [(x -> mstable(x, (baseline, Albedo(a₂ = albedo.a₁ - Δa)))).(X) for Δa ∈ Δamap]
+    nullclinevariation = [(T -> Mstable(T, (baseline, Albedo(λ₂ = albedo.λ₁ - Δλ)))).(Tspace) for Δλ ∈ Δλmap]
 
 
     nullclinefig = @pgf Axis(
@@ -131,23 +133,23 @@ begin # Nullcline plot
             width = raw"0.7\textwidth",
             height = raw"0.7\textwidth",
             grid = "both",
-            ylabel = raw"Temperature deviations $x - x^{\mathtt{p}}$",
-            xlabel = raw"Carbon concentration $m$",
+            ylabel = TEMPLABEL,
+            xlabel = raw"Carbon concentration $M$",
             xmax = 1200,
             xtick = 0:300:1200,
             yticklabels = temperatureticks[2],
-            ytick = 0:1:Δxᵤ,
-            ymin = 0, ymax = Δxᵤ,
+            ytick = 0:1:ΔTᵤ,
+            ymin = 0, ymax = ΔTᵤ,
             ultra_thick, 
         }
     )
 
     @pgf for (i, nullclinedata) in enumerate(nullclinevariation)
-        coords = Coordinates(collect(zip(nullclinedata, Xₚ)))
+        coords = Coordinates(collect(zip(nullclinedata, Tspacedev)))
 
-        curve = Plot({color = seqpaletteΔa[i]}, coords) 
+        curve = Plot({color = seqpaletteΔλ[i]}, coords) 
 
-        legend = LegendEntry("$(Δamap[i])")
+        legend = LegendEntry("$(Δλmap[i])")
 
         push!(nullclinefig, curve, legend)
     end
@@ -171,17 +173,17 @@ begin # Import IPCC data
     ipcctime = bauscenario.Year .- BASELINE_YEAR
     T = last(ipcctime)
 
-    mbau = bauscenario[:, "CO2 concentration"]
-    xbau = bauscenario[:, "Temperature"]
-    Ebau = (Gtonoverppm / 1e9) * bauscenario[:, "CO2 emissions"]
+    Mᵇ = bauscenario[:, "CO2 concentration"]
+    Tᵇ = bauscenario[:, "Temperature"]
+    Eᵇ = (Gtonoverppm / 1e9) * bauscenario[:, "CO2 emissions"]
 
     # Calibrate g
-    gcalib_data = Array(log.(mbau)')
+    gcalib_data = Array(log.(Mᵇ)')
     t0 = first(ipcctime)
-    gp(t, p) = p[1] + p[2] * (t - t0) + p[3] * (t - t0)^2
+    γparametric(t, p) = p[1] + p[2] * (t - t0) + p[3] * (t - t0)^2
    
     function Fbau!(du, u, p, t)
-        du[1] = gp(t, p)
+        du[1] = γparametric(t, p)
     end
 
     gcalib_problem = ODEProblem(Fbau!, [gcalib_data[1]], extrema(ipcctime))
@@ -192,30 +194,30 @@ begin # Import IPCC data
     )
 
     optprob = Optimization.OptimizationProblem(cost, zeros(3))
-    gcalibrated = solve(optprob, BFGS())
+    calibratedγ = solve(optprob, BFGS())
 
-    g(t) = gp(t, gcalibrated.u)
+    γᵇ(t) = γparametric(t, calibratedγ.u)
 
     # Initial mₛ
     baseidx = findfirst(==(0), ipcctime)
-    mₛ₀ = δₘ⁻¹(Ebau[baseidx] / mbau[baseidx] - g(0), baseline)
+    N₀ = δₘ⁻¹(Eᵇ[baseidx] / Mᵇ[baseidx] - γᵇ(0), baseline)
 end
 
 
-function simulatebau(Δa; trajectories = 1000) # Business as Usual, ensemble simulation    
-    αbau = (x, m̂) -> 0.
-    baualbedo = Albedo(a₂ = albedo.a₁ - Δa)
+function simulatebau(Δλ; trajectories = 1000) # Business as Usual, ensemble simulation    
+    αbau = (T, M) -> 0.
+    baualbedo = Albedo(λ₂ = albedo.λ₁ - Δλ)
     
-    bauparameters = ((Hogg(), baualbedo), g, αbau)
+    bauparameters = ((Hogg(), baualbedo), γᵇ, αbau)
     
     SDEFunction(F!, G!, mass_matrix = mass_matrix(baseline))
     
-    problembse = SDEProblem(SDEFunction(F!, G!, mass_matrix = mass_matrix(baseline)), G!, [baseline.x₀, log(baseline.m₀), mₛ₀], (0, T), bauparameters)
+    problembse = SDEProblem(SDEFunction(F!, G!, mass_matrix = mass_matrix(baseline)), G!, [baseline.T₀, log(baseline.M₀), N₀], (0, T), bauparameters)
     
     ensemblebse = EnsembleProblem(problembse)
     
     bausim = solve(ensemblebse, trajectories = trajectories)
-    baunullcline = (x -> mstable(x, (baseline, baualbedo))).(X)
+    baunullcline = (x -> mstable(x, (baseline, baualbedo))).(Tspace)
     
     return bausim, baunullcline
 end
@@ -230,7 +232,7 @@ begin # Growth of carbon concentration
             width = raw"0.75\linewidth",
             height = raw"0.75\linewidth",
             grid = "both",
-            ylabel = raw"Growth rate $g^{\mathtt{b}}_t$",
+            ylabel = raw"Growth rate $\gamma^{\mathrm{b}}$",
             xlabel = raw"Year",
             xtick = 0:20:T,
             xmin = 0, xmax = T,
@@ -239,7 +241,7 @@ begin # Growth of carbon concentration
         }
     )   
     
-    gdata = g.(yearlytime)
+    gdata = γᵇ.(yearlytime)
     coords = Coordinates(zip(yearlytime, gdata))
 
     markers = @pgf Plot({ only_marks, mark_options = {fill = gcolor, scale = 1.5, draw_opacity = 0}, mark_repeat = 10}, coords) 
@@ -249,7 +251,7 @@ begin # Growth of carbon concentration
     push!(gfig, curve, markers)
 
     if SAVEFIG
-        PGFPlotsX.save(joinpath(PLOTPATH, "gfig.tikz"), gfig; include_preamble = true) 
+        PGFPlotsX.save(joinpath(PLOTPATH, "growthmfig.tikz"), gfig; include_preamble = true) 
     end
 
     gfig
@@ -266,18 +268,18 @@ begin
             width = raw"0.6\textwidth",
             height = raw"0.6\textwidth",
             yticklabels = temperatureticks[2],
-            ytick = 0:1:Δxᵤ,
-            ymin = 0, ymax = Δxᵤ,
-            xmin = baseline.mₚ, xmax = 1200,
+            ytick = 0:1:ΔTᵤ,
+            ymin = 0, ymax = ΔTᵤ,
+            xmin = baseline.Mᵖ, xmax = 1200,
             xtick = 200:100:1100,
             grid = "both"
         }
     )
 
-    @pgf for (i, Δa) ∈ enumerate([0, 0.08])
+    @pgf for (i, Δλ) ∈ enumerate([0, 0.08])
         isfirst = i == 1
-        Δaplots = []
-        timeseriescolor = isfirst ? seqpaletteΔa[1] : seqpaletteΔa[end]
+        Δλplots = []
+        timeseriescolor = isfirst ? seqpaletteΔλ[1] : seqpaletteΔλ[end]
     
         # IPCC benchmark line
         ipccbau = @pgf Plot(
@@ -288,35 +290,35 @@ begin
                 mark_options = {scale = 1.5, draw_opacity = 0}, 
                 mark_repeat = 2
             }, 
-            Coordinates(zip(mbau[3:end], xbau[3:end]))
+            Coordinates(zip(Mᵇ[3:end], Tᵇ[3:end]))
         )
 
-        push!(Δaplots, ipccbau)
+        push!(Δλplots, ipccbau)
         
-        push!(Δaplots, LegendEntry("SSP5 - Baseline"))
+        push!(Δλplots, LegendEntry("SSP5 - Baseline"))
 
 
         # Data simulation
-        bausim, baunullcline = simulatebau(Δa; trajectories = 20)
+        bausim, baunullcline = simulatebau(Δλ; trajectories = 20)
         baumedian = [timepoint_median(bausim, t) for t in yearlytime]
-        baumedianm = @. exp([u[2] for u in baumedian])
-        baumedianx = @. first(baumedian) - xpreindustrial
+        baumedianM = @. exp([u[2] for u in baumedian])
+        baumedianT = @. first(baumedian) - baseline.Tᵖ
 
 
         # Nullcline
-        push!(Δaplots,
+        push!(Δλplots,
             @pgf Plot({dashed, color = "black", ultra_thick, forget_plot},
-                Coordinates(collect(zip(baunullcline, Xₚ)))
+                Coordinates(collect(zip(exp.(baunullcline), Tspacedev)))
             )
         )
 
-        mediancoords = Coordinates(zip(baumedianm, baumedianx))
+        mediancoords = Coordinates(zip(baumedianM, baumedianT))
 
-        label = isfirst ? raw"$\Delta a = 0.02$" : raw"$\Delta a = 0.08$"
+        label = isfirst ? raw"$\Delta \lambda = 0.02$" : raw"$\Delta \lambda = 0.08$"
 
         @pgf begin
             push!(
-                Δaplots,
+                Δλplots,
                 Plot({ultra_thick, color = timeseriescolor, opacity = 0.8},mediancoords),
                 LegendEntry(label),
                 Plot({only_marks, mark_options = {fill = timeseriescolor, scale = 1.5, draw_opacity = 0, fill_opacity = 0.8}, mark_repeat = 20, forget_plot, mark = "*"}, mediancoords)
@@ -327,22 +329,27 @@ begin
             path = sim.(yearlytime)
 
             mpath = @. exp([u[2] for u in path])
-            xpath = @. first(path) - xpreindustrial
+            xpath = @. first(path) - baseline.Tᵖ
 
             push!(
-                Δaplots, 
+                Δλplots, 
                 Plot({forget_plot, color = timeseriescolor, opacity = 0.2},
                     Coordinates(zip(mpath, xpath)),
                 )
             )
         end
         
-        nextgroup = isfirst ? {xlabel = raw"Carbon concentration $m_t$", ylabel = raw"Temperature deviations $x_t - x^{\mathtt{p}}$"} : {xlabel = raw"Carbon concentration $m_t$"}
+        nextgroup = isfirst ? {
+            xlabel = raw"Carbon concentration $M$", 
+            ylabel = TEMPLABEL
+        } : {
+            xlabel = raw"Carbon concentration $M$"
+        }
 
-        push!(baufig, nextgroup, Δaplots...)
+        push!(baufig, nextgroup, Δλplots...)
     end
 
-    @pgf baufig["legend style"] = raw"at = {(0.4, 0.95)}"
+    @pgf baufig["legend style"] = raw"at = {(0.6, 0.95)}"
 
     if SAVEFIG
         PGFPlotsX.save(joinpath(PLOTPATH, "baufig.tikz"), baufig; include_preamble = true) 
@@ -355,11 +362,12 @@ yearsofdensity = 10:10:80
 densedomain = collect(0:0.1:12)
 
 baupossim, _ = simulatebau(0.08; trajectories = 51)
-decadetemperatures = [first(componentwise_vectors_timepoint(baupossim, t)) .- xpreindustrial for t in yearsofdensity]
+decadetemperatures = [first(componentwise_vectors_timepoint(baupossim, t)) .- baseline.Tᵖ for t in yearsofdensity]
 dists = (x -> kde(x)).(decadetemperatures)
 densities = [x -> pdf(d, x) for d in dists]
 
 begin
+    poscolor = PALETTE[2]
     densedomain_ext = [[densedomain[1]]; densedomain; [densedomain[end]]]
 
     densityfig = @pgf Axis(
@@ -375,7 +383,7 @@ begin
             ztick = collect(0:0.25:1.5),
             ytick = collect(yearsofdensity),
             x_dir = "reverse",
-            xlabel = raw"Temperature deviations $x_t - x^{\mathtt{p}}$",
+            xlabel = raw"Temperature deviations $x_t - x^{\mathrm{p}}$",
             ylabel = raw"Year",
             zlabel = raw"Density of temperature",
             yticklabels = yearsofdensity .+ BASELINE_YEAR
@@ -420,8 +428,8 @@ end
 
 begin
     Lfig = Plots.plot(xlabel = "Temperature,  \$x [K]\$", legendtitle = "Transition rate \$x_a\$", ylabel = "\$L(x)\$")
-    for xₐ ∈ [1, 1e-1]
-        plot!(Lfig, X, x -> L(x, Albedo(xₐ = xₐ)); label = "\$$(xₐ)\$", linewidth = 2)
+    for Tₐ ∈ [1, 1e-1]
+        plot!(Lfig, Tspace, x -> L(x, Albedo(Tₐ = Tₐ)); label = "\$$(Tₐ)\$", linewidth = 2)
     end
 
     Lfig
