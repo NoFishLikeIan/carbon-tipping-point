@@ -1,23 +1,24 @@
 mass_matrix(baseline) = diagm([baseline.ϵ / secondtoyears, 1., 1.])
 
 """
-Drift dynamics of (x, m̂, mₛ) given an abatement function α(x, m̂) and a business as usual growth rate g(t).
+Drift dynamics of (T, m, N) given an abatement function γᵇ(T, m) and a business as usual growth rate g(t).
 """
 function F!(du, u, parameters, t)
 	# Parameters
-	climate, g, α = parameters
+	climate, γᵇ, α = parameters
 	
-	x, m̂, mₛ = @view u[1:3]
+	T, m, N = @view u[1:3]
+	M = exp(m)
 
-	du[1] = μ(x, m̂, climate)
-	du[2] = g(t) - α(x, m̂)
-	du[3] = δₘ(mₛ, first(climate)) * exp(m̂)
+	du[1] = μ(T, m, climate)
+	du[2] = γᵇ(t) - α(T, m)
+	du[3] = δₘ(N, first(climate)) * M
 end
 
 function G!(du, u, parameters, t)
 	baseline = parameters[1][1]	
 
-	du[1] = baseline.σ²ₓ 
+	du[1] = baseline.σ²ₜ 
 	du[2] = baseline.σ²ₘ
 	du[3] = 0.
 end
