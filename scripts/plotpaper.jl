@@ -30,10 +30,8 @@ end
 include("../src/model/climate.jl")
 include("../src/model/economic.jl")
 
-include("../src/utils/dynamicalsystems.jl")
-
 include("../src/utils/plotting.jl")
-include("../src/utils/extractsim.jl")
+include("../src/utils/dynamics.jl")
 
 # -- Load data
 function gettimestamp(filepath)

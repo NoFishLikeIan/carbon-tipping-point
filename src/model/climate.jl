@@ -1,4 +1,5 @@
 secondtoyears = 60 * 60 * 24 * 365.25
+Gtonoverppm = 1 / 7.821
 
 Base.@kwdef struct Albedo
     Tₐ::Float64 = 3. # Transition rate
