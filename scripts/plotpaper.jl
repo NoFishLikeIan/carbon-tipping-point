@@ -4,7 +4,7 @@ using UnPack
 using Dierckx
 using LinearAlgebra
 
-using DifferentialEquations
+using DifferentialEquations, DifferentialEquations.EnsembleAnalysis
 
 using KernelDensity
 using Plots, Printf, PGFPlotsX, Colors
@@ -197,7 +197,7 @@ begin # Growth of carbon concentration
     gfig
 end
 
-begin
+begin # Business as usual plots
     baufig = @pgf GroupPlot(
         {
             group_style = { 
@@ -306,7 +306,7 @@ decadetemperatures = [first(componentwise_vectors_timepoint(baupossim, t)) .- ba
 dists = (x -> kde(x)).(decadetemperatures)
 densities = [x -> pdf(d, x) for d in dists]
 
-begin
+begin # Density of business as usual scenario
     poscolor = PALETTE[2]
     densedomain_ext = [[densedomain[1]]; densedomain; [densedomain[end]]]
 
