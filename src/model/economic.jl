@@ -18,6 +18,13 @@ Base.@kwdef struct Economy
     A₀::Float64 = 0.113 # Initial TFP
 end
 
+"""
+Parametric form of γ(t)
+"""
+function γ(t, p, t0)
+    p[1] + p[2] * (t - t0) + p[3] * (t - t0)^2
+end
+
 "Epstein-Zin aggregator"
 function f(c, u, economy::Economy)
     @unpack ρ, θ, ψ = economy
@@ -27,15 +34,6 @@ function f(c, u, economy::Economy)
     ccont = c^(1 - ψ⁻¹)
 
     return (ρ / (1 - ψ⁻¹)) * (1 - θ) * u * ((ccont / ucont) - 1)
-end
-
-function ∂cf(c, u, economy::Economy)
-    @unpack ρ, θ, ψ = economy
-    ψ⁻¹ = 1 / ψ
-
-    ucont = ((1 - θ) * u)^((1 - θ) / (1 - ψ⁻¹))
-
-    return ρ * (1 - θ) * u * c^(-ψ⁻¹) / ucont
 end
 
 "Cost of abatement as a fraction of GDP"

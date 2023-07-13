@@ -1,30 +1,28 @@
-using UnPack
+using JLD2, DotEnv
 
+using UnPack
 using Dierckx
 using LinearAlgebra
 
 using DifferentialEquations
-using DifferentialEquations.EnsembleAnalysis
-using DiffEqParamEstim, Optimization, OptimizationOptimJL
 
 using KernelDensity
-
-using CSV, DataFrames, JLD2
-
 using Plots, Printf, PGFPlotsX, Colors
 
 begin # Global variables
+    env = DotEnv.config()
+
     PALETTE = color.(["#003366", "#E31B23", "#005CAB", "#DCEEF3", "#FFC325", "#E6F1EE"])
     SEQPALETTECODE = :YlOrRd
     generateseqpalette(n) = palette(SEQPALETTECODE, n + 2)[3:end]
 
     LINESTYLE = ["solid", "dashed", "dotted"]
     
-    BASELINE_YEAR = 2020 # Year for data
+    BASELINE_YEAR = parse(Int64, get(env, "BASELINE_YEAR", "2020"))
+    DATAPATH = get(env, "DATAPATH", "data")
+    PLOTPATH = get(env, "PLOTPATH", "plots")
 
-    PLOTPATH = "plots"
-    DATAPATH = "data/climate-data"
-    SAVEFIG = true 
+    SAVEFIG = false 
 end
 
 include("../src/model/climate.jl")
@@ -33,27 +31,7 @@ include("../src/model/economic.jl")
 include("../src/utils/plotting.jl")
 include("../src/utils/dynamics.jl")
 
-# -- Load data
-function gettimestamp(filepath)
-    filename = replace(filepath, ".jld2" => "")
-    timestamp = eachsplit(filename, "_") |> collect |> last
-    inttimestamp = parse(Int, timestamp)
-
-    return inttimestamp
-end
-
-if false # Load the latest simulation
-    datapath = "data/sims"; @assert ispath(datapath)
-    availablesims = map(gettimestamp, readdir(datapath))
-
-    data = load(joinpath(datapath, "valuefunction_$(maximum(availablesims)).jld2"))
-    parameters = get(data, "parameters",  [])
-    simulationresults = get(data, "solution",  [])
-    @unpack Γ = first(simulationresults)
-end
-
-begin # This assumes that all simulations have the same limits in (x, c)
-
+begin # Initialise models and set domains
     albedo = Albedo()
     baseline = Hogg(σ²ₜ = 0.1)
     climate = (baseline, albedo)
@@ -71,8 +49,14 @@ begin # This assumes that all simulations have the same limits in (x, c)
     economy = Economy()
 end
 
-# -- Climate dynamics plots
+begin # Load calibrated data
+    @load joinpath(DATAPATH, "calibration.jld2") ipcc
+    @unpack Eᵇ, Tᵇ, Mᵇ, N₀, γparameters = ipcc
 
+    γᵇ(t) = γ(t, γparameters[1:3], γparameters[4])
+end
+
+# -- Climate dynamics plots
 TEMPLABEL = raw"Temperature deviations $T - T^{\mathrm{p}}$"
 
 begin # Albedo plot
@@ -159,47 +143,6 @@ begin # Nullcline plot
 
     nullclinefig
 end
-
-begin # Import IPCC data
-    ipccdatapath = joinpath(DATAPATH, "proj-median.csv")
-    ipccproj = CSV.read(ipccdatapath, DataFrame)
-    
-    getscenario(s::Int64) = filter(:Scenario => isequal("SSP$(s) - Baseline"), ipccproj)
-
-    bauscenario = getscenario(5)
-    ipcctime = bauscenario.Year .- BASELINE_YEAR
-    T = last(ipcctime)
-
-    Mᵇ = bauscenario[:, "CO2 concentration"]
-    Tᵇ = bauscenario[:, "Temperature"]
-    Eᵇ = (Gtonoverppm / 1e9) * bauscenario[:, "CO2 emissions"]
-
-    # Calibrate g
-    gcalib_data = Array(log.(Mᵇ)')
-    t0 = first(ipcctime)
-    γparametric(t, p) = p[1] + p[2] * (t - t0) + p[3] * (t - t0)^2
-   
-    function Fbau!(du, u, p, t)
-        du[1] = γparametric(t, p)
-    end
-
-    gcalib_problem = ODEProblem(Fbau!, [gcalib_data[1]], extrema(ipcctime))
-    cost = build_loss_objective(
-        gcalib_problem, Tsit5(), L2Loss(ipcctime, gcalib_data), 
-        Optimization.AutoForwardDiff();
-        maxiters = 10000, verbose = false
-    )
-
-    optprob = Optimization.OptimizationProblem(cost, zeros(3))
-    calibratedγ = solve(optprob, BFGS())
-
-    γᵇ(t) = γparametric(t, calibratedγ.u)
-
-    # Initial mₛ
-    baseidx = findfirst(==(0), ipcctime)
-    N₀ = δₘ⁻¹(Eᵇ[baseidx] / Mᵇ[baseidx] - γᵇ(0), baseline)
-end
-
 
 function simulatebau(Δλ; trajectories = 1000) # Business as Usual, ensemble simulation    
     αbau = (T, M) -> 0.
@@ -421,8 +364,4 @@ begin
     end
 
     densityfig
-end
-
-begin
-    
 end
