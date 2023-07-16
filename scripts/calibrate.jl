@@ -6,7 +6,7 @@ using DiffEqParamEstim, Optimization, OptimizationOptimJL
 
 
 include("../src/model/climate.jl")
-include("../src/model/economic.jl")
+include("../src/model/economy.jl")
 
 env = DotEnv.config()
 

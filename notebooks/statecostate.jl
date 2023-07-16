@@ -114,7 +114,7 @@ end
 climate = ingredients("../model/climate.jl");
 
 # ╔═╡ 8d16ec1e-e16f-45d4-93a4-1cc1a18fb487
-economy = ingredients("../model/economic.jl");
+economy = ingredients("../model/economy.jl");
 
 # ╔═╡ 241e7857-3178-44de-9b4e-85f0b717d131
 dsutils = ingredients("../utils/dynamicalsystems.jl");

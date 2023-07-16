@@ -83,7 +83,7 @@ default(
 climate = ingredients("../src/model/climate.jl");
 
 # ╔═╡ 31b74174-6400-4fa9-aafa-f6d23762e1d5
-economic = ingredients("../src/model/economic.jl");
+economic = ingredients("../src/model/economy.jl");
 
 # ╔═╡ 642b5259-e456-430f-9484-7a477e1b835c
 md"## Data import"

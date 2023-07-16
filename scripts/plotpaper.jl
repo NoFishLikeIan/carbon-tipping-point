@@ -26,7 +26,7 @@ begin # Global variables
 end
 
 include("../src/model/climate.jl")
-include("../src/model/economic.jl")
+include("../src/model/economy.jl")
 
 include("../src/utils/plotting.jl")
 include("../src/utils/dynamics.jl")

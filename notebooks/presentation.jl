@@ -228,7 +228,7 @@ where $E$ is the space of continuous function from time $t \in [0, \infty)$ to $
 "
 
 # ╔═╡ 593d13c6-2c59-4188-9bec-7e30ccbb082f
-economy = ingredients("../src/model/economic.jl");
+economy = ingredients("../src/model/economy.jl");
 
 # ╔═╡ 9e64b198-282e-4f81-82d6-2633325a4496
 l = economy.LinearQuadratic();
