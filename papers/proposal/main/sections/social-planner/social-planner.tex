@@ -23,22 +23,47 @@ To make sense of this utility specification it is useful to consider two illustr
 
 \subsection{Hamilton-Bellman-Jacobi Equation and the Social Cost of Carbon}
 
-The social planner then seeks to maximise, for all $t$, her utility (\ref{eq:utility}), given a consumption schedule $\control{\chi}: [0, \infty) \mapsto \mathcal [0, 1]$ and an abatement strategy $\control{\alpha}: [0, \infty) \mapsto \mathcal{A}$. \textbf{This is odd.} Let the value function at time $t$, given a state of CO$_2$ concentration, temperature, CO$_2$ stored in natural sincs, and output $(m, T, N, y)$ be defined as \begin{equation}
+The social planner then seeks to maximise, for all $t$, her utility (\ref{eq:utility}), given a consumption schedule $\control{\chi}: [0, \infty) \mapsto \mathcal [0, 1]$ and an abatement strategy $\control{\alpha}: [0, \infty) \mapsto \mathcal{A}$. \textbf{This is odd.} Let the value function at time $t$, given a state temperature, CO$_2$ stored in natural sincs, atmospheric log-concentration of CO$_2$, and output $(m, T, N, y)$ be defined as \begin{equation}
     V \coloneqq \sup_{(\control{\alpha}, \control{\chi})} U(\control{\alpha}, \control{\chi}).
 \end{equation}
 
 \begin{proposition}
     The value function satisfies the Hamilton-Bellman-Jacobi equation \begin{equation}
         \begin{split}
-            0 = \sup_{(\alpha, \chi) \in \mathcal{A} \times \mathcal{C}} \; \Bigg\{&f\left(C(\alpha, \chi), V\right) + \; \big(\partial_T V \big) \; \Big(\mu_T(T) + \mu_{m}(m) \Big) + \; \big(\partial_{m} V \big) \; \Big(\gamma^{\mathrm{p}} - \alpha \Big) \\
-            + \; &\Big(\partial_{N} V\Big) \; \delta_m(N) + \; \Big(\partial_{Y} V \Big) \; \Big(\varrho + \phi(\chi) - A \beta(t, u, \alpha) - \delta_k(T) \Big) \\
-            + \; &\Big(\partial^2_{m} V\Big) \sigma^2_m + \Big(\partial^2_{T} V\Big) \sigma^2_T  \Bigg\}
+            0 = \sup_{(\control{\alpha}, \control{\chi}) \in \mathcal{A} \times \mathcal{C}} \; \Bigg\{ &f\left(C(\control{\chi}), V\right) + \;
+            \Big(\partial_{m} V \Big) \; \Big(\gamma^{\mathrm{p}} - \control{\alpha} \Big) + \Big(\partial_{y} V \Big) \;  \Big(\phi(\control{\chi}) - A \beta(\control{\alpha}) \Big) \Bigg\} \\
+            + \; &\Big(\partial_{N} V\Big) \; \delta_m(N) + \;
+            \Big(\partial_T V \Big) \; \Big(\mu_T(T) + \mu_{m}(m) \Big) + \;
+            \Big(\partial_{y} V \Big) \; \Big(\varrho - \delta_k(T) \Big) \\
+            + \; &\Big(\partial^2_{m} V\Big) \; \sigma^2_m + \Big(\partial^2_{T} V\Big) \; \sigma^2_T + \Big(\partial_t V\Big)
         \end{split}
     \end{equation}
 \end{proposition}
 
-The social cost of carbon is then given by \begin{equation}
-    \text{SCC} = - \frac{\partial V / \partial E}{\partial V / \partial Y}. 
+\subsection{First order conditions}
+
+The ratio of abated emission $\varepsilon$ is linear in the abatement rate $\control{\alpha}$ \begin{equation}
+    \varepsilon(\control{\alpha}) = 1 - \frac{M}{\xi E^{\mathrm{b}}} \Big(\delta_m(N) + \gamma^{\mathrm{b}} - \control{\alpha}\Big),
+\end{equation} such that \begin{equation}
+    \partial_{\control{\alpha}} \varepsilon = \frac{M}{\xi E^{\mathrm{b}}}.
+\end{equation}
+
+Using the chain rule, we can write \begin{equation}
+    \partial_{\control{\alpha}} \beta = \partial_{\varepsilon} \beta \; \partial_{\control{\alpha}} \varepsilon = \frac{M}{\omega \xi E^{\mathrm{b}}} \; \varepsilon(\control{\alpha}).
+\end{equation}
+
+Likewise \begin{equation}
+    \partial_{\control{\chi}} f = Y \partial_{C} f
+\end{equation} and \begin{equation}
+    \partial_{\control{\chi}} \phi = \kappa A^2 (1 - \control{\chi}) - A.
+\end{equation}
+
+\subsection{Economic Problem}
+
+Assume the damage function $d(T) = 0$. Then optimal abatement is trivially $\control{\alpha} = 0$ and the only relevant state is $y$. Hence, the Hamilton-Bellman-Jacobi equation simplifies to \begin{equation}
+    0 = f(\control{\chi} \; Y, V) + \Big(\partial_{y} V \Big) \;  \Big(\varrho + \phi(\control{\chi}) - \delta^{\mathrm{p}}_k \Big) + \partial_t V
+\end{equation} and the first order condition with respect to the consumption ratio $\control{\chi}$ is given by \begin{equation}
+    0 = \partial_C f(\control{\chi} \; Y, V) \; Y + \Big(\partial_{y} V \Big) \Big( \kappa A^2 (1 - \control{\chi}) - A \Big)
 \end{equation}
 
 \end{document}
