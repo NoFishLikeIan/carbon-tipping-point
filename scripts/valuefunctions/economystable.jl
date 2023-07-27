@@ -16,7 +16,6 @@ env = DotEnv.config()
 DATAPATH = get(env, "DATAPATH", "data")
 
 # Solve simplified model
-
 economy = Economy()
 @unpack A₀, δₖᵖ, κ, ϱ, θ = economy
 
@@ -36,12 +35,13 @@ eqs = [
     f′(χ(t, y), y, v(t, y)) + Dy(v(t, y)) * ϕ′(t, χ(t, y)) ~ 0 # FOC
 ]
 
-T = 200.
-ymin = log(0.01economy.Y₀)
-ymax = log(2economy.Y₀)
+T = 380.
+y₀ = log(economy.Y₀)
+ymin, ymax = (0.1, 10) .* y₀
 
 bcs = [
-    Dy(v(T, y)) ~ 0
+    Dy(v(T, y)) ~ 0,
+    Dt(v(T, y)) ~ -f(χ(T, y), y, v(T, y))
 ]
 
 domains = [ 
@@ -49,7 +49,7 @@ domains = [
     y ∈ Interval(ymin, ymax) 
 ]
 
-hiddensize = 20
+hiddensize = 80
 inputsize = length(domains)
 chain = [
     Lux.Chain(
@@ -57,13 +57,13 @@ chain = [
         Lux.Dense(hiddensize, hiddensize, Lux.relu),
         Lux.Dense(hiddensize, hiddensize, Lux.relu),
         Lux.Dense(hiddensize, 1)
-    ), # Neural network for v(y)
+    ), # Neural network for v(t, y)
     Lux.Chain(
         Lux.Dense(inputsize, hiddensize, Lux.relu),
         Lux.Dense(hiddensize, hiddensize, Lux.relu),
         Lux.Dense(hiddensize, hiddensize, Lux.relu),
         Lux.Dense(hiddensize, 1, Lux.σ)
-    ), # Neural network for χ(y)
+    ), # Neural network for χ(t, y)
 ]
 
 discretization = PhysicsInformedNN(chain, QuadratureTraining())
@@ -72,16 +72,22 @@ discretization = PhysicsInformedNN(chain, QuadratureTraining())
 prob = discretize(pdesystem, discretization)
 
 begin # logging
+    const losses = Float64[]
     sym_prob = NeuralPDE.symbolic_discretize(pdesystem, discretization)
 
     pdeloss = sym_prob.loss_functions.pde_loss_functions
     bcsloss = sym_prob.loss_functions.bc_loss_functions
 
     callback = function (p, l)
-        println("Total loss: ", l)
-        println("HJB loss: ", map(l_ -> l_(p), pdeloss))
-        println("Boundary loss: ", map(l_ -> l_(p), bcsloss))
-        println("-------")
+        push!(losses, l)
+        print("Total loss: ", l, '\r')
+        
+        if length(losses) % 10 == 0
+            println("HJB loss: ", map(l_ -> l_(p), pdeloss))
+            println("Boundary loss: ", map(l_ -> l_(p), bcsloss))
+            println("-------")
+        end
+
         return false
     end
 end
