@@ -6,7 +6,7 @@ Base.@kwdef struct Economy
     # Preferences
     ρ::Float64 = 0.015 # Discount rate 
     θ::Float64 = 10.0 # Relative risk aversion
-    ψ::Float64 = 0.5 # Elasticity of intertemporal substitution 
+    ψ::Float64 = 1. # Elasticity of intertemporal substitution 
 
     # Technology
     ωᵣ::Float64 = 0.02 # Speed of abatement technology cost reduction
@@ -33,17 +33,30 @@ end
 function f(c, u, economy::Economy)
     @unpack ρ, θ, ψ = economy
 
+    if ψ ≈ 1
+        return ρ * (1 - θ) * u * (
+            log(
+                c / ((1 - θ) * u)^inv(1 - θ)
+            )
+        )
+    end
+
+    # FIXME check for ψ ≠ 1
     ψ⁻¹ = 1 / ψ
 
-    ucont = ((1 - θ) * u)^((1 - θ) / (1 - ψ⁻¹))
-    ccont = c^(1 - ψ⁻¹)
-
-    return (ρ / (1 - ψ⁻¹)) * (1 - θ) * u * ((ccont / ucont) - 1)
+    return ρ * (1 - θ) * inv(1 - ψ⁻¹) * u * (
+        (c / ((1 - θ) * u)^inv(1 - θ))^(1 - ψ⁻¹) - 1
+    )
 end
 
 
 function ∂f_∂c(c, u, economy::Economy)
     @unpack ρ, θ, ψ = economy
+
+    if ψ ≈ 1
+        return ρ * (1 - θ) * (u / c)
+    end
+
     ψ⁻¹ = 1 / ψ
     ucont = ((1 - θ) * u)^((1 - θ) / (1 - ψ⁻¹))
 
