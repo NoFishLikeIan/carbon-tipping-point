@@ -4,22 +4,22 @@ include("climate.jl")
 
 Base.@kwdef struct Economy
     # Preferences
-    ρ::Float64 = 0.015 # Discount rate 
-    θ::Float64 = 10.0 # Relative risk aversion
-    ψ::Float64 = 1. # Elasticity of intertemporal substitution 
+    ρ::Float32 = 1.5f-3 # Discount rate 
+    θ::Float32 = 10f0 # Relative risk aversion
+    ψ::Float32 = 1f0 # Elasticity of intertemporal substitution 
 
     # Technology
-    ωᵣ::Float64 = 0.02 # Speed of abatement technology cost reduction
-    ϱ::Float64 = 0.008 # Growth of TFP
-    κ::Float64 = 0.372 # Adjustment costs of abatement technology
+    ωᵣ::Float32 = 2f-3 # Speed of abatement technology cost reduction
+    ϱ::Float32 = 8f-3 # Growth of TFP
+    κ::Float32 = 3.72f-1 # Adjustment costs of abatement technology
     
     # Damages
-    δₖᵖ::Float64 = 0.015 # Initial depreciation rate of capital
-    damagehalftime::Float64 = 1.04 # d(T) = 1/2 if T = damagehalftime Tᵖ 
+    δₖᵖ::Float32 = 1.5f-2 # Initial depreciation rate of capital
+    damagehalftime::Float32 = 1.04f0 # d(T) = 1/2 if T = damagehalftime Tᵖ 
 
     # Output
-    Y₀::Float64 = 75.8 # trillion US-$
-    A₀::Float64 = 0.113 # Initial TFP
+    Y₀::Float32 = 75.8f0 # trillion US-$
+    A₀::Float32 = 0.113f0 # Initial TFP
 end
 
 """
