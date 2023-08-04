@@ -74,5 +74,33 @@ function (l::EpsteinZinBoundedControl)(x::AbstractMatrix, ps, st::NamedTuple)
     scale = last.(l.bounds) - first.(l.bounds)
     shift = first.(l.bounds)
 
-    [ -1f0 .* y[[1], :] .^2; Lux.σ.(y[2:l.out_dims, :]) .* scale .+ shift ], st
+    [ -1f0 .* Lux.softplus.(y[[1], :]); Lux.σ.(y[2:l.out_dims, :]) .* scale .+ shift ], st
+end
+
+
+struct EpsteinZinPositiveControl <: Lux.AbstractExplicitLayer
+    in_dims::Int 
+    out_dims::Int
+    init_weight::Function
+end
+
+"""
+Same as EpsteinZinBoundedControl but forces the value function to be negative and the control to be positive
+"""
+EpsteinZinPositiveControl(in_dims::Int, out_dims::Int; init_weight::Function = Lux.glorot_normal) = EpsteinZinPositiveControl(in_dims, out_dims, init_weight)
+
+function Lux.initialparameters(rng::AbstractRNG, l::EpsteinZinPositiveControl)
+    return (
+        weight=l.init_weight(rng, l.out_dims, l.in_dims),
+    )
+end
+
+Lux.initialstates(::AbstractRNG, ::EpsteinZinPositiveControl) = NamedTuple()
+Lux.parameterlength(l::EpsteinZinPositiveControl) = l.out_dims * l.in_dims
+Lux.statelength(::EpsteinZinPositiveControl) = 0
+
+function (l::EpsteinZinPositiveControl)(x::AbstractMatrix, ps, st::NamedTuple)
+    y = ps.weight * x
+
+    [ -1f0 .* Lux.softplus.(y[[1], :]); Lux.softplus.(y[2:l.out_dims, :])], st
 end
