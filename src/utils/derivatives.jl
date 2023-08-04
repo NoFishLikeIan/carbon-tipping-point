@@ -1,5 +1,24 @@
-ϵ = sqrt(eps(Float32))
+ϵ = cbrt(eps(Float32))
 ϵ⁻¹ = inv(ϵ)
 
-∂(f, x) = (f(x .+ ϵ) .- f(x .- ϵ)) .* (ϵ⁻¹) ./ 2
-∂(f, x, v) = (f(x .+ ϵ * v) - f(x .- ϵ * v)) .* (ϵ⁻¹) ./ 2
+function ∂(f, x)
+    second = (f(x .- 2ϵ) - f(x .+ 2ϵ)) ./ 12  
+    first = 2(f(x .+ ϵ) - f(x .- ϵ)) ./ 3
+
+    return (second .+ first) .* (ϵ⁻¹)
+end
+
+function ∂(f, x, v)
+    second = (f(x .- 2ϵ * v) - f(x .+ 2ϵ * v)) ./ 12
+    first =  2(f(x .+ ϵ * v) - f(x .- ϵ * v)) ./ 3
+
+    return (second .+ first) .* (ϵ⁻¹)
+end
+
+function basis(n)
+    Id = Matrix{Float32}(I(n))
+
+    return eachcol(Id)
+end
+
+∇(h, x) = reduce(vcat, ∂(h, x, e) for e in basis(size(x, 1)))
