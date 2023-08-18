@@ -1,24 +1,24 @@
-ϵ = cbrt(eps(Float32))
-ϵ⁻¹ = inv(ϵ)
+const ϵ = cbrt(eps(Float32))
+const ϵ⁻¹ = inv(ϵ)
+const ϵ⁻² = inv(ϵ^2)
 
-function ∂(f, x)
-    second = (f(x .- 2ϵ) - f(x .+ 2ϵ)) ./ 12  
-    first = 2(f(x .+ ϵ) - f(x .- ϵ)) ./ 3
-
-    return (second .+ first) .* (ϵ⁻¹)
+function paddedrange(from::Float32, to::Float32)
+    collect(range(from - 2ϵ, to + 2ϵ; step = ϵ)[:, :]')
 end
 
-function ∂(f, x, v)
-    second = (f(x .- 2ϵ * v) - f(x .+ 2ϵ * v)) ./ 12
-    first =  2(f(x .+ ϵ * v) - f(x .- ϵ * v)) ./ 3
+const S₁¹ = reshape(ϵ⁻¹ .* [-1f0, 8f0, 0f0, -8f0, 1f0] ./ 12f0, 1, 5, 1, 1)
+const S₁² = reshape(ϵ⁻² .* [-1f0, 16f0, -30f0, 16f0, -1f0] ./ 12f0, 1, 5, 1, 1)
 
-    return (second .+ first) .* (ϵ⁻¹)
+function ∂(y)
+    reshape(
+        NNlib.conv(reshape(y, 1, size(y, 2), 1, 1), S₁¹),
+        1, (size(y, 2) - 4)
+    )
 end
 
-function basis(n)
-    Id = Matrix{Float32}(I(n))
-
-    return eachcol(Id)
+function ∂²(y)
+    reshape(
+        NNlib.conv(reshape(y, 1, size(y, 2), 1, 1), S₁²),
+        1, (size(y, 2) - 4)
+    )
 end
-
-∇(h, x) = reduce(vcat, ∂(h, x, e) for e in basis(size(x, 1)))

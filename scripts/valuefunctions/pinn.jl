@@ -1,78 +1,83 @@
-using Lux
-using Lux: Chain, Dense, tanh, kaiming_normal
-using Optimisers
-using Zygote
+using UnPack
+
+using Lux, Optimisers, Zygote
+using NNlib
 
 using Statistics
 using Random
 
+using Plots: plot, plot!
+
+include("../../src/utils/derivatives.jl")
+include("../../src/utils/plotting.jl")
+
 rng = Random.MersenneTwister(1234)
-Random.seed!(rng, 1234)
 
-# Definte numeric derivative
-ϵ = cbrt(eps(Float32))
-ϵ⁻¹ = inv(ϵ)
-∂(f, x) = (f(x .+ ϵ) .- f(x .- ϵ)) .* (ϵ⁻¹) ./ 2
-∂(f, x, v) = (f(x .+ ϵ * v) - f(x .- ϵ * v)) .* (ϵ⁻¹) ./ 2
+const xₑ = paddedrange(0f0, 1f0)
+const idxpad = 3:(length(xₑ) - 2)
+const x = xₑ[:, idxpad]
 
-n = 20 
-model = Chain(
-    Dense(1, n, tanh),
-    Dense(n, n, tanh),
-    Dense(n, 2),
+depad(x::Matrix{Float32}) = @view x[[1], idxpad]
+
+nn = Chain(
+	Dense(1, 24, Lux.relu),
+	Dense(24, 24, Lux.relu),
+	Dense(24, 24, Lux.relu),
+	Dense(24, 1),
+    BranchLayer(
+        WrappedFunction(depad),
+        WrappedFunction(∂)
+    )
 )
 
-ps, st = Lux.setup(rng, model)
-nn(x, model, ps, st) = model(x, ps, st) |> first
+function loss(nn, Θ, st)
+    (y, y′), st = nn(xₑ, Θ, st)
+	
+	diffeq = mean(abs2, @. y^2 + 1f0 - y′)
+    bc = abs2(y[1])
 
-# Test call
-x = rand(rng, Float32, 1, 10_000) .* 10f0
-model(x, ps, st) |> first
-∂(x -> nn(x, model, ps, st), x)
+	return diffeq + bc, st 
+end
 
-function loss(x, model, ps, st)
-    pde = mean(abs2, nn(x, model, ps, st) .- ∂(x -> nn(x, model, ps, st), x))
-    bc = mean(abs2, nn([1f0], model, ps, st) .- [Float32(ℯ), Float32(2ℯ)])
+function trainstep!(optimiser, Θ, st)
+	(l, st), back = pullback(p -> loss(nn, p, st), Θ)
+	gs = back((1f0, nothing))[1]
+	
+	optimiser, Θ = Optimisers.update!(optimiser, Θ, gs)
+
+	return optimiser, Θ, st, l
+end
+
+function train(rng::AbstractRNG, nn; iterations = 100, η = 1f-3)
+    Θ, st = Lux.setup(rng, nn)
+    optimiser = Optimisers.setup(Optimisers.ADAM(η), Θ)
     
-    return pde + bc, st
-end
+    initlosspath = Vector{Float32}(undef, iterations)
 
-function makeoptimiser(ps, η)
-    opt = Optimisers.ADAM(η)
-    return Optimisers.setup(opt, ps)
-end
-
-function train(epochs, iterations; n = 1000)
-    ps, st = Lux.setup(rng, model)
-    iterloss = Float32[]
-    optstate = makeoptimiser(ps, 0.01f0)
-
-    for epoch in 1:epochs
-        x = rand(rng, Float32, 1, n) .* 2f0
-        totalloss = 0f0
-
-        for i in 1:iterations
-            (l, st), back = pullback(p -> loss(x, model, p, st), ps)
-            gs = back((one(l), nothing, nothing))[1]
-            optstate, ps = Optimisers.update(optstate, ps, gs)
-
-            totalloss += l
-            push!(iterloss, l)
-        end 
-
-        println("Epoch $epoch avg. loss: $(totalloss / iterations)")
+    for iter = 1:iterations
+        optimiser, Θ, st, l = trainstep!(optimiser, Θ, st)
+        initlosspath[iter] = l
     end
 
-    return ps, st, iterloss
+    return Θ, st, initlosspath
 end
 
-ps, st, iterloss = train(10, 250, n = 2000)
+# Hot load
+Θ₀, st₀ = Lux.setup(rng, nn)
+@time nn(xₑ, Θ₀, st₀)
+@time loss(nn, Θ₀, st₀)
+@time trainstep!(Optimisers.setup(Optimisers.ADAM(5f-3), Θ₀), Θ₀, st₀)
 
-using Plots
-begin # Plot results
-    nn(x) = nn(x', model, ps, st)'
-    x = range(0f0, 2f0; length = 101)[:, :]
-    plot(x, nn(x); xlabel = "\$x\$", ylabel = "\$y\$", label = "\$NN(x)\$")
+Θ, st, initlosspath = train(rng, nn; iterations = 50_000)
 
-    scatter!([1f0, 1f0], nn([1f0])')
+begin # Error plot
+    plot(log.(initlosspath); xlabel = "Iteration \$k\$", ylabel = "\$\\log \\mathcal{L}(\\theta_k)\$", linewidth = 1, size = 400 .* (√2, 1), dpi = 600, c = :darkgreen)
+end
+
+begin
+    (ỹ, _), _ = nn(xₑ, Θ, st)
+    y = tan.(x)
+
+    plot(x', ỹ'; label = "\$NN(x; \\theta)\$", c = :darkgreen, linewidth = 2.5)
+    plot!(x', y'; label = "\$\\tan(x)\$", linewidth = 2, linestyle = :dash, c = :darkred)
 end
