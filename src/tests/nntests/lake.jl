@@ -11,8 +11,8 @@ using Plots: plot, plot!, mm, twinx, default
 
 default(label = false, size = 400 .* (√2, 1), linewidth = 2.)
 
-include("../../src/utils/derivatives.jl")
-include("../../src/utils/plotting.jl")
+include("../../../src/utils/derivatives.jl")
+include("../../../src/utils/plotting.jl")
 
 const rng = Random.MersenneTwister(1234)
 
