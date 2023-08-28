@@ -1,7 +1,5 @@
 using UnPack
 
-include("climate.jl")
-
 Base.@kwdef struct Economy
     # Preferences
     ρ::Float32 = 1.5f-3 # Discount rate 
@@ -18,19 +16,27 @@ Base.@kwdef struct Economy
     damagehalftime::Float32 = 1.04f0 # d(T) = 1/2 if T = damagehalftime Tᵖ 
 
     # Output
-    Y₀::Float32 = 75.8f0 # trillion US-$
     A₀::Float32 = 0.113f0 # Initial TFP
+    y₀::Float32 = log(75.8f0)
+
+    # Domain 
+    t₀::Float32 = -15f0 # Initial time
+    t₁::Float32 = 80f0 # Final time
+    tspan::Float32 = 80f0 - 15f0 # Time span
+
+    y̲::Float32 = log(2.5f-1 * 75.8f0) # Minimum output
+    ȳ::Float32 = log(2f0 * 75.8f0) # Maximum output
 end
 
 """
-Parametric form of γ(t)
+Parametric form of γ(t), t: [0, 1] → [0, 1]
 """
-function γ(t, p, t0)
+function γ(t::Float32, p::NTuple{3, Float32}, t0::Float32)
     p[1] + p[2] * (t - t0) + p[3] * (t - t0)^2
 end
 
 "Epstein-Zin aggregator"
-function f(c, u, economy::Economy)
+function f(c::Float32, u::Float32, economy::Economy)
     @unpack ρ, θ, ψ = economy
 
     if ψ ≈ 1
@@ -50,7 +56,7 @@ function f(c, u, economy::Economy)
 end
 
 
-function ∂f_∂c(c, u, economy::Economy)
+function ∂f_∂c(c::Float32, u::Float32, economy::Economy)
     @unpack ρ, θ, ψ = economy
 
     if ψ ≈ 1
@@ -64,34 +70,34 @@ function ∂f_∂c(c, u, economy::Economy)
 end
 
 "Cost of abatement as a fraction of GDP"
-function β(t, ε, economy::Economy)
+function β(t::Float32, ε::Float32, economy::Economy)
     return (ε^2 / 2) * exp(-economy.ωᵣ * t)
 end
 
 
-function d(T, economy::Economy, baseline::Hogg)
+function d(T::Float32, economy::Economy, baseline::Hogg)
     fct = 1 - (1 / economy.damagehalftime)
     ΔT = fct * baseline.Tᵖ + (1 - fct) * (baseline.Tᵖ - T)
 
     return inv(1 + exp(ΔT / 3))
 end
 
-function δₖ(T, economy::Economy, baseline::Hogg)
+function δₖ(T::Float32, economy::Economy, hogg::Hogg)
     @unpack δₖᵖ = economy
 
-    return δₖᵖ + (1 - δₖᵖ) * d(T, economy, baseline)
+    return δₖᵖ + (1 - δₖᵖ) * d(T, economy, hogg)
 end
 
-function ϕ(χ, A::Real, economy::Economy)
+function ϕ(χ::Float32, A::Real, economy::Economy)
     I = (1 - χ) * A
 
     return I * (1 - I * economy.κ / 2)
 end
 
-function ϕ′(χ, A::Real, economy::Economy)
+function ϕ′(χ::Float32, A::Real, economy::Economy)
     return economy.κ * (1 - χ) * A^2 - A
 end
 
-function A(t, economy::Economy)
+function A(t::Float32, economy::Economy)
     return economy.A₀ * exp(economy.ϱ * t)
 end

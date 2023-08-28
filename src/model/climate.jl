@@ -1,104 +1,98 @@
 using UnPack
 
-secondtoyears = 60 * 60 * 24 * 365.25
-Gtonoverppm = 1 / 7.821
+const secondtoyears = Float32(60 * 60 * 24 * 365.25)
+const Gtonoverppm = Float32(1 / 7.821)
 
 Base.@kwdef struct Albedo
-    Tₐ::Float64 = 3. # Transition rate
-	T₁::Float64 = 290.5 # Pre-transition temperature
-    T₂::Float64 = 295 # Post-transition temeprature 
+    Tₐ::Float32 = 3f0 # Transition rate
+	T₁::Float32 = 290.5f0 # Pre-transition temperature
+    T₂::Float32 = 295f0 # Post-transition temeprature 
      
-    λ₁::Float64 = 0.31 # Pre-transition albedo
-    λ₂::Float64 = 0.23 # Post-transition albedo
+    λ₁::Float32 = 0.31f0 # Pre-transition albedo
+    λ₂::Float32 = 0.23f0 # Post-transition albedo
 end
 
 Base.@kwdef struct Hogg
     # Current and pre-industrial data
-    T₀::Float64 = 288.56 # [K]
-    Tᵖ::Float64 = 287.15 # [K]
-    M₀::Float64 = 410 # [p.p.m.]
-    Mᵖ::Float64 = 280 # [p.p.m.]
+    T₀::Float32 = 288.56f0 # [K]
+    Tᵖ::Float32 = 287.15f0 # [K]
+    M₀::Float32 = 410f0 # [p.p.m.]
+    Mᵖ::Float32 = 280f0 # [p.p.m.]
+
+    # Domain
+    T̲::Float32 = 287.15f0
+    T̄::Float32 = 300f0
+    m̲::Float32 = log(280f0)
+    m̄::Float32 = log(1000f0)
+    N̲::Float32 = 0f0
+    N̅::Float32 = 314.8f0
     
     # Volatility
-    σ²ₜ = 0.3
-    σ²ₘ = 0.0
+    σ²ₜ::Float32 = 0.3f0
 
     # Climate sensitwivity
-    S₀::Float64 = 342 # [W / m²] Mean solar radiation
+    S₀::Float32 = 342f0 # [W / m²] Mean solar radiation
 
-    ϵ::Float64 = 5e8 # [J / m² K] Heat capacity of the ocean
-    η::Float64 = 5.67e-8 # Stefan-Boltzmann constant 
+    ϵ::Float32 = 5f8 # [J / m² K] Heat capacity of the ocean
+    η::Float32 = 5.67f-8 # Stefan-Boltzmann constant 
     
-    G₁::Float64 = 20.5 # [W / m²] Effect of CO₂ on radiation budget
-    G₀::Float64 = 150 # [W / m²] Pre-industrial GHG radiation budget
+    G₁::Float32 = 20.5f0 # [W / m²] Effect of CO₂ on radiation budget
+    G₀::Float32 = 150f0 # [W / m²] Pre-industrial GHG radiation budget
     
     # Decay rate of carbon concentration
-    aδ::Float64 = 0.0176
-    bδ::Float64 = -27.36
-    cδ::Float64 = 314.8
+    aδ::Float32 = 0.0176f0
+    bδ::Float32 = -27.36f0
+    cδ::Float32 = 314.8f0
 end
-
-ClimateModel = Tuple{Hogg, Albedo}
 
 "Decay of carbon"
-function δₘ(m, baseline::Hogg)
-    @unpack aδ, bδ, cδ = baseline    
-
-    return aδ * exp(-(m - cδ)^2 / bδ^2)
+function δₘ(N::Float32, hogg::Hogg)
+    hogg.aδ * exp(-(N - hogg.cδ)^2 / hogg.bδ^2)
 end
 
-function δₘ⁻¹(δ, baseline::Hogg)
-    @unpack aδ, bδ, cδ = baseline    
-
-    return cδ + bδ * √(log(aδ / δ))
+function δₘ⁻¹(δ::Float32, hogg::Hogg)
+    hogg.cδ + hogg.bδ * √(log(hogg.aδ / δ))
 end
 
 # Albedo functions
 "Heaviside function"
-H(T, Tₐ::Real) = (1 + tanh(T / Tₐ)) / 2
-H(T, albedo::Albedo) = H(T, albedo.Tₐ)
+H(T::Float32, Tₐ::Float32) = (1 + tanh(T / Tₐ)) / 2
+H(T::Float32, albedo::Albedo) = H(T, albedo.Tₐ)
 
 
 "Transition function"
-function L(T, albedo::Albedo)
+function L(T::Float32, albedo::Albedo)
     @unpack T₁, T₂ = albedo
     ((T - T₁) / (T₂ - T₁)) * H(T - T₁, albedo) * H(T₂ - T, albedo) + H(T - T₂, albedo)
 end
 
 "Albedo coefficient"
-λ(T, albedo::Albedo) = albedo.λ₁ - (albedo.λ₁ - albedo.λ₂) * L(T, albedo)
+λ(T::Float32, albedo::Albedo) = albedo.λ₁ - (albedo.λ₁ - albedo.λ₂) * L(T, albedo)
 
 "Radiation dynamics"
-function fₜ(T, climate::ClimateModel)
-    baseline, albedo = climate
-    @unpack S₀, η = baseline
-
-    return S₀ * (1 - λ(T, albedo)) - η * T^4
+function fₜ(T::Float32, hogg::Hogg, albedo::Albedo)
+    hogg.S₀ * (1 - λ(T, albedo)) - hogg.η * T^4
 end
 
 "CO2 forcing given log of CO2 concentration"
-function fₘ(m, baseline::Hogg)
-    @unpack G₀, G₁, Mᵖ = baseline
-    return G₀ + G₁ * (m - log(Mᵖ))
+function fₘ(m::Float32, hogg::Hogg)
+    hogg.G₀ + hogg.G₁ * (m - log(hogg.Mᵖ))
 end
 
-function fₘ⁻¹(r, baseline::Hogg)
-    @unpack G₀, G₁, Mᵖ = baseline
-    return log(Mᵖ) + (r - G₀) / G₁
+function fₘ⁻¹(r::Float32, hogg::Hogg)
+    log(hogg.Mᵖ) + (r - hogg.G₀) / hogg.G₁
 end
 
 
 "Drift temperature dynamics"
-function μ(T, m, climate::ClimateModel)
-    baseline = first(climate)
-    return fₜ(T, climate) + fₘ(m, baseline)
+function μ(T::Float32, m::Float32, hogg::Hogg, albedo::Albedo)
+    fₜ(T, hogg, albedo) + fₘ(m, hogg)
 end
 
 
 "Compute CO₂ concentration consistent with temperature T"
-function mstable(T, climate::ClimateModel)
-    baseline = first(climate)
-    fₘ⁻¹(-fₜ(T, climate), baseline)
+function mstable(T::Float32, hogg::Hogg, albedo::Albedo)
+    fₘ⁻¹(-fₜ(T, hogg, albedo), hogg)
 end
 
-Mstable(T, climate::ClimateModel) = exp(mstable(T, climate)) 
+Mstable(T::Float32, hogg::Hogg, albedo::Albedo) = exp(mstable(T, hogg, albedo)) 
