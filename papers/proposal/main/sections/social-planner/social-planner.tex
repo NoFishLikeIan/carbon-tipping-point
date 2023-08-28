@@ -23,47 +23,51 @@ To make sense of this utility specification it is useful to consider two illustr
 
 \subsection{Hamilton-Bellman-Jacobi Equation and the Social Cost of Carbon}
 
-The social planner then seeks to maximise, for all $t$, her utility (\ref{eq:utility}), given a consumption schedule $\control{\chi}: [0, \infty) \mapsto \mathcal [0, 1]$ and an abatement strategy $\control{\alpha}: [0, \infty) \mapsto \mathcal{A}$. \textbf{This is odd.} Let the value function at time $t$, given a state temperature, CO$_2$ stored in natural sincs, atmospheric log-concentration of CO$_2$, and output $(y, m, T, N)$ be defined as \begin{equation}
-    V \coloneqq \sup_{(\control{\alpha}, \control{\chi})} U(\control{\alpha}, \control{\chi}).
+The social planner problem depends on time $t$ and four state variables: temperature $T$, CO$_2$ stored in natural sinks $N$, atmospheric log-concentration of CO$_2$ $m$, and output $y$. For convenience, let $X$ be the vector of state variables at time $t$, taking values in the domain $\mathcal{S}$. The value function is defined as \begin{equation}
+    V(t, X) = \sup_{(\control{\alpha}, \control{\chi})} U(\control{\alpha}, \control{\chi}; t, X),
+\end{equation} where the two controls $\control{\alpha}, \control{\chi}$ are functions $[0, \infty) \times \mathcal{S} \mapsto [0, 1]$. The state vector $X$ follows the drift \begin{equation}
+    w(t, X, \control{\alpha}, \control{\chi}) = \begin{pmatrix}
+        \mu_T(T) + \mu_m(m) \\
+        \delta_m(N) \\
+        \gamma^{\mathrm{b}} - \control{\alpha} \\
+        \varrho + \phi(t, \control{\chi}) - A(t) \beta(t, \control{\alpha}) - \delta_K(T)
+    \end{pmatrix}
 \end{equation}
 
 \begin{proposition}
-    The value function satisfies the Hamilton-Bellman-Jacobi equation \begin{equation}
-        \begin{split}
-            0 = \sup_{(\control{\alpha}, \control{\chi}) \in \mathcal{A} \times \mathcal{C}} \; \Bigg\{ &f\left(C(\control{\chi}), V\right) + \;
-            \Big(\partial_{m} V \Big) \; \Big(\gamma^{\mathrm{p}} - \control{\alpha} \Big) + \Big(\partial_{y} V \Big) \;  \Big(\phi(\control{\chi}) - A \beta(\control{\alpha}) \Big) \Bigg\} \\
-            + \; &\Big(\partial_{N} V\Big) \; \delta_m(N) + \;
-            \Big(\partial_T V \Big) \; \Big(\mu_T(T) + \mu_{m}(m) \Big) + \;
-            \Big(\partial_{y} V \Big) \; \Big(\varrho - \delta_k(T) \Big) \\
-            + \; &\Big(\partial^2_{m} V\Big) \; \sigma^2_m + \Big(\partial^2_{T} V\Big) \; \sigma^2_T + \Big(\partial_t V\Big)
-        \end{split}
+    The value function satisfies the Hamilton-Bellman-Jacobi equation \begin{equation}b
+        0 = \sup_{\control{\alpha}, \control{\chi}} \; \Bigg\{ f\left(\control{\chi} Y, V\right) + \nabla_X V \cdot w + \frac{\sigma_T^2}{2} \; \Big(\partial^2_T V \Big) \Bigg\}
     \end{equation}
 \end{proposition}
 
 \subsection{First order conditions}
 
-The ratio of abated emission $\varepsilon$ is linear in the abatement rate $\control{\alpha}$ \begin{equation}
-    \varepsilon(\control{\alpha}) = 1 - \frac{M}{\xi E^{\mathrm{b}}} \Big(\delta_m(N) + \gamma^{\mathrm{b}} - \control{\alpha}\Big),
-\end{equation} such that \begin{equation}
-    \partial_{\control{\alpha}} \varepsilon = \frac{M}{\xi E^{\mathrm{b}}}.
-\end{equation}x
-
-Using the chain rule, we can write \begin{equation}
-    \partial_{\control{\alpha}} \beta = \partial_{\varepsilon} \beta \; \partial_{\control{\alpha}} \varepsilon = \frac{M}{\omega \xi E^{\mathrm{b}}} \; \varepsilon(\control{\alpha}).
+We can expand the value HJB equation to     
+\begin{equation}
+    \begin{split}
+        0 = \sup_{\control{\alpha}, \control{\chi}} \; \Bigg\{ &f\left(\control{\chi} Y, V\right) + \;
+        \Big(\partial_{m} V \Big) \; \Big(\gamma^{\mathrm{p}} - \control{\alpha} \Big) + \Big(\partial_{y} V \Big) \;  \Big(\phi(\control{\chi}) - A \beta(\control{\alpha}) \Big) \Bigg\} \\
+        + \; &\Big(\partial_{N} V\Big) \; \delta_m(N) + \;
+        \Big(\partial_T V \Big) \; \Big(\mu_T(T) + \mu_{m}(m) \Big) + \;
+        \Big(\partial_{y} V \Big) \; \Big(\varrho - \delta_k(T) \Big) \\
+        + \; &\frac{\sigma_T^2}{2} \; \Big(\partial^2_T V \Big) + \Big(\partial_t V\Big)
+    \end{split}
 \end{equation}
 
-Likewise \begin{equation}
-    \partial_{\control{\chi}} f = Y \partial_{C} f
-\end{equation} and \begin{equation}
-    \partial_{\control{\chi}} \phi = \kappa A^2 (1 - \control{\chi}) - A.
+Using we can compute the first order conditions for $\alpha$ and $\chi$. 
+
+\subsubsection[Abatement]{Abatement, $\alpha$}
+
+Note that the abatement rate is given by \begin{equation}
+    \varepsilon(t, X, \control{\alpha}) = 1 - \frac{M}{\xi E^b(t)} (\delta_m(N) + \gamma^{\mathrm{b}}(t) - \control{\alpha}),
+\end{equation} such that the first order condition is \begin{equation}
+    0 = \big(\partial_m V\big) + \big(\partial_y V\big) \left(\omega \; A(t) \; \frac{M}{\xi E^b(t)} \varepsilon(t, X, \control{\alpha}) \right)
 \end{equation}
 
-\subsection{Economic Problem}
+\subsubsection[Consumption]{Consumption, $\chi$}
 
-Assume the damage function $d(T) = 0$. Then optimal abatement is trivially $\control{\alpha} = 0$ and the only relevant state is $y$. Hence, the Hamilton-Bellman-Jacobi equation simplifies to \begin{equation}
-    0 = f(\control{\chi} \; Y, V) + \Big(\partial_{y} V \Big) \;  \Big(\varrho + \phi(\control{\chi}) - \delta^{\mathrm{p}}_k \Big) + \partial_t V
-\end{equation} and the first order condition with respect to the consumption ratio $\control{\chi}$ is given by \begin{equation}
-    0 = \partial_C f(\control{\chi} \; Y, V) \; Y + \Big(\partial_{y} V \Big) \Big( \kappa A^2 (1 - \control{\chi}) - A \Big)
+\begin{equation}
+    0 = Y \frac{\partial f}{\partial C}(\control{\chi} Y, V) +\big(\partial_y V\big) A(t) \big(\kappa A(t) (1 - \control{\chi}) - 1\big) 
 \end{equation}
 
 \end{document}
