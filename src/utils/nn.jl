@@ -1,48 +1,65 @@
-using Optimisers: Adam, setup
-using Lux: setup as Lsetup
-using Zygote: pullback
+function constructNN(n::Int, m::Int)::Tuple{Lux.Chain, Function}
 
-function makeoptimiser(ps; η)
-    opt = Adam(η)
-    return setup(opt, ps)
-end
+    χskip = SkipConnection(
+        Chain(
+            Dense(n, m),
+            Dense(m, m),
+            Dense(m, 1, Lux.σ)
+        ), 
+        (χ, X) -> (χ, Fχ(X, χ))
+    ) # X → (χ, Fχ)
 
-nn(x, model, ps, st) = model(x, ps, st) |> first
+    αskip = SkipConnection(
+        Chain(
+            Dense(n, m),
+            Dense(m, m),
+            Dense(m, 1, Lux.σ)
+        ), 
+        (α, X) -> (α, Fα(X, α))
+    ) # α → (α, Fα)
+    
+    controlchain = Parallel(
+        (αt, χt, X) -> (
+            X, αt[1], χt[1], w(X, αt[1], χt[1]), αt[2], χt[2]
+        ),
+        αskip, χskip, NoOpLayer() # Passes on X
+    ) # X → X, α, χ, w, Fα, Fχ
+
+    valuechain = Chain(
+        Dense(n, m), Dense(m, m),
+        Dense(m, 1),
+        BranchLayer(
+            WrappedFunction(x -> -Lux.softplus(x)), 
+            WrappedFunction(∂²₁)
+        )
+    ) # X → (V, ∂²V)
+
+    disjointchain = Parallel(
+        (c, v) -> (c[1], c[2], c[3], v[1], v[2], c[4], c[5], c[6]),
+        controlchain, valuechain
+    ) # X -> X, α, χ, V, ∂²V, w, Fα, Fχ
+
+    NN = Chain(
+        disjointchain, 
+        SkipConnection(
+            WrappedFunction(tup -> ∇V′w(tup[4], tup[5], tup[6], tup[7])),
+            (grad, tup) -> (tup[2], tup[3], tup[4], tup[5], grad)
+        )
+    ) # X -> α, χ, V, ∂²v, ∇V′w
 
 
-function train(rng::AbstractRNG, model, epochs;
-    batch::Tuple{Integer, Integer} = (1000, 10), 
-    bounds::Bounds = repeat([(0f0, 1f0)], model[1].in_dims),
-    η = 1f-3)
+    function L(Θ, st, X, σ²; weights = ones(Float32, 3))
+        (_, χ, V, ∂²v, ∇V), st = NN(X, Θ, st)
+        
+        Y = exp.(X[[4], :])
+        χY = χ .* Y
 
-    points, batches = batch
+        ∇V[[1], :] += f.(χY, V, Ref(economy)) .+ (σ² / 2f0) .* ∂²v
+        ∇V[[3], :] += Y .* ∂f_∂c.(χY, V, Ref(economy)) 
 
-    ps, st = Lsetup(rng, model)
-    optstate = makeoptimiser(ps, η = η)
-
-    losspath = Vector{Float32}(undef, epochs * batches)
-    lossvec = zeros(Float32, points)
-
-    for epoch in 1:epochs
-        stime = time()
-        epochloss = 0f0
-
-        x = adaptivesampler(rng, bounds, lossvec)
-
-        for iter in 1:batches
-            (l, iterlossvec, st), back = pullback(p -> loss(x, model, p, st), ps)
-            gs = back((one(l), nothing, nothing, nothing))[1]
-            optstate, ps = Optimisers.update(optstate, ps, gs)
-
-            lossvec .+= iterlossvec
-            epochloss += l
-            losspath[batches * (epoch - 1) + iter] = l
-        end
-
-        endtime = time()
-
-        println("Epoch $epoch in $(round(endtime - stime, digits = 2)) s., total loss: $(epochloss)")
+        return mean(abs2, weights'∇V)
     end
 
-    return ps, st, losspath
+    return NN, L
+
 end
