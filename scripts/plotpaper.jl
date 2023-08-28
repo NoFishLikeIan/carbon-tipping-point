@@ -33,7 +33,7 @@ include("../src/utils/dynamics.jl")
 
 begin # Initialise models and set domains
     albedo = Albedo()
-    baseline = Hogg(σ²ₜ = 0.1)
+    baseline = Hogg(σ²ₜ = 1f-1)
     climate = (baseline, albedo)
 
     Tₗ, Tᵤ = baseline.Tᵖ, baseline.Tᵖ + 13
@@ -53,7 +53,7 @@ begin # Load calibrated data
     @load joinpath(DATAPATH, "calibration.jld2") ipcc
     @unpack Eᵇ, Tᵇ, Mᵇ, N₀, γparameters = ipcc
 
-    γᵇ(t) = γ(t, γparameters[1:3], γparameters[4])
+    γᵇ(t) = γ(t, Float32.(γparameters[1:3]), Float32.(γparameters[4]))
 end
 
 # -- Climate dynamics plots
@@ -162,6 +162,7 @@ function simulatebau(Δλ; trajectories = 1000) # Business as Usual, ensemble si
     return bausim, baunullcline
 end
 
+T = 80
 yearlytime = 0:1:T
 
 begin # Growth of carbon concentration

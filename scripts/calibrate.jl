@@ -56,6 +56,7 @@ end
 results = Dict(
     :Eᵇ => Eᵇ, :Tᵇ => Tᵇ, :Mᵇ => Mᵇ, :N₀ => N₀,
     :γparameters => (γparameters..., T0),
+    :horizon => 80
 )
 
 save(
