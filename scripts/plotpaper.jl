@@ -32,6 +32,11 @@ include("../src/model/init.jl")
 include("../src/utils/plotting.jl")
 include("../src/utils/dynamics.jl")
 
+@changeprecision Float32 begin
+    @load joinpath(DATAPATH, "calibration.jld2") ipcc
+    @unpack Mᵇ, Tᵇ, N₀, horizon = ipcc
+end
+
 begin # labels and axis
     TEMPLABEL = raw"Temperature deviations $T - T^{\mathrm{p}}$"
     Tspace = range(hogg.Tᵖ, 13f0 + hogg.Tᵖ; length = 51)
@@ -43,9 +48,6 @@ begin # labels and axis
 end
 
 @changeprecision Float32 begin # Load IPCC data
-    @load joinpath(DATAPATH, "calibration.jld2") ipcc
-    @unpack Mᵇ, Tᵇ, N₀, horizon = ipcc
-
     Mᵇ = Float32.(Mᵇ)
     Tᵇ = Float32.(Tᵇ)
     N₀ = Float32(N₀)
@@ -53,6 +55,8 @@ end
 
     const Tₗ, Tᵤ = extrema(Tspace)
     const Mₗ, Mᵤ = hogg.Mᵖ, mstable(Tₗ, hogg, albedo)
+
+    const n₀ = N₀ / hogg.M₀
 end
 
 begin # Albedo plot
@@ -178,7 +182,7 @@ function simulatebau(Δλ::Float32; trajectories = 1000) # Business as Usual, en
     
     fn = SDEFunction(F!, G!, mass_matrix = mass_matrix(hogg))
     
-    problembse = SDEProblem(fn, G!, [hogg.T₀, log(hogg.M₀), N₀], (0, T), bauparameters)
+    problembse = SDEProblem(fn, G!, [hogg.T₀, log(hogg.M₀)], (0, T), bauparameters)
     
     ensemblebse = EnsembleProblem(problembse)
     
@@ -293,14 +297,14 @@ end
 
 begin # Density of business as usual scenario
     yearsofdensity = 10:10:80
-    densedomain = collect(0:0.1:12)
+    densedomain = collect(0:0.01:12)
     
-    baupossim, _ = simulatebau(8f-3; trajectories = 51)
+    baupossim, _ = simulatebau(8f-2; trajectories = 1001)
     decadetemperatures = [first(componentwise_vectors_timepoint(baupossim, t)) .- hogg.Tᵖ for t in yearsofdensity]
     dists = (x -> kde(x)).(decadetemperatures)
     densities = [x -> pdf(d, x) for d in dists]
 
-    poscolor = PALETTE[2]
+    poscolor = PALETTE[1]
     densedomain_ext = [[densedomain[1]]; densedomain; [densedomain[end]]]
 
     densityfig = @pgf Axis(
@@ -359,17 +363,17 @@ begin # Density of business as usual scenario
     densityfig
 end
 
-begin # Carbon decay
+begin # Carbon decay calibration
     
     sinkspace = range(N₀, 1.2f0 * N₀; length = 101)
     decay = [δₘ(N, hogg) for N in sinkspace]
 
     decayfig = @pgf Axis(
         {
-            width = raw"1\textwidth",
-            height = raw"0.6\textwidth",
+            width = raw"0.7\textwidth",
+            height = raw"0.5\textwidth",
             grid = "both",
-            xlabel = raw"Carbon sink $N$",
+            xlabel = raw"Carbon stored in sinks $N$",
             ylabel = raw"Decay of CO$_2$ in the atmosphere $\delta_m$",
             no_markers,
             ultra_thick,
@@ -392,4 +396,47 @@ begin # Carbon decay
     end
 
     decayfig
+end
+
+begin # Carbon decay path
+    bausim, baunullcline = simulatebau(0f0; trajectories = 1)
+    M = exp.([u[2] for u in bausim[1].u])
+    decaysim = δₘ.(n₀ .* M, Ref(hogg))
+    
+    Msparse = exp.([Float32(bausim(y)[1][2]) for y in 0:10:T])
+    decaysimsparse = δₘ.(n₀ .* Msparse, Ref(hogg))
+
+    decaypathfig = @pgf Axis(
+        {
+            width = raw"0.7\textwidth",
+            height = raw"0.5\textwidth",
+            grid = "both",
+            xlabel = raw"Carbon concentration $M$",
+            ylabel = raw"Decay of CO$_2$ in the atmosphere $\delta_m$",
+            no_markers,
+            ultra_thick,
+            xmin = hogg.M₀, xmax = maximum(M),
+            ymin = -1e-3
+        }
+    )
+
+    @pgf push!(decaypathfig,
+        Plot({ color = PALETTE[1], ultra_thick }, Coordinates(M, decaysim))
+    )
+
+    decayscatter = @pgf Plot({
+        very_thick, 
+        color = "black", 
+        mark = "*", only_marks,
+        mark_options = {scale = 1.5, draw_opacity = 0}
+    }, Coordinates(Msparse, decaysimsparse))
+
+    @pgf push!(decaypathfig, decayscatter)
+
+
+    if SAVEFIG
+        PGFPlotsX.save(joinpath(PLOTPATH, "decaypathfig.tikz"), decaypathfig; include_preamble = true) 
+    end
+
+    decaypathfig
 end
