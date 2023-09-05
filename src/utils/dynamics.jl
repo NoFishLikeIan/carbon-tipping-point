@@ -5,21 +5,21 @@ Drift dynamics of (T, m, N) given an abatement function γᵇ(T, m) and a busine
 """
 function F!(du, u, parameters, t)
 	# Parameters
-	climate, γᵇ, α = parameters
+	hogg, albedo, γᵇ, α = parameters
 	
 	T, m, N = @view u[1:3]
 	M = exp(m)
 
-	du[1] = μ(T, m, climate)
+	du[1] = μ(T, m, hogg, albedo)
 	du[2] = γᵇ(t) - α(T, m)
-	du[3] = δₘ(N, first(climate)) * M
+	du[3] = δₘ(N, hogg) * M
 end
 
 function G!(du, u, parameters, t)
-	baseline = parameters[1][1]	
+	hogg = first(parameters)
 
-	du[1] = baseline.σ²ₜ 
-	du[2] = baseline.σ²ₘ
+	du[1] = hogg.σ²ₜ 
+	du[2] = 0.
 	du[3] = 0.
 end
 

@@ -46,13 +46,15 @@ end
 
 # Five dimensions
 "Five stencil ∇ₓy in direction dims(w) = (1, 5). Assume y is a (1, n) matrix with entries y = { f(x[i, j, k, l, m]) }ₙ."
-∇₅(y::Matrix{Float32}, w::Matrix{Float32}) = ∇₅!(similar(y), y, w)
+function ∇₅(y::Matrix{Float32}, w::Matrix{Float32})    
+    ∇₅!(similar(y), y, w)
+end
 function ∇₅!(D::Matrix{Float32}, y::Matrix{Float32}, w::Matrix{Float32})
     Δ = floor(Int, size(y, 2)^(1 / 5)) # Assumes n = Δ^5; |x| ≡ Δ 
 
     Δ², Δ³, Δ⁴ = Δ^2, Δ^3, Δ^4
     
-    @tturbo for jdx in axes(D, 2)   
+    @inbounds for jdx in axes(D, 2)   
         i = 1 + mod(jdx - 1, Δ)
         j = 1 + mod((jdx - i) ÷ Δ, Δ)
         k = 1 + mod((jdx - i - (j - 1) * Δ) ÷ (Δ²), Δ)
@@ -126,14 +128,18 @@ Computes the three necessary gradients:
 
 The output is a row major directional derivative matrix D (3 × n).
 "
-∇V′w(V::Matrix{Float32}, w::Matrix{Float32}, Fα::Matrix{Float32}, Fχ::Matrix{Float32}) = ∇V′w!(Matrix{Float32}(undef, 3, size(V, 2)), V, w, Fα, Fχ)
-function ∇V′w!(D::Matrix{Float32}, V::Matrix{Float32}, w::Matrix{Float32}, Fα::Matrix{Float32}, Fχ::Matrix{Float32})::Matrix{Float32}
+function ∇V′w(V, w, Fα, Fχ)
+    D = Zygote.Buffer(V, (3, size(V, 2)))
+    ∇V′w!(D, V, w, Fα, Fχ)
+    return copy(D)
+end
+function ∇V′w!(D, V, w, Fα, Fχ)
     Δ = floor(Int, size(V, 2)^(1 / 5)) # Assumes the grid for V is Δ^5; |x| ≡ Δ
 
     Δ², Δ³, Δ⁴ = Δ^2, Δ^3, Δ^4
     
     # Iteration for w
-    @tturbo for jdx in axes(D, 2)   
+    @inbounds for jdx in axes(D, 2)   
         i = 1 + mod(jdx - 1, Δ)
         j = 1 + mod((jdx - i) ÷ Δ, Δ)
         k = 1 + mod((jdx - i - (j - 1) * Δ) ÷ (Δ²), Δ)
@@ -205,18 +211,20 @@ end
 
 "Compute second derivative of y in direction of the first input x₁:
 ( ∂²f(x₁, x₂, x₃, x₄, x₅) / ∂x₁² )"
-∂²₁(y::Matrix{Float32}) = ∂²₁!(similar(y), y)
-function ∂²₁!(D::Matrix{Float32}, y::Matrix{Float32})
+function ∂²₁(y)
+    D = Zygote.Buffer(y)
+    ∂²₁!(D, y)
+    return copy(D)
+end
+function ∂²₁!(D, y)
     Δ = floor(Int, size(y, 2)^(1 / 5)) # Assumes n = Δ^5; |x| ≡ Δ 
-    
-    D .= (-2f0 * ϵ⁻²) .* y
-    
-    @tturbo for jdx in axes(D, 2)   
+        
+    @inbounds for jdx in axes(D, 2)   
         i = 1 + mod(jdx - 1, Δ)
         jklm = jdx - (i - 1)
 
-        D[jdx] += ϵ⁻² * (
-            y[jklm + min(i + 1, Δ) - 1] + y[jklm + max(i - 1, 1) - 1]
+        D[jdx] = ϵ⁻² * (
+            y[jklm + min(i + 1, Δ) - 1] + y[jklm + max(i - 1, 1) - 1] - 2f0 * y[jdx]
         )
     end
 

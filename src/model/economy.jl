@@ -29,14 +29,14 @@ Base.@kwdef struct Economy
 end
 
 """
-Parametric form of γ(t), t: [0, 1] → [0, 1]
+Parametric form of γ: (t0, ∞) → [0, 1]
 """
-function γ(t::Float32, p::NTuple{3, Float32}, t0::Float32)
+function γ(t, p::NTuple{3, Float32}, t0)
     p[1] + p[2] * (t - t0) + p[3] * (t - t0)^2
 end
 
 "Epstein-Zin aggregator"
-function f(c::Float32, u::Float32, economy::Economy)
+function f(c, u, economy::Economy)
     @unpack ρ, θ, ψ = economy
 
     if ψ ≈ 1
@@ -47,7 +47,7 @@ function f(c::Float32, u::Float32, economy::Economy)
         )
     end
 
-    # FIXME check for ψ ≠ 1
+    # FIXME: check for ψ ≠ 1
     ψ⁻¹ = 1 / ψ
 
     return ρ * (1 - θ) * inv(1 - ψ⁻¹) * u * (
@@ -56,7 +56,7 @@ function f(c::Float32, u::Float32, economy::Economy)
 end
 
 
-function ∂f_∂c(c::Float32, u::Float32, economy::Economy)
+function ∂f_∂c(c, u, economy::Economy)
     @unpack ρ, θ, ψ = economy
 
     if ψ ≈ 1
@@ -70,34 +70,34 @@ function ∂f_∂c(c::Float32, u::Float32, economy::Economy)
 end
 
 "Cost of abatement as a fraction of GDP"
-function β(t::Float32, ε::Float32, economy::Economy)
+function β(t, ε, economy::Economy)
     return (ε^2 / 2) * exp(-economy.ωᵣ * t)
 end
 
 
-function d(T::Float32, economy::Economy, baseline::Hogg)
+function d(T, economy::Economy, baseline::Hogg)
     fct = 1 - (1 / economy.damagehalftime)
     ΔT = fct * baseline.Tᵖ + (1 - fct) * (baseline.Tᵖ - T)
 
     return inv(1 + exp(ΔT / 3))
 end
 
-function δₖ(T::Float32, economy::Economy, hogg::Hogg)
+function δₖ(T, economy::Economy, hogg::Hogg)
     @unpack δₖᵖ = economy
 
     return δₖᵖ + (1 - δₖᵖ) * d(T, economy, hogg)
 end
 
-function ϕ(χ::Float32, A::Real, economy::Economy)
+function ϕ(χ, A::Real, economy::Economy)
     I = (1 - χ) * A
 
     return I * (1 - I * economy.κ / 2)
 end
 
-function ϕ′(χ::Float32, A::Real, economy::Economy)
+function ϕ′(χ, A::Real, economy::Economy)
     return economy.κ * (1 - χ) * A^2 - A
 end
 
-function A(t::Float32, economy::Economy)
+function A(t, economy::Economy)
     return economy.A₀ * exp(economy.ϱ * t)
 end

@@ -2,8 +2,9 @@ include("climate.jl")
 include("economy.jl")
 
 # Construct the interpolation functions in t ∈ [0, 1]. A bit ugly hard coding but it works.
-const γparams = (4.02245065f-3, 2.6250145f-4, 1.7798517501546115f-6)
-γᵇ(t::Float32) = γ(t, γparams, 15f0)
+const γparams = (4.0245065f-3, 2.6250145f-4, -1.7798518f-6)
+
+γᵇ(t) = γ(t, γparams, -15f0)
 
 const Eᵇᵥ = Float32.([7.253094489195755, 8.932568341644291, 10.796121480629076, 12.95251456335507, 15.023632003580104, 16.557901521544558, 16.672744124792224, 16.122961603375526])
 
@@ -17,7 +18,7 @@ const X̲ = [hogg.T̲ hogg.N̲ hogg.m̲ economy.y̲ 0f0]'
 fromunit(X::Matrix{Float32}) = X .* (X̄ .- X̲) .+ X̲
 tounit(X::Matrix{Float32}) = (X .- X̲) ./ (X̄ .- X̲)
 
-function Eᵇ(t::Float32)
+function Eᵇ(t)
     dt = economy.t₁ / (length(Eᵇᵥ) - 1)
 
     div, port = divrem(t, dt)
@@ -36,7 +37,7 @@ function ε(t, N, MoverE, α::Matrix{Float32})::Matrix{Float32}
     1f0 .- MoverE .* (δₘ.(N, Ref(hogg)) .+ γᵇ.(t) .- α)
 end
 
-function Fα(X::Matrix{Float32}, α::Matrix{Float32})::Matrix{Float32}
+function Fα(X, α)
 
     N = @view X[[2], :]
     m = @view X[[3], :]
@@ -53,13 +54,13 @@ function Fα(X::Matrix{Float32}, α::Matrix{Float32})::Matrix{Float32}
 end
 
 
-function Fχ(X::Matrix{Float32}, χ::Matrix{Float32})::Matrix{Float32}
+function Fχ(X, χ)
 
     A.(X[[5], :], Ref(economy)) .* (economy.κ .* A.(X[[5], :], Ref(economy)) .* (1 .- χ) .- 1f0)
 
 end
 
-function w(X::Matrix{Float32}, α::Matrix{Float32}, χ::Matrix{Float32})::Matrix{Float32}
+function w(X, α, χ)
     T = @view X[[1], :]
     N = @view X[[2], :]
     m = @view X[[3], :]
