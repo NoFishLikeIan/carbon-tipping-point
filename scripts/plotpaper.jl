@@ -73,7 +73,7 @@ begin # Albedo plot
             height = raw"0.6\textwidth",
             grid = "both",
             xlabel = TEMPLABEL,
-            ylabel = raw"Albedo coefficient $\lambda(x)$",
+            ylabel = raw"Albedo coefficient $\lambda(T)$",
             xticklabels = temperatureticks[2],
             xtick = 0:1:ΔTᵤ,
             no_markers,
@@ -439,4 +439,36 @@ begin # Carbon decay path
     end
 
     decaypathfig
+end
+
+
+begin # Albedo plot
+
+    damagefig = @pgf Axis(
+        {
+            width = raw"1\textwidth",
+            height = raw"0.6\textwidth",
+            grid = "both",
+            xlabel = TEMPLABEL,
+            ylabel = raw"Depreciation rate of capital $\delta_k(T)$",
+            xticklabels = temperatureticks[2],
+            xtick = 0:1:ΔTᵤ,
+            no_markers,
+            ultra_thick,
+            xmin = 0, xmax = ΔTᵤ,
+            ytick = 0:0.1:1
+        }
+    )
+
+    @pgf damagecurve = Plot({color = PALETTE[2]},
+        Coordinates(Tspacedev, [δₖ(T, economy, hogg) for T in Tspace])
+    )
+
+    push!(damagefig, damagecurve)
+
+    if SAVEFIG
+        PGFPlotsX.save(joinpath(PLOTPATH, "damagefig.tikz"), damagefig; include_preamble = true) 
+    end
+
+    damagefig
 end
