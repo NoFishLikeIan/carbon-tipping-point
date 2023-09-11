@@ -443,5 +443,6 @@ Manifest.toml
 logs
 .token
 
-
+# Custom
 remote
+papers/presentations/figures

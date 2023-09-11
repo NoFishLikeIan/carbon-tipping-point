@@ -1,8 +1,10 @@
 using UnPack
 
-using Lux
-using NNlib
-using Optimisers, Zygote
+using Lux, NNlib
+using ComponentArrays
+
+using LineSearches, Optimization, OptimizationOptimJL
+using LuxAMDGPU
 
 using StatsBase
 
@@ -16,81 +18,47 @@ include("../src/model/init.jl")
 include("../src/utils/derivatives.jl")
 include("../src/utils/nn.jl")
 
+function generatesample()
+
+
+end
+
 X₀ = reshape(
-    [hogg.T₀, hogg.N̲, log(hogg.M₀), economy.y₀, 0f0],
-    (5, 1)
+    [hogg.T₀, log(hogg.M₀), economy.y₀, 0f0],
+    (4, 1)
 ) |> tounit
 
-cube = [paddedrange(x₀, x₀ + 5.1f0ϵ) for x₀ in X₀]
+cube = [paddedrange(x₀, x₀ + 0.1f0) for x₀ in X₀]
 
-const X = Matrix{Float32}(undef, 5, length(first(cube))^5)
+const X = Matrix{Float32}(undef, 4, length(first(cube))^4)
 for (i, x) in enumerate(Iterators.product(cube...))
     X[:, i] .= x
 end
 
 const n = size(X, 1)
-const m = n # 2^7
+const m = 2^6
 
-NN = Chain(
-    Dense(n, m, relu),
-    Dense(m, m, relu),
-    BranchLayer(
-        Dense(m, 1, Lux.σ),
-        Dense(m, 1, Lux.σ),
-        Chain(
-            Dense(m, 1),
-            WrappedFunction(x -> -Lux.softplus(x))
-        )
-    )
-)
-    
-function lossfn(Θ, st, X, σ²; weights = ones(Float32, 3))
-    (α, χ, V), st = NN(X, Θ, st)
-
-    ∇V = ∇V′w(V, w(X, α, χ), Fα(X, α), Fχ(X, χ))
-    
-    Y = exp.(X[[4], :])
-    χY = χ .* Y
-
-    return mean(abs2,
-        weights[1] * (∇V[[1], :] .+ f.(χY, V, Ref(economy)) .+ (σ² / 2f0) .* ∂²₁(V)) +
-        weights[1] * ∇V[[2], :] +
-        weights[3] * (∇V[[3], :] .+ Y .* ∂f_∂c.(χY, V, Ref(economy)))
-    ), st
-end
-
-function trainstep!(optimiser, Θ, st, σ²)
-	(l, st), back = pullback(p -> lossfn(p, st, X, σ²), Θ)
-	gs = back((1f0, nothing))[1]
-	
-	optimiser, Θ = Optimisers.update!(optimiser, Θ, gs)
-
-	return optimiser, Θ, st, l
-end
-
-function train(rng::AbstractRNG, nn, σ²; iterations = 100, initialisation = Lux.setup(rng, nn), η = 1f-3)
-
-	Θ, st = deepcopy.(initialisation)
-	
-	optimiser = Optimisers.setup(Optimisers.Adam(η), Θ)
-
-    losspath = Vector{Float32}(undef, iterations)
-
-	for iter in 1:iterations
-		optimiser, Θ, st, l = trainstep!(optimiser, Θ, st, σ²)
-		losspath[iter] = l
-	end
-
-	return Θ, st, losspath
-end
-
+const NN, lossfn = constructNN(n, m)
 
 # Hot load and check allocations
-Θ₀, st₀ = Lux.setup(rng, NN)
-@time NN(X, Θ₀, st₀)
-@time lossfn(Θ₀, st₀, X, 1f0)
+Θ₀, st₀ = Lux.setup(rng, NN);
+NN(X, Θ₀, st₀);
+lossfn(Θ₀, st₀, X, 1f0);
 
-testoptimiser = Optimisers.setup(Optimisers.Adam(1f-3), Θ₀)
-@time trainstep!(testoptimiser, Θ₀, st₀, 1f0)
+const losspath = Float32[]
+function callback(Θ, l, out)
+	push!(losspath, l)
+	return false
+end
 
-@time train(rng, nn; iterations = 1, initialisation = (Θ₀, st₀), η = 1f-3)
+ps = ComponentArray{Float32}(Θ₀);
+
+adtype = Optimization.AutoZygote()
+optf = Optimization.OptimizationFunction((Θ, p) -> lossfn(Θ, st₀, X, 1f0), adtype)
+
+optprob = Optimization.OptimizationProblem(optf, ps)
+solver = BFGS(; initial_stepnorm = 0.01, linesearch = LineSearches.BackTracking())
+
+# Hotload
+Optimization.solve(optprob, solver; callback, maxiters = 1);
+@time res = Optimization.solve(optprob, solver; callback, maxiters = 1000);

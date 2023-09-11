@@ -12,8 +12,8 @@ const economy = Economy()
 const hogg = Hogg()
 const albedo = Albedo()
 
-const X̄ = [hogg.T̄ hogg.N̅ hogg.m̄ economy.ȳ economy.t₁]'
-const X̲ = [hogg.T̲ hogg.N̲ hogg.m̲ economy.y̲ 0f0]'
+const X̄ = [hogg.T̄ hogg.m̄ economy.ȳ economy.t₁]'
+const X̲ = [hogg.T̲ hogg.m̲ economy.y̲ 0f0]'
 
 fromunit(X::Matrix{Float32}) = X .* (X̄ .- X̲) .+ X̲
 tounit(X::Matrix{Float32}) = (X .- X̲) ./ (X̄ .- X̲)
@@ -29,51 +29,36 @@ function Eᵇ(t)
     Eᵇᵥ[idx] * (1 - α) + Eᵇᵥ[idx + 1] * α
 end
 
-function εcomp(t, N, m, α::Matrix{Float32})::Matrix{Float32}
-    ε(t, N,  exp.(m) ./ Eᵇ.(t), α)
-end
-
-function ε(t, N, MoverE, α::Matrix{Float32})::Matrix{Float32}
-    1f0 .- MoverE .* (δₘ.(N, Ref(hogg)) .+ γᵇ.(t) .- α)
+function ε(t, M, α::Matrix{Float32})::Matrix{Float32}
+    1f0 .- (M ./ Eᵇ.(t)) .* (δₘ.(hogg.n₀ .* M, Ref(hogg)) .+ γᵇ.(t) .- α)
 end
 
 function Fα(X, α)
+    m = @view X[[2], :]
+    t = @view X[[4], :]
 
-    N = @view X[[2], :]
-    m = @view X[[3], :]
-    t = @view X[[5], :]
-
-    MoverE = exp.(m) ./ Eᵇ.(t)
-
-
-    [
-        1f0 
-        economy.ωᵣ * A.(t, Ref(economy)) .* MoverE .* ε(N, MoverE, t, α)
-    ]
-
+    M = exp.(m)
+    economy.ωᵣ * A.(t, Ref(economy)) .* (M ./ Eᵇ.(t)) .* ε(t, M, α)
 end
 
 
 function Fχ(X, χ)
-
-    A.(X[[5], :], Ref(economy)) .* (economy.κ .* A.(X[[5], :], Ref(economy)) .* (1 .- χ) .- 1f0)
+    t = @view X[[4], :]
+    A.(t, Ref(economy)) .* (economy.κ .* A.(t, Ref(economy)) .* (1 .- χ) .- 1f0)
 
 end
 
-function w(X, α, χ)
+function drift(X, α, χ)
     T = @view X[[1], :]
-    N = @view X[[2], :]
-    m = @view X[[3], :]
-    t = @view X[[5], :]
+    m = @view X[[2], :]
+    t = @view X[[4], :]
 
     eref = Ref(economy)
     href = Ref(hogg)
 
     [
         μ.(T, m, href, Ref(albedo))
-        δₘ.(N, href)
         γᵇ.(t) - α
-        economy.ϱ .+ ϕ.(χ, A.(t, eref), eref) .- A.(t, eref) .* β.(t, εcomp(t, N, m, α), eref) .- δₖ.(T, eref, href)
-        ones(Float32, 1, size(X, 2))
+        economy.ϱ .+ ϕ.(χ, A.(t, eref), eref) .- A.(t, eref) .* β.(t, ε(t, exp.(m), α), eref) .- δₖ.(T, eref, href)
     ]
 end

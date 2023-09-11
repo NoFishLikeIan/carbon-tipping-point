@@ -1,5 +1,5 @@
 using NNlib: conv
-using LoopVectorization: @tturbo, @turbo
+using Zygote: Buffer
 
 const ϵ = cbrt(eps(Float32))
 const ϵ⁻¹ = inv(ϵ)
@@ -119,7 +119,7 @@ end
 # ---- Ad hoc functions ----
 
 "
-Takes a row major V (1 × n) and three directions w (1 × 5), Fα (1 × 2), and Fχ (1 × 1). 
+Takes a row major V (1 × n) and three directions w (1 × 3), Fα (1 × 2), and Fχ (1 × 1). The vector w = μ(t, X). The ∂ₜV is multiplied by 1.
 
 Computes the three necessary gradients:
 1. HJB: ∇V⋅w
@@ -128,96 +128,78 @@ Computes the three necessary gradients:
 
 The output is a row major directional derivative matrix D (3 × n).
 "
-function ∇V′w(V, w, Fα, Fχ)
-    D = Zygote.Buffer(V, (3, size(V, 2)))
-    ∇V′w!(D, V, w, Fα, Fχ)
+function ∇V′μ(V, w, ∂αy, ∂χy)
+    D = Buffer(V, (3, size(V, 2)))
+    ∇V′μ!(D, V, w, ∂αy, ∂χy)
     return copy(D)
 end
-function ∇V′w!(D, V, w, Fα, Fχ)
-    Δ = floor(Int, size(V, 2)^(1 / 5)) # Assumes the grid for V is Δ^5; |x| ≡ Δ
+function ∇V′μ!(D, V, w, ∂αy, ∂χy)
+    Δ = floor(Int, size(V, 2)^(1 / 4)) # Assumes the grid for V is Δ^4; |x| ≡ Δ
 
-    Δ², Δ³, Δ⁴ = Δ^2, Δ^3, Δ^4
+    Δ², Δ³ = Δ^2, Δ^3
     
-    # Iteration for w
+    # Iteration for μ
     @inbounds for jdx in axes(D, 2)   
         i = 1 + mod(jdx - 1, Δ)
         j = 1 + mod((jdx - i) ÷ Δ, Δ)
         k = 1 + mod((jdx - i - (j - 1) * Δ) ÷ (Δ²), Δ)
         l = 1 + mod((jdx - i - (j - 1) * Δ - (k - 1) * Δ²) ÷ (Δ³), Δ)
-        m = 1 + mod((jdx - i - (j - 1) * Δ - (k - 1) * Δ² - (l - 1) * Δ³) ÷ Δ⁴, Δ)
 
-        jklm = jdx - (i - 1)
-        iklm = jdx - (j - 1) * Δ
-        ijlm = jdx - (k - 1) * Δ²
-        ijkm = jdx - (l - 1) * Δ³
-        ijkl = jdx - (m - 1) * Δ⁴
+        jkl = jdx - (i - 1)
+        ikl = jdx - (j - 1) * Δ
+        ijl = jdx - (k - 1) * Δ²
+        ijk = jdx - (l - 1) * Δ³
 
-        ∂₃ = 8f0 * (
-            V[ijlm + Δ² * (min(k + 1, Δ) - 1)] -
-            V[ijlm + Δ² * (max(k - 1, 1) - 1)]
+        ∂T = 8f0 * (
+            V[jkl + min(i + 1, Δ) - 1] -
+            V[jkl + max(i - 1, 1) - 1]
         ) - (
-            V[ijlm + Δ² * (min(k + 2, Δ) - 1)] - 
-            V[ijlm + Δ² * (max(k - 2, 1) - 1)]
+            V[jkl + min(i + 2, Δ) - 1] - 
+            V[jkl + max(i - 2, 1) - 1]
         )
 
-        ∂₄ = 8f0 * (
-            V[ijkm + Δ³ * (min(l + 1, Δ) - 1)] -
-            V[ijkm + Δ³ * (max(l - 1, 1) - 1)]
+        ∂m = 8f0 * (
+                V[ikl + Δ * (min(j + 1, Δ) - 1)] -
+                V[ikl + Δ * (max(j - 1, 1) - 1)]
+            ) - (
+                V[ikl + Δ * (min(j + 2, Δ) - 1)] - 
+                V[ikl + Δ * (max(j - 2, 1) - 1)]
+            )
+            
+        ∂y = 8f0 * (
+            V[ijl + Δ² * (min(k + 1, Δ) - 1)] -
+            V[ijl + Δ² * (max(k - 1, 1) - 1)]
         ) - (
-            V[ijkm + Δ³ * (min(l + 2, Δ) - 1)] - 
-            V[ijkm + Δ³ * (max(l - 2, 1) - 1)]
+            V[ijl + Δ² * (min(k + 2, Δ) - 1)] - 
+            V[ijl + Δ² * (max(k - 2, 1) - 1)]
         )
+
+        ∂t = 24f0V[ijk + Δ³ * (min(l + 1, Δ) - 1)] - 
+             6f0V[ijk + Δ³ * (min(l + 2, Δ) - 1)] -
+             18f0V[jdx]
+            
 
         # ∇V⋅w
         D[1, jdx] = (ϵ⁻¹ / 12f0) * (
-            # Dimension T  
-            w[1] * (   
-                8f0 * (
-                    V[jklm + min(i + 1, Δ) - 1] -
-                    V[jklm + max(i - 1, 1) - 1]
-                ) - (
-                    V[jklm + min(i + 2, Δ) - 1] - 
-                    V[jklm + max(i - 2, 1) - 1]
-                )
-            ) + 
-            # Dimension N
-            w[2] * (   
-                8f0 * (
-                    V[iklm + Δ * (min(j + 1, Δ) - 1)] -
-                    V[iklm + Δ * (max(j - 1, 1) - 1)]
-                ) - (
-                    V[iklm + Δ * (min(j + 2, Δ) - 1)] - 
-                    V[iklm + Δ * (max(j - 2, 1) - 1)]
-                )
-            ) + 
-            # Dimension m
-            w[3] * ∂₃ + 
-            # Dimension y
-            w[4] * ∂₄ +  
-            # Dimension t, use forward difference
-            w[5] *  (   
-                24f0V[ijkl + Δ⁴ * (min(m + 1, Δ) - 1)] - 
-                6f0V[ijkl + Δ⁴ * (min(m + 2, Δ) - 1)] -
-                18f0V[jdx]
-            )
+            w[1, jdx] * ∂T + w[2, jdx] * ∂m + w[3, jdx] * ∂y + ∂t
         )
 
-        D[2, jdx] = (ϵ⁻¹ / 12f0) * (∂₃ * Fα[1] + ∂₄ * Fα[2]) # ∇V₃₄⋅Fα
-        D[3, jdx] = (ϵ⁻¹ / 12f0) * ∂₄ * Fχ[1] # ∇V₄ ⋅ Fχ
+        D[2, jdx] = (ϵ⁻¹ / 12f0) * (∂m + ∂y * ∂αy[jdx]) # ∇V₃₄⋅∂αy
+        D[3, jdx] = (ϵ⁻¹ / 12f0) * ∂y * ∂χy[jdx] # ∇V₄⋅∂χy
     end
 
     return D
 end
 
 "Compute second derivative of y in direction of the first input x₁:
-( ∂²f(x₁, x₂, x₃, x₄, x₅) / ∂x₁² )"
+( ∂²f(x₁, x₂, x₃, x₄) / ∂x₁² )"
 function ∂²₁(y)
-    D = Zygote.Buffer(y)
+    D = Buffer(y)
     ∂²₁!(D, y)
     return copy(D)
 end
 function ∂²₁!(D, y)
-    Δ = floor(Int, size(y, 2)^(1 / 5)) # Assumes n = Δ^5; |x| ≡ Δ 
+    Δ = floor(Int, size(y, 2)^(1 / 4)) # Assumes n = Δ^4; |x| ≡ Δ 
         
     @inbounds for jdx in axes(D, 2)   
         i = 1 + mod(jdx - 1, Δ)

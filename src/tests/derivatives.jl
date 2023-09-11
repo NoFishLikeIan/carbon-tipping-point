@@ -35,84 +35,54 @@ ĝ = g.(x', x)
 
 @test all(abs.(∇₂(ĝ, w₂) .- ∇g.(x', x)[idxtwopad, idxtwopad]) .< ε¹)
 
-# Five dimensions
+# Four dimensions
 xsmall = paddedrange(0.5f0, 0.55f0)
 idxpadsmall = 3:(length(xsmall) - 2)
 Δ = length(xsmall)
 
 # Generating data 
-w₅ = reshape([1f0, 3f0, 2f0, 1f0, 1f0], 1, 5)
+h(a, b, c, d) = exp(sin(a * b * c * d))
+∇h(a, b, c, d) = cos(a * b * c * d) * exp(a * b * c * d) * [ b * c * d, a * c * d, a * b * d, a * b * c]
 
-h(a, b, c, d, e) = exp(sin(a * b * c * d * e))
-∇h(a, b, c, d, e) = cos(a * b * c * d * e) * exp(a * b * c * d * e) * [ b * c * d * e, a * c * d * e, a * b * d * e, a * b * c * e, a * b * c * d]
-
-X = Iterators.product(fill(vec(xsmall), 5)...) |> collect |> vec;
+X = Iterators.product(fill(vec(xsmall), 4)...) |> collect |> vec;
 
 y = reshape((z -> h.(z...)).(X), 1, length(X));
-y′ = reshape((z -> first(w₅ * ∇h.(z...))).(Iterators.product(fill(vec(xsmall), 5)...)), 1, length(X));
-
-# Testing indexing
-@time D = ∇₅(y, w₅);
-
-Darray = reshape(D, Δ, Δ, Δ, Δ, Δ);
-y′array = reshape(y′, Δ, Δ, Δ, Δ, Δ);
-
-@test all(abs.((Darray - y′array)[idxpadsmall, idxpadsmall, idxpadsmall, idxpadsmall, idxpadsmall]) .< ε¹)
-
-# Size testing
-xlarge = paddedrange(0f0, 0.1f0)
-d = length(xlarge)
-M = reshape(rand(Float32, d, d, d, d, d), 1, d^5);
-
-@btime ∇₅!(M, M, w₅);
-
-# Second derivative
-∂²₁h(a, b, c, d, e) = -h(a, b, c, d, e) * (b * c * d * e)^2 * (sin(a * b * c * d * e) - cos(a * b * c * d * e)^2)
-
-y′′ = reshape((z -> ∂²₁h.(z...)).(X), 1, length(X));
-
-@time D = ∂²₁(y);
-
-y′′array = reshape(y′′, Δ, Δ, Δ, Δ, Δ);
-Darray = reshape(D, Δ, Δ, Δ, Δ, Δ);
-
-errors = abs.((Darray - y′′array)[idxpadsmall, idxpadsmall, idxpadsmall, idxpadsmall, idxpadsmall]);
-
-@test all(errors .< ε²)
 
 # Directional derivative
-w = ones(Float32, 1, 5)
-Fα = ones(Float32, 1, 2)
-Fχ = ones(Float32, 1, 1)
+μ = ones(Float32, 1, 3)
+∂αy = 2f0
+∂χy = 1.5f0
 
 V = copy(y);
 
-@time DV = ∇V′w(V, w, Fα, Fχ);
+@time DV = ∇V′μ(V, μ, ∂αy, ∂χy);
 
 diry′ = similar(DV);
 
 for col in axes(diry′, 2)
     ∇ᵢ = ∇h(X[col]...)
-    diry′[1, col] = (w * ∇ᵢ)[1]
-    diry′[2, col] = (Fα * ∇ᵢ[[3, 4]])[1]
-    diry′[3, col] = (Fχ * ∇ᵢ[[4]])[1]
+    diry′[1, col] = ([μ'; 1f0]'∇ᵢ)[1]
+    diry′[2, col] = ([1f0; ∂αy]'∇ᵢ[[2, 3]])[1]
+    diry′[3, col] = (∂χy * ∇ᵢ[[3]])[1]
 end
 
 for dim in 1:3
-    DVmatrix = reshape(DV[dim, :], Δ, Δ, Δ, Δ, Δ);
-    diry′matrix = reshape(diry′[dim, :], Δ, Δ, Δ, Δ, Δ);
+    DVmatrix = reshape(DV[dim, :], Δ, Δ, Δ, Δ);
+    diry′matrix = reshape(diry′[dim, :], Δ, Δ, Δ, Δ);
 
-    errors = abs.((DVmatrix - diry′matrix)[idxpadsmall, idxpadsmall, idxpadsmall, idxpadsmall, idxpadsmall]);
+    errors = abs.((DVmatrix - diry′matrix)[idxpadsmall, idxpadsmall, idxpadsmall, idxpadsmall]);
 
     @test all(errors .< ε¹)
 end
 
 # Size testing
+xlarge = paddedrange(0f0, 0.25f0)
+
 w = rand(Float32, 1, 5)
 Fα = rand(Float32, 1, 2)
 Fχ = rand(Float32, 1, 1)
 
 d = length(xlarge)
-M = reshape(rand(Float32, d, d, d, d, d), 1, d^5);
+M = rand(Float32, 1, d^4);
 
-@btime ∇V′w!(M, M, w, Fα, Fχ);
+@btime ∇V′μ!(M, M, μ, ∂αy, ∂χy);

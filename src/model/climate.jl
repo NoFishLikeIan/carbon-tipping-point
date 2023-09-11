@@ -19,6 +19,9 @@ Base.@kwdef struct Hogg
     M₀::Float32 = 410f0 # [p.p.m.]
     Mᵖ::Float32 = 280f0 # [p.p.m.]
 
+    # Initial ratio of N / M
+    n₀::Float32 = 286.65543f0 / 410f0
+
     # Domain
     T̲::Float32 = 287.15f0
     T̄::Float32 = 300f0

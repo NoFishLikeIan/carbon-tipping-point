@@ -9,10 +9,10 @@ include("../model/init.jl")
 include("../utils/derivatives.jl")
 include("../utils/nn.jl")
 
-unit = paddedrange(0f0, 0.025f0)
-cube = fill(unit, 5)
+unit = paddedrange(0f0, 0.05f0)
+cube = fill(unit, 4)
 
-X = Matrix{Float32}(undef, 5, length(unit)^5)
+X = Matrix{Float32}(undef, 4, length(unit)^4)
 for (i, x) in enumerate(Iterators.product(cube...))
     X[:, i] .= x
 end
@@ -23,7 +23,7 @@ end
 V = rand(Float32, 1, size(X, 2))
 
 # Time utility functions
-@time Eᵇ.(X[[5], :])
+@time Eᵇ.(X[[4], :])
 @time Fα(X, α)
 @time Fχ(X, χ)
 

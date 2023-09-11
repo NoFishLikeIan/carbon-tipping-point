@@ -8,8 +8,8 @@ using Random
 
 using Plots: plot, plot!
 
-include("../../src/utils/derivatives.jl")
-include("../../src/utils/plotting.jl")
+include("../../../src/utils/derivatives.jl")
+include("../../../src/utils/plotting.jl")
 
 rng = Random.MersenneTwister(1234)
 

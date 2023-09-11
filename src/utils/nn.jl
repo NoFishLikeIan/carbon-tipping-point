@@ -1,63 +1,40 @@
 function constructNN(n::Int, m::Int)::Tuple{Lux.Chain, Function}
 
-    χskip = SkipConnection(
-        Chain(
-            Dense(n, m),
-            Dense(m, m),
-            Dense(m, 1, Lux.σ)
-        ), 
-        (χ, X) -> (χ, Fχ(X, χ))
-    ) # X → (χ, Fχ)
+    χchain = Chain(
+        Dense(m, m, Lux.tanh), Dense(m, m, Lux.tanh),
+        Dense(m, 1, Lux.σ)
+    )
 
-    αskip = SkipConnection(
-        Chain(
-            Dense(n, m),
-            Dense(m, m),
-            Dense(m, 1, Lux.σ)
-        ), 
-        (α, X) -> (α, Fα(X, α))
-    ) # α → (α, Fα)
-    
-    controlchain = Parallel(
-        (αt, χt, X) -> (
-            X, αt[1], χt[1], w(X, αt[1], χt[1]), αt[2], χt[2]
-        ),
-        αskip, χskip, NoOpLayer() # Passes on X
-    ) # X → X, α, χ, w, Fα, Fχ
+    αchain = Chain(
+        Dense(m, m, Lux.tanh), Dense(m, m, Lux.tanh),
+        Dense(m, 1, Lux.σ)
+    )
 
     valuechain = Chain(
-        Dense(n, m), Dense(m, m),
-        Dense(m, 1),
-        BranchLayer(
-            WrappedFunction(x -> -Lux.softplus(x)), 
-            WrappedFunction(∂²₁)
-        )
-    ) # X → (V, ∂²V)
-
-    disjointchain = Parallel(
-        (c, v) -> (c[1], c[2], c[3], v[1], v[2], c[4], c[5], c[6]),
-        controlchain, valuechain
-    ) # X -> X, α, χ, V, ∂²V, w, Fα, Fχ
+        Dense(m, m, Lux.relu), Dense(m, m, Lux.relu), 
+        Dense(m, 1, x -> -Lux.softplus(x))
+    )
 
     NN = Chain(
-        disjointchain, 
-        SkipConnection(
-            WrappedFunction(tup -> ∇V′w(tup[4], tup[5], tup[6], tup[7])),
-            (grad, tup) -> (tup[2], tup[3], tup[4], tup[5], grad)
-        )
-    ) # X -> α, χ, V, ∂²v, ∇V′w
+        Dense(n, m, Lux.tanh), Dense(m, m, Lux.tanh),
+        BranchLayer(αchain, χchain, valuechain)
+    )
 
+    function L(Θ, st, X, σ²)
+        (α, χ, V), st = NN(X, Θ, st)
 
-    function L(Θ, st, X, σ²; weights = ones(Float32, 3))
-        (_, χ, V, ∂²v, ∇V), st = NN(X, Θ, st)
-        
-        Y = exp.(X[[4], :])
+        X̃ = fromunit(X)
+
+        Y = exp.(X̃[[4], :])
         χY = χ .* Y
+        
+        ∇V = Buffer(V, (3, size(V, 2)))
+        ∇V′μ!(∇V, V, drift(X̃, α, χ), Fα(X̃, α), Fχ(X̃, χ))
 
-        ∇V[[1], :] += f.(χY, V, Ref(economy)) .+ (σ² / 2f0) .* ∂²v
+        ∇V[[1], :] += f.(χY, V, Ref(economy)) .+ (σ² / 2f0) .* ∂²₁(V)
         ∇V[[3], :] += Y .* ∂f_∂c.(χY, V, Ref(economy)) 
 
-        return mean(abs2, weights'∇V)
+        return mean(abs2, ∇V), (α, χ, V)
     end
 
     return NN, L
