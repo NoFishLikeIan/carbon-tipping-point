@@ -1,0 +1,354 @@
+\documentclass[pdf]{beamer}
+
+\usetheme{Berlin}
+
+\usepackage[utf8]{inputenc}
+\usepackage{hyperref}
+
+% Math
+\usepackage{amsmath, amssymb, mathtools, bbm, bm}
+\usepackage{xcolor-solarized}
+
+
+\let\d\relax
+\newcommand{\d}[1]{\mathrm{d}#1}
+
+\newcommand{\control}[1]{\bm{#1}}
+
+% Diagrams
+\usepackage{tikz} 
+\usepackage{tikzit}
+\usepackage{tikzscale}
+\usepackage{pgfplots}
+\usepackage{graphicx}
+\usepackage{wrapfig}
+\usepackage{relsize}
+
+
+% Graphs
+\usepackage{tikz} 
+\usepackage{tikzit}
+\usepackage{pgfplots}
+\usepackage{ifdraft}
+\usetikzlibrary{positioning,fit,calc,decorations.pathreplacing,calligraphy, arrows.meta, pgfplots.groupplots}
+
+\pgfplotsset{compat=1.18}
+
+\newcommand{\inputtikz}[1]{%  
+
+    \ifdraft{
+    \includegraphics[width=0.5\textwidth]{example-image-a}
+    }{
+    \IfFileExists{#1}{
+        \input{#1}
+        }{
+        \includegraphics[width=0.5\textwidth]{example-image-a}
+    }
+    }
+}
+\pgfplotsset{compat=1.18}
+
+\usepackage[bibencoding=utf8, style=apa, backend=biber, eprint=false]{biblatex}
+\addbibresource{../../proposal/scc-tipping-points.bib}
+
+\author{Andrea Titton}
+\title[Climate Tipping Points and Optimal Emissions]{\small Climate Tipping Points and\\ Optimal Emissions}
+\institute{CeNDEF, University of Amsterdam}
+\date{PhD seminar, 11/09}
+
+\begin{document}
+
+\frame[plain]{\titlepage}
+
+\section{Motivation}
+\begin{frame}
+    \begin{enumerate}
+        \item To get optimal emissions, climate dynamics matter (\cite{dietz_are_2020, dietz_economic_2021})
+        \pause \item Large focus on stochastic tipping point, via jump processes (\cite{van_den_bremer_risk-adjusted_2021,lin_social_2023})
+        \pause \item In climate models most tipping points are caused by bifurcations (\cite{ashwin_tipping_2012,ashwin_extreme_2020})
+    \end{enumerate}
+\end{frame}
+
+\begin{frame}
+    In this paper I look at one such tipping point: \textbf{ice-albedo feedback}
+
+    \pause \begin{figure}
+        \centering
+        \includegraphics[width = 0.5\linewidth]{../figures/feedback.png}
+    \end{figure}
+\end{frame}
+
+
+\begin{frame}
+    \centering
+    \begin{figure}
+        \includegraphics[width = 0.9\paperwidth]{../figures/sinkhole.png}
+    \end{figure}
+\end{frame}
+
+
+\section{Climate Model}
+
+\begin{frame} \frametitle{Temperature}
+    \begin{columns}
+        \column{0.3\linewidth}
+        \begin{enumerate}
+            \item ${\color{orange} S}$ solar radiation
+            \item ${\color{red} T}$ temperature
+        \end{enumerate}
+        \column{0.6\linewidth}
+        \begin{equation*}
+            {\color{orange} S} = \eta \sigma {\color{red} T}^4
+        \end{equation*}
+    \end{columns}
+\end{frame}
+
+\begin{frame} \frametitle{Temperature}
+    \begin{columns}
+        \column{0.3\linewidth}
+        \begin{enumerate}
+            \item ${\color{orange} S}$ solar radiation
+            \item ${\color{red} T}$ temperature
+            \item ${\color{blue} M}$ carbon concentration
+        \end{enumerate}
+        \column{0.6\linewidth}
+        \begin{equation*}
+            {\color{orange} S} = \eta \sigma {\color{red} T}^4 - (G_0 + G_1 \log {\color{blue} M} / M^{\mathrm{p}})
+        \end{equation*}
+    \end{columns}
+\end{frame}
+
+\begin{frame} \frametitle{Temperature}
+    \begin{columns}
+        \column{0.3\linewidth}
+        \begin{enumerate}
+            \item ${\color{orange} S_0} (1 - \lambda({\color{red} T}))$ solar radiation
+            \item ${\color{red} T}$ temperature
+            \item ${\color{blue} M}$ carbon concentration
+        \end{enumerate}
+        \column{0.6\linewidth}
+        \begin{equation*}
+            {\color{orange} S_0} (1 - \lambda({\color{red} T})) = \eta \sigma {\color{red} T}^4 - (G_0 + G_1 \log {\color{blue} M} / M^{\mathrm{p}})
+        \end{equation*}
+    \end{columns}
+\end{frame}
+
+
+\begin{frame} \frametitle{Temperature}
+    \begin{columns}
+        \column{0.3\linewidth}
+        \begin{itemize}
+            \item ${\color{orange} S_0} (1 - \lambda({\color{red} T}))$ solar radiation
+            \item ${\color{red} T}$ temperature
+            \item ${\color{blue} M}$ carbon concentration
+        \end{itemize}
+        \column{0.6\linewidth}
+        \begin{equation*}
+            \begin{split}
+                \epsilon \; \d {{ \color{red} T }} = \big( &{\color{orange} S_0} (1 - \lambda({\color{red} T})) - \eta \sigma {\color{red} T}^4 \\ 
+                + &G_0 + G_1 \log {\color{blue} M} / M^{\mathrm{p}} \big) \d t \\
+                + &\sigma_T \d W
+            \end{split}
+        \end{equation*}
+    \end{columns}
+\end{frame}
+
+\begin{frame} \frametitle{Albedo loss}
+    \begin{equation*}
+        \lambda({\color{red} T}) = \lambda_1 - (1 - L({\color{red} T})) \Delta \lambda
+    \end{equation*}
+    \begin{figure}
+    \resizebox{!}{0.4\linewidth}{
+        \inputtikz{../../../plots/albedo.tikz}
+    }
+    \end{figure}
+\end{frame}
+
+\begin{frame} \frametitle{Albedo loss}
+    \begin{equation*}
+        {\color{orange} S_0} (1 - \lambda({\color{red} T})) = \eta \sigma {\color{red} T}^4 -  G_0 - G_1 \log {\color{blue} M} / M^{\mathrm{p}}  
+    \end{equation*}
+    \begin{figure}
+    \resizebox{!}{0.4\linewidth}{
+        \inputtikz{../../../plots/nullcline.tikz}
+    }
+    \end{figure}
+\end{frame}
+
+\begin{frame} \frametitle{Carbon Concentration}
+    \begin{columns}
+        \column{0.3\linewidth}
+        Let $\gamma^\mathrm{b}$ be the growth rate of carbon concentration $M$ under the business-as-usual scenario.
+        \column{0.6\linewidth}
+        \begin{figure}[H]
+            \inputtikz{../../../plots/growthmfig.tikz}
+        \end{figure}
+    \end{columns}
+\end{frame}
+
+
+\begin{frame} \frametitle{Carbon Concentration}
+    \begin{columns}
+        \column{0.3\linewidth}
+        \begin{equation*}
+            \d m = \frac{\d M}{M} = \left( \gamma^\mathrm{b} - \control{\alpha} \right) \d t
+        \end{equation*}
+        \column{0.6\linewidth}
+        \begin{figure}[H]
+            \centering
+            \inputtikz{../../../plots/growthmfig.tikz}
+        \end{figure}
+    \end{columns}
+\end{frame}
+
+\begin{frame}{Business-as-usual dynamics}
+    \begin{figure}[H]
+        \centering
+        \inputtikz{../../../plots/presentation/baufig.tikz}
+    \end{figure}
+\end{frame}
+
+\section{Economy}
+
+\begin{frame}{$AK$ Economy (\cite{hambel_optimal_2021})}
+    \begin{columns}
+        \column{0.3\linewidth}
+        \begin{itemize}
+            \item ${\color{cyan} y}$ log-output
+            \item ${\color{purple} k}$ log-capital
+            \item $I$ investment in capital
+            \item $B$ abatement expenditure
+            \item $C$ consumption
+        \end{itemize}
+        \column{0.6\linewidth}
+        \begin{align*}
+            {\color{cyan} y} &= \log(A) + {\color{purple} k} \text{ s.t.} \\
+            {\color{cyan} Y} &= I + B + C
+        \end{align*}
+    \end{columns}
+\end{frame}
+
+\begin{frame}{Climate change slows growth}
+    \begin{columns}
+        \column{0.3\linewidth}
+        \begin{itemize}
+            \item ${\color{purple} k}$ log-capital
+            \item ${\color{red} T}$ temperature
+            \item $I$ investment in capital
+            \item $B$ abatement expenditure
+        \end{itemize}
+        \column{0.6\linewidth}
+        \begin{equation*}
+            \d {{\color{purple} k}} = \left(\frac{I}{{\color{purple} K}} - \delta_k({\color{red} T}) - \frac{\kappa}{2} \left( \frac{I}{{\color{purple} K}}  + \frac{B}{{\color{purple} K}}\right)^2\right) \d t
+        \end{equation*}
+    \end{columns}
+\end{frame}
+
+
+\begin{frame}{Climate damages}
+    \begin{figure}[H]
+        \centering
+        \inputtikz{../../../plots/presentation/damagefig.tikz}
+    \end{figure}
+\end{frame}
+
+\begin{frame}{Making everything a rate...}
+    \begin{columns}
+        \column{0.3\linewidth}
+        \begin{itemize}
+            \item ${\color{cyan} Y}$ output
+            \item $B$ abatement expenditure
+            \item $C$ consumption
+            \item $\mathbf{\chi}$ consumption rate
+            \item $\mathbf{\varepsilon}$ emissivity rate
+        \end{itemize}
+        \column{0.6\linewidth}
+        \begin{equation*}
+            \mathbf{\chi} \coloneqq \frac{C}{{\color{cyan} Y} } \text{ and } \frac{\omega}{2} \mathbf{\varepsilon}^2 \coloneqq \frac{B}{{\color{cyan} Y}}
+        \end{equation*}
+    \end{columns}
+\end{frame}
+
+\begin{frame}{Emissivity rate $\varepsilon$ to abatement $\alpha$}
+    \begin{columns}
+        \column{0.3\linewidth}
+        \begin{itemize}
+            \item ${\color{blue} M}$ CO$_2$ concentration
+            \item $E^{\mathrm{B}}$ BaU emissions
+            \item $\delta_m({\color{blue} M})$ natural decay of CO$_2$
+            \item $\gamma^{\mathrm{B}}$ BaU growth of ${\color{blue} M}$
+        \end{itemize}
+        \column{0.6\linewidth}
+        \begin{equation*}
+            \varepsilon = 1 - \frac{{\color{blue} M}}{ E^{\mathrm{B}}} \left( \delta_m({\color{blue} M}) + \gamma^{\mathrm{B}} - \mathbf{\alpha} \right)
+        \end{equation*}
+    \end{columns}
+\end{frame}
+
+
+\begin{frame}{Putting it all back into capital...}
+    \begin{equation*}
+        \frac{\d {{\color{purple} k}}}{\d t} = \overbrace{A (1 - \mathbf{\chi}) - \frac{A\kappa}{2} (1 - \mathbf{\chi})^2}^{\text{Standard consumption problem $\phi(\chi)$}} - \underbrace{\frac{A \omega}{2} \mathbf{\varepsilon}^2}_{\text{abatement}} - \overbrace{\delta_k({\color{red} T})}^{\text{climate change}}
+    \end{equation*}
+\end{frame}
+
+
+\begin{frame}{But we really care about output...}
+    \begin{equation*}
+        \frac{\d {{\color{cyan} y}}}{\d t} = \overbrace{\varrho + \phi(\chi)}^{\text{Economic growth}} - \underbrace{\frac{A \omega}{2} \mathbf{\varepsilon}^2}_{\text{abatement}} - \overbrace{\delta_k({\color{red} T})}^{\text{climate change}}
+    \end{equation*}
+\end{frame}
+
+\section{Optimal Emissions}
+
+\begin{frame}{Social Planner}
+    The social planner at time $\tau$ is trying to maximise \begin{equation*}
+        U(\tau, \alpha, \chi) = \mathbb{E} \int^\infty_\tau f(C(t), U(t, \alpha, \chi)) \d t
+    \end{equation*} where $f(C, U)$ is the Epstein-Zin aggregator.
+\end{frame}
+
+\begin{frame}{Why Epstein-Zin?}
+    \begin{columns}
+        \column{0.5\linewidth}
+        I flip a coin today. You get $2$€ every day if it is head and $1$€ every day if it is tails.
+        \column{0.5\linewidth}
+        Each day I flip a coin. That day you get $2$€ if it is head and $1$€ if it is tails.
+    \end{columns}
+\end{frame}
+
+\begin{frame}{Value Function}
+    Looking for $V(t, \chi, \alpha) = \sup_{\chi, \alpha} U(t, \alpha, \chi)$, which satisfies
+    \begin{equation*}
+        -\partial_t V = f(\chi {\color{cyan} Y}, V) + \nabla V \cdot (\text{drift of state}) + \partial^2_T V \; \sigma^2_T
+    \end{equation*}
+\end{frame}
+
+
+\begin{frame}
+    We need to find functions $\alpha, \chi, V$ from a four dimensional state space $t, T, M, y$ to $\mathbb{R}$. We must do this numerically but how?
+    
+    \hspace{2em}
+
+    \pause No really... how?
+\end{frame}
+
+\section{Conclusion}
+\begin{frame}{Conclusion}
+    \begin{enumerate}
+        \item Tipping points in the climate systems are (mostly) induced by bifurcations
+        \pause \item Optimal emissions paths matter, not only total emissions (would you walk on the edge of a ditch)
+        \pause \item TODO: solve this HJB numerically?  
+    \end{enumerate}
+\end{frame}
+
+\begin{frame}{Thank you!}
+    \centering
+    \begin{figure}
+        \includegraphics[width = 0.7\linewidth]{../figures/netherlands.png}
+        \caption{Ed Hawkins, Berkeley Earth data}
+    \end{figure}
+\end{frame}
+
+
+
+\end{document}
