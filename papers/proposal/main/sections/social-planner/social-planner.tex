@@ -15,7 +15,7 @@ To make sense of this utility specification it is useful to consider two illustr
     \lim_{\psi \to 1 / \theta} f(C, U) = \rho \left(\frac{1}{1 - \theta} C^{1 - \theta} - U\right),
 \end{equation} and the utility (\ref{eq:utility}) simplifies to the usual time separable formulation \begin{equation}
     U(\control{\alpha}, \control{\chi}) = \rho\E \int^{\infty} \exp\big(-\rho (s - t) \big) \; \frac{1}{1 - \theta} C(s)^{1 - \theta} \; \d{t}.
-\end{equation} Second, if we let the elasticity of intertemporal substitution converge to one, $\psi \to 1$, we obtain the log-separable aggregator \begin{equation}
+\end{equation} Second, if we let the elasticity of intertemporal substitution converge to one, $\psi \to 1$, we obtain the log-separable aggregator \begin{equation} \label{eq:epstein-zin:log-separable}
     f(C, U) = \rho (1 - \theta)U \left(\log(C) - \frac{1}{1 - \theta} \log\big( (1 - \theta) U \big) \right).
 \end{equation}
 
@@ -23,7 +23,11 @@ To make sense of this utility specification it is useful to consider two illustr
 
 \subsection{Simplifying Assumptions}
 
-For computational purposes, it is convenient to make some simplifying assumption to reduce the dimensionality of the state space. The calibrated carbon decay $\delta_m$, as a function of the carbon stored in sinks $N$, is illustrated in Figure (\ref{fig:decay}). The calibration assumes a functional form \begin{equation}
+For computational purposes, it is convenient to make some simplifying assumption to reduce the dimensionality of the state space.
+
+\subsubsection{Decay Rate of Carbon}
+ 
+The calibrated carbon decay $\delta_m$, as a function of the carbon stored in sinks $N$, is illustrated in Figure (\ref{fig:decay}). The calibration assumes a functional form \begin{equation}
     \delta_m(N) = a_{\delta} e^{-\left(\frac{N - c_{\delta}}{b_{\delta}}\right)^2},
 \end{equation} for parameters $a_{\delta}, b_{\delta}, c_{\delta}$.
 
@@ -43,13 +47,22 @@ To simplify matters I will assume that the amount of carbon sinks present in the
     \label{fig:decaypath}
 \end{figure}
 
+\subsubsection{Log-separable aggregator}
+
+I further assume that $\psi \to 1$. This implies that the Epstein-Zin aggregator reduces in its log-separable form (\ref{eq:epstein-zin:log-separable}). In turn, letting consumption be $\control{\chi} Y$, the aggregator simplifies to \begin{equation} \label{eq:epstein-zin:log-separable-simplified}
+    f(\control{\chi}, y, U) = \rho U \Big( (1 - \theta) \log \control{\chi} + (1 - \theta) y + \log\big((1 - \theta) U\big) \Big).
+\end{equation} 
+
+\subsection{Adjustment costs}
+
+Finally, I will assume that capital does not incur in any adjustment cost $\kappa = 0$.
 
 \subsection{Hamilton-Bellman-Jacobi Equation and the Social Cost of Carbon}
 
 The social planner problem depends on time $t$ and three state variables: temperature $T$, atmospheric log-concentration of CO$_2$ $m$, and output $y$. For convenience, let $X$ be the vector of state variables at time $t$, taking values in the domain $\mathcal{S}$. The value function is defined as \begin{equation}
-    V(t, X) = \sup_{(\control{\alpha}, \control{\chi})} U(\control{\alpha}, \control{\chi}; t, X),
-\end{equation} where the two controls $\control{\alpha}, \control{\chi}$ are functions $[0, \infty) \times \mathcal{S} \mapsto [0, 1]$. The state vector $X$ follows the drift \begin{equation}
-    w(t, X, \control{\alpha}, \control{\chi}) = \begin{pmatrix}
+    V(t, X) = \sup_{(\control{\chi}, \control{\alpha})} U(\control{\chi}, \control{\alpha}; t, X),
+\end{equation} where the two controls $\control{\chi}, \control{\alpha}$ are functions $[0, \infty) \times \mathcal{S} \mapsto [0, 1]$. The state vector $X$ follows the drift \begin{equation}
+    w(t, X,  \control{\chi}, \control{\alpha}) = \begin{pmatrix}
         \mu_T(T) + \mu_m(m) \\
         \gamma^{\mathrm{b}} - \control{\alpha} \\
         \varrho + \phi(t, \control{\chi}) - A(t) \beta(t, \control{\alpha}) - \delta_K(T)
@@ -58,7 +71,7 @@ The social planner problem depends on time $t$ and three state variables: temper
 
 \begin{proposition}
     The value function satisfies the Hamilton-Bellman-Jacobi equation \begin{equation}
-        0 = \sup_{\control{\alpha}, \control{\chi}} \; \Bigg\{ f\left(\control{\chi} Y, V\right) + \nabla_X V \cdot w + \frac{\sigma_T^2}{2} \; \Big(\partial^2_T V \Big) \Bigg\}
+        0 = \sup_{\control{\alpha}, \control{\chi}} \; \Bigg\{ f(\control{\chi}, y, V ) + \nabla_X V \cdot w + \frac{\sigma_T^2}{2} \; \Big(\partial^2_T V \Big) \Bigg\}
     \end{equation}
 \end{proposition}
 
@@ -67,7 +80,7 @@ The social planner problem depends on time $t$ and three state variables: temper
 We can expand the value HJB equation to     
 \begin{equation}
     \begin{split}
-        0 = \sup_{\control{\alpha}, \control{\chi}} \; \Bigg\{ &f\left(\control{\chi} Y, V\right) + \;
+        0 = \sup_{\control{\alpha}, \control{\chi}} \; \Bigg\{ &f(\control{\chi}, y, V ) + \;
         \Big(\partial_{m} V \Big) \; \Big(\gamma^{\mathrm{p}} - \control{\alpha} \Big) + \Big(\partial_{y} V \Big) \;  \Big(\phi(\control{\chi}) - A \beta(\control{\alpha}) \Big) \Bigg\} \\
         + \; &\Big(\partial_T V \Big) \; \Big(\mu_T(T) + \mu_{m}(m) \Big) + \;
         \Big(\partial_{y} V \Big) \; \Big(\varrho - \delta_k(T) \Big) \\
@@ -77,18 +90,26 @@ We can expand the value HJB equation to
 
 Using we can compute the first order conditions for $\alpha$ and $\chi$. 
 
-\subsubsection[Abatement]{Abatement, $\alpha$}
-
-Note that the abatement rate is given by \begin{equation}
-    \varepsilon(t, X, \control{\alpha}) = 1 - \frac{M}{\xi E^{\mathrm{b}}(t)} \left(\delta_m\left( M\right) + \gamma^{\mathrm{b}}(t) - \control{\alpha} \right),
-\end{equation} such that the first order condition is \begin{equation}
-    0 = \big(\partial_m V\big) + \big(\partial_y V\big) \left(\omega \; A(t) \; \frac{M}{\xi E^{\mathrm{b}}(t)} \varepsilon(t, X, \control{\alpha}) \right)
-\end{equation}
 
 \subsubsection[Consumption]{Consumption, $\chi$}
 
-\begin{equation}
-    0 = Y \frac{\partial f}{\partial C}(\control{\chi} Y, V) +\big(\partial_y V\big) A(t) \big(\kappa A(t) (1 - \control{\chi}) - 1\big) 
+The first order condition with respect to consumption is given by \begin{equation}
+    0 = \frac{\partial f}{\partial \control{\chi}}(\control{\chi}, y, V) - A \; \partial_y V,
+\end{equation} which implies that the optimal consumption rate is given by \begin{equation}
+    \control{\chi} = \rho (1 - \theta) \frac{V}{A \; \partial_y V}.
 \end{equation}
+
+\subsubsection[Abatement]{Abatement, $\alpha$}
+
+Similarly, we can compute the first order condition for the abatement level, \begin{equation}
+    0 = \partial_m V + A \; \partial_y V \; \beta^\prime(\control{\alpha}). 
+\end{equation}
+
+Given that \begin{equation}
+    \beta(\control{\alpha}) = \frac{\omega}{2} \left(1 - \frac{M}{\xi  E^{\mathrm{b}}} \big( \delta_m(M) + \gamma^{\mathrm{b}} - \control{\alpha} \big) \right)^2,  
+\end{equation} the optimal abatement level is \begin{equation}
+    \control{\alpha} = 1 - \frac{M}{\xi  E^{\mathrm{b}}} \left( \delta_m(M) + \gamma^{\mathrm{b}} - A \; \omega \; \frac{\partial_m V}{\partial_y V} \right)
+\end{equation}
+
 
 \end{document}
