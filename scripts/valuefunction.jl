@@ -1,64 +1,94 @@
 using UnPack
-
-using Lux, NNlib
-using ComponentArrays
-
-using LineSearches, Optimization, OptimizationOptimJL
-using LuxAMDGPU
-
 using StatsBase
+using NLsolve, Optim
 
-using Random
-rng = Random.MersenneTwister(1234)
-
-include("../src/model/climate.jl")
-include("../src/model/economy.jl")
 include("../src/model/init.jl")
-
 include("../src/utils/derivatives.jl")
-include("../src/utils/nn.jl")
 
-function generatesample()
-
-
+function torestricted(Vunr)
+    reshape(-1f0 * Vunr.^2, 1, length(Vunr))
 end
 
+function fromrestricted(V)
+    vec(sqrt.(-1f0 .* V)) 
+end
+
+σ(c) = reshape(inv.(1 .+ exp.(c)), 1, length(c))
+σ⁻¹(c) = vec(log.(c ./ (1 .- c)))
+
+"""
+Given an hypercube grid X ∈ (d, n) and an initial guess for (V₀, χ₀, α₀) ∈ (1, n); compute V, α, χ
+"""
+function solveincube!(X::Matrix{Float32}, V₀, χ₀, α₀; focweight = 1f0, verbose = false, maxiters = 1000, solver = LBFGS())
+
+    # Allocate constants
+    Y = exp.(X[[4], :])
+    
+    function G(V, χ, α)
+        w = drift(X, α, χ)
+
+        D = dir∇V(V, w)
+
+        f.(χ .* Y, V, Ref(economy)) .+ D[[4], :] + (hogg.σ²ₜ / 2f0) .* ∂²T(V) .+ D[[1], :]
+    end
+
+    function F(V, χ, α)        
+        D = dir∇V(V, drift(X, α, χ))
+        Dm = @view D[[3], :]
+        Dy = @view D[[4], :]
+    
+        mean(abs2, Dm .+ Dy .* Fα(X, α)) + 
+        mean(abs2, Y .* ∂f_∂c.(χ .* Y, V, Ref(economy)) + Dy .* Fχ(X, χ) )
+    end
+
+    n = size(X, 2)
+    s₀ = vcat(V₀, α₀, χ₀)
+
+    function loss(state)
+        V = torestricted(state[1:n])
+        χ = σ(state[(n + 1):2n])
+        α = σ(state[(2n + 1):3n])
+
+        return mean(abs2, G(V, χ, α)) + focweight * F(V, χ, α) 
+    end
+
+    sol = optimize(loss, s₀, solver, Optim.Options(show_trace = verbose, iterations = maxiters))
+
+    return sol
+end
+
+
 X₀ = reshape(
-    [hogg.T₀, log(hogg.M₀), economy.y₀, 0f0],
+    [0f0, hogg.T₀, log(hogg.M₀), economy.y₀],
     (4, 1)
 ) |> tounit
 
-cube = [paddedrange(x₀, x₀ + 0.1f0) for x₀ in X₀]
+cube = [range(0, 3ϵ; step = ϵ) |> collect for _ in X₀]
 
-const X = Matrix{Float32}(undef, 4, length(first(cube))^4)
+X̃  = Matrix{Float32}(undef, 4, length(first(cube))^4)
 for (i, x) in enumerate(Iterators.product(cube...))
-    X[:, i] .= x
+    X̃[:, i] .= x
 end
 
-const n = size(X, 1)
-const m = 2^6
+Xmin = [0f0, hogg.T₀, log(hogg.M₀), economy.y₀]
+Xmax = [1f0, hogg.T₀ + 5f0, log(hogg.M₀ + 20f0), economy.y₀ + 1f0]
 
-const NN, lossfn = constructNN(n, m)
+X = fromunit(X̃, Xmin, Xmax);
 
-# Hot load and check allocations
-Θ₀, st₀ = Lux.setup(rng, NN);
-NN(X, Θ₀, st₀);
-lossfn(Θ₀, st₀, X, 1f0);
+n = size(X, 2)
+V₀ = -1f0 .* rand(Float32, 1, n)
+α = rand(Float32, 1, n)
+χ = rand(Float32, 1, n)
 
-const losspath = Float32[]
-function callback(Θ, l, out)
-	push!(losspath, l)
-	return false
-end
+V₀ = randn(Float32, n);
+α₀ = randn(Float32, n);
+χ₀ = randn(Float32, n);
 
-ps = ComponentArray{Float32}(Θ₀);
 
-adtype = Optimization.AutoZygote()
-optf = Optimization.OptimizationFunction((Θ, p) -> lossfn(Θ, st₀, X, 1f0), adtype)
+@time sol = solveincube!(X, V₀, α₀, χ₀; verbose = false, maxiters = 2_000);
 
-optprob = Optimization.OptimizationProblem(optf, ps)
-solver = BFGS(; initial_stepnorm = 0.01, linesearch = LineSearches.BackTracking())
+state = sol.minimizer
 
-# Hotload
-Optimization.solve(optprob, solver; callback, maxiters = 1);
-@time res = Optimization.solve(optprob, solver; callback, maxiters = 1000);
+V = torestricted(state[1:n])
+χ = σ(state[(n + 1):2n])
+α = σ(state[(2n + 1):3n])

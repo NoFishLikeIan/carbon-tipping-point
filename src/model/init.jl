@@ -12,11 +12,18 @@ const economy = Economy()
 const hogg = Hogg()
 const albedo = Albedo()
 
-const X̄ = [hogg.T̄ hogg.m̄ economy.ȳ economy.t₁]'
-const X̲ = [hogg.T̲ hogg.m̲ economy.y̲ 0f0]'
+const X̄ = [economy.t₁ hogg.T̄ hogg.m̄ economy.ȳ]'
+const X̲ = [0f0 hogg.T̲ hogg.m̲ economy.y̲]'
 
-fromunit(X::Matrix{Float32}) = X .* (X̄ .- X̲) .+ X̲
-tounit(X::Matrix{Float32}) = (X .- X̲) ./ (X̄ .- X̲)
+function fromunit(X, Xmin, Xmax)
+    X .* (Xmax .- Xmin) .+ Xmin
+end
+fromunit(X) = fromunit(X, X̲, X̄)
+
+function tounit(X, Xmin, Xmax)
+    (X - Xmin) ./ (Xmax .- Xmin)
+end
+tounit(X) = tounit(X, X̲, X̄)
 
 function Eᵇ(t)
     dt = economy.t₁ / (length(Eᵇᵥ) - 1)
@@ -29,13 +36,13 @@ function Eᵇ(t)
     Eᵇᵥ[idx] * (1 - α) + Eᵇᵥ[idx + 1] * α
 end
 
-function ε(t, M, α::Matrix{Float32})::Matrix{Float32}
+function ε(t, M, α)
     1f0 .- (M ./ Eᵇ.(t)) .* (δₘ.(hogg.n₀ .* M, Ref(hogg)) .+ γᵇ.(t) .- α)
 end
 
 function Fα(X, α)
-    m = @view X[[2], :]
-    t = @view X[[4], :]
+    t = @view X[[1], :]
+    m = @view X[[3], :]
 
     M = exp.(m)
     economy.ωᵣ * A.(t, Ref(economy)) .* (M ./ Eᵇ.(t)) .* ε(t, M, α)
@@ -49,9 +56,9 @@ function Fχ(X, χ)
 end
 
 function drift(X, α, χ)
-    T = @view X[[1], :]
-    m = @view X[[2], :]
-    t = @view X[[4], :]
+    t = @view X[[1], :]
+    T = @view X[[2], :]
+    m = @view X[[3], :]
 
     eref = Ref(economy)
     href = Ref(hogg)

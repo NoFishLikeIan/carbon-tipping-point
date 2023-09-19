@@ -7,36 +7,8 @@ include("../utils/derivatives.jl")
 ε¹ = 1f-3
 ε² = 4f-2
 
-x = paddedrange(0f0, 1f0)
-idxonepad = 2:(length(x) - 1)
-idxtwopad = 3:(length(x) - 2)
-
-# One dimension
-f(x) = exp(sin(x))
-f′(x) = cos(x) * exp(sin(x))
-f′′(x) = exp(sin(x)) * (cos(x)^2 - sin(x)) 
-
-@time ∂(f.(x));
-@time ∂²(f.(x));
-
-@test all(abs.(∂(f.(x)) - f′.(x)[:, idxtwopad]) .< ε¹)
-@test all(abs.(∂²(f.(x)) - f′′.(x)[:, idxonepad]) .< ε²)
-
-# Two dimensions
-w₂ = reshape([2f-1, 3f0], 1, 2)
-
-g(x, y) = exp(sin(x * y))
-∇g(x, y) = exp(sin(x * y)) * cos(x * y) * (w₂[1] * x + w₂[2] * y)
-
-ĝ = g.(x', x)
-
-@time S₂¹(w₂);
-@time ∇₂(ĝ, w₂);
-
-@test all(abs.(∇₂(ĝ, w₂) .- ∇g.(x', x)[idxtwopad, idxtwopad]) .< ε¹)
-
 # Four dimensions
-xsmall = paddedrange(0.5f0, 0.55f0)
+xsmall = paddedrange(0.5f0, 0.7f0)
 idxpadsmall = 3:(length(xsmall) - 2)
 Δ = length(xsmall)
 
@@ -46,24 +18,21 @@ h(a, b, c, d) = exp(sin(a * b * c * d))
 
 X = Iterators.product(fill(vec(xsmall), 4)...) |> collect |> vec;
 
-y = reshape((z -> h.(z...)).(X), 1, length(X));
+V = reshape((z -> h.(z...)).(X), 1, length(X));
 
 # Directional derivative
-μ = ones(Float32, 1, 3)
-∂αy = 2f0
-∂χy = 1.5f0
+w = ones(Float32, 3, size(V, 2));
 
-V = copy(y);
-
-@time DV = ∇V′μ(V, μ, ∂αy, ∂χy);
+DV = similar(V, 4, size(V, 2));
+@time dir∇V!(DV, V, w);
 
 diry′ = similar(DV);
-
 for col in axes(diry′, 2)
     ∇ᵢ = ∇h(X[col]...)
-    diry′[1, col] = ([μ'; 1f0]'∇ᵢ)[1]
-    diry′[2, col] = ([1f0; ∂αy]'∇ᵢ[[2, 3]])[1]
-    diry′[3, col] = (∂χy * ∇ᵢ[[3]])[1]
+    diry′[1, col] = ∇ᵢ[1]
+    diry′[2, col] = ∇ᵢ[3]
+    diry′[3, col] = ∇ᵢ[4]
+    diry′[4, col] = sum(∇ᵢ[2:4])
 end
 
 for dim in 1:3
@@ -75,14 +44,17 @@ for dim in 1:3
     @test all(errors .< ε¹)
 end
 
-# Size testing
-xlarge = paddedrange(0f0, 0.25f0)
+# Second derivative w.r.t. the second argument
+∂²₂h(a, b, c, d) = (a * c * d)^2 * (cos(a * b * c * d)^2 - sin(a * b * c * d)^2) * h(a, b, c, d)
 
-w = rand(Float32, 1, 5)
-Fα = rand(Float32, 1, 2)
-Fχ = rand(Float32, 1, 1)
+D² = similar(V);
+∂²T!(D², V); @time ∂²T!(D², V);
 
-d = length(xlarge)
-M = rand(Float32, 1, d^4);
+y′′ = similar(D²);
+for col in axes(y′′, 2)
+    y′′[col] = ∂²₂h(X[col]...)
+end
 
-@btime ∇V′μ!(M, M, μ, ∂αy, ∂χy);
+errormatrix = reshape(abs.(y′′ - D²), Δ, Δ, Δ, Δ)[idxpadsmall, idxpadsmall, idxpadsmall, idxpadsmall];
+
+@test all(errormatrix .< ε²)

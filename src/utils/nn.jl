@@ -1,4 +1,4 @@
-function constructNN(n::Int, m::Int)::Tuple{Lux.Chain, Function}
+function constructNN(n::Int, m::Int)
 
     χchain = Chain(
         Dense(m, m, Lux.tanh), Dense(m, m, Lux.tanh),
@@ -21,14 +21,14 @@ function constructNN(n::Int, m::Int)::Tuple{Lux.Chain, Function}
     )
 
     function L(Θ, st, X, σ²)
-        (α, χ, V), st = NN(X, Θ, st)
+        (α, χ, V) = first(NN(X, Θ, st))
 
         X̃ = fromunit(X)
 
         Y = exp.(X̃[[4], :])
         χY = χ .* Y
         
-        ∇V = Buffer(V, (3, size(V, 2)))
+        ∇V = similar(V, (3, size(V, 2)))
         ∇V′μ!(∇V, V, drift(X̃, α, χ), Fα(X̃, α), Fχ(X̃, χ))
 
         ∇V[[1], :] += f.(χY, V, Ref(economy)) .+ (σ² / 2f0) .* ∂²₁(V)
@@ -38,5 +38,4 @@ function constructNN(n::Int, m::Int)::Tuple{Lux.Chain, Function}
     end
 
     return NN, L
-
 end
