@@ -13,25 +13,15 @@ Base.@kwdef struct Albedo
 end
 
 Base.@kwdef struct Hogg
-    # Current and pre-industrial data
+    # Current and pre-industrial data temperature and carbon concentration
     T₀::Float32 = 288.56f0 # [K]
     Tᵖ::Float32 = 287.15f0 # [K]
     M₀::Float32 = 410f0 # [p.p.m.]
     Mᵖ::Float32 = 280f0 # [p.p.m.]
 
-    # Initial ratio of N / M
-    n₀::Float32 = 286.65543f0 / 410f0
-
-    # Domain
-    T̲::Float32 = 287.15f0
-    T̄::Float32 = 300f0
-    m̲::Float32 = log(280f0)
-    m̄::Float32 = log(1000f0)
-    N̲::Float32 = 0f0
-    N̅::Float32 = 314.8f0
+    N₀::Float32 = 286.65543f0 # [p.p.m.]
     
-    # Volatility
-    σ²ₜ::Float32 = 0.3f0
+    σ²ₜ::Float32 = 0.3f0 # Volatility of temperature
 
     # Climate sensitwivity
     S₀::Float32 = 342f0 # [W / m²] Mean solar radiation
@@ -46,15 +36,24 @@ Base.@kwdef struct Hogg
     aδ::Float32 = 0.0176f0
     bδ::Float32 = -27.36f0
     cδ::Float32 = 314.8f0
+
+    # Domain
+    T̲::Float32 = 288.56f0 # Use initial levels because α > 0
+    M̲::Float32 = 410f0 
+
+    T̄::Float32 = 287.15f0 + 8f0 # Max. temperature, +10
+    M̄::Float32 = 645f0 # Concentration consistent with T̄
 end
 
 "Decay of carbon"
-function δₘ(N::Float32, hogg::Hogg)
-    hogg.aδ * exp(-(N - hogg.cδ)^2 / hogg.bδ^2)
+function δₘ(m::Float32, hogg::Hogg)
+    N = exp(m) * (hogg.N₀ / hogg.M₀)
+    return hogg.aδ * exp(-(N - hogg.cδ)^2 / hogg.bδ^2)
 end
 
 function δₘ⁻¹(δ::Float32, hogg::Hogg)
-    hogg.cδ + hogg.bδ * √(log(hogg.aδ / δ))
+    N = hogg.cδ + hogg.bδ * √(log(hogg.aδ / δ))
+    return log(N * hogg.M₀ / hogg.N₀)
 end
 
 # Albedo functions

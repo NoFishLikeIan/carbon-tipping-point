@@ -20,12 +20,11 @@ Base.@kwdef struct Economy
     y₀::Float32 = log(75.8f0)
 
     # Domain 
-    t₀::Float32 = -15f0 # Initial time
-    t₁::Float32 = 80f0 # Final time
-    tspan::Float32 = 80f0 - 15f0 # Time span
+    t₀::Float32 = -15f0 # Initial time of IPCC report
+    t₁::Float32 = 80f0 # Horizon of IPCC report
 
-    y̲::Float32 = log(2.5f-1 * 75.8f0) # Minimum output
-    ȳ::Float32 = log(2f0 * 75.8f0) # Maximum output
+    y̲::Float32 = log(0.9f0 * 75.8f0) # Current output is assumed to be minimum
+    ȳ::Float32 = log(1.3f0 * 75.8f0) # Maximum output
 end
 
 """
@@ -47,14 +46,13 @@ function f(c, u, economy::Economy)
         )
     end
 
-    # FIXME: check for ψ ≠ 1
-    ψ⁻¹ = 1 / ψ
-
-    return ρ * (1 - θ) * inv(1 - ψ⁻¹) * u * (
-        (c / ((1 - θ) * u)^inv(1 - θ))^(1 - ψ⁻¹) - 1
-    )
+    @warn "Case for ψ ≠ 1 not implemented!"
 end
 
+function f(χ, y, u, economy::Economy)
+    @unpack ρ, θ = economy
+    ρ * u * ((1 - θ) * (log(χ) + y) + log((1 - θ) * u))
+end
 
 function ∂f_∂c(c, u, economy::Economy)
     @unpack ρ, θ, ψ = economy
@@ -63,10 +61,7 @@ function ∂f_∂c(c, u, economy::Economy)
         return ρ * (1 - θ) * (u / c)
     end
 
-    ψ⁻¹ = 1 / ψ
-    ucont = ((1 - θ) * u)^((1 - θ) / (1 - ψ⁻¹))
-
-    return ρ * (1 - θ) * u * (c^(-ψ⁻¹) / ucont)
+    @warn "Case for ψ ≠ 1 not implemented!"
 end
 
 "Cost of abatement as a fraction of GDP"
