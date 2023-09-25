@@ -102,7 +102,9 @@ function ∂²T!(D::Matrix{Float32}, V::Matrix{Float32}; m = 3)
         jk = idx - (i - 1)
 
         D[idx] = ϵ⁻² * (
-            V[jk + (min(i + 1, Δ) - 1)] + V[jk + (max(i - 1, 1) - 1)] - 2f0 * V[idx]
+            V[jk + (min(i + 1, Δ) - 1)] + 
+            V[jk + (max(i - 1, 1) - 1)] - 
+            2f0 * V[idx]
         )
     end
 

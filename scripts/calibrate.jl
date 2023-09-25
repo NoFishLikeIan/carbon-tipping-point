@@ -8,7 +8,7 @@ using DiffEqParamEstim, Optimization, OptimizationOptimJL
 include("../src/model/climate.jl")
 include("../src/model/economy.jl")
 
-env = DotEnv.config()
+const env = DotEnv.config()
 
 BASELINE_YEAR = parse(Int64, get(env, "BASELINE_YEAR", "2020"))
 DATAPATH = get(env, "DATAPATH", "data/") 
