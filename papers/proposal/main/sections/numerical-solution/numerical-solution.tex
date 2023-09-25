@@ -1,0 +1,17 @@
+\documentclass[../../main.tex]{subfiles}
+\begin{document}
+
+Putting it all together, letting $X$ be the state vector, the value function at time $t$ satisfies \begin{equation}
+    \begin{split}
+        -\partial_t V_t &= G(t, X, V_t) \\
+        &\coloneqq f(\control{\chi}(X, \nabla V_t), X, V_t) + \nabla V_t \cdot w(t, X, \control{\chi}(X), \control{\alpha}(X),  \nabla V_t) + \frac{\sigma^2}{2} \partial_{T}^2 V_t
+    \end{split}
+\end{equation}
+
+Using a backward finite difference approximation \begin{equation}
+    -\partial_t V_t = \frac{V_{t - 1} - V_{t}}{\epsilon},
+\end{equation} we can rewrite \begin{equation}
+    V_{t - 1} = V_t + \epsilon \; G(t, X, V_t).
+\end{equation}
+
+\end{document}
