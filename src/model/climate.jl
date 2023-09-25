@@ -46,8 +46,8 @@ Base.@kwdef struct Hogg
 end
 
 "Decay of carbon"
-function δₘ(m::Float32, hogg::Hogg)
-    N = exp(m) * (hogg.N₀ / hogg.M₀)
+function δₘ(M::Float32, hogg::Hogg)
+    N = M * (hogg.N₀ / hogg.M₀)
     return hogg.aδ * exp(-(N - hogg.cδ)^2 / hogg.bδ^2)
 end
 

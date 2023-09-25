@@ -17,14 +17,16 @@ Base.@kwdef struct Economy
 
     # Output
     A₀::Float32 = 0.113f0 # Initial TFP
-    y₀::Float32 = log(75.8f0)
+    Y₀::Float32 = 75.8f0
 
     # Domain 
     t₀::Float32 = -15f0 # Initial time of IPCC report
     t₁::Float32 = 80f0 # Horizon of IPCC report
 
-    y̲::Float32 = log(0.9f0 * 75.8f0) # Current output is assumed to be minimum
-    ȳ::Float32 = log(1.3f0 * 75.8f0) # Maximum output
+    Y̲::Float32 = 0.9f0 * 75.8f0 # Current output is assumed to be minimum
+    Ȳ::Float32 = 1.3f0 * 75.8f0 # Maximum output
+
+    V̲::Float32 = 10f3
 end
 
 """
