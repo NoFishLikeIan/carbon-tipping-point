@@ -1,112 +1,129 @@
+# Utilities for regular grid
+RegularGrid = NTuple{3, Vector{Float32}};
+Domain = Tuple{Float32, Float32, Int};
+Domains = Vector{Domain};
+
+steps(grid::RegularGrid) = ntuple(i -> grid[i][2] - grid[i][1], Val(3))
+Base.size(grid::RegularGrid) = prod(length, grid)
+function makeregulargrid(domains::Domains)::RegularGrid
+    ntuple(
+        i -> collect(
+            range(domains[i][1], domains[i][2]; length = domains[i][3])
+        ), 
+        Val(3)
+    )
+end
+
 const ϵ = cbrt(eps(Float32))
-const ϵ⁻¹ = inv(ϵ)
-const ϵ⁻² = inv(ϵ^2)
+const Δi = CartesianIndex(1, 0, 0);
+const Δj = CartesianIndex(0, 1, 0);
+const Δk = CartesianIndex(0, 0, 1);
+const Δ = (Δi, Δj, Δk);
 
-function paddedrange(from::Float32, to::Float32; pad = 2ϵ)
-    collect(range(from - pad, to + pad; step = ϵ)[:, :]')
-end
-
-function ∂₊(V, idx, onestep, twostep)
-    (ϵ⁻¹ / 2f0) .* (-V[twostep] + 4f0V[onestep] - 3f0V[idx])
-end
-
-function ∂₋(V, idx, onestep, twostep)
-    (ϵ⁻¹ / 2f0) .* (3f0V[idx] - 4f0V[onestep] + V[twostep])
+"""
+Upwind-downind directional derivative of V at idx along direction Δd
+"""
+function ∂(idx::CartesianIndex, V::Array{Float32, 3}, ispos::Bool, Δd::CartesianIndex, Rₑ::Tuple{CartesianIndex, CartesianIndex})
+    if ispos > 0
+        -V[min(idx + 2Δd, Rₑ[2])] + 4f0V[min(idx + Δd, Rₑ[2])] - 3f0V[idx]
+    else
+        V[min(idx - 2Δd, Rₑ[1])] - 4f0V[min(idx - Δd, Rₑ[1])] + 3f0V[idx]
+    end
 end
 
 """
-Given a Vₜ (1 × n)  and a drift w (3 × n) returns a matrix ∇Vₜ⋅w (1 × n). Note that Vₜ_ijk = Vₜ(T, m, y).
+Given a Vₜ (n₁ × n₂ × n₃) and a drift w (n₁ × n₂ × n₃ × 3) returns a matrix D (n₁ × n₂ × n₃ × 4), with first three elemnts ∇Vₜ and last ∇Vₜ⋅w.
 
 The finite difference scheme is computed by using second order forward derivatives if the drift is positive and backwards if it is negative.
-
-Accepts δ (3 × 1) which is the domain size. It defaults to δ = 1.
 """
-function dir∇V(V::Matrix{Float32}, w::Matrix{Float32})    
-    D = Matrix{Float32}(undef, size(w))
-    return dir∇V!(D, V, w)
+function dir∇V(V::Array{Float32, 3}, w::Array{Float32, 4}, grid::RegularGrid)    
+    D = Array{Float32}(undef, size(V)..., length(grid) + 1)
+    dir∇V!(D, V, w, grid)
+    return D
 end
-function dir∇V!(D::Matrix{Float32}, V::Matrix{Float32}, w::Matrix{Float32})
-    m, n = size(w)
-    Δ = round(Int, n^(1 / m)) # Assumes n = Δ^m where |x| ≡ Δ 
-    Δ² = Δ^2
- 
-    posdrift = w .> 0
+function dir∇V!(D::Array{Float32, 4}, V::Array{Float32, 3}, w::Array{Float32, 4}, grid::RegularGrid)
+    h = steps(grid)
+
+    if any(h .< ϵ) @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
+    twoh⁻¹ = inv.(2f0 .* h)
     
-    @inbounds for idx in axes(D, 2)  
-        i = 1 + mod(idx - 1, Δ)
-        j = 1 + mod((idx - i) ÷ Δ, Δ)
-        k = 1 + mod((idx - i - (j - 1) * Δ) ÷ (Δ²), Δ)
+    isdriftpos = w .> 0
 
-        jk = idx - (i - 1)
-        ik = idx - (j - 1) * Δ
-        ij = idx - (k - 1) * Δ²
+    R = CartesianIndices(V)
+    R₁, Rₙ = extrema(R)
 
+    # TODO: vectorize
+    for idx in R
+        inner = 0f0
 
-        D[1, idx] = posdrift[1, idx] ? # ∂T
-                ∂₊(V, idx, jk + (min(i + 1, Δ) - 1), jk + (min(i + 2, Δ) - 1)) :
-                ∂₋(V, idx, jk + (max(i - 1, 1) - 1), jk + (max(i - 2, 1) - 1))
+        for (l, Δₗ) ∈ enumerate(Δ)
+            D[idx, l] = twoh⁻¹[l] * (isdriftpos[idx, l] ?
+                -V[min(idx + 2Δₗ, Rₙ)] + 4f0V[min(idx + Δₗ, Rₙ)] - 3f0V[idx] :
+                V[max(idx - 2Δₗ, R₁)] - 4f0V[max(idx - Δₗ, R₁)] + 3f0V[idx]
+            )
 
-        D[2, idx] = posdrift[2, idx] ? # ∂m
-                ∂₊(V, idx, ik + Δ * (min(j + 1, Δ) - 1), ik + Δ * (min(j + 2, Δ) - 1)) :
-                ∂₋(V, idx, ik + Δ * (max(j - 1, 1) - 1), ik + Δ * (max(j - 2, 1) - 1))
+            inner += D[idx, l] * w[idx, l]
+        end
 
-        D[3, idx] = posdrift[3, idx] ? # ∂y
-                ∂₊(V, idx, ij + Δ² * (min(k + 1, Δ) - 1), ij + Δ² * (min(k + 2, Δ) - 1)) :
-                ∂₋(V, idx, ij + Δ² * (max(k - 1, 1) - 1), ij + Δ² * (max(k - 2, 1) - 1)) 
-    end
-
-    return D 
-end
-
-"""
-Given a V (1 × n) returns a matrix D (3 × n) with rows (∂TV, ∂mV, ∂yV) where and (∂TV, ∂mV, ∂yV) are computed via central differences. Note that V_ijk = V(T, m, y)
-"""
-function central∇V(V::Matrix{Float32})    
-    central∇V!(Matrix{Float32}(undef, 3, size(V, 2)), V)
-end
-function central∇V!(D::Matrix{Float32}, V::Matrix{Float32})
-    dims, n = size(D)
-    Δ = round(Int, n^(1 / dims)) # Assumes n = Δ^dims; |x| ≡ Δ 
-    Δ² = Δ^2
-
-    @inbounds for idx in axes(D, 2)  
-        i = 1 + mod(idx - 1, Δ)
-        j = 1 + mod((idx - i) ÷ Δ, Δ)
-        k = 1 + mod((idx - i - (j - 1) * Δ) ÷ (Δ²), Δ)
-
-        jk = idx - (i - 1)
-        ik = idx - (j - 1) * Δ
-        ij = idx - (k - 1) * Δ²
-
-        D[1, idx] = (ϵ⁻¹ / 2f0) .* (V[jk + (min(i + 1, Δ) - 1)] - V[jk + (max(i - 1, 1) - 1)])
-
-        D[2, idx] = (ϵ⁻¹ / 2f0) .* (V[ik + Δ * (min(j + 1, Δ) - 1)] - V[ik + Δ * (max(j - 1, 1) - 1)])
-
-        D[3, idx] = (ϵ⁻¹ / 2f0) .* (V[ij + Δ² * (min(k + 1, Δ) - 1)] - V[ij + Δ² * (max(k - 1, 1) - 1)])
-    end
-
-    return D 
-end
-
-"Compute second derivative of y in direction of the first input x₁:
-( ∂²/(∂x₁)² f(x₁, x₂, x₃) )"
-function ∂²T(V::Matrix{Float32}; m = 3)
-    D = similar(V)
-    ∂²T!(D, V; m = m)
-end
-function ∂²T!(D::Matrix{Float32}, V::Matrix{Float32}; m = 3)
-    Δ = round(Int, size(V, 2)^(1 / m)) # Assumes n = Δ^m; |x| ≡ Δ 
         
-    @inbounds for idx in axes(D, 2) 
-        i = 1 + mod(idx - 1, Δ)
-        jk = idx - (i - 1)
+        D[idx, 4] = inner
+    end
 
-        D[idx] = ϵ⁻² * (
-            V[jk + (min(i + 1, Δ) - 1)] + 
-            V[jk + (max(i - 1, 1) - 1)] - 
-            2f0 * V[idx]
+    return D 
+end
+
+"""
+Given a Vₜ (n₁ × n₂ × n₃) returns a matrix D (n₁ × n₂ × n₃ × 3), with elements ∇Vₜ and last ∇Vₜ⋅w.
+"""
+function central∇V(V::Array{Float32, 3}, grid::RegularGrid)
+    D = Array{Float32}(undef, size(V, 1), size(V, 2), size(V, 3), length(grid))
+    central∇V!(D, V, grid)
+    return D
+end
+function central∇V!(D::Array{Float32, 4}, V::Array{Float32, 3}, grid::RegularGrid)
+    h = steps(grid)
+
+    if any(h .< ϵ) @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
+
+    twoh⁻¹ = inv.(2f0 .* h)
+
+    R = CartesianIndices(V)
+    R₁, Rₙ = extrema(R)
+
+    # TODO: vectorize
+    for idx in R
+        D[idx, 1] = twoh⁻¹[1] * ( V[min(idx + Δi, Rₙ)] - V[max(idx - Δi, R₁)] )
+        D[idx, 2] = twoh⁻¹[2] * ( V[min(idx + Δj, Rₙ)] - V[max(idx - Δj, R₁)] )
+        D[idx, 3] = twoh⁻¹[3] * ( V[min(idx + Δk, Rₙ)] - V[max(idx - Δk, R₁)] )
+    end
+
+    return D 
+end
+
+"""
+Given a Vₜ (n₁ × n₂ × n₃) computes the second derivative in the direction of the l-th input xₗ.
+"""
+function ∂²(l::Int, V::Array{Float32, 3}, grid::RegularGrid)
+    D² = similar(V)
+    ∂²!(D², V, l, grid)
+    return D²
+end
+function ∂²!(D²::Array{Float32, 3}, l::Int, V::Array{Float32, 3}, grid::RegularGrid)
+    hₗ = steps(grid)[l]
+
+    if (hₗ < ϵ) @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
+
+    hₗ⁻² = inv(hₗ^2)
+
+    R = CartesianIndices(V)
+    R₁, Rₙ = extrema(R)
+
+    # TODO: vectorize
+    for idx in R
+        D²[idx] = hₗ⁻² * (
+            V[min(idx + Δ[l], Rₙ)] - 2f0 * V[idx] + V[max(idx - Δ[l], R₁)]
         )
     end
 
-    return D 
+    return D² 
 end

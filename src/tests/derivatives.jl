@@ -1,79 +1,67 @@
 using Test: @test
 using BenchmarkTools
+using LinearAlgebra, LoopVectorization
 
 include("../utils/derivatives.jl")
 
 # Tolerance for first and second derivatives
 ε¹ = 1f-3
-ε² = 4f-2
+ε² = 2f-2
 
 begin # Initialise three dimensional cube
-    dims = 3 # state space excluding time
-
-    span = paddedrange(0f0, 1f0)
-    idxpadsmall = 3:(length(span) - 2)
-    Δ = length(span)
-
-    X = Iterators.product(fill(span, dims)...) |> collect |> vec
-    n = length(X);
-
-    Xmat = Matrix{Float32}(undef, dims, n)
-    for (i, xᵢ) ∈ enumerate(X)
-        Xmat[:, i] .= xᵢ
-    end
+    domains = [ (0f0, 1f0, 201), (0f0, 1f0, 201), (0f0, 1f0, 201) ];
+    grid = makeregulargrid(domains);
+    n = size(grid);
 end;
 
 # Generating mock data
-v(T, m, y) = sin(T * y * m)
-∇v(T, m, y) = cos(T * m * y) .* [y * m, T * y, T * m]
+X = Iterators.product(grid...) |> collect;
 
-# Exact derivative
-V = Matrix{Float32}(undef, 1, n);
-V′ = Matrix{Float32}(undef, dims, n);
-for i ∈ axes(V, 2)
-    xᵢ = @view Xmat[:, i]
-    V[i] = v(xᵢ...)
-    V′[:, i] .= ∇v(xᵢ...)
-end;
+v(tup) = v(tup[1], tup[2], tup[3]);
+v(T, m, y) = T^2 * y^2 + log(m + 1)
+
+∇v(tup) = ∇v(tup[1], tup[2], tup[3]);
+∇v(T, m, y) = [2T * y^2, 1 / (m + 1), 2y * T^2]
+
+paddedslice(s) = [(1 + s):(n - s) for n ∈ size(V)] # Index without the edge
+begin # Exact derivative
+    V = v.(X);
+    V′ = Array{Float32}(undef, size(V)..., 3);
+    for idx ∈ CartesianIndices(X)
+        V′[idx, :] .= ∇v(X[idx])
+    end;
+end
+
+function absnorm(A, B, order)
+    maximum(abs.(A - B)[paddedslice(order)..., :])
+end
 
 # Central difference
-Dcentral = similar(V′);
-@time central∇V!(Dcentral, V);
+Dcentral = Array{Float32}(undef, size(V)..., length(grid));
+central∇V!(Dcentral, V, grid); @time central∇V!(Dcentral, V, grid);
+centralε = absnorm(Dcentral, V′, 1)
+@test centralε < ε¹
 
-for dim in 1:dims
-    DVmatrix = reshape(Dcentral[dim, :], Δ, Δ, Δ);
-    matrix = reshape(V′[dim, :], Δ, Δ, Δ);
+# Upwind-downind difference
+w = ones(Float32, size(Dcentral));
+D = Array{Float32}(undef, size(V)..., length(grid) + 1);
+dir∇V!(D, V, w, grid); @time dir∇V!(D, V, w, grid);
 
-    errors = abs.((DVmatrix - matrix)[idxpadsmall, idxpadsmall, idxpadsmall])
-    @test all(errors .< ε¹)
-    println("Dimension $dim: max ε = $(maximum(errors))")
-end
+Dfwd = @view D[:, :, :, 1:3];
 
-# Forward difference
-w = -1f0ones(Float32, dims, n);
-D = similar(V′);
-@time dir∇V!(D, V, w);
-
-for dim in 1:dims
-    Dmatrix = reshape(D[dim, :], Δ, Δ, Δ);
-    y′matrix = reshape(V′[dim, :], Δ, Δ, Δ);
-
-    errors = abs.((Dmatrix - y′matrix)[idxpadsmall, idxpadsmall, idxpadsmall]);
-
-    @test all(errors .< ε¹)
-    println("Dimension $dim: max ε = $(maximum(errors))")
-end
+errors = abs.(Dfwd - V′)[paddedslice(2)..., :];
+fwdε = absnorm(Dfwd, V′, 2)
+@test fwdε < ε¹
 
 # Second derivative w.r.t. the first argument
-∂²₁h(T, m, y) = -(m * y)^2 * sin(T * m * y)
-y′′ = similar(D²);
-for col in axes(y′′, 2)
-    y′′[col] = ∂²₁h(X[col]...)
+∂²Tv(T, m, y) = 2y^2
+∂²TV = similar(V);
+for idx ∈ CartesianIndices(V)
+    ∂²TV[idx] = ∂²Tv(X[idx]...)
 end
 
 D² = similar(V);
-∂²T!(D², V); @time ∂²T!(D², V);
+∂²!(D², 1, V, grid); @time ∂²!(D², 1, V, grid);
+T²ε = absnorm(D², ∂²TV, 2)
 
-errormatrix = reshape(abs.(y′′ - D²), Δ, Δ, Δ)[idxpadsmall, idxpadsmall, idxpadsmall];
-
-@test all(errormatrix .< ε²)
+@test all(T²ε .< ε²)
