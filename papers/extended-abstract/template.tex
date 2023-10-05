@@ -1,0 +1,84 @@
+\documentclass[12pt]{article}
+\usepackage[paper=letterpaper,margin=2cm]{geometry}
+\usepackage{amsmath}
+\usepackage{natbib}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{caption} 
+
+\newcommand{\citein}[1]{\citeauthor{#1}, \citeyear{#1}}
+
+% Graphs
+\usepackage{float}
+\usepackage{tikz} 
+\usepackage{tikzit}
+\usepackage{pgfplots}
+\usepackage{ifdraft}
+\usetikzlibrary{positioning,fit,calc,decorations.pathreplacing,calligraphy, arrows.meta, pgfplots.groupplots}
+
+\pgfplotsset{compat=1.18}
+
+\newcommand{\inputtikz}[1]{%  
+    \ifdraft{
+    \includegraphics[width=0.5\textwidth]{example-image-a}
+    }{
+    \IfFileExists{#1}{
+        \input{#1}
+        }{
+        \includegraphics[width=0.5\textwidth]{example-image-a}
+    }
+    }
+}
+
+\title{Climate Tipping Points and Optimal Emissions}
+\author{} %Leave this empty, document must be anonymous
+\date{} %Leave this empty
+
+\begin{document}
+
+\maketitle
+
+\textbf{Keywords:} Social Cost of Carbon, Tipping Points, Climate Change, Environmental Economics
+
+\section{Introduction}
+
+As the world temperature rises, due to carbon dioxide (CO$_2$) emissions from human economic activities, the risk of tipping points in the climate system becomes more concrete (\cite{ashwin_extreme_2020,sledd_cloudier_2021}). This risk affects the social cost of carbon, the marginal damage of increasing carbon emissions. In this paper, I study the relationship between the risk of tipping, optimal emissions, and the social cost of carbon. To do so, I solve a social-planner integrated model with a stylised ice-albedo feedback in the climate dynamics (\cite{hogg_glacial_2008,ashwin_tipping_2012}). I model a tipping point induced by the ice–albedo feedback and study how this affects optimal abatements. The tipping point affects temperature dynamics, and as a consequence optimal emissions, in three ways. First, it introduces a non-linear increase in temperature. Second, it makes positive temperature shocks more persistent than negative ones. Third, it introduces a jump in the abatement necessary to revert temperatures to the pre-tipping-point level. I show that, in this context, it is crucial not only to quickly reach net-zero emissions, but to also flatten the emission curve to reduce the risk of tipping
+
+\section{Methodology}
+
+I study the social planner solution to an integrated model with non-linear climate dynamics. The non-linearity is due to the presence of an ice-albedo feedback. As temperature rises, the earth's surface covered in ice recedes, which reduces the albedo, which, in turns, exacerbates heating. I model this by assuming that the fraction of reflected incoming solar radiation is a decreasing function of temperature, as displayed in Figure \ref{fig:albedo} (\cite{mendez_investigating_2021,oerlemans_ice_1984}). The modelled ice dynamics are highly stylised to keep the model tractable while, at the same time, introduce a relevant bifurcation tipping points in the climate dynamics. Throughout the paper, optimal emissions, investment, and consumption paths are computed vis-à-vis a business-as-usual scenario, which is calibrated using the SSP5 IPCC scenario \citep{kriegler_fossil-fueled_2017}.
+
+The climate affects the economy as increases in temperature beyond pre-industrial levels reduce economic growth \citep{pindyck_economic_2013, hambel_optimal_2021}. This modelling choice, as opposed to having temperatures wipe-out a fraction of the capital stock, as in Nordhaus (\citeyear{nordhaus_estimates_2014,nordhaus_question_2008,nordhaus_revisiting_2017}), is motivated by recent evidence on the role of temperature in reducing economic growth and productivity (\cite{burke_global_2015, dietz_growth_2019}). To introduce this channel, I setup a simple Ramsey growth economy in which temperature deviations increase the rate of capital depreciation (\cite{hambel_optimal_2021}). Production emits CO$_2$, yet, emissivity can be abated by investing in abatement technologies, at increasing marginal costs. Hence, when computing optimal emission paths the social planner attempts to balance the costs of substituting capital with that of climate damages.
+
+The social planner problem is a continuous time, infinite horizon, optimal control problem for an agent with Epstein-Zin preferences. The state space consists in temperature, atmospheric carbon concentration, carbon stored in natural sinks, and economic output. The planner chooses then paths for consumption and abatement investment to maximise the discounted present value of the utility path. The value function is derived numerically via an upwind scheme adapted for problems containing tipping points. Furthermore, a link between the tipping probability and the social cost of carbon is extracted analytically using perturbation techniques developed by \cite{grass_small-noise_2015}.
+
+\section{Results}
+
+To understand the role of the ice-albedo feedback in driving temperature dynamics, in Figure \ref{fig:bau} I show the path of emissions and carbon concentration under the business as usual for a worst case and best case scenario parametrisation of the ice-albedo function. 
+
+\section{Conclusions}
+
+
+The importance of modelling precise climate dynamics and tipping points when determining optimal emission paths has been increasingly recognised in economics (\cite{van_den_bremer_risk-adjusted_2021,dietz_economic_2021,dietz_are_2020,taconet_social_2021,lontzek_stochastic_2015}). Previous approaches have mostly focused on the stochastic nature of tipping points, by modelling temperature dynamics or damages as jump processes, with arrival rates increasing in emissions. Yet, many tipping points in the climate system are caused by bifurcations (\cite{ashwin_extreme_2020,ashwin_tipping_2012}). I show that introducing this class of tipping points in an integrated model yields similar prediction in terms of aggregate emissions, but prescribes much steeper reduction of emissions to keep the risk of tipping low.
+
+\bibliographystyle{apalike}
+\bibliography{../scc-tipping-points.bib}
+
+\newpage
+
+\section*{Figures and tables}
+\begin{figure}[H]
+    \centering
+    \resizebox{\linewidth}{!}{\inputtikz{../../plots/albedo.tikz}}
+    \caption{Albedo coefficients at different levels of temperature deviations from pre-industrial levels $T^{\mathrm{p}}$ and different parametrisations.}
+    \label{fig:albedo}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \resizebox{\linewidth}{!}{\inputtikz{../../plots/baufig.tikz}}
+    \caption{Business as usual path of temperature with small (left) and large (right) albedo drop. Each marker represents the temperature every 20 years, starting from 2020. In black, the \textit{SSP5 - Baseline} model.}
+    \label{fig:bau}
+\end{figure}
+
+\end{document}
