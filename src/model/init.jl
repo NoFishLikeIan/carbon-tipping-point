@@ -62,15 +62,53 @@ function ε(t, M, α)
 end
 
 function drift(t, X, α, χ)
-    T = @view X[[1], :]
-    m = @view X[[2], :]
+    T = @view X[:, :, :, 1]
+    m = @view X[:, :, :, 2]
 
     eref = Ref(economy)
     href = Ref(hogg)
+    aref = Ref(albedo)
 
-    [
-        μ.(T, m, href, Ref(albedo))
-        γᵇ.(t) .- α
-        economy.ϱ .+ ϕ.(χ, A(t, economy), eref) .- A(t, economy) .* β.(t, ε(t, exp.(m), α), eref) .- δₖ.(T, eref, href)
-    ]
+    w = similar(X)
+
+    w[:, :, :, 1] .= μ.(T, m, href, aref)
+
+    w[:, :, :, 2] .= γᵇ.(t) .- α
+    w[:, :, :, 3] .= economy.ϱ .+ ϕ.(χ, A(t, economy), eref) .- A(t, economy) .* β.(t, ε(t, exp.(m), α), eref) .- δₖ.(T, eref, href)
+
+    return w
+end
+
+"""
+Computes the objective functional 
+    f(t, x, χ) + ∂₂V (γ - α) + ∂₃V (ϕ(χ) - A * β(α))
+over the whole state space X
+"""
+function objectivefunctional(t::Float32, V::FieldGrid, ∇V::VectorGrid, X::VectorGrid, P::FieldGrid)
+    objectivefunctional!(Array{Float32}(undef, size(V)..., 3), t::Float32, V::FieldGrid, ∇V::VectorGrid, X::VectorGrid, P::FieldGrid)
+end
+function objectivefunctional!(policy::VectorGrid, t::Float32, V::FieldGrid, ∇V::VectorGrid, X::VectorGrid, P::FieldGrid)
+    ∂₂∇V = @view ∇V[:, :, :, 2]
+    ∂₃∇V = @view ∇V[:, :, :, 3]
+
+    m = @view X[:, :, :, 2]
+    y = @view X[:, :, :, 3]    
+
+    Aₜ = A(t, economy)
+    policy[:, :, :, 3] .= -Inf; 
+    obj = similar(V)
+
+    for i ∈ axes(P, 1), j ∈ axes(P, 2)
+        c = @views P[i, j, :]
+        obj .= f.(c[2], y, V, Ref(economy)) .+ 
+            ∂₂∇V .* (γᵇ(t) - c[1]) .+ 
+            ∂₃∇V .* (ϕ.(c[2], Aₜ, Ref(economy)) .- Aₜ .* β.(t, ε(t, exp.(m), c[1]), Ref(economy)))
+
+        optjdx = obj .> policy[:, :, :, 3];
+        policy[optjdx, [3]] .= obj[optjdx]
+        policy[optjdx, [1]] .= c[1]
+        policy[optjdx, [2]] .= c[2]
+    end
+
+    return policy
 end

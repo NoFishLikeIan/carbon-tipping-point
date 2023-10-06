@@ -53,7 +53,7 @@ end
 
 function f(χ, y, u, economy::Economy)
     @unpack ρ, θ = economy
-    ρ * u * ((1 - θ) * (log(χ) + y) + log((1 - θ) * u))
+    ρ * min(u, -ϵ) * ((1 - θ) * (log(χ) + y) + log((1 - θ) * min(u, -ϵ)))
 end
 
 function ∂f_∂c(c, u, economy::Economy)
