@@ -1,19 +1,3 @@
-# Utilities for regular grid
-RegularGrid = NTuple{3, Vector{Float32}};
-Domain = Tuple{Float32, Float32, Int};
-Domains = Vector{Domain};
-
-steps(grid::RegularGrid) = ntuple(i -> grid[i][2] - grid[i][1], Val(3))
-Base.size(grid::RegularGrid) = prod(length, grid)
-function makeregulargrid(domains::Domains)::RegularGrid
-    ntuple(
-        i -> collect(
-            range(domains[i][1], domains[i][2]; length = domains[i][3])
-        ), 
-        Val(3)
-    )
-end
-
 const ϵ = cbrt(eps(Float32))
 const Δi = CartesianIndex(1, 0, 0);
 const Δj = CartesianIndex(0, 1, 0);
@@ -36,19 +20,17 @@ Given a Vₜ (n₁ × n₂ × n₃) and a drift w (n₁ × n₂ × n₃ × 3) re
 
 The finite difference scheme is computed by using second order forward derivatives if the drift is positive and backwards if it is negative.
 """
-function dir∇V(V::Array{Float32, 3}, w::Array{Float32, 4}, grid::RegularGrid)    
+function dir∇(V::Array{Float32, 3}, w::Array{Float32, 4}, grid::StateRegularGrid)    
     D = Array{Float32}(undef, size(V)..., length(grid) + 1)
-    dir∇V!(D, V, w, grid)
+    dir∇!(D, V, w, grid)
     return D
 end
-function dir∇V!(D::Array{Float32, 4}, V::Array{Float32, 3}, w::Array{Float32, 4}, grid::RegularGrid)
+function dir∇!(D::Array{Float32, 4}, V::Array{Float32, 3}, w::Array{Float32, 4}, grid::StateRegularGrid)
     h = steps(grid)
 
     if any(h .< ϵ) @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
     twoh⁻¹ = inv.(2f0 .* h)
     
-    isdriftpos = w .> 0
-
     R = CartesianIndices(V)
     R₁, Rₙ = extrema(R)
 
@@ -57,7 +39,7 @@ function dir∇V!(D::Array{Float32, 4}, V::Array{Float32, 3}, w::Array{Float32, 
         inner = 0f0
 
         for (l, Δₗ) ∈ enumerate(Δ)
-            D[idx, l] = twoh⁻¹[l] * (isdriftpos[idx, l] ?
+            D[idx, l] = twoh⁻¹[l] * (w[idx, l] > 0 ?
                 -V[min(idx + 2Δₗ, Rₙ)] + 4f0V[min(idx + Δₗ, Rₙ)] - 3f0V[idx] :
                 V[max(idx - 2Δₗ, R₁)] - 4f0V[max(idx - Δₗ, R₁)] + 3f0V[idx]
             )
@@ -75,12 +57,12 @@ end
 """
 Given a Vₜ (n₁ × n₂ × n₃) returns a matrix D (n₁ × n₂ × n₃ × 3), with elements ∇Vₜ and last ∇Vₜ⋅w.
 """
-function central∇V(V::Array{Float32, 3}, grid::RegularGrid)
+function central∇(V::Array{Float32, 3}, grid::StateRegularGrid)
     D = Array{Float32}(undef, size(V, 1), size(V, 2), size(V, 3), length(grid))
-    central∇V!(D, V, grid)
+    central∇!(D, V, grid)
     return D
 end
-function central∇V!(D::Array{Float32, 4}, V::Array{Float32, 3}, grid::RegularGrid)
+function central∇!(D::Array{Float32, 4}, V::Array{Float32, 3}, grid::StateRegularGrid)
     h = steps(grid)
 
     if any(h .< ϵ) @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
@@ -103,12 +85,12 @@ end
 """
 Given a Vₜ (n₁ × n₂ × n₃) computes the second derivative in the direction of the l-th input xₗ.
 """
-function ∂²(l::Int, V::Array{Float32, 3}, grid::RegularGrid)
+function ∂²(l::Int, V::Array{Float32, 3}, grid::StateRegularGrid)
     D² = similar(V)
-    ∂²!(D², V, l, grid)
+    ∂²!(D², l, V, grid)
     return D²
 end
-function ∂²!(D²::Array{Float32, 3}, l::Int, V::Array{Float32, 3}, grid::RegularGrid)
+function ∂²!(D²::Array{Float32, 3}, l::Int, V::Array{Float32, 3}, grid::StateRegularGrid)
     hₗ = steps(grid)[l]
 
     if (hₗ < ϵ) @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
@@ -126,4 +108,27 @@ function ∂²!(D²::Array{Float32, 3}, l::Int, V::Array{Float32, 3}, grid::Regu
     end
 
     return D² 
+end
+
+"""
+Given a function G: [0, ∞) × (n₁ × n₂ × n₃)² → (n₁ × n₂ × n₃), with
+    ∂ₜ Wₜ = G(t, X, Wₜ), 
+a time step h, an evaluation Wₜ, and a time t, computes the Runge-Kutta third order step 
+    Δₕ(G) = (h / 8) * (2k₁ + 3k₂ + 3k₃).
+
+And computes 
+    Wₜ += Δₕ(G)
+"""
+function rkstep!(Wₜ::FieldGrid, G::Function, t::Float32, X::Array{Float32, 4}; h = 1f-2)
+    k₁ = G(t, Wₜ, X)
+    k₂ = G(t + (2f0 / 3f0) * h, Wₜ + (2f0 / 3f0) * h * k₁, X)
+    k₃ = G(t + (2f0 / 3f0) * h, Wₜ + (2f0 / 3f0) * h * k₂, X)
+
+    Wₜ .+= (h / 8f0) * (2k₁ + 3k₂ + 3k₃)
+    return Wₜ
+end
+function rkstep(Wₜ::AbstractArray{Float32, 3}, G::Function, t::Float32, X::Array{Float32, 4}; h = 1f-2)
+    Wₜ₊₁ = copy(Wₜ)
+    rkstep!(Wₜ₊₁, G, t, X; h = h)
+    return Wₜ₊₁
 end
