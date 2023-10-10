@@ -83,9 +83,9 @@ Backup of *.doc*
 *.xdv
 *-converted-to.*
 # these rules will exclude image files for figures, et cetera...
-# *.ps
-# *.eps
-# *.pdf
+*.ps
+*.eps
+*.pdf
 
 ## Generated if empty string given at "Please type another file name for output:"
 .pdf
