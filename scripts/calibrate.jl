@@ -26,7 +26,7 @@ T = last(ipcctime)
 
 Mᵇ = bauscenario[:, "CO2 concentration"]
 Tᵇ = bauscenario[:, "Temperature"]
-Eᵇ = (Gtonoverppm / 1e9) * bauscenario[:, "CO2 emissions"]
+Eᵇ = bauscenario[:, "CO2 emissions"] * 1e-9 # in Gton
 
 begin # Calibrate growth rate γᵇ
     growthdata = Array(log.(Mᵇ)')
@@ -49,17 +49,15 @@ end
 begin # Initial N₀
     baseline = Hogg()
     baseidx = findfirst(==(0), ipcctime)
-    N₀ = δₘ⁻¹(Eᵇ[baseidx] / Mᵇ[baseidx] - γ(0, γparameters, T0), baseline)
+    N₀ = δₘ⁻¹(Gtonoverppm * Eᵇ[baseidx] / Mᵇ[baseidx] - γ(0, γparameters, T0), baseline)
 end
 
 # Save calibration results
 results = Dict(
-    :Eᵇ => Eᵇ, :Tᵇ => Tᵇ, :Mᵇ => Mᵇ, :N₀ => N₀,
+    :Eᵇ => Eᵇ, 
+    :Tᵇ => Tᵇ, :Mᵇ => Mᵇ, :N₀ => N₀,
     :γparameters => (γparameters..., T0),
-    :horizon => 80
+    :horizon => T
 )
 
-save(
-    joinpath(DATAPATH, "calibration.jld2"), 
-    "ipcc", results   
-)
+save(joinpath(DATAPATH, "calibration.jld2"), "calibration", results)

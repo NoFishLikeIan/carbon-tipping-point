@@ -46,55 +46,55 @@ Base.@kwdef struct Hogg
 end
 
 "Decay of carbon"
-function δₘ(M::Float32, hogg::Hogg)
+function δₘ(M, hogg::Hogg)
     N = M * (hogg.N₀ / hogg.M₀)
     return hogg.aδ * exp(-(N - hogg.cδ)^2 / hogg.bδ^2)
 end
 
-function δₘ⁻¹(δ::Float32, hogg::Hogg)
+function δₘ⁻¹(δ, hogg::Hogg)
     N = hogg.cδ + hogg.bδ * √(log(hogg.aδ / δ))
     return log(N * hogg.M₀ / hogg.N₀)
 end
 
 # Albedo functions
 "Heaviside function"
-H(T::Float32, Tₐ::Float32) = (1 + tanh(T / Tₐ)) / 2
-H(T::Float32, albedo::Albedo) = H(T, albedo.Tₐ)
+H(T, Tₐ) = (1 + tanh(T / Tₐ)) / 2
+H(T, albedo::Albedo) = H(T, albedo.Tₐ)
 
 
 "Transition function"
-function L(T::Float32, albedo::Albedo)
+function L(T, albedo::Albedo)
     @unpack T₁, T₂ = albedo
     ((T - T₁) / (T₂ - T₁)) * H(T - T₁, albedo) * H(T₂ - T, albedo) + H(T - T₂, albedo)
 end
 
 "Albedo coefficient"
-λ(T::Float32, albedo::Albedo) = albedo.λ₁ - (albedo.λ₁ - albedo.λ₂) * L(T, albedo)
+λ(T, albedo::Albedo) = albedo.λ₁ - (albedo.λ₁ - albedo.λ₂) * L(T, albedo)
 
 "Radiation dynamics"
-function fₜ(T::Float32, hogg::Hogg, albedo::Albedo)
+function fₜ(T, hogg::Hogg, albedo::Albedo)
     hogg.S₀ * (1 - λ(T, albedo)) - hogg.η * T^4
 end
 
 "CO2 forcing given log of CO2 concentration"
-function fₘ(m::Float32, hogg::Hogg)
+function fₘ(m, hogg::Hogg)
     hogg.G₀ + hogg.G₁ * (m - log(hogg.Mᵖ))
 end
 
-function fₘ⁻¹(r::Float32, hogg::Hogg)
+function fₘ⁻¹(r, hogg::Hogg)
     log(hogg.Mᵖ) + (r - hogg.G₀) / hogg.G₁
 end
 
 
 "Drift temperature dynamics"
-function μ(T::Float32, m::Float32, hogg::Hogg, albedo::Albedo)
+function μ(T, m, hogg::Hogg, albedo::Albedo)
     fₜ(T, hogg, albedo) + fₘ(m, hogg)
 end
 
 
 "Compute CO₂ concentration consistent with temperature T"
-function mstable(T::Float32, hogg::Hogg, albedo::Albedo)
+function mstable(T, hogg::Hogg, albedo::Albedo)
     fₘ⁻¹(-fₜ(T, hogg, albedo), hogg)
 end
 
-Mstable(T::Float32, hogg::Hogg, albedo::Albedo) = exp(mstable(T, hogg, albedo)) 
+Mstable(T, hogg::Hogg, albedo::Albedo) = exp(mstable(T, hogg, albedo)) 
