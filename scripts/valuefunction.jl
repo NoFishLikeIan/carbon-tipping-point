@@ -1,4 +1,4 @@
-using UnPack  
+using UnPack
 using StatsBase
 using NLsolve, Optim
 using LinearAlgebra
@@ -9,9 +9,9 @@ include("../src/model/init.jl")
 
 # -- Generate state cube
 const statedomain::Vector{Domain} = [
-    (hogg.T₀, hogg.T̄, 60), 
-    (log(hogg.M₀), log(hogg.M̄), 60), 
-    (log(economy.Y̲), log(economy.Ȳ), 25)
+    (hogg.T₀, hogg.T̄, 21), 
+    (log(hogg.M₀), log(hogg.M̄), 21), 
+    (log(economy.Y̲), log(economy.Ȳ), 21)
 ];
 const Ω = makeregulargrid(statedomain);
 const Nₛ = size(Ω);
