@@ -1,6 +1,5 @@
 using UnPack
 using StatsBase
-using NLsolve, Optim
 using LinearAlgebra
 
 using BenchmarkTools
@@ -40,9 +39,8 @@ idx = rand(CartesianIndices(V));
 Xᵢ = @view X[idx, :]
 ∇Vᵢ = @view ∇V[idx, :]
 Vᵢ = @view V[idx]
+t = 80f0
+
 
 @btime control($χ, $α, $t, $Xᵢ, $Vᵢ, $∇Vᵢ);
 @btime objectivefunctional!(objective, $χ, $α, $t, $X, $V, $∇V);
-
-policy = Array{Float32}(undef, size(V)..., 2);
-@btime optimalpolicy!(policy, objective, $P, $t, $X, $V, $∇V);
