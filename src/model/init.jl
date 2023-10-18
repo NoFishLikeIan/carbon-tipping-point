@@ -2,7 +2,8 @@ using DotEnv, JLD2
 
 include("climate.jl")
 include("economy.jl")
-include("functions.jl")
+include("pdes.jl")
+include("terminalpde.jl")
 
 const env = DotEnv.config();
 const DATAPATH = get(env, "DATAPATH", "data/");
