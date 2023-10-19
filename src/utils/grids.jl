@@ -24,7 +24,7 @@ function makeregulargrid(domains::Vector{Domain})::RegularGrid
     )
 end
 
-function fromgridtoarray(grid::ActionRegularGrid)::Array{Float32, 3}
+function fromgridtoarray(grid::ActionRegularGrid)
     permutedims(
         collect(reinterpret(
             reshape, Float32, collect(Iterators.product(grid...))
@@ -32,11 +32,22 @@ function fromgridtoarray(grid::ActionRegularGrid)::Array{Float32, 3}
         (2, 3, 1)
     );
 end
-function fromgridtoarray(grid::StateRegularGrid)::Array{Float32, 4}
+function fromgridtoarray(grid::StateRegularGrid)
     permutedims(
         collect(reinterpret(
             reshape, Float32, collect(Iterators.product(grid...))
         )),
         (2, 3, 4, 1)
     );
+end
+
+function fromgridtosharedarray(grid::RegularGrid)
+    gridsize = (length.(grid)..., length(grid))
+    
+    X = SharedArray{Float32, length(Γ) + 1}(gridsize)
+    for idx in CartesianIndices(length.(grid))
+        X[idx, :] .= [grid[i][idx.I[i]] for i in 1:length(idx.I)]
+    end
+    
+    return X
 end

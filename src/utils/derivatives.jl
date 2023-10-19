@@ -5,27 +5,16 @@ const Δk = CartesianIndex(0, 0, 1);
 const Δ = (Δi, Δj, Δk);
 
 """
-Upwind-downind directional derivative of V at idx along direction Δd
-"""
-function ∂(idx::CartesianIndex, V::Array{Float32, 3}, ispos::Bool, Δd::CartesianIndex, Rₑ::Tuple{CartesianIndex, CartesianIndex})
-    if ispos > 0
-        -V[min(idx + 2Δd, Rₑ[2])] + 4f0V[min(idx + Δd, Rₑ[2])] - 3f0V[idx]
-    else
-        V[min(idx - 2Δd, Rₑ[1])] - 4f0V[min(idx - Δd, Rₑ[1])] + 3f0V[idx]
-    end
-end
-
-"""
 Given a Vₜ (n₁ × n₂ × n₃) and a drift w (n₁ × n₂ × n₃ × 3) returns a matrix D (n₁ × n₂ × n₃ × 4), with first three elemnts ∇Vₜ and last ∇Vₜ⋅w.
 
 The finite difference scheme is computed by using second order forward derivatives if the drift is positive and backwards if it is negative.
 """
-function dir∇(V::Array{Float32, 3}, w::Array{Float32, 4}, grid::StateRegularGrid)    
-    D = Array{Float32}(undef, size(V)..., length(grid) + 1)
+function dir∇(V::FieldGrid, w, grid)::VectorGrid  
+    D = Array{Float32}(undef, length.(grid)..., length(grid) + 1)
     dir∇!(D, V, w, grid)
     return D
 end
-function dir∇!(D::Array{Float32, 4}, V::Array{Float32, 3}, w::Array{Float32, 4}, grid::StateRegularGrid)
+function dir∇!(D, V, w, grid)
     h = steps(grid)
 
     if any(h .< ϵ) @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
@@ -34,7 +23,6 @@ function dir∇!(D::Array{Float32, 4}, V::Array{Float32, 3}, w::Array{Float32, 4
     R = CartesianIndices(V)
     R₁, Rₙ = extrema(R)
 
-    # TODO: vectorize
     for idx in R
         inner = 0f0
 
@@ -57,12 +45,12 @@ end
 """
 Given a Vₜ (n₁ × n₂ × n₃) returns a matrix D (n₁ × n₂ × n₃ × 3), with elements ∇Vₜ and last ∇Vₜ⋅w.
 """
-function central∇(V::Array{Float32, 3}, grid::StateRegularGrid)
-    D = Array{Float32}(undef, size(V, 1), size(V, 2), size(V, 3), length(grid))
+function central∇(V::FieldGrid, grid)::VectorGrid
+    D = Array{Float32}(undef, length.(grid)..., length(grid))
     central∇!(D, V, grid)
     return D
 end
-function central∇!(D::Array{Float32, 4}, V::Array{Float32, 3}, grid::StateRegularGrid)
+function central∇!(D, V, grid)
     h = steps(grid)
 
     if any(h .< ϵ) @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
@@ -85,13 +73,13 @@ end
 """
 Given a Vₜ (n₁ × n₂ × n₃) computes the second derivative in the direction of the l-th input xₗ.
 """
-function ∂²(l::Int, V::Array{Float32, 3}, grid::StateRegularGrid)
+function ∂²(V::FieldGrid, grid; dim = 1)::VectorGrid
     D² = similar(V)
-    ∂²!(D², l, V, grid)
+    ∂²!(D², V, grid; dim = dim)
     return D²
 end
-function ∂²!(D²::Array{Float32, 3}, l::Int, V::Array{Float32, 3}, grid::StateRegularGrid)
-    hₗ = steps(grid)[l]
+function ∂²!(D², V, grid; dim = 1)
+    hₗ = steps(grid)[dim]
 
     if (hₗ < ϵ) @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
 
@@ -103,7 +91,7 @@ function ∂²!(D²::Array{Float32, 3}, l::Int, V::Array{Float32, 3}, grid::Stat
     # TODO: vectorize
     for idx in R
         D²[idx] = hₗ⁻² * (
-            V[min(idx + Δ[l], Rₙ)] - 2f0 * V[idx] + V[max(idx - Δ[l], R₁)]
+            V[min(idx + Δ[dim], Rₙ)] - 2f0 * V[idx] + V[max(idx - Δ[dim], R₁)]
         )
     end
 
