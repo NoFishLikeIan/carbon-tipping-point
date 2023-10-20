@@ -10,8 +10,8 @@ function central∇(V::SharedFieldGrid, grid)::SharedVectorGrid
     return D
 end
 
-function ∂²(V::SharedFieldGrid, grid; dim = 1)::SharedVectorGrid
-    D² = similar(V)
+function ∂²(V::SharedFieldGrid, grid; dim = 1)::SharedFieldGrid
+    D² = SharedArray{Float32, 3}(size(V))
     ∂²!(D², V, grid; dim = dim)
     return D²
 end

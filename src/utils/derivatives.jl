@@ -45,7 +45,7 @@ end
 """
 Given a Vₜ (n₁ × n₂ × n₃) returns a matrix D (n₁ × n₂ × n₃ × 3), with elements ∇Vₜ and last ∇Vₜ⋅w.
 """
-function central∇(V::FieldGrid, grid)::VectorGrid
+function central∇(V, grid)
     D = Array{Float32}(undef, length.(grid)..., length(grid))
     central∇!(D, V, grid)
     return D
@@ -73,7 +73,7 @@ end
 """
 Given a Vₜ (n₁ × n₂ × n₃) computes the second derivative in the direction of the l-th input xₗ.
 """
-function ∂²(V::FieldGrid, grid; dim = 1)::VectorGrid
+function ∂²(V::FieldGrid, grid; dim = 1)::FieldGrid
     D² = similar(V)
     ∂²!(D², V, grid; dim = dim)
     return D²
