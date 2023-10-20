@@ -1,84 +1,6 @@
-function ε(t, M, α)
-    1f0 .- M .* (δₘ.(M, Ref(hogg)) .+ γᵇ(t) .- α) ./ (Gtonoverppm * Eᵇ(t))
-end
-
-function drift(t, X, α, χ)
-    T = @view X[:, :, :, 1]
-    m = @view X[:, :, :, 2]
-
-    w = similar(X)
-
-    w[:, :, :, 1] .= μ.(T, m, Ref(hogg), Ref(albedo))
-
-    w[:, :, :, 2] .= γᵇ.(t) .- α
-    w[:, :, :, 3] .= economy.ϱ .+ ϕ.(χ, A(t, economy), Ref(economy)) .- A(t, economy) .* β.(t, ε(t, exp.(m), α), Ref(economy)) .- δₖ.(T, Ref(economy), Ref(hogg))
-
-    return w
-end
-
-function objectivefunction(χ, α, t, Xᵢ, Vᵢ, ∇Vᵢ)
-    f(χ, Xᵢ[3], Vᵢ[1], economy) + 
-        ∇Vᵢ[2] * (γᵇ(t) - α) + 
-        ∇Vᵢ[3] * (
-            ϕ(χ,  A(t, economy), economy) -  A(t, economy) * β(t, ε(t, exp(Xᵢ[2]), α), economy)
-        )
-end
-
-function optimalpolicy(t, Xᵢ, Vᵢ, ∇Vᵢ, Γ)
-    objective = -Inf32
-    χᵒ = 0f0;
-    αᵒ = 0f0; 
-
-    for χ ∈ Γ[1], α ∈ Γ[2]
-        objᵢ = objectivefunction(χ, α, t, Xᵢ, Vᵢ, ∇Vᵢ);
-        if objᵢ > objective
-            χᵒ = χ
-            αᵒ = α
-            objective = objᵢ
-        end
-    end
-
-    return χᵒ, αᵒ
-end
-
 """
-Computes the optimal policy (χᵒ, αᵒ) over the state space X
+Computes the Hamilton-Jacobi-Bellmann equation at point Xᵢ
 """
-function policyovergrid(t::Float32, X::VectorGrid, V::FieldGrid, ∇V::VectorGrid, Γ)
-    policyovergrid!(
-        Array{Float32}(undef, size(V)..., 2), 
-        t, X, V, ∇V, Γ
-    )
-end
-function policyovergrid!(
-    policy::SharedVectorGrid, 
-    t::Float32, X::VectorGrid, V::FieldGrid, ∇V::VectorGrid, Γ)
-    
-    @inbounds @distributed for idx ∈ CartesianIndices(V)
-        Xᵢ = @view X[idx, :]
-        ∇Vᵢ = @view ∇V[idx, :]
-        Vᵢ = @view V[idx]
-
-        policy[idx, :] .= optimalpolicy(t, Xᵢ, Vᵢ, ∇Vᵢ, Γ)
-    end
-
-    return policy
-end
-function policyovergrid!(
-    policy::VectorGrid, 
-    t::Float32, X::VectorGrid, V::FieldGrid, ∇V::VectorGrid, Γ)
-    
-    @inbounds for idx ∈ CartesianIndices(V)
-        Xᵢ = @view X[idx, :]
-        ∇Vᵢ = @view ∇V[idx, :]
-        Vᵢ = @view V[idx]
-
-        policy[idx, :] .= optimalpolicy(t, Xᵢ, Vᵢ, ∇Vᵢ, Γ)
-    end
-
-    return policy
-end
-
 function hjb(χ, α, t, Xᵢ, Vᵢ, ∇Vᵢ, ∂²Vᵢ)
     f(χ, Xᵢ[3], Vᵢ[1], economy) + 
         ∇Vᵢ[1] * μ(Xᵢ[1], Xᵢ[2], hogg, albedo) +
@@ -91,10 +13,92 @@ function hjb(χ, α, t, Xᵢ, Vᵢ, ∇Vᵢ, ∂²Vᵢ)
         ∂²Vᵢ[1] * hogg.σ²ₜ / 2f0
 end
 
-G(t::Float32, X::VectorGrid, V::FieldGrid, ∇V::VectorGrid, policy::VectorGrid) = G!(similar(V), t, X, V, ∇V, policy)
-function G!(∂ₜV::FieldGrid, t::Float32, X::VectorGrid, V::FieldGrid, Ω, Γ)
-    policy = policyovergrid(t, X, V, central∇(V, Ω), Γ);
-    w = drift(economy.t₁, X, γᵇ(economy.t₁), χ̄);
-    ∇V = dir∇(V̄, w, Ω);
-    ∂ₜV .= f.(χ̄, X[:, :, :, 3], V̄, Ref(economy)) + ∇V[:, :, :, 4] .+ ∂²(1, V̄, Ω) .* hogg.σ²ₜ / 2f0
+"""
+Computes the the objective functional at point Xᵢ which depends on the control.
+"""
+function objectivefunction(χ, α, t, Xᵢ, Vᵢ, ∇Vᵢ)
+    f(χ, Xᵢ[3], Vᵢ[1], economy) + 
+        ∇Vᵢ[2] * (γᵇ(t) - α) + 
+        ∇Vᵢ[3] * (
+            ϕ(χ,  A(t, economy), economy) -  A(t, economy) * β(t, ε(t, exp(Xᵢ[2]), α), economy)
+        )
 end
+
+
+"""
+Computes the the optimal policy at point Xᵢ. P is assumed to be a Latin Hyper Grid.
+"""
+function optimalpolicy(t, Xᵢ, Vᵢ, ∇Vᵢ, P)
+    objective = -Inf32
+    copt = @view P[1, :]
+
+    for i ∈ axes(P, 1)
+        c = @view P[i, :]
+
+        o = objectivefunction(c[1], c[2], t, Xᵢ, Vᵢ, ∇Vᵢ);
+        if o > objective
+            copt = c
+            objective = o
+        end
+    end
+
+    return copt
+end
+
+"""
+Computes the optimal policy (χ', α') over the state space X
+"""
+function policyovergrid(t, X, V, ∇V, P)
+    policyovergrid!(SharedArray{Float32, 4}((size(V)..., 2)), t, X, V, ∇V, P)
+end
+function policyovergrid!(policy::SVectorGrid, t, X, V, ∇V, P)
+    @sync @distributed for idx ∈ CartesianIndices(V)
+        Xᵢ = @view X[idx, :]
+        ∇Vᵢ = @view ∇V[idx, :]
+        Vᵢ = @view V[idx]
+
+        policy[idx, :] .= optimalpolicy(t, Xᵢ, Vᵢ, ∇Vᵢ, P)
+    end
+
+    return policy
+end
+function policyovergrid!(policy::VectorGrid, t, X, V, ∇V, P)
+    for idx ∈ CartesianIndices(V)
+        Xᵢ = @view X[idx, :]
+        ∇Vᵢ = @view ∇V[idx, :]
+        Vᵢ = @view V[idx]
+
+        policy[idx, :] .= optimalpolicy(t, Xᵢ, Vᵢ, ∇Vᵢ, P)
+    end
+    
+    return policy
+end
+
+function G(t, X, V, Ω, P)
+    G!(
+        Array{Float32}(undef, size(V)), # ∂ₜV
+        Array{Float32}(undef, size(V)..., 4), # ∇V
+        Array{Float32}(undef, size(V)..., 3), # w
+        SharedArray{Float32, 4}((size(V)..., 2)), # policy
+        t, X, V, Ω, P
+    )
+end
+"""
+Computes G! by modifying (∂ₜV, ∇V, policy, w)
+"""
+function G!(∂ₜV::FieldGrid, ∇V::VectorGrid, w, policy, t, X, V, Ω, P)
+    central∇!(∇V, V, Ω)
+    policyovergrid!(policy, t, X, V, ∇V, P);
+
+    χ = @view policy[:, :, :, 1];
+    α = @view policy[:, :, :, 2];
+
+    drift!(w, χ, α, t, X);
+    dir∇!(∇V, V, w, Ω);
+
+    ∂ₜV .= f.(χ, X[:, :, :, 3], V, Ref(economy)) + ∇V[:, :, :, 4] .+ ∂²(V, Ω; dim = 1) .* hogg.σ²ₜ / 2f0
+
+    return ∂ₜV
+end
+
+

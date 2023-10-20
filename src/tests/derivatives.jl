@@ -11,7 +11,7 @@ include("../utils/derivatives.jl")
 
 begin # Initialise three dimensional cube
     domains = [ (0f0, 1f0, 201), (0f0, 1f0, 201), (0f0, 1f0, 201) ];
-    grid = makeregulargrid(domains);
+    grid = makegrid(domains);
     n = size(grid);
 end;
 
@@ -69,8 +69,8 @@ end
 
 println("--- Second derivative")
 D² = similar(V);
-@btime ∂²!($D², 1, $V, $grid);
-∂²!(D², 1, V, grid); 
+@btime ∂²!($D², $V, $grid);
+∂²!(D², V, grid); 
 T²ε = absnorm(D², ∂²TV, 2);
 @test all(T²ε .< ε²)
 

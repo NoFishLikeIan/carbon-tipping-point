@@ -1,86 +1,103 @@
+using Test
 using Distributed, SharedArrays
 addprocs(3);
 
 @everywhere begin
-    using UnPack 
-    
-    include("../../src/utils/grids.jl")
-    include("../../src/utils/derivatives.jl")
-    include("../../src/model/init.jl")
+    using UnPack
+    using SharedArrays
+    using LatinHypercubeSampling
 end
 
+@everywhere begin 
+    include("../../src/utils/grids.jl")
+    include("../../src/utils/derivatives.jl")
+    include("../../src/model/pdes.jl")
+end
+
+# This is done on the side to avoid redefining constants
+@everywhere include("../../src/model/init.jl")
+
 # -- Generate state cube
-n = 51
-const statedomain::Vector{Domain} = [
-    (hogg.T₀, hogg.T̄, n), 
-    (log(hogg.M₀), log(hogg.M̄), n), 
-    (log(economy.Y̲), log(economy.Ȳ), n)
+statedomain = [
+    (hogg.T₀, hogg.T̄, 21), 
+    (log(hogg.M₀), log(hogg.M̄), 21), 
+    (log(economy.Y̲), log(economy.Ȳ), 21)
 ];
-const Ω = makeregulargrid(statedomain);
-const X = fromgridtoarray(Ω);
+Ω = makegrid(statedomain);
+X = fromgridtoarray(Ω);
 
 # -- Generate action square
-m = 51
-const actiondomain::Vector{Domain} = [
-    (1f-3, 1f0 - 1f-3, m), (1f-3, 1f0 - 1f-3, m)
-]
-
-const Γ = makeregulargrid(actiondomain);
-const P = fromgridtoarray(Γ);
+m = 1200 # Number of points in policy grid
+actiondomain = [(1f-3, 1f0 - 1f-3), (1f-3, 1f0 - 1f-3)];
+P = makegrid(actiondomain, m);
 
 # ---- Benchmarking
-V = -rand(Float32, size(X[:, :, :, 1])) .- 1f0;
-∇V = central∇(V, Ω);
-∂²V = ∂²(1, V, Ω);
-
-α = χ = 0.5f0;
-objective = similar(V);
-terminalpolicy = similar(V);
-idx = rand(CartesianIndices(V));
-
-t = 80f0;
-Xᵢ = @view X[idx, :];
-Vᵢ = @view V[idx];
-∇Vᵢ = @view ∇V[idx, :];
-∂²Vᵢ = @view ∂²V[idx];
-
 using BenchmarkTools
+
+begin # Value function and derivatives
+    V = rand(Float32, length.(Ω)) .- 1f0;
+    ∇V = central∇(V, Ω);
+    ∂²V = ∂²(V, Ω);
+end;
+
+# Some sample data
+begin
+    t = 5f0 
+    idx = rand(CartesianIndices(V))
+    jdx = rand(axes(P, 1))
+    αᵢ, χᵢ = @view P[jdx, :]
+    Xᵢ = @view X[idx, :]
+    Vᵢ = @view V[idx]
+    ∇Vᵢ = @view ∇V[idx, :]
+    ∂²Vᵢ = @view ∂²V[idx]
+end;
 
 begin
     println("HJB given control...")
-    @btime hjb($χ, $α, $t, $Xᵢ, $Vᵢ, $∇Vᵢ, $∂²Vᵢ);
+    @btime hjb($χᵢ, $αᵢ, $t, $Xᵢ, $Vᵢ, $∇Vᵢ, $∂²Vᵢ);
 
     println("Objective functional given control...")
-    @btime objectivefunction($χ, $α, $t, $Xᵢ, $Vᵢ, $∇Vᵢ);
+    @btime objectivefunction($χᵢ, $αᵢ, $t, $Xᵢ, $Vᵢ, $∇Vᵢ);
 
     println("Optimal policy at a given point...")
-    @btime optimalpolicy($t, $Xᵢ, $Vᵢ, $∇Vᵢ, $Γ);
-    @btime terminalpolicyovergrid!(terminalpolicy, $X, $V, $∇V, $Γ);
-
-
-    # FIXME: the distributed value gives wrong values.
-    println("Optimal policy on the full grid...")
-    policy = SharedArray{Float32, 4}((size(V)..., 2));
-    policyovergrid!(policy, t, X, V, ∇V, Γ); @time policyovergrid!(policy, t, X, V, ∇V, Γ);
-
-    nondistpolicy = Array{Float32, 4}(undef, (size(V)..., 2));
-    policyovergrid!(nondistpolicy, t, X, V, ∇V, Γ); @time policyovergrid!(nondistpolicy, t, X, V, ∇V, Γ);
-    # @btime policyovergrid!(policy, $t, $X, $V, $∇V, $Γ); # FIXME: @btime not working for distributed
+    @btime optimalpolicy($t, $Xᵢ, $Vᵢ, $∇Vᵢ, $P);
 end;
 
-if false
-    ∂ₜV = similar(V);
-    @btime Ḡ!(∂ₜV, $V, $X, $Ω, $Γ);
+println("Optimal policy on the full grid...")
+policysize = (size(V)..., 2);
 
-    ∂ₜV = vec(∂ₜV);
-    const V₀ = (-1f0 .- rand(Float32, length(V)));
-    function Ḡ!(∂ₜV::Vector{Float32}, V::Vector{Float32}, p, t)
-        ∂ₜV .= vec(Ḡ(reshape(V, n, n, n), X, Ω, Γ)) .* (V .< 0)
-    end
+println("Single core...")
+nondistpolicy = Array{Float32, 4}(undef, policysize);
+@btime policyovergrid!($nondistpolicy, $t, $X, $V, $∇V, $P);
 
-    @time Ḡ!(∂ₜV, V₀, [], 0f0);
-    prob = ODEProblem(Ḡ!, V₀, (0f0, 1f0));
-    sol = solve(prob)
+println("$(nprocs()) cores...")
+policy = SharedArray{Float32, 4}(policysize, init = S -> S .= NaN);
+@btime policyovergrid!($policy, $t, $X, $V, $∇V, $P);
 
-    terminalproblem = SteadyStateProblem(prob);
+begin
+    println("Asserting correctness...")
+
+    c′ = optimalpolicy(t, Xᵢ, Vᵢ, ∇Vᵢ, P);
+    @test all(nondistpolicy[idx, :] .== c′);
+    @test all(policy[idx, :] .== c′);
+    @test all(nondistpolicy .≈ policy)
 end
+
+# -- Benchmarking G
+∂ₜV = similar(V);
+w = Array{Float32}(undef, size(V)..., 3);
+∇V = Array{Float32}(undef, size(V)..., 4);
+@btime G($t, $X, $V, $Ω, $P);
+@btime G!($∂ₜV, $∇V, $w, $policy, $t, $X, $V, $Ω, $P);
+
+∂ₜV = vec(∂ₜV);
+const V₀ = (-1f0 .- rand(Float32, length(V)));
+function Ḡ!(∂ₜV::Vector{Float32}, V::Vector{Float32}, p, t)
+    ∂ₜV .= vec(Ḡ(reshape(V, n, n, n), X, Ω, Γ)) .* (V .< 0)
+end
+
+@time Ḡ!(∂ₜV, V₀, [], 0f0);
+prob = ODEProblem(Ḡ!, V₀, (0f0, 1f0));
+sol = solve(prob)
+
+terminalproblem = SteadyStateProblem(prob);
