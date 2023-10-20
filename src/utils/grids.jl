@@ -1,21 +1,17 @@
 using Base.Iterators: product
-using SharedArrays: SharedArray
 
-# Utilities for regular grid
-Domain = Tuple{Float32, Float32, Int};
+# Utilities for state grid, which have to be regular;
+RegularDomain = Tuple{Float32, Float32, Int};
+StateGrid = NTuple{3, Vector{Float32}};
 
-ActionRegularGrid = NTuple{2, Vector{Float32}};
-StateRegularGrid = NTuple{3, Vector{Float32}};
-RegularGrid = Union{StateRegularGrid, ActionRegularGrid};
 FieldGrid = Array{Float32, 3};
-SharedFieldGrid = SharedArray{Float32, 3};
-
 VectorGrid = Array{Float32, 4};
-SharedVectorGrid = SharedArray{Float32, 4};
+SVectorGrid = SharedArray{Float32, 4};
 
-steps(grid::RegularGrid) = ntuple(i -> grid[i][2] - grid[i][1], Val(3))
-Base.size(grid::RegularGrid) = prod(length, grid)
-function makeregulargrid(domains::Vector{Domain})::RegularGrid
+steps(grid) = ntuple(i -> grid[i][2] - grid[i][1], Val(3))
+Base.size(grid) = prod(length, grid)
+
+function makegrid(domains::Vector{RegularDomain})
     ntuple(
         i -> collect(
             range(domains[i][1], domains[i][2]; length = domains[i][3])
@@ -24,30 +20,18 @@ function makeregulargrid(domains::Vector{Domain})::RegularGrid
     )
 end
 
-function fromgridtoarray(grid::ActionRegularGrid)
+function fromgridtoarray(grid)::VectorGrid
     permutedims(
         collect(reinterpret(
             reshape, Float32, collect(Iterators.product(grid...))
         )),
-        (2, 3, 1)
-    );
-end
-function fromgridtoarray(grid::StateRegularGrid)
-    permutedims(
-        collect(reinterpret(
-            reshape, Float32, collect(Iterators.product(grid...))
-        )),
-        (2, 3, 4, 1)
+        (2, 3, 4, 1) # Re-orders the columns
     );
 end
 
-function fromgridtosharedarray(grid::RegularGrid)
-    gridsize = (length.(grid)..., length(grid))
-    
-    X = SharedArray{Float32, length(Γ) + 1}(gridsize)
-    for idx in CartesianIndices(length.(grid))
-        X[idx, :] .= [grid[i][idx.I[i]] for i in 1:length(idx.I)]
-    end
-    
-    return X
+# Utilities for action grid, relying on LatinHypercubeSampling
+LatinDomain = Tuple{Float32, Float32}
+
+function makegrid(domains::Vector{LatinDomain}, n)
+    Float32.(scaleLHC(randomLHC(n, 2), domains))
 end
