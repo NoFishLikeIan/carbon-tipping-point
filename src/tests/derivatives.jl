@@ -42,8 +42,8 @@ println("Testing and benchmarking:")
 # Central difference
 println("--- Central Difference Scheme")
 Dcentral = Array{Float32}(undef, size(V)..., length(grid));
-@btime central∇!($Dcentral, $V, $grid);
 central∇!(Dcentral, V, grid);
+@btime central∇!($Dcentral, $V, $grid);
 centralε = absnorm(Dcentral, V′, 1)
 @test centralε < ε¹
 

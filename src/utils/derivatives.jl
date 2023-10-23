@@ -1,8 +1,38 @@
-const ϵ = cbrt(eps(Float32))
+using Polyester: @batch
+
+const ϵ = cbrt(eps(Float32));
 const Δi = CartesianIndex(1, 0, 0);
 const Δj = CartesianIndex(0, 1, 0);
 const Δk = CartesianIndex(0, 0, 1);
 const Δ = (Δi, Δj, Δk);
+
+"""
+Given a Vₜ (n₁ × n₂ × n₃) returns a matrix D (n₁ × n₂ × n₃ × 3), with elements ∇Vₜ and last ∇Vₜ⋅w.
+"""
+function central∇(V, grid)
+    D = OffsetArray(similar(V))
+
+    D = Array{Float32}(undef, length.(grid)..., length(grid))
+    central∇!(D, V, grid)
+    return D
+end
+function central∇!(D, V, grid)
+    h = steps(grid)
+    dimensions = length(grid)
+
+    if any(h .< ϵ) @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
+
+    twoh⁻¹ = inv.(2f0 .* h)
+
+    R = CartesianIndices(V)
+    R₁, Rₙ = extrema(R)
+
+    @batch for I in R, d in axes(D, dimensions + 1)
+        D[I, d] = twoh⁻¹[d] * ( V[min(I + Δ[d], Rₙ)] - V[max(I - Δ[d], R₁)] )
+    end
+
+    return D 
+end
 
 """
 Given a Vₜ (n₁ × n₂ × n₃) and a drift w (n₁ × n₂ × n₃ × 3) returns a matrix D (n₁ × n₂ × n₃ × 4), with first three elemnts ∇Vₜ and last ∇Vₜ⋅w.
@@ -22,49 +52,22 @@ function dir∇!(D, V, w, grid)
     
     R = CartesianIndices(V)
     R₁, Rₙ = extrema(R)
+    temp = 0f0
 
-    for idx in R
-        inner = 0f0
+    @batch for I in R
+        temp = 0f0
 
         for (l, Δₗ) ∈ enumerate(Δ)
-            D[idx, l] = twoh⁻¹[l] * (w[idx, l] > 0 ?
-                -V[min(idx + 2Δₗ, Rₙ)] + 4f0V[min(idx + Δₗ, Rₙ)] - 3f0V[idx] :
-                V[max(idx - 2Δₗ, R₁)] - 4f0V[max(idx - Δₗ, R₁)] + 3f0V[idx]
+            D[I, l] = twoh⁻¹[l] * ifelse(w[I, l] > 0,
+                -V[min(I + 2Δₗ, Rₙ)] + 4f0V[min(I + Δₗ, Rₙ)] - 3f0V[I],
+                V[max(I - 2Δₗ, R₁)] - 4f0V[max(I - Δₗ, R₁)] + 3f0V[I]
             )
 
-            inner += D[idx, l] * w[idx, l]
+            temp += D[I, l] * w[I, l]
         end
 
         
-        D[idx, 4] = inner
-    end
-
-    return D 
-end
-
-"""
-Given a Vₜ (n₁ × n₂ × n₃) returns a matrix D (n₁ × n₂ × n₃ × 3), with elements ∇Vₜ and last ∇Vₜ⋅w.
-"""
-function central∇(V, grid)
-    D = Array{Float32}(undef, length.(grid)..., length(grid))
-    central∇!(D, V, grid)
-    return D
-end
-function central∇!(D, V, grid)
-    h = steps(grid)
-
-    if any(h .< ϵ) @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
-
-    twoh⁻¹ = inv.(2f0 .* h)
-
-    R = CartesianIndices(V)
-    R₁, Rₙ = extrema(R)
-
-    # TODO: vectorize
-    for idx in R
-        D[idx, 1] = twoh⁻¹[1] * ( V[min(idx + Δi, Rₙ)] - V[max(idx - Δi, R₁)] )
-        D[idx, 2] = twoh⁻¹[2] * ( V[min(idx + Δj, Rₙ)] - V[max(idx - Δj, R₁)] )
-        D[idx, 3] = twoh⁻¹[3] * ( V[min(idx + Δk, Rₙ)] - V[max(idx - Δk, R₁)] )
+        D[I, 4] = temp
     end
 
     return D 
@@ -87,9 +90,8 @@ function ∂²!(D², V, grid; dim = 1)
 
     R = CartesianIndices(V)
     R₁, Rₙ = extrema(R)
-
-    # TODO: vectorize
-    for idx in R
+    
+    @batch for idx in R
         D²[idx] = hₗ⁻² * (
             V[min(idx + Δ[dim], Rₙ)] - 2f0 * V[idx] + V[max(idx - Δ[dim], R₁)]
         )
