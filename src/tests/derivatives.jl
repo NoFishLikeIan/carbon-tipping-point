@@ -47,6 +47,10 @@ central∇!(Dcentral, V, grid);
 centralε = absnorm(Dcentral, V′, 1)
 @test centralε < ε¹
 
+∂₂V = Array{Float32}(undef, size(V));
+central∂!(∂₂V, V, grid; direction = 2);
+@test all(∂₂V .≈ Dcentral[:, :, :, 2])
+
 # Upwind-downind difference
 println("--- Upwind scheme")
 w = ones(Float32, size(Dcentral));
@@ -59,6 +63,9 @@ Dfwd = @view D[:, :, :, 1:3];
 errors = abs.(Dfwd - V′)[paddedslice(2)..., :];
 fwdε = absnorm(Dfwd, V′, 2)
 @test fwdε < ε¹
+
+dir∂!(∂₂V, V, w, grid; direction = 2);
+@test all(∂₂V .≈ Dfwd[:, :, :, 2])
 
 # Second derivative w.r.t. the first argument
 ∂²Tv(T, m, y) = 2y^2

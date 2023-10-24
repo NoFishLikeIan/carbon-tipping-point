@@ -12,36 +12,59 @@ function makeΔ(n)
 end
 
 """
-Given a Vₜ (n₁ × n₂ × n₃) returns a matrix D (n₁ × n₂ × n₃ × 3), with elements ∇Vₜ and last ∇Vₜ⋅w.
+Given a Vₜ (n₁ × n₂ ... × nₘ) returns a matrix D (n₁ × n₂ ... × nₘ × m), with elements ∇Vₜ and last ∇Vₜ⋅w.
 """
 function central∇(V, grid)
     D = Array{Float32}(undef, length.(grid)..., length(grid))
     central∇!(D, V, grid)
     return D
 end
-function central∇!(D, V, grid)
+function central∇!(D, V, grid::StateGrid)
     h = steps(grid); twoh⁻¹ = inv.(2f0 .* h);
     if any(h .< ϵ) @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
 
-    dimensions = length(grid)
-    Δ = makeΔ(dimensions)
+    dimension = length(size(V))
+    Δ = makeΔ(dimension)
 
     Iₗ, Iᵤ = CartesianIndices(V) |> extrema
 
-    @batch for I in CartesianIndices(V), d in axes(D, dimensions + 1)
-        D[I, d] = twoh⁻¹[d] * ( V[min(I + Δ[d], Iᵤ)] - V[max(I - Δ[d], Iₗ)] )
+    @batch for I in CartesianIndices(V), l in last(axes(D))
+        D[I, l] = twoh⁻¹[l] * ( V[min(I + Δ[l], Iᵤ)] - V[max(I - Δ[l], Iₗ)] )
+    end
+
+    return D 
+end
+
+function central∂(V, grid; direction = 1)
+    D = similar(V)
+    central∂!(D, V, grid; direction = direction)
+    return D
+end
+function central∂!(D, V, grid; direction = direction)
+    h = steps(grid)[direction]; twoh⁻¹ = inv(2f0 .* h);
+    if h < ϵ @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
+
+    Δᵢ = makeΔ(length(grid))[direction]
+
+    Iₗ, Iᵤ = CartesianIndices(V) |> extrema
+
+    @batch for I in CartesianIndices(V)
+        D[I] = twoh⁻¹ * ( V[min(I + Δᵢ, Iᵤ)] - V[max(I - Δᵢ, Iₗ)] )
     end
 
     return D 
 end
 
 """
-Given a Vₜ (n₁ × n₂ ... × nₘ) and a drift w (n₁ × n₂ ... × nₘ × 3) returns a matrix D (n₁ × n₂ ... × nₘ × 4), with first three elemnts ∇Vₜ and last ∇Vₜ⋅w.
+Given a `Vₜ` `(n₁ × n₂ ... × nₘ)` and a drift `w` `(n₁ × n₂ ... × nₘ × m)` returns a matrix `D` `(n₁ × n₂ ... × nₘ × (m + 1))`, with first three elemnts ∇Vₜ and last ∇Vₜ⋅w. If `withdot = false` then ∇Vₜ⋅w is not computed and `D` has size `(n₁ × n₂ ... × nₘ × m)`
 
 The finite difference scheme is computed by using second order forward derivatives if the drift is positive and backwards if it is negative.
+
 """
 function dir∇(V, w, grid)
-    D = Array{Float32}(undef, length.(grid)..., length(grid) + 1)
+    m = length(grid) + Int(withdot ? 1 : 0)
+
+    D = Array{Float32}(undef, length.(grid)..., m)
     dir∇!(D, V, w, grid)
     return D
 end
@@ -49,8 +72,8 @@ function dir∇!(D, V, w, grid)
     h = steps(grid); twoh⁻¹ = inv.(2f0 .* h);
     if any(h .< ϵ) @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
 
-    dimensions = length(grid)
-    Δ = makeΔ(dimensions)
+    dimension = length(grid)
+    Δ = makeΔ(dimension)
     
     Iₗ, Iᵤ = CartesianIndices(V) |> extrema
     temp = 0f0
@@ -58,15 +81,39 @@ function dir∇!(D, V, w, grid)
     @batch for I in CartesianIndices(V)
         temp = 0f0
 
-        for (l, Δₗ) ∈ enumerate(Δ)
+        for l ∈ 1:dimension
             D[I, l] = twoh⁻¹[l] * ifelse(w[I, l] > 0,
-                -V[min(I + 2Δₗ, Iᵤ)] + 4f0V[min(I + Δₗ, Iᵤ)] - 3f0V[I],
-                V[max(I - 2Δₗ, Iₗ)] - 4f0V[max(I - Δₗ, Iₗ)] + 3f0V[I]
+                -V[min(I + 2Δ[l], Iᵤ)] + 4f0V[min(I + Δ[l], Iᵤ)] - 3f0V[I],
+                V[max(I - 2Δ[l], Iₗ)] - 4f0V[max(I - Δ[l], Iₗ)] + 3f0V[I]
             )
 
             temp += D[I, l] * w[I, l]
-        end        
-        D[I, dimensions + 1] = temp
+        end
+
+        D[I, dimension + 1] = temp
+    end
+
+    return D 
+end
+
+function dir∂(V, w, grid; direction = 1)
+    D = similar(V)
+    dir∂!(D, V, w, grid; direction = direction)
+    return D
+end
+function dir∂!(D, V, w, grid; direction = direction)
+    h = steps(grid)[direction]; twoh⁻¹ = inv(2f0 .* h);
+    if h < ϵ @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
+
+    Δᵢ = makeΔ(length(grid))[direction]
+
+    Iₗ, Iᵤ = CartesianIndices(V) |> extrema
+
+    @batch for I in CartesianIndices(V)
+        D[I] = twoh⁻¹ * ifelse(w[I] > 0,
+            -V[min(I + 2Δᵢ, Iᵤ)] + 4f0V[min(I + Δᵢ, Iᵤ)] - 3f0V[I],
+            V[max(I - 2Δᵢ, Iₗ)] - 4f0V[max(I - Δᵢ, Iₗ)] + 3f0V[I]
+        )
     end
 
     return D 
