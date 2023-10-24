@@ -3,7 +3,7 @@ using UnPack
 
 include("../src/utils/grids.jl")
 include("../src/utils/derivatives.jl")
-include("../src/model/init.jl")
+include("../src/model/initialisation.jl")
 
 # -- Generate state cube
 const n = 51

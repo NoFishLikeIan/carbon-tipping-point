@@ -12,7 +12,7 @@ begin
 end
 
 # This is done on the side to avoid redefining constants
-include("../../src/model/init.jl")
+include("../../src/model/initialisation.jl")
 
 # -- Generate state cube
 statedomain = [

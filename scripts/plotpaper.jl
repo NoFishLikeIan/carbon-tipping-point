@@ -27,7 +27,7 @@ begin # Global variables
     SAVEFIG = false 
 end
 
-include("../src/model/init.jl")
+include("../src/model/initialisation.jl")
 
 include("../src/utils/plotting.jl")
 include("../src/utils/dynamics.jl")
