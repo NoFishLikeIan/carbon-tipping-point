@@ -4,7 +4,7 @@
 To derive the optimal abatement path and the social cost of carbon, I solve the problem of a social planner who derives utility from consumption, is risk averse, and discounts the future. To disentangle the role of these two components I model the social planner as having Epstein-Zin preferences. Societal utility $U$ at time $t$, given an abatement strategy $\control{\alpha}$ and a consumption schedule $\control{\chi}$, is defined recursively by the integral equation as \begin{equation} \label{eq:utility}
     U(t; \control{\alpha}(t), \control{\chi}(t)) = \E \int^{\infty} f\left(C(s), U(s; \control{\alpha}(s), \control{\chi}(s))\right) \; \d{s}
 \end{equation} where $C(s) = \control{\chi}(s) Y(s)$ is the consumption path. Introducing the coefficient of relative risk aversion $\theta > 1$, elasticity of intertemporal substitution $\psi > 0$, and the discount rate $\rho$, the Epstein-Zin aggregator (\cite{duffie_asset_1992}) is defined as \begin{equation} \label{eq:aggregator}
-    f(C, U) = \frac{\rho}{1 - 1 / \psi} \frac{C^{1 - 1 / \psi} - \big((1- \theta) U\big)^{\frac{1 - \theta}{1 - 1 / \psi}}}{\big((1- \theta) U\big)^{\frac{1 - \theta}{1 - 1 / \psi} - 1}}.
+    f(C, U) = \frac{\rho}{1 - 1 / \psi} (1 - \theta) U  \left( \left(\frac{C}{((1 - \theta) U)^{\frac{1}{1 - \theta}}}\right)^{1 - 1 / \psi} - 1 \right)
 \end{equation}
 
 \subsection{Motivation behind the use of Epstein-Zin preferences}
