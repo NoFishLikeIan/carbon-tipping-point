@@ -40,7 +40,7 @@ function central∂(V, grid; direction = 1)
     central∂!(D, V, grid; direction = direction)
     return D
 end
-function central∂!(D, V, grid; direction = direction)
+function central∂!(D, V, grid; direction = 1)
     h = steps(grid)[direction]; twoh⁻¹ = inv(2f0 .* h);
     if h < ϵ @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
 
@@ -101,7 +101,7 @@ function dir∂(V, w, grid; direction = 1)
     dir∂!(D, V, w, grid; direction = direction)
     return D
 end
-function dir∂!(D, V, w, grid; direction = direction)
+function dir∂!(D, V, w, grid; direction = 1)
     h = steps(grid)[direction]; twoh⁻¹ = inv(2f0 .* h);
     if h < ϵ @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
 

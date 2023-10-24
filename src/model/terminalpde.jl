@@ -1,54 +1,72 @@
-# Terminal functions
-function terminalobjectivefunctional(χ, Xᵢ, Vᵢ, ∇Vᵢ)
-    objectivefunction(χ, γᵇ(economy.t₁), economy.t₁, Xᵢ, Vᵢ, ∇Vᵢ)
+using Polyester: @batch
+using Roots: Bisection, find_zero
+
+"""
+Computes the terminal Hamilton-Jacobi-Bellmann equation at point Xᵢ
+"""
+function hjbterminal(χ, Xᵢ, Vᵢ, ∂yVᵢ, ∂²Vᵢ)
+    t = economy.t₁
+
+    f(χ, Xᵢ[2], Vᵢ[1], economy) + 
+        ∂yVᵢ[1] * (ϕ(t, χ, economy) - δₖ(Xᵢ[1], economy, hogg)) +
+        ∂²Vᵢ[1] * hogg.σ²ₜ / 2f0
 end
 
-function optimalterminalpolicy(Xᵢ, Vᵢ, ∇Vᵢ, Γ)
-    objective = -Inf32
-    χᵒ = 0f0;
+function terfoc(χ, Xᵢ, Vᵢ, ∂yVᵢ)
+    t = economy.t₁
+    Y∂f(χ, Xᵢ[2], Vᵢ[1], economy) + ∂yVᵢ[1] * ϕ′(t, χ, economy)
+end
 
-    for χ ∈ Γ[1]
-        objᵢ = terminalobjectivefunctional(χ, Xᵢ, Vᵢ, ∇Vᵢ);
-        if objᵢ > objective
-            χᵒ = χ
-            objective = objᵢ
-        end
+function optimalterminalpolicy(Xᵢ, Vᵢ, ∂yVᵢ)
+    g(χ) = terfoc(χ, Xᵢ, Vᵢ, ∂yVᵢ)
+
+    if g(1f-3) * g(1f0) > 0 
+        if g(1f-3) < 0 return 1f-3 end
+        if g(1f0) > 0 return 1f0 end
     end
 
-    return χᵒ
+    find_zero(g, (1f-3, 1f0), Bisection())
 end
 
 """
-Computes the optimal policy χᵒ over the state space X assuming αᵒ = γᵇ(t₁).
+Computes the optimal policy χ' over the state space X
 """
-function terminalpolicyovergrid(X::VectorGrid, V::FieldGrid, ∇V::VectorGrid, Γ::ActionRegularGrid)
-    terminalpolicyovergrid!(similar(V), X, V, ∇V, Γ)
+function terminalpolicyovergrid(X, V, ∂yV)
+    terminalpolicyovergrid!(similar(V), X, V, ∂yV)
 end
-function terminalpolicyovergrid!(terminalpolicy::FieldGrid,
-    X::VectorGrid, V::FieldGrid, ∇V::VectorGrid, Γ::ActionRegularGrid)
-    
-    @inbounds Threads.@threads for idx ∈ CartesianIndices(V)
+function terminalpolicyovergrid!(policy, X, V, ∂yV)
+    @batch for idx ∈ CartesianIndices(V)
         Xᵢ = @view X[idx, :]
-        ∇Vᵢ = @view ∇V[idx, :]
+        ∂yVᵢ = @view ∂yV[idx]
         Vᵢ = @view V[idx]
 
-        terminalpolicy[idx] = optimalterminalpolicy(Xᵢ, Vᵢ, ∇Vᵢ, Γ)
+        policy[idx] = optimalterminalpolicy(Xᵢ, Vᵢ, ∂yVᵢ)
     end
-
-    return terminalpolicy
+    
+    return policy
 end
 
-function hjbterminal(χ, Xᵢ, Vᵢ, ∇Vᵢ, ∂²Vᵢ)
-    hjb(χ, γᵇ(economy.t₁), economy.t₁, Xᵢ, Vᵢ, ∇Vᵢ, ∂²Vᵢ)
+function terminalG(X, V, Ω)
+    terminalG!(
+        similar(V), similar(V), similar(V), similar(V),
+        X, V, Ω
+    )
 end
+"""
+Computes G! by modifying (∂ₜV, ∂yV, policy, w)
+"""
+function terminalG!(∂ₜV, ∂yV, w, policy, X, V, Ω)
+    central∂!(∂yV, V, Ω; direction = 2);
+    terminalpolicyovergrid!(policy, X, V, ∂yV);
 
-"""
-Computes the terminal hjb over the grid X given a steady state value function V̄, Ḡ(V̄, X).
-"""
-Ḡ(V̄::FieldGrid, X::VectorGrid, Ω::StateRegularGrid, Γ::ActionRegularGrid) = Ḡ!(similar(V̄), V̄, X, Ω, Γ)
-function Ḡ!(∂ₜV::FieldGrid, V̄::FieldGrid, X::VectorGrid, Ω::StateRegularGrid, Γ::ActionRegularGrid) # FIXME: A bit ugly.
-    χ̄ = terminalpolicyovergrid(X, V̄, central∇(V̄, Ω), Γ)
-    w = drift(economy.t₁, X, γᵇ(economy.t₁), χ̄);
-    ∇V = dir∇(V̄, w, Ω);
-    ∂ₜV .= f.(χ̄, X[:, :, :, 3], V̄, Ref(economy)) + ∇V[:, :, :, 4] .+ ∂²(1, V̄, Ω) .* hogg.σ²ₜ / 2f0
+    T = @view X[:, :, 1]
+    y = @view X[:, :, 2]
+
+    w .= ϕ.(economy.t₁, policy, Ref(economy)) .- δₖ.(T, Ref(economy), Ref(hogg))
+    
+    dir∂!(∂yV, V, w, Ω; direction = 2);
+
+    ∂ₜV .= f.(policy, y, V, Ref(economy)) + (∂yV .* w) .+ ∂²(V, Ω; dim = 1) .* hogg.σ²ₜ / 2f0
+
+    return ∂ₜV
 end
