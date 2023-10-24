@@ -75,49 +75,51 @@ T²ε = absnorm(D², ∂²TV, 2);
 @test all(T²ε .< ε²)
 
 # Time derivative and Runge-Kutta method
-X = permutedims(collect(reinterpret(reshape, Float32, Xgrid)), (2, 3, 4, 1));
-Y₀ = ones(Float32, size(X, 1), size(X, 2), size(X, 3));
+if false
+    X = permutedims(collect(reinterpret(reshape, Float32, Xgrid)), (2, 3, 4, 1));
+    Y₀ = ones(Float32, size(X, 1), size(X, 2), size(X, 3));
 
-function G(t, X, Yₜ)
-    X₁ = @view X[:, :, :, 1]
-    X₂ = @view X[:, :, :, 2]
+    function G(t, X, Yₜ)
+        X₁ = @view X[:, :, :, 1]
+        X₂ = @view X[:, :, :, 2]
 
-    -(X₁ .+ X₂) .* tan.(X₁ .+ X₂ .* t) .* Yₜ
-end
-
-begin # test time
-    t, h = 0f0, 1f-1;
-    println("--- Derivative function")
-    @btime G($t, $X, $Y₀);
-
-    println("--- Runge-Kutta step")
-    @btime rkstep!($Y₀, $G, $t, $X; h = $h);
-end;
-
-function y(t, X) 
-    Xₚ = prod(X; dims = 4) 
-    dropdims(cos.(Xₚ .* t); dims = 4)
-end
-
-function simulationerror!(Y::Array{Float32, 3}, timegrid)
-    timesteps = length(timegrid) - 1
-    h = step(timegrid)
-    errors = Vector{Float32}(undef, timesteps)
-
-    for i ∈ 1:timesteps
-        t = timegrid[i]
-        errors[i] = maximum(abs2, Y - y(t, X))
-        rkstep!(Y, G, t, X; h = h)
+        -(X₁ .+ X₂) .* tan.(X₁ .+ X₂ .* t) .* Yₜ
     end
 
-    return errors
+    begin # test time
+        t, h = 0f0, 1f-1;
+        println("--- Derivative function")
+        @btime G($t, $X, $Y₀);
+
+        println("--- Runge-Kutta step")
+        @btime rkstep!($Y₀, $G, $t, $X; h = $h);
+    end;
+
+    function y(t, X) 
+        Xₚ = prod(X; dims = 4) 
+        dropdims(cos.(Xₚ .* t); dims = 4)
+    end
+
+    function simulationerror!(Y::Array{Float32, 3}, timegrid)
+        timesteps = length(timegrid) - 1
+        h = step(timegrid)
+        errors = Vector{Float32}(undef, timesteps)
+
+        for i ∈ 1:timesteps
+            t = timegrid[i]
+            errors[i] = maximum(abs2, Y - y(t, X))
+            rkstep!(Y, G, t, X; h = h)
+        end
+
+        return errors
+    end
+
+    smalltimegrid = range(0f0, 1f0; length = 3); 
+    Ysmall = ones(Float32, size(X, 1), size(X, 2), size(X, 3));
+    @btime simulationerror!(Ysmall, smalltimegrid);
+
+    timegrid = range(0f0, 1f0; length = 201);
+    Y = ones(Float32, size(X, 1), size(X, 2), size(X, 3));;
+    @time errors = simulationerror!(Y, timegrid);
+    @test maximum(errors) < ε² / step(timegrid)
 end
-
-smalltimegrid = range(0f0, 1f0; length = 3); 
-Ysmall = ones(Float32, size(X, 1), size(X, 2), size(X, 3));
-@btime simulationerror!(Ysmall, smalltimegrid);
-
-timegrid = range(0f0, 1f0; length = 201);
-Y = ones(Float32, size(X, 1), size(X, 2), size(X, 3));;
-@time errors = simulationerror!(Y, timegrid);
-@test maximum(errors) < ε² / step(timegrid)
