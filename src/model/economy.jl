@@ -40,28 +40,28 @@ end
 function f(χ, y, u, economy::Economy)
     @unpack ρ, θ, ψ = economy
 
-    ψᵣ = 1 - 1 / ψ
-    C = (χ * exp(y))^ψᵣ / ((1 - θ) * u)^(-1 + (1 - θ) / ψᵣ)
+    c = χ * exp(y)
+    R = (c / ((1 - θ) * u)^inv(1 - θ))^(1 - 1 / ψ)
 
-    return (ρ / ψᵣ) * (C - (1 - θ) * u)
+    return ρ * (1 - θ) * u / (1 - 1 / ψ) * (R - 1)
 end
 
 function Y∂f(χ, y, u, economy::Economy)
     @unpack ρ, θ, ψ = economy
 
-    ψᵣ = 1 - 1 / ψ
-    C = (χ * exp(y))^ψᵣ / ((1 - θ) * u)^(-1 + (1 - θ) / ψᵣ)
+    c = χ * exp(y)
+    R = (c / ((1 - θ) * u)^inv(1 - θ))^(1 - 1 / ψ)
 
-    return (ρ / χ) * C
+    return ρ * (1 - θ) * u * R / χ
 end
 
 function Y²∂²f(χ, y, u, economy::Economy)
     @unpack ρ, θ, ψ = economy
 
-    ψᵣ = 1 - 1 / ψ
-    C = (χ * exp(y))^ψᵣ / ((1 - θ) * u)^(-1 + (1 - θ) / ψᵣ)
+    c = χ * exp(y)
+    R = (c / ((1 - θ) * u)^inv(1 - θ))^(1 - 1 / ψ)
 
-    return ψᵣ * (ρ / χ^2) * C
+    return -ρ * (1 - θ) * u * R / (χ^2 * ψ)
 end
 
 "Cost of abatement as a fraction of GDP"
