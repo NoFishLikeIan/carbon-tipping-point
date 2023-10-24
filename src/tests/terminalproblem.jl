@@ -1,9 +1,9 @@
 using Test, BenchmarkTools
 
-include("../../src/utils/grids.jl")
-include("../../src/utils/derivatives.jl")
-include("../../src/model/terminalpde.jl")
-include("../../src/model/initialisation.jl")
+include("../utils/grids.jl")
+include("../utils/derivatives.jl")
+include("../model/terminalpde.jl")
+include("../model/initialisation.jl")
 
 terminaldomain = [
     (hogg.T₀, hogg.T̄, 101), 

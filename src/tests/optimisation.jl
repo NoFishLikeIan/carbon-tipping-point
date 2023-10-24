@@ -1,18 +1,17 @@
 using Test
 
 using UnPack
-using LatinHypercubeSampling, Polyester
+using Polyester
 using Optim
-using Plots
 
 begin 
-    include("../../src/utils/grids.jl")
-    include("../../src/utils/derivatives.jl")
-    include("../../src/model/pdes.jl")
+    include("../utils/grids.jl")
+    include("../utils/derivatives.jl")
+    include("../model/pdes.jl")
 end
 
 # This is done on the side to avoid redefining constants
-include("../../src/model/initialisation.jl")
+include("../model/initialisation.jl")
 
 # -- Generate state cube
 statedomain = [
