@@ -1,27 +1,24 @@
 using Test
-using Distributed, SharedArrays
-addprocs(3);
 
-@everywhere begin
-    using UnPack
-    using SharedArrays
-    using LatinHypercubeSampling
-end
+using UnPack
+using LatinHypercubeSampling, Polyester
+using Optim
+using Plots
 
-@everywhere begin 
+begin 
     include("../../src/utils/grids.jl")
     include("../../src/utils/derivatives.jl")
     include("../../src/model/pdes.jl")
 end
 
 # This is done on the side to avoid redefining constants
-@everywhere include("../../src/model/init.jl")
+include("../../src/model/init.jl")
 
 # -- Generate state cube
 statedomain = [
-    (hogg.T₀, hogg.T̄, 21), 
-    (log(hogg.M₀), log(hogg.M̄), 21), 
-    (log(economy.Y̲), log(economy.Ȳ), 21)
+    (hogg.T₀, hogg.T̄, 101), 
+    (log(hogg.M₀), log(hogg.M̄), 51), 
+    (log(economy.Y̲), log(economy.Ȳ), 51)
 ];
 Ω = makegrid(statedomain);
 X = fromgridtoarray(Ω);
@@ -35,69 +32,68 @@ P = makegrid(actiondomain, m);
 using BenchmarkTools
 
 begin # Value function and derivatives
-    V = rand(Float32, length.(Ω)) .- 1f0;
+    function vguess(Xᵢ)
+        ((exp(Xᵢ[3]) / economy.Ȳ)^2 - (exp(Xᵢ[2]) / hogg.Mᵖ)^2 *  (Xᵢ[1] / hogg.Tᵖ)^2)
+    end
+
+    V = Array{Float32}(undef, length.(Ω));
+    for I ∈ CartesianIndices(V) V[I] = vguess(X[I, :]) end
+    V .= 1f-1 .* (V ./ maximum(abs.(V)))
+
     ∇V = central∇(V, Ω);
     ∂²V = ∂²(V, Ω);
 end;
 
 # Some sample data
 begin
-    t = 5f0 
+    t = 5f0
     idx = rand(CartesianIndices(V))
-    jdx = rand(axes(P, 1))
-    αᵢ, χᵢ = @view P[jdx, :]
     Xᵢ = @view X[idx, :]
     Vᵢ = @view V[idx]
     ∇Vᵢ = @view ∇V[idx, :]
     ∂²Vᵢ = @view ∂²V[idx]
+
+    jdx = rand(axes(P, 1))
+    cᵢ = @view P[jdx, :]
 end;
 
 begin
+    unit = range(1f-2, 1f0 - 1f-2; length = 101);
+    g = objective(t, Xᵢ, Vᵢ, ∇Vᵢ);
+    surface(unit, unit, (χ, α) -> -g([χ, α]); xlabel = "\$\\chi\$", ylabel = "\$\\alpha\$")
+end
+
+begin
     println("HJB given control...")
-    @btime hjb($χᵢ, $αᵢ, $t, $Xᵢ, $Vᵢ, $∇Vᵢ, $∂²Vᵢ);
+    @btime hjb($cᵢ, $t, $Xᵢ, $Vᵢ, $∇Vᵢ, $∂²Vᵢ);
 
     println("Objective functional given control...")
-    @btime objectivefunction($χᵢ, $αᵢ, $t, $Xᵢ, $Vᵢ, $∇Vᵢ);
+    @btime objectivefunction($cᵢ, $t, $Xᵢ, $Vᵢ, $∇Vᵢ);
 
     println("Optimal policy at a given point...")
-    @btime optimalpolicy($t, $Xᵢ, $Vᵢ, $∇Vᵢ, $P);
+    @btime optimalpolicy($t, $Xᵢ, $Vᵢ, $∇Vᵢ);
+    @btime optimalpolicygreedy($t, $Xᵢ, $Vᵢ, $∇Vᵢ, $P);
 end;
+
+initguess = rand(Float32, 2, 1000)
+minimizers = similar(initguess)
+for j in axes(initguess, 2)
+    minimizers[:, j] .= optimalpolicy(t, Xᵢ, Vᵢ, ∇Vᵢ; c₀ = initguess[:, j])
+end
+
+optimalpolicygreedy(t, Xᵢ, Vᵢ, ∇Vᵢ, P)
 
 println("Optimal policy on the full grid...")
 policysize = (size(V)..., 2);
 
-println("Single core...")
-nondistpolicy = Array{Float32, 4}(undef, policysize);
-@btime policyovergrid!($nondistpolicy, $t, $X, $V, $∇V, $P);
-
-println("$(nprocs()) cores...")
-policy = SharedArray{Float32, 4}(policysize, init = S -> S .= NaN);
+policy = Array{Float32, 4}(undef, policysize);
 @btime policyovergrid!($policy, $t, $X, $V, $∇V, $P);
 
-begin
-    println("Asserting correctness...")
-
-    c′ = optimalpolicy(t, Xᵢ, Vᵢ, ∇Vᵢ, P);
-    @test all(nondistpolicy[idx, :] .== c′);
-    @test all(policy[idx, :] .== c′);
-    @test all(nondistpolicy .≈ policy)
-end
-
 # -- Benchmarking G
-∂ₜV = similar(V);
-w = Array{Float32}(undef, size(V)..., 3);
-∇V = Array{Float32}(undef, size(V)..., 4);
-@btime G($t, $X, $V, $Ω, $P);
-@btime G!($∂ₜV, $∇V, $w, $policy, $t, $X, $V, $Ω, $P);
-
-∂ₜV = vec(∂ₜV);
-const V₀ = (-1f0 .- rand(Float32, length(V)));
-function Ḡ!(∂ₜV::Vector{Float32}, V::Vector{Float32}, p, t)
-    ∂ₜV .= vec(Ḡ(reshape(V, n, n, n), X, Ω, Γ)) .* (V .< 0)
+if false
+    ∂ₜV = similar(V);
+    w = Array{Float32}(undef, size(V)..., 3);
+    ∇V = Array{Float32}(undef, size(V)..., 4);
+    @btime G($t, $X, $V, $Ω, $P);
+    @btime G!($∂ₜV, $∇V, $w, $policy, $t, $X, $V, $Ω, $P);
 end
-
-@time Ḡ!(∂ₜV, V₀, [], 0f0);
-prob = ODEProblem(Ḡ!, V₀, (0f0, 1f0));
-sol = solve(prob)
-
-terminalproblem = SteadyStateProblem(prob);

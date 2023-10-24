@@ -10,8 +10,6 @@ const Δ = (Δi, Δj, Δk);
 Given a Vₜ (n₁ × n₂ × n₃) returns a matrix D (n₁ × n₂ × n₃ × 3), with elements ∇Vₜ and last ∇Vₜ⋅w.
 """
 function central∇(V, grid)
-    D = OffsetArray(similar(V))
-
     D = Array{Float32}(undef, length.(grid)..., length(grid))
     central∇!(D, V, grid)
     return D

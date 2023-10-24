@@ -37,31 +37,41 @@ function γ(t, p, t0)
 end
 
 "Epstein-Zin aggregator"
-function f(c, u, economy::Economy)
+function f(χ, y, u, economy::Economy)
     @unpack ρ, θ, ψ = economy
 
-    if ψ ≈ 1
-        return ρ * (1 - θ) * u * (
-            log(
-                c / ((1 - θ) * u)^inv(1 - θ)
-            )
-        )
-    else
-        ψᵣ = 1 - 1 / ψ
-        (ρ / ψᵣ) * (
-            (c^ψᵣ - ((1 - θ) * u)^((1 - θ) / ψᵣ)) /
-            ((1 - θ) * u)^(-1 + (1 - θ) / ψᵣ)
-        )
-    end
+    ψᵣ = 1 - 1 / ψ
+    C = (χ * exp(y))^ψᵣ / ((1 - θ) * u)^(-1 + (1 - θ) / ψᵣ)
+
+    return (ρ / ψᵣ) * (C - (1 - θ) * u)
 end
 
-f(χ, y, u, economy::Economy) = f(χ * exp(y), u, economy)
+function Y∂f(χ, y, u, economy::Economy)
+    @unpack ρ, θ, ψ = economy
+
+    ψᵣ = 1 - 1 / ψ
+    C = (χ * exp(y))^ψᵣ / ((1 - θ) * u)^(-1 + (1 - θ) / ψᵣ)
+
+    return (ρ / χ) * C
+end
+
+function Y²∂²f(χ, y, u, economy::Economy)
+    @unpack ρ, θ, ψ = economy
+
+    ψᵣ = 1 - 1 / ψ
+    C = (χ * exp(y))^ψᵣ / ((1 - θ) * u)^(-1 + (1 - θ) / ψᵣ)
+
+    return ψᵣ * (ρ / χ^2) * C
+end
 
 "Cost of abatement as a fraction of GDP"
-function β(t, ε, economy::Economy)
-    return (ε^2 / 2) * exp(-economy.ωᵣ * t)
+function β(t, e, economy::Economy)
+    (e^2 / 2) * exp(-economy.ωᵣ * t)
 end
 
+function β′(t, e, economy::Economy)
+    exp(-economy.ωᵣ * t) * e
+end
 
 function d(T, economy::Economy, hogg::Hogg)
     fct = 1 - (1 / economy.damagehalftime)
@@ -76,8 +86,15 @@ function δₖ(T, economy::Economy, hogg::Hogg)
     return δₖᵖ + (1 - δₖᵖ) * d(T, economy, hogg)
 end
 
-function ϕ(χ, Aₜ, economy::Economy)
-    (1 - χ) * Aₜ * (1 - (1 - χ) * Aₜ * economy.κ / 2)
+function ϕ(t, χ, economy::Economy)
+    (1 - χ) * A(t, economy) * (1 - (1 - χ) * A(t, economy) * economy.κ / 2)
+end
+function ϕ′(t, χ, economy::Economy)
+    economy.κ * A(t, economy)^2 * (1 - χ) - A(t, economy)
+end
+
+function ϕ′′(t, economy::Economy)
+    -economy.κ * A(t, economy)^2 
 end
 
 function A(t, economy::Economy)

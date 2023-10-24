@@ -1,10 +1,12 @@
 using Base.Iterators: product
+using SharedArrays: SharedArray
 
 # Utilities for state grid, which have to be regular;
 RegularDomain = Tuple{Float32, Float32, Int};
 StateGrid = NTuple{3, Vector{Float32}};
 
 FieldGrid = Array{Float32, 3};
+SFieldGrid = Array{Float32, 3};
 VectorGrid = Array{Float32, 4};
 SVectorGrid = SharedArray{Float32, 4};
 

@@ -29,7 +29,14 @@ function Eᵇ(t)
     return Eᵇpath[idx] * (1 - α) + Eᵇpath[idx + 1] * α
 end
 
-function ε(t, M, α)
+function ε(t, M::Float32, α)
+    1f0 - M * (δₘ(M, hogg) + γᵇ(t) - α) / (Gtonoverppm * Eᵇ(t))
+end
+function ε′(t, M)
+    M / (Gtonoverppm * Eᵇ(t))
+end
+
+function ε(t, M::AbstractArray, α)
     1f0 .- M .* (δₘ.(M, Ref(hogg)) .+ γᵇ(t) .- α) ./ (Gtonoverppm * Eᵇ(t))
 end
 
