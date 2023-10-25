@@ -27,13 +27,6 @@ Base.@kwdef struct Economy
     V̲::Float32 = 10f3
 end
 
-"""
-Parametric form of γ: (t₀, ∞) → [0, 1]
-"""
-function γ(t, p::NTuple{3, Float32}, t₀)
-    p[1] + p[2] * (t - t₀) + p[3] * (t - t₀)^2
-end
-
 "Epstein-Zin aggregator"
 function f(χ, y, u, economy::Economy)
     @unpack ρ, θ, ψ = economy
@@ -95,4 +88,26 @@ end
 
 function A(t, economy::Economy)
     economy.A₀ * exp(economy.ϱ * t)
+end
+
+"""
+Parametric form of γ: (t₀, ∞) → [0, 1]
+"""
+function γ(t, p, t₀)
+    p[1] + p[2] * (t - t₀) + p[3] * (t - t₀)^2
+end
+γ(t, economy::Economy, calibration::Calibration) = γ(t, calibration.γparameters, economy.t₀)
+
+Eᵇ(t, economy::Economy, calibration::Calibration) = Eᵇ(t, economy.t₀, economy.t₁, calibration.emissions)
+function Eᵇ(t, t₀, t₁, emissions)
+    if t < t₀ return first(emissions) end
+    if t > t₁ return last(emissions) end
+
+    partition = range(t₀, t₁; length = length(emissions))
+    udx = findfirst(tᵢ -> tᵢ > t, partition)
+    ldx = udx - 1
+
+    α = (t - partition[ldx]) / step(partition)
+
+    return (1 - α) * emissions[ldx] + α * emissions[udx]
 end

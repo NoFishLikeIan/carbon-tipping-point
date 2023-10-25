@@ -5,12 +5,12 @@ using Polyester: @batch
 using Optim: optimize, minimizer, Newton
 using Roots: Bisection, find_zero
 
+include("calibration.jl")
 include("climate.jl")
 include("economy.jl")
 
 ModelInstance = Union{Economy, Hogg, Albedo}
 
-include("calibration.jl")
 
 include("pdes.jl")
 include("terminalpdes.jl")

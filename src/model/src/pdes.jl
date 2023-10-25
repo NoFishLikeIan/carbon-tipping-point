@@ -1,12 +1,12 @@
 """
 Computes the Hamilton-Jacobi-Bellmann equation at point Xᵢ
 """
-function hjb(c, t, Xᵢ, Vᵢ, ∇Vᵢ, ∂²Vᵢ, instance::ModelInstance)
+function hjb(c, t, Xᵢ, Vᵢ, ∇Vᵢ, ∂²Vᵢ, instance::ModelInstance, calibration::Calibration)
     economy, hogg, albedo = instance
 
     f(c[1], Xᵢ[3], Vᵢ[1], economy) + 
         ∇Vᵢ[1] * μ(Xᵢ[1], Xᵢ[2], hogg, albedo) +
-        ∇Vᵢ[2] * (γᵇ(t) - c[2]) + 
+        ∇Vᵢ[2] * (γᵇ(t, calibration) - c[2]) + 
         ∇Vᵢ[3] * (
             economy.ϱ + ϕ(t, c[1], economy) - 
             A(t, economy) * ε(t, exp(Xᵢ[2]), c[2])^2 * exp(-economy.ωᵣ * t) / 2 -
