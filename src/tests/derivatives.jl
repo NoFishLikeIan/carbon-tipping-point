@@ -1,9 +1,11 @@
+using Revise
+
 using Test: @test
 using BenchmarkTools
 using LinearAlgebra
 
-include("../utils/grids.jl")
-include("../utils/derivatives.jl")
+using Model
+using Utils: makegrid
 
 # Tolerance for first and second derivatives
 ε¹ = 1f-3
@@ -42,21 +44,21 @@ println("Testing and benchmarking:")
 # Central difference
 println("--- Central Difference Scheme")
 Dcentral = Array{Float32}(undef, size(V)..., length(grid));
-central∇!(Dcentral, V, grid);
-@btime central∇!($Dcentral, $V, $grid);
+Utils.central∇!(Dcentral, V, grid);
+@btime Utils.central∇!($Dcentral, $V, $grid);
 centralε = absnorm(Dcentral, V′, 1)
 @test centralε < ε¹
 
 ∂₂V = Array{Float32}(undef, size(V));
-central∂!(∂₂V, V, grid; direction = 2);
+Utils.central∂!(∂₂V, V, grid; direction = 2);
 @test all(∂₂V .≈ Dcentral[:, :, :, 2])
 
 # Upwind-downind difference
 println("--- Upwind scheme")
 w = ones(Float32, size(Dcentral));
 D = Array{Float32}(undef, size(V)..., length(grid) + 1);
-@btime dir∇!($D, $V, $w, $grid);
-dir∇!(D, V, w, grid); 
+@btime Utils.dir∇!($D, $V, $w, $grid);
+Utils.dir∇!(D, V, w, grid); 
 
 Dfwd = @view D[:, :, :, 1:3];
 
@@ -64,7 +66,7 @@ errors = abs.(Dfwd - V′)[paddedslice(2)..., :];
 fwdε = absnorm(Dfwd, V′, 2)
 @test fwdε < ε¹
 
-dir∂!(∂₂V, V, w, grid; direction = 2);
+Utils.dir∂!(∂₂V, V, w[:, :, :, 2], grid; direction = 2);
 @test all(∂₂V .≈ Dfwd[:, :, :, 2])
 
 # Second derivative w.r.t. the first argument
@@ -76,57 +78,7 @@ end
 
 println("--- Second derivative")
 D² = similar(V);
-@btime ∂²!($D², $V, $grid);
-∂²!(D², V, grid); 
+@btime Utils.∂²!($D², $V, $grid);
+Utils.∂²!(D², V, grid); 
 T²ε = absnorm(D², ∂²TV, 2);
 @test all(T²ε .< ε²)
-
-# Time derivative and Runge-Kutta method
-if false
-    X = permutedims(collect(reinterpret(reshape, Float32, Xgrid)), (2, 3, 4, 1));
-    Y₀ = ones(Float32, size(X, 1), size(X, 2), size(X, 3));
-
-    function G(t, X, Yₜ)
-        X₁ = @view X[:, :, :, 1]
-        X₂ = @view X[:, :, :, 2]
-
-        -(X₁ .+ X₂) .* tan.(X₁ .+ X₂ .* t) .* Yₜ
-    end
-
-    begin # test time
-        t, h = 0f0, 1f-1;
-        println("--- Derivative function")
-        @btime G($t, $X, $Y₀);
-
-        println("--- Runge-Kutta step")
-        @btime rkstep!($Y₀, $G, $t, $X; h = $h);
-    end;
-
-    function y(t, X) 
-        Xₚ = prod(X; dims = 4) 
-        dropdims(cos.(Xₚ .* t); dims = 4)
-    end
-
-    function simulationerror!(Y::Array{Float32, 3}, timegrid)
-        timesteps = length(timegrid) - 1
-        h = step(timegrid)
-        errors = Vector{Float32}(undef, timesteps)
-
-        for i ∈ 1:timesteps
-            t = timegrid[i]
-            errors[i] = maximum(abs2, Y - y(t, X))
-            rkstep!(Y, G, t, X; h = h)
-        end
-
-        return errors
-    end
-
-    smalltimegrid = range(0f0, 1f0; length = 3); 
-    Ysmall = ones(Float32, size(X, 1), size(X, 2), size(X, 3));
-    @btime simulationerror!(Ysmall, smalltimegrid);
-
-    timegrid = range(0f0, 1f0; length = 201);
-    Y = ones(Float32, size(X, 1), size(X, 2), size(X, 3));;
-    @time errors = simulationerror!(Y, timegrid);
-    @test maximum(errors) < ε² / step(timegrid)
-end

@@ -1,8 +1,10 @@
-using Test
+using Revise
 
-using UnPack
-using Polyester
-using Optim
+using Test: @test
+using BenchmarkTools
+
+using Model: Hogg, Albedo, Economy, hjb, objectivefunction, optimalpolicy
+using Utils: fromgridtoarray, makegrid, dir∇, central∇, ∂²
 
 begin 
     include("../utils/grids.jl")
@@ -12,6 +14,10 @@ end
 
 # This is done on the side to avoid redefining constants
 include("../model/initialisation.jl")
+
+economy = Economy();
+albedo = Albedo();
+hogg = Hogg();
 
 # -- Generate state cube
 statedomain = [
@@ -28,8 +34,6 @@ actiondomain = [(1f-3, 1f0 - 1f-3), (1f-3, 1f0 - 1f-3)];
 P = makegrid(actiondomain, m);
 
 # ---- Benchmarking
-using BenchmarkTools
-
 begin # Value function and derivatives
     function vguess(Xᵢ)
         ((exp(Xᵢ[3]) / economy.Ȳ)^2 - (exp(Xᵢ[2]) / hogg.Mᵖ)^2 *  (Xᵢ[1] / hogg.Tᵖ)^2)
@@ -51,16 +55,8 @@ begin
     Vᵢ = @view V[idx]
     ∇Vᵢ = @view ∇V[idx, :]
     ∂²Vᵢ = @view ∂²V[idx]
-
-    jdx = rand(axes(P, 1))
-    cᵢ = @view P[jdx, :]
+    cᵢ = rand(Float32, 2)
 end;
-
-begin
-    unit = range(1f-2, 1f0 - 1f-2; length = 101);
-    g = objective(t, Xᵢ, Vᵢ, ∇Vᵢ);
-    surface(unit, unit, (χ, α) -> -g([χ, α]); xlabel = "\$\\chi\$", ylabel = "\$\\alpha\$")
-end
 
 begin
     println("HJB given control...")
