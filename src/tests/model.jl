@@ -2,22 +2,17 @@ using Revise
 
 using Test: @test
 using BenchmarkTools
+using JLD2
 
-using Model: Hogg, Albedo, Economy, hjb, objectivefunction, optimalpolicy
-using Utils: fromgridtoarray, makegrid, dir∇, central∇, ∂²
+using Model
+using Utils
 
-begin 
-    include("../utils/grids.jl")
-    include("../utils/derivatives.jl")
-    include("../model/pdes.jl")
-end
+economy = Model.Economy();
+hogg = Model.Hogg();
+albedo = Model.Albedo();
 
-# This is done on the side to avoid redefining constants
-include("../model/initialisation.jl")
-
-economy = Economy();
-albedo = Albedo();
-hogg = Hogg();
+instance = (economy, hogg, albedo);
+@load "data/calibration.jld2" calibration;
 
 # -- Generate state cube
 statedomain = [
@@ -25,16 +20,11 @@ statedomain = [
     (log(hogg.M₀), log(hogg.M̄), 51), 
     (log(economy.Y̲), log(economy.Ȳ), 51)
 ];
-Ω = makegrid(statedomain);
-X = fromgridtoarray(Ω);
-
-# -- Generate action square
-m = 1200 # Number of points in policy grid
-actiondomain = [(1f-3, 1f0 - 1f-3), (1f-3, 1f0 - 1f-3)];
-P = makegrid(actiondomain, m);
+Ω = Utils.makegrid(statedomain);
+X = Utils.fromgridtoarray(Ω);
 
 # ---- Benchmarking
-begin # Value function and derivatives
+begin # Test value function and derivatives
     function vguess(Xᵢ)
         ((exp(Xᵢ[3]) / economy.Ȳ)^2 - (exp(Xᵢ[2]) / hogg.Mᵖ)^2 *  (Xᵢ[1] / hogg.Tᵖ)^2)
     end
@@ -58,16 +48,18 @@ begin
     cᵢ = rand(Float32, 2)
 end;
 
+
 begin
     println("HJB given control...")
-    @btime hjb($cᵢ, $t, $Xᵢ, $Vᵢ, $∇Vᵢ, $∂²Vᵢ);
+    @btime hjb($cᵢ, $t, $Xᵢ, $Vᵢ, $∇Vᵢ, $∂²Vᵢ, $instance, $calibration);
 
     println("Objective functional given control...")
-    @btime objectivefunction($cᵢ, $t, $Xᵢ, $Vᵢ, $∇Vᵢ);
+    objectivefunction = objective(t, Xᵢ, Vᵢ, ∇Vᵢ, instance, calibration)
+    @btime objectivefunction($cᵢ, $t, $Xᵢ, $Vᵢ, $∇Vᵢ, $instance, $calibration);
 
     println("Optimal policy at a given point...")
-    @btime optimalpolicy($t, $Xᵢ, $Vᵢ, $∇Vᵢ);
-    @btime optimalpolicygreedy($t, $Xᵢ, $Vᵢ, $∇Vᵢ, $P);
+    @btime optimalpolicy($t, $Xᵢ, $Vᵢ, $∇Vᵢ, $instance, $calibration);
+    @btime optimalpolicygreedy($t, $Xᵢ, $Vᵢ, $∇Vᵢ, $instance, $calibration);
 end;
 
 initguess = rand(Float32, 2, 1000)

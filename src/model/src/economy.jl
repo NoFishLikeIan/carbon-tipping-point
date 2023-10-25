@@ -110,18 +110,3 @@ function Eᵇ(t, t₀, t₁, emissions)
 
     return (1 - α) * emissions[ldx] + α * emissions[udx]
 end
-
-"Emissivity rate implied by abatement `α` at time `t` and carbon concentration `M`"
-function ε(t, M::Real, α::Real, instance::ModelInstance, calibration::Calibration)
-    economy, hogg, _ = instance
-
-    1f0 - M * (δₘ(M, hogg) + γ(t, economy, calibration) - α) / (Gtonoverppm * Eᵇ(t, economy, calibration))
-end
-function ε(t, M::AbstractArray, α::Real, instance::ModelInstance, calibration::Calibration)
-    economy, hogg, _ = instance
-    1f0 .- M .* (δₘ.(M, Ref(hogg)) .+ γ(t, economy, calibration) .- α) ./ (Gtonoverppm * Eᵇ(t, economy, calibration))
-end
-
-function ε′(t, M::Real, instance::ModelInstance, calibration::Calibration)
-    M / (Gtonoverppm * Eᵇ(t, instance[1], calibration))
-end
