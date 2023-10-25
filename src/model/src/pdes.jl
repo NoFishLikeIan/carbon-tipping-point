@@ -1,10 +1,9 @@
-using Polyester: @batch
-using Optim: optimize, minimizer, Newton
-
 """
 Computes the Hamilton-Jacobi-Bellmann equation at point Xᵢ
 """
-function hjb(c, t, Xᵢ, Vᵢ, ∇Vᵢ, ∂²Vᵢ)
+function hjb(c, t, Xᵢ, Vᵢ, ∇Vᵢ, ∂²Vᵢ, instance::ModelInstance)
+    economy, hogg, albedo = instance
+
     f(c[1], Xᵢ[3], Vᵢ[1], economy) + 
         ∇Vᵢ[1] * μ(Xᵢ[1], Xᵢ[2], hogg, albedo) +
         ∇Vᵢ[2] * (γᵇ(t) - c[2]) + 
@@ -27,7 +26,6 @@ function objective(t, Xᵢ, Vᵢ, ∇Vᵢ)
             A(t, economy) * ε(t, exp(Xᵢ[2]), c[2])^2 * exp(-economy.ωᵣ * t) / 2
         )
 end
-
 
 function gradientobjective(t, Xᵢ, Vᵢ, ∇Vᵢ)
     function ∇J!(∇, c)
@@ -89,37 +87,18 @@ function optimalpolicy(t, Xᵢ, Vᵢ, ∇Vᵢ; c₀ = [0.5f0, 0.5f0])
 end
 
 """
-Computes the the optimal policy at point Xᵢ by computing all points in P. P is assumed to be a Latin Hyper Grid.
-"""
-function optimalpolicygreedy(t, Xᵢ, Vᵢ, ∇Vᵢ, P)
-    z = -Inf32
-    copt = copy(P[1, :])
-
-    for i ∈ axes(P, 1)
-        c = @view P[i, :]
-        zᵢ = objectivefunction(c, t, Xᵢ, Vᵢ, ∇Vᵢ);
-        if zᵢ > z
-            copt .= c
-            z = zᵢ
-        end
-    end
-
-    return copt
-end
-
-"""
 Computes the optimal policy (χ', α') over the state space X
 """
 function policyovergrid(t, X, V, ∇V, P)
     policyovergrid!(Array{Float32, 4}(undef, size(V)..., 2), t, X, V, ∇V, P)
 end
-function policyovergrid!(policy::VectorGrid, t, X, V, ∇V, P)
+function policyovergrid!(policy, t, X, V, ∇V, P)
     @batch for idx ∈ CartesianIndices(V)
         Xᵢ = @view X[idx, :]
         ∇Vᵢ = @view ∇V[idx, :]
         Vᵢ = @view V[idx]
 
-        policy[idx, :] .= optimalpolicy(t, Xᵢ, Vᵢ, ∇Vᵢ, P)
+        policy[idx, :] .= optimalpolicy(t, Xᵢ, Vᵢ, ∇Vᵢ)
     end
     
     return policy
@@ -137,7 +116,7 @@ end
 """
 Computes G! by modifying (∂ₜV, ∇V, policy, w)
 """
-function G!(∂ₜV::FieldGrid, ∇V::VectorGrid, w, policy, t, X, V, Ω, P)
+function G!(∂ₜV, ∇V, w, policy, t, X, V, Ω, P)
     central∇!(∇V, V, Ω)
     policyovergrid!(policy, t, X, V, ∇V, P);
 

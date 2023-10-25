@@ -1,5 +1,3 @@
-using UnPack
-
 Base.@kwdef struct Economy
     # Preferences
     ρ::Float32 = 1.5f-3 # Discount rate 
@@ -30,10 +28,10 @@ Base.@kwdef struct Economy
 end
 
 """
-Parametric form of γ: (t0, ∞) → [0, 1]
+Parametric form of γ: (t₀, ∞) → [0, 1]
 """
-function γ(t, p, t0)
-    p[1] + p[2] * (t - t0) + p[3] * (t - t0)^2
+function γ(t, p::NTuple{3, Float32}, t₀)
+    p[1] + p[2] * (t - t₀) + p[3] * (t - t₀)^2
 end
 
 "Epstein-Zin aggregator"
@@ -49,8 +47,7 @@ end
 function Y∂f(χ, y, u, economy::Economy)
     @unpack ρ, θ, ψ = economy
 
-    c = χ * exp(y)
-    R = (c / ((1 - θ) * u)^inv(1 - θ))^(1 - 1 / ψ)
+    R = (χ * exp(y) / ((1 - θ) * u)^inv(1 - θ))^(1 - 1 / ψ)
 
     return ρ * (1 - θ) * u * R / χ
 end
@@ -58,8 +55,7 @@ end
 function Y²∂²f(χ, y, u, economy::Economy)
     @unpack ρ, θ, ψ = economy
 
-    c = χ * exp(y)
-    R = (c / ((1 - θ) * u)^inv(1 - θ))^(1 - 1 / ψ)
+    R = (χ * exp(y) / ((1 - θ) * u)^inv(1 - θ))^(1 - 1 / ψ)
 
     return -ρ * (1 - θ) * u * R / (χ^2 * ψ)
 end
