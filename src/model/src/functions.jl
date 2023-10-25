@@ -1,3 +1,18 @@
+"Emissivity rate implied by abatement `α` at time `t` and carbon concentration `M`"
+function ε(t, M::Real, α::Real, instance::ModelInstance, calibration::Calibration)
+    economy, hogg, _ = instance
+
+    1f0 - M * (δₘ(M, hogg) + γ(t, economy, calibration) - α) / (Gtonoverppm * Eᵇ(t, economy, calibration))
+end
+function ε(t, M::AbstractArray, α::Real, instance::ModelInstance, calibration::Calibration)
+    economy, hogg, _ = instance
+    1f0 .- M .* (δₘ.(M, Ref(hogg)) .+ γ(t, economy, calibration) .- α) ./ (Gtonoverppm * Eᵇ(t, economy, calibration))
+end
+
+function ε′(t, M::Real, instance::ModelInstance, calibration::Calibration)
+    M / (Gtonoverppm * Eᵇ(t, instance[1], calibration))
+end
+
 "Computes drift over whole state space `X`"
 drift(policy, t, X, instance::ModelInstance, calibration::Calibration) = drift!(similar(X), policy, t, X, instance, calibration)
 function drift!(w, policy, t, X, instance::ModelInstance, calibration::Calibration)
@@ -115,27 +130,4 @@ function policyovergrid!(policy, t, X, V, ∇V, instance::ModelInstance, calibra
     end
     
     return policy
-end
-
-function G(t, X, V, Ω, instance::ModelInstance, calibration::Calibration)
-    G!(
-        Array{Float32}(undef, size(V)), # ∂ₜV
-        Array{Float32}(undef, size(V)..., 4), # ∇V
-        Array{Float32}(undef, size(V)..., 3), # w
-        SharedArray{Float32, 4}((size(V)..., 2)), # policy
-        t, X, V, Ω, instance, calibration
-    )
-end
-"Computes G! by modifying (∂ₜV, ∇V, policy, w)"
-function G!(∂ₜV, ∇V, w, policy, t, X, V, Ω, instance::ModelInstance, calibration::Calibration)
-    economy = first(instance)
-
-    central∇!(∇V, V, Ω)
-    policyovergrid!(policy, t, X, V, ∇V, instance, calibration);
-    drift!(policy, α, t, X, instance, calibration);
-    dir∇!(∇V, V, w, Ω);
-
-    ∂ₜV .= f.(χ, X[:, :, :, 3], V, Ref(economy)) + ∇V[:, :, :, 4] .+ ∂²(V, Ω; dim = 1) .* hogg.σ²ₜ / 2f0
-
-    return ∂ₜV
 end

@@ -1,3 +1,6 @@
+
+# --- Terminal functions
+
 """
 Computes the terminal Hamilton-Jacobi-Bellmann equation at point Xᵢ
 """
@@ -44,35 +47,4 @@ end
 
 function ydrift!(w, policy, T)
     w .= ϕ.(economy.t₁, policy, Ref(economy)) .- δₖ.(T, Ref(economy), Ref(hogg))
-end
-
-function terminalG(X, V, Ω)
-    terminalG!(
-        similar(V), similar(V, size(V)..., 4),
-        X, V, Ω
-    )
-end
-"""
-Computes G! by modifying ∂ₜV and tmp = (∂yV, ∂²TV,  policy, w)
-"""
-function terminalG!(∂ₜV, tmp, X, V, Ω)
-    ∂yV = @view tmp[:, :, 1]
-    ∂²TV = @view tmp[:, :, 2]
-    policy = @view tmp[:, :, 3]
-    w = @view tmp[:, :, 4]
-    T = @view X[:, :, 1]
-    y = @view X[:, :, 2]
-
-    central∂!(∂yV, V, Ω; direction = 2);
-    terminalpolicyovergrid!(policy, X, V, ∂yV);
-    ydrift!(w, policy, T)
-    dir∂!(∂yV, V, w, Ω; direction = 2);
-    ∂²!(∂²TV, V, Ω; dim = 1)
-
-
-    for idx in CartesianIndices(∂ₜV)
-        ∂ₜV[idx] = hjbterminal(policy[idx], X[idx, :], V[idx], ∂yV[idx], ∂²TV[idx])
-    end
-
-    return ∂ₜV
 end
