@@ -1,14 +1,14 @@
+using Revise
+
 using DotEnv, UnPack
 using CSV, DataFrames, JLD2
 
 using DifferentialEquations
 using DiffEqParamEstim, Optimization, OptimizationOptimJL
 
+using Model
 
-include("../src/model/climate.jl")
-include("../src/model/economy.jl")
-
-const env = DotEnv.config()
+env = DotEnv.config()
 
 BASELINE_YEAR = parse(Int64, get(env, "BASELINE_YEAR", "2020"))
 DATAPATH = get(env, "DATAPATH", "data/") 
@@ -32,7 +32,7 @@ begin # Calibrate growth rate γᵇ
     growthdata = Array(log.(Mᵇ)')
     
     function Fbau!(du, u, p, t)
-        du[1] = γ(t, p, T0)
+        du[1] = Model.γ(t, p, T0)
     end
 
     calibrationproblem = ODEProblem(Fbau!, [growthdata[1]], extrema(ipcctime))
@@ -46,18 +46,11 @@ begin # Calibrate growth rate γᵇ
     optprob = Optimization.OptimizationProblem(cost, zeros(3))
     γparameters = solve(optprob, BFGS())
 end
-begin # Initial N₀
-    baseline = Hogg()
-    baseidx = findfirst(==(0), ipcctime)
-    N₀ = δₘ⁻¹(Gtonoverppm * Eᵇ[baseidx] / Mᵇ[baseidx] - γ(0, γparameters, T0), baseline)
-end
 
-# Save calibration results
-results = Dict(
-    :Eᵇ => Eᵇ, 
-    :Tᵇ => Tᵇ, :Mᵇ => Mᵇ, :N₀ => N₀,
-    :γparameters => (γparameters..., T0),
-    :horizon => T
+calibration = Model.Calibration(
+    bauscenario.Year, 
+    Float32.(Eᵇ), 
+    Float32.(Tuple(γparameters))
 )
 
-save(joinpath(DATAPATH, "calibration.jld2"), "calibration", results)
+@save joinpath(DATAPATH, "calibration.jld2") calibration
