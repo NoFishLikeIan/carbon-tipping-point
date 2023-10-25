@@ -1,5 +1,3 @@
-using Polyester: @batch
-
 const ϵ = cbrt(eps(Float32));
 "Generate basis vectors in CartesianIndex of size n"
 function makeΔ(n)
@@ -110,7 +108,7 @@ function dir∂!(D, V, w, grid; direction = 1)
     Iₗ, Iᵤ = CartesianIndices(V) |> extrema
 
     @batch for I in CartesianIndices(V)
-        D[I] = twoh⁻¹ * ifelse(w[I] > 0,
+        D[I, 1] = twoh⁻¹ * ifelse(w[I] > 0,
             -V[min(I + 2Δᵢ, Iᵤ)] + 4f0V[min(I + Δᵢ, Iᵤ)] - 3f0V[I],
             V[max(I - 2Δᵢ, Iₗ)] - 4f0V[max(I - Δᵢ, Iₗ)] + 3f0V[I]
         )
@@ -143,27 +141,4 @@ function ∂²!(D², V, grid; dim = 1)
     end
 
     return D² 
-end
-
-"""
-Given a function G: [0, ∞) × (n₁ × n₂ × n₃)² → (n₁ × n₂ × n₃), with
-    ∂ₜ Wₜ = G(t, X, Wₜ), 
-a time step h, an evaluation Wₜ, and a time t, computes the Runge-Kutta third order step 
-    Δₕ(G) = (h / 8) * (2k₁ + 3k₂ + 3k₃).
-
-And computes 
-    Wₜ += Δₕ(G)
-"""
-function rkstep!(Wₜ, G::Function, t::Float32, X::Array{Float32, 4}; h = 1f-2)
-    k₁ = G(t, Wₜ, X)
-    k₂ = G(t + (2f0 / 3f0) * h, Wₜ + (2f0 / 3f0) * h * k₁, X)
-    k₃ = G(t + (2f0 / 3f0) * h, Wₜ + (2f0 / 3f0) * h * k₂, X)
-
-    Wₜ .+= (h / 8f0) * (2k₁ + 3k₂ + 3k₃)
-    return Wₜ
-end
-function rkstep(Wₜ::AbstractArray{Float32, 3}, G::Function, t::Float32, X::Array{Float32, 4}; h = 1f-2)
-    Wₜ₊₁ = copy(Wₜ)
-    rkstep!(Wₜ₊₁, G, t, X; h = h)
-    return Wₜ₊₁
 end

@@ -1,5 +1,3 @@
-using Base.Iterators: product
-
 # Utilities for state grid, which have to be regular;
 RegularDomain = Tuple{Float32, Float32, Int};
 StateGrid{N} = NTuple{N, Vector{Float32}};
