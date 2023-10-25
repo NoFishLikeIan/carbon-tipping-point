@@ -1,17 +1,28 @@
-using Test, BenchmarkTools
+using Revise
 
-include("../utils/grids.jl")
-include("../utils/derivatives.jl")
-include("../model/terminalpde.jl")
-include("../model/initialisation.jl")
+using Test: @test
+using BenchmarkTools
+using JLD2
+
+using Model
+using Utils
+
+economy = Model.Economy();
+hogg = Model.Hogg();
+albedo = Model.Albedo();
+
+instance = (economy, hogg, albedo);
+@load "data/calibration.jld2" calibration;
+
+include("../timederivative.jl")
 
 terminaldomain = [
-    (hogg.T₀, hogg.T̄, 21), 
-    (log(economy.Y̲), log(economy.Ȳ), 21)
+    (hogg.T₀, hogg.T̄, 101), 
+    (log(economy.Y̲), log(economy.Ȳ), 51)
 ];
 
-Ω = makegrid(terminaldomain);
-X = fromgridtoarray(Ω);
+Ω = Utils.makegrid(terminaldomain);
+X = Utils.fromgridtoarray(Ω);
 
 V = [ -2f0 + (exp(y) / economy.Y₀)^2 - (T / hogg.Tᵖ)^3 for T ∈ Ω[1], y ∈ Ω[2] ]
 
@@ -30,14 +41,15 @@ begin
     χᵢ = 0.5f0
 end;
 
-@btime hjbterminal($χ₀, $Xᵢ, $Vᵢ, $∂yVᵢ, ∂²TVᵢ)
-@btime terfoc($χ₀, $Xᵢ, $Vᵢ, $∂yVᵢ);
-@btime optimalterminalpolicy($Xᵢ, $Vᵢ, $∂yVᵢ);
+@btime Model.hjbterminal($χᵢ, $Xᵢ, $Vᵢ, $∂yVᵢ, ∂²TVᵢ, $instance);
+@btime Model.terfoc($χᵢ, $Xᵢ, $Vᵢ, $∂yVᵢ, $instance);
+@btime Model.optimalterminalpolicy($Xᵢ, $Vᵢ, $∂yVᵢ, instance);
 
-@btime central∂!(∂yV, V, Ω; direction = 2);
-@btime dir∂!(∂yV, V, w, Ω; direction = 2);
+@btime Utils.central∂!(∂yV, V, Ω; direction = 2);
+@btime Utils.dir∂!(∂yV, V, w, Ω; direction = 2);
 
-@btime terminalpolicyovergrid!($policy, $X, $V, $∂yV);
+@btime Model.terminalpolicyovergrid!($policy, $X, $V, $∂yV, $instance);
 
-tmp = similar(V, size(V)..., 4)
-@btime terminalG!($∂ₜV, $tmp, $X, $V, $Ω);
+tmp = similar(V, size(V)..., 4);
+terminalG!(∂ₜV, tmp, X, V, Ω, instance);
+@btime terminalG!($∂ₜV, $tmp, $X, $V, $Ω, $instance);

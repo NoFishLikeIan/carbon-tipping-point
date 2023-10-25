@@ -1,14 +1,11 @@
-function G(t, X, V, Ω, instance::ModelInstance, calibration::Calibration)
+function G(t, X, V, Ω, instance::Model.ModelInstance, calibration::Model.Calibration)
     G!(
-        Array{Float32}(undef, size(V)), # ∂ₜV
-        Array{Float32}(undef, size(V)..., 4), # ∇V
-        Array{Float32}(undef, size(V)..., 3), # w
-        SharedArray{Float32, 4}((size(V)..., 2)), # policy
+        similar(V), similar(V, size(V)..., 4),
         t, X, V, Ω, instance, calibration
     )
 end
 "Computes G! by modifying (∂ₜV, ∇V, policy, w)"
-function G!(∂ₜV, ∇V, w, policy, t, X, V, Ω, instance::ModelInstance, calibration::Calibration)
+function G!(∂ₜV, tmp, t, X, V, Ω, instance::Model.ModelInstance, calibration::Model.Calibration)
     economy = first(instance)
 
     central∇!(∇V, V, Ω)
@@ -21,18 +18,17 @@ function G!(∂ₜV, ∇V, w, policy, t, X, V, Ω, instance::ModelInstance, cali
     return ∂ₜV
 end
 
-
-
-function terminalG(X, V, Ω)
+function terminalG(X, V, Ω, instance::Model.ModelInstance, calibration::Model.Calibration)
     terminalG!(
         similar(V), similar(V, size(V)..., 4),
-        X, V, Ω
+        X, V, Ω,
+        instance, calibration
     )
 end
 """
 Computes G! by modifying ∂ₜV and tmp = (∂yV, ∂²TV,  policy, w)
 """
-function terminalG!(∂ₜV, tmp, X, V, Ω)
+function terminalG!(∂ₜV, tmp, X, V, Ω, instance::Model.ModelInstance)
     ∂yV = @view tmp[:, :, 1]
     ∂²TV = @view tmp[:, :, 2]
     policy = @view tmp[:, :, 3]
@@ -40,15 +36,15 @@ function terminalG!(∂ₜV, tmp, X, V, Ω)
     T = @view X[:, :, 1]
     y = @view X[:, :, 2]
 
-    central∂!(∂yV, V, Ω; direction = 2);
-    terminalpolicyovergrid!(policy, X, V, ∂yV);
-    ydrift!(w, policy, T)
-    dir∂!(∂yV, V, w, Ω; direction = 2);
-    ∂²!(∂²TV, V, Ω; dim = 1)
+    Utils.central∂!(∂yV, V, Ω; direction = 2);
+    Model.terminalpolicyovergrid!(policy, X, V, ∂yV, instance);
+    Model.ydrift!(w, policy, T, instance);
+    Utils.dir∂!(∂yV, V, w, Ω; direction = 2);
+    Utils.∂²!(∂²TV, V, Ω; dim = 1)
 
 
     for idx in CartesianIndices(∂ₜV)
-        ∂ₜV[idx] = hjbterminal(policy[idx], X[idx, :], V[idx], ∂yV[idx], ∂²TV[idx])
+        ∂ₜV[idx] = Model.hjbterminal(policy[idx], X[idx, :], V[idx], ∂yV[idx], ∂²TV[idx], instance)
     end
 
     return ∂ₜV

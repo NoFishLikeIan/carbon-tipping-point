@@ -1,23 +1,23 @@
+"Computes the terminal Hamilton-Jacobi-Bellmann equation at point Xᵢ"
+function hjbterminal(χᵢ, Xᵢ, Vᵢ, ∂yVᵢ, ∂²Vᵢ, instance::ModelInstance)
+    economy, hogg, _ = instance
+    t = economy.t₁
 
-# --- Terminal functions
-
-"""
-Computes the terminal Hamilton-Jacobi-Bellmann equation at point Xᵢ
-"""
-function hjbterminal(χᵢ, Xᵢ, Vᵢ, ∂yVᵢ, ∂²Vᵢ)
     f(χᵢ, Xᵢ[2], Vᵢ[1], economy) + 
         ∂yVᵢ[1] * (
-            ϕ(economy.t₁, χᵢ, economy) - δₖ(Xᵢ[1], economy, hogg)
-        ) + ∂²Vᵢ[1] * hogg.σ²ₜ / 2f0
+            ϕ(t, χᵢ, economy) - δₖ(Xᵢ[1], economy, hogg)
+        ) +
+        ∂²Vᵢ[1] * hogg.σ²ₜ / 2f0
 end
 
-function terfoc(χ, Xᵢ, Vᵢ, ∂yVᵢ)
+function terfoc(χᵢ, Xᵢ, Vᵢ, ∂yVᵢ, instance::ModelInstance)
+    economy = first(instance)
     t = economy.t₁
-    Y∂f(χ, Xᵢ[2], Vᵢ[1], economy) + ∂yVᵢ[1] * ϕ′(t, χ, economy)
+    Y∂f(χᵢ, Xᵢ[2], Vᵢ[1], economy) + ∂yVᵢ[1] * ϕ′(t, χᵢ, economy)
 end
 
-function optimalterminalpolicy(Xᵢ, Vᵢ, ∂yVᵢ)
-    g(χ) = terfoc(χ, Xᵢ, Vᵢ, ∂yVᵢ)
+function optimalterminalpolicy(Xᵢ, Vᵢ, ∂yVᵢ, instance::ModelInstance)
+    g = @closure χ -> terfoc(χ, Xᵢ, Vᵢ, ∂yVᵢ, instance)
 
     if g(1f-3) * g(1f0) > 0 
         if g(1f-3) < 0 return 1f-3 end
@@ -27,24 +27,32 @@ function optimalterminalpolicy(Xᵢ, Vᵢ, ∂yVᵢ)
     find_zero(g, (1f-3, 1f0), Bisection())
 end
 
+
+function ydrift!(w, policy, T, instance::ModelInstance)
+    economy, hogg, _ = instance
+    t = economy.t₁
+
+    @batch for idx in CartesianIndices(w)
+        w[idx] = ϕ(t, policy[idx], economy) - δₖ(T[idx], economy, hogg)
+    end
+
+    return w
+end
+
 """
 Computes the optimal policy χ' over the state space X
 """
-function terminalpolicyovergrid(X, V, ∂yV)
-    terminalpolicyovergrid!(similar(V), X, V, ∂yV)
+function terminalpolicyovergrid(X, V, ∂yV, instance::ModelInstance)
+    terminalpolicyovergrid!(similar(V), X, V, ∂yV, instance)
 end
-function terminalpolicyovergrid!(policy, X, V, ∂yV)
+function terminalpolicyovergrid!(policy, X, V, ∂yV, instance::ModelInstance)
     @batch for idx ∈ CartesianIndices(V)
         Xᵢ = @view X[idx, :]
         ∂yVᵢ = @view ∂yV[idx]
         Vᵢ = @view V[idx]
 
-        policy[idx] = optimalterminalpolicy(Xᵢ, Vᵢ, ∂yVᵢ)
+        policy[idx] = optimalterminalpolicy(Xᵢ, Vᵢ, ∂yVᵢ, instance)
     end
     
     return policy
-end
-
-function ydrift!(w, policy, T)
-    w .= ϕ.(economy.t₁, policy, Ref(economy)) .- δₖ.(T, Ref(economy), Ref(hogg))
 end

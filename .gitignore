@@ -447,3 +447,4 @@ logs
 remote
 papers/presentations/figures
 .vscode
+**/*.mem
