@@ -90,14 +90,13 @@ function A(t, economy::Economy)
     economy.A₀ * exp(economy.ϱ * t)
 end
 
-"""
-Parametric form of γ: (t₀, ∞) → [0, 1]
-"""
+"Parametric form of γ: (t₀, ∞) → [0, 1]"
+γ(t, economy::Economy, calibration::Calibration) = γ(t, calibration.γparameters, economy.t₀)
 function γ(t, p, t₀)
     p[1] + p[2] * (t - t₀) + p[3] * (t - t₀)^2
 end
-γ(t, economy::Economy, calibration::Calibration) = γ(t, calibration.γparameters, economy.t₀)
 
+"Linear interpolation of emissions in `calibration`"
 Eᵇ(t, economy::Economy, calibration::Calibration) = Eᵇ(t, economy.t₀, economy.t₁, calibration.emissions)
 function Eᵇ(t, t₀, t₁, emissions)
     if t < t₀ return first(emissions) end
@@ -110,4 +109,19 @@ function Eᵇ(t, t₀, t₁, emissions)
     α = (t - partition[ldx]) / step(partition)
 
     return (1 - α) * emissions[ldx] + α * emissions[udx]
+end
+
+"Emissivity rate implied by abatement `α` at time `t` and carbon concentration `M`"
+function ε(t, M::Real, α::Real, instance::ModelInstance, calibration::Calibration)
+    economy, hogg, _ = instance
+
+    1f0 - M * (δₘ(M, hogg) + γ(t, economy, calibration) - α) / (Gtonoverppm * Eᵇ(t, economy, calibration))
+end
+function ε(t, M::AbstractArray, α::Real, instance::ModelInstance, calibration::Calibration)
+    economy, hogg, _ = instance
+    1f0 .- M .* (δₘ.(M, Ref(hogg)) .+ γ(t, economy, calibration) .- α) ./ (Gtonoverppm * Eᵇ(t, economy, calibration))
+end
+
+function ε′(t, M::Real, instance::ModelInstance, calibration::Calibration)
+    M / (Gtonoverppm * Eᵇ(t, instance[1], calibration))
 end

@@ -9,7 +9,7 @@ include("calibration.jl")
 include("climate.jl")
 include("economy.jl")
 
-ModelInstance = Union{Economy, Hogg, Albedo}
+ModelInstance = Tuple{Economy, Hogg, Albedo}
 
 
 include("pdes.jl")

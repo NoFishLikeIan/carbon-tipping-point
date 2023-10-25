@@ -1,63 +1,78 @@
+"Computes drift over whole state space `X`"
+drift(policy, t, X, instance::ModelInstance, calibration::Calibration) = drift!(similar(X), policy, t, X, instance, calibration)
+function drift!(w, policy, t, X, instance::ModelInstance, calibration::Calibration)
+    economy, hogg, albedo = instance
+
+    T = @view X[:, :, :, 1]
+    m = @view X[:, :, :, 2]
+    χ = @view policy[:, :, :, 1]
+    α = @view policy[:, :, :, 2]
+
+    w[:, :, :, 1] .= μ.(T, m, Ref(hogg), Ref(albedo))
+    w[:, :, :, 2] .= γ(t, economy, calibration) .- α
+    w[:, :, :, 3] .= economy.ϱ .+ ϕ.(χ, A(t, economy), Ref(economy)) .- 
+        A(t, economy) .* β.(t, ε(t, exp.(m), α, instance, albedo), Ref(economy)) .- 
+        δₖ.(T, Ref(economy), Ref(hogg))
+
+    return w
+end
+
 """
-Computes the Hamilton-Jacobi-Bellmann equation at point Xᵢ
+Computes the Hamilton-Jacobi-Bellmann equation at point `Xᵢ`.
 """
 function hjb(c, t, Xᵢ, Vᵢ, ∇Vᵢ, ∂²Vᵢ, instance::ModelInstance, calibration::Calibration)
     economy, hogg, albedo = instance
 
     f(c[1], Xᵢ[3], Vᵢ[1], economy) + 
         ∇Vᵢ[1] * μ(Xᵢ[1], Xᵢ[2], hogg, albedo) +
-        ∇Vᵢ[2] * (γᵇ(t, calibration) - c[2]) + 
+        ∇Vᵢ[2] * (γ(t, economy, calibration) - c[2]) + 
         ∇Vᵢ[3] * (
             economy.ϱ + ϕ(t, c[1], economy) - 
-            A(t, economy) * ε(t, exp(Xᵢ[2]), c[2])^2 * exp(-economy.ωᵣ * t) / 2 -
+            A(t, economy) * ε(t, exp(Xᵢ[2]), c[2], instance, calibration)^2 * exp(-economy.ωᵣ * t) / 2 -
             δₖ(Xᵢ[1], economy, hogg)
         ) +
         ∂²Vᵢ[1] * hogg.σ²ₜ / 2f0
 end
 
-"""
-Computes the negative objective functional at point Xᵢ which depends on the control.
-"""
-function objective(t, Xᵢ, Vᵢ, ∇Vᵢ)
-    c -> -f(c[1], Xᵢ[3], Vᵢ[1], economy) - 
-        ∇Vᵢ[2] * (γᵇ(t) - c[2]) - 
-        ∇Vᵢ[3] * (
-            ϕ(t, c[1], economy) - 
-            A(t, economy) * ε(t, exp(Xᵢ[2]), c[2])^2 * exp(-economy.ωᵣ * t) / 2
-        )
-end
-
-function gradientobjective(t, Xᵢ, Vᵢ, ∇Vᵢ)
-    function ∇J!(∇, c)
-        ∇[1] = -Y∂f(c[1], Xᵢ[3], Vᵢ[1], economy) - ∇Vᵢ[3] * ϕ′(t, c[1], economy)
-        ∇[2] = ∇Vᵢ[2] + A(t, economy) * ε(t, exp(Xᵢ[2]), c[2]) * ε′(t, exp(Xᵢ[2])) * exp(-economy.ωᵣ * t)
+"Constructs the negative objective functional at `Xᵢ`."
+function objective(t, Xᵢ, Vᵢ, ∇Vᵢ, instance::ModelInstance, calibration::Calibration)
+    economy = first(instance)
+    function J(c)
+        -f(c[1], Xᵢ[3], Vᵢ[1], economy) - 
+            ∇Vᵢ[2] * (γ(t, economy, calibration) - c[2]) + 
+            ∇Vᵢ[3] * (
+                ϕ(t, c[1], economy) - 
+                A(t, economy) * ε(t, exp(Xᵢ[2]), c[2], instance, calibration)^2 * exp(-economy.ωᵣ * t) / 2
+            )
     end
 end
-function hessianobjective(t, Xᵢ, Vᵢ, ∇Vᵢ)
+
+"Constructs the gradient function of the objective functional at `Xᵢ`."
+function gradientobjective(t, Xᵢ, Vᵢ, ∇Vᵢ, instance::ModelInstance, calibration::Calibration)
+    economy = first(instance)
+    function ∇J!(∇, c)
+        ∇[1] = -Y∂f(c[1], Xᵢ[3], Vᵢ[1], economy) - ∇Vᵢ[3] * ϕ′(t, c[1], economy)
+        ∇[2] = ∇Vᵢ[2] + A(t, economy) * ε(t, exp(Xᵢ[2]), c[2], instance, calibration) * ε′(t, exp(Xᵢ[2]), instance, calibration) * exp(-economy.ωᵣ * t)
+    end
+end
+
+"Constructs the hessian function of the objective functional at `Xᵢ`." # TODO: Check calculations
+function hessianobjective(t, Xᵢ, Vᵢ, ∇Vᵢ, instance::ModelInstance, calibration::Calibration)
+    economy = first(instance)
     function ∇H!(H, c)
         H[1, 1] = - Y²∂²f(c[1], Xᵢ[3], Vᵢ[1], economy) - ∇Vᵢ[3] * ϕ′′(t, economy)
         H[1, 2] = 0f0
         H[2, 1] = 0f0
-        H[2, 2] = ∇Vᵢ[2] + ε′(t, exp(Xᵢ[2]))^2
+        H[2, 2] = A(t, economy) * ε′(t, exp(Xᵢ[2]), instance, calibration)^2  * exp(-economy.ωᵣ * t)
     end
 end
 
-"""
-Computes the the objective functional at point Xᵢ which depends on the control.
-"""
-function objectivefunction(c, t, Xᵢ, Vᵢ, ∇Vᵢ)
-    f(c[1], Xᵢ[3], Vᵢ[1], economy) + 
-        ∇Vᵢ[2] * (γᵇ(t) - c[2]) + 
-        ∇Vᵢ[3] * (
-            ϕ(c[1],  A(t, economy), economy) -  A(t, economy) * β(t, ε(t, exp(Xᵢ[2]), c[2]), economy)
-        )
-end
-
-function optimalpolicy(t, Xᵢ, Vᵢ, ∇Vᵢ; c₀ = [0.5f0, 0.5f0])
+"Numerically maximises the objective functional at point `Xᵢ`."
+function optimalpolicy(t, Xᵢ, Vᵢ, ∇Vᵢ, instance::ModelInstance, calibration::Calibration; c₀ = [0.5f0, 0.5f0])
     df = TwiceDifferentiable(
-        objective(t, Xᵢ, Vᵢ, ∇Vᵢ),
-        gradientobjective(t, Xᵢ, Vᵢ, ∇Vᵢ),
-        hessianobjective(t, Xᵢ, Vᵢ, ∇Vᵢ),
+        objective(t, Xᵢ, Vᵢ, ∇Vᵢ, instance, calibration),
+        gradientobjective(t, Xᵢ, Vᵢ, ∇Vᵢ, instance, calibration),
+        hessianobjective(t, Xᵢ, Vᵢ, ∇Vᵢ, instance, calibration),
         c₀
     )
 
@@ -86,49 +101,41 @@ function optimalpolicy(t, Xᵢ, Vᵢ, ∇Vᵢ; c₀ = [0.5f0, 0.5f0])
     return minimizer(res)
 end
 
-"""
-Computes the optimal policy (χ', α') over the state space X
-"""
-function policyovergrid(t, X, V, ∇V, P)
-    policyovergrid!(Array{Float32, 4}(undef, size(V)..., 2), t, X, V, ∇V, P)
+"Computes the optimal `policy = (χ, α)` over the state space `X`"
+function policyovergrid(t, X, V, ∇V, instance::ModelInstance, calibration::Calibration)
+    policyovergrid!(Array{Float32, 4}(undef, size(V)..., 2), t, X, V, ∇V, instance, calibration)
 end
-function policyovergrid!(policy, t, X, V, ∇V, P)
+function policyovergrid!(policy, t, X, V, ∇V, instance::ModelInstance, calibration::Calibration)
     @batch for idx ∈ CartesianIndices(V)
         Xᵢ = @view X[idx, :]
         ∇Vᵢ = @view ∇V[idx, :]
         Vᵢ = @view V[idx]
 
-        policy[idx, :] .= optimalpolicy(t, Xᵢ, Vᵢ, ∇Vᵢ)
+        policy[idx, :] .= optimalpolicy(t, Xᵢ, Vᵢ, ∇Vᵢ, instance, calibration) # TODO: Set guess c₀
     end
     
     return policy
 end
 
-function G(t, X, V, Ω, P)
+function G(t, X, V, Ω, instance::ModelInstance, calibration::Calibration)
     G!(
         Array{Float32}(undef, size(V)), # ∂ₜV
         Array{Float32}(undef, size(V)..., 4), # ∇V
         Array{Float32}(undef, size(V)..., 3), # w
         SharedArray{Float32, 4}((size(V)..., 2)), # policy
-        t, X, V, Ω, P
+        t, X, V, Ω, instance, calibration
     )
 end
-"""
-Computes G! by modifying (∂ₜV, ∇V, policy, w)
-"""
-function G!(∂ₜV, ∇V, w, policy, t, X, V, Ω, P)
+"Computes G! by modifying (∂ₜV, ∇V, policy, w)"
+function G!(∂ₜV, ∇V, w, policy, t, X, V, Ω, instance::ModelInstance, calibration::Calibration)
+    economy = first(instance)
+
     central∇!(∇V, V, Ω)
-    policyovergrid!(policy, t, X, V, ∇V, P);
-
-    χ = @view policy[:, :, :, 1];
-    α = @view policy[:, :, :, 2];
-
-    drift!(w, χ, α, t, X);
+    policyovergrid!(policy, t, X, V, ∇V, instance, calibration);
+    drift!(policy, α, t, X, instance, calibration);
     dir∇!(∇V, V, w, Ω);
 
     ∂ₜV .= f.(χ, X[:, :, :, 3], V, Ref(economy)) + ∇V[:, :, :, 4] .+ ∂²(V, Ω; dim = 1) .* hogg.σ²ₜ / 2f0
 
     return ∂ₜV
 end
-
-
