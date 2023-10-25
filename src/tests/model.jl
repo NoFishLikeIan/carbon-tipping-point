@@ -33,8 +33,8 @@ begin # Test value function and derivatives
     for I ∈ CartesianIndices(V) V[I] = vguess(X[I, :]) end
     V .= 1f-1 .* (V ./ maximum(abs.(V)))
 
-    ∇V = central∇(V, Ω);
-    ∂²V = ∂²(V, Ω);
+    ∇V = Utils.central∇(V, Ω);
+    ∂²V = Utils.∂²(V, Ω);
 end;
 
 # Some sample data
@@ -48,33 +48,24 @@ begin
     cᵢ = rand(Float32, 2)
 end;
 
+println("HJB given control...")
+@btime Model.hjb($cᵢ, $t, $Xᵢ, $Vᵢ, $∇Vᵢ, $∂²Vᵢ, $instance, $calibration);
 
-begin
-    println("HJB given control...")
-    @btime hjb($cᵢ, $t, $Xᵢ, $Vᵢ, $∇Vᵢ, $∂²Vᵢ, $instance, $calibration);
+println("Objective functional given control...")
+@btime Model.objective($cᵢ, $t, $Xᵢ, $Vᵢ, $∇Vᵢ, $instance, $calibration);
 
-    println("Objective functional given control...")
-    objectivefunction = objective(t, Xᵢ, Vᵢ, ∇Vᵢ, instance, calibration)
-    @btime objectivefunction($cᵢ, $t, $Xᵢ, $Vᵢ, $∇Vᵢ, $instance, $calibration);
+∇ = zeros(Float32, 2);
+@btime Model.gradientobjective!($∇, $cᵢ, $t, $Xᵢ, $Vᵢ, $∇Vᵢ, $instance, $calibration);
 
-    println("Optimal policy at a given point...")
-    @btime optimalpolicy($t, $Xᵢ, $Vᵢ, $∇Vᵢ, $instance, $calibration);
-    @btime optimalpolicygreedy($t, $Xᵢ, $Vᵢ, $∇Vᵢ, $instance, $calibration);
-end;
+H = zeros(Float32, 2, 2);
+@btime Model.hessianobjective!($H, $cᵢ, $t, $Xᵢ, $Vᵢ, $∇Vᵢ, $instance, $calibration);
 
-initguess = rand(Float32, 2, 1000)
-minimizers = similar(initguess)
-for j in axes(initguess, 2)
-    minimizers[:, j] .= optimalpolicy(t, Xᵢ, Vᵢ, ∇Vᵢ; c₀ = initguess[:, j])
-end
+println("Optimal policy at a given point...")
+@btime Model.optimalpolicy(t, Xᵢ, Vᵢ, ∇Vᵢ, instance, calibration);
 
-optimalpolicygreedy(t, Xᵢ, Vᵢ, ∇Vᵢ, P)
-
-println("Optimal policy on the full grid...")
 policysize = (size(V)..., 2);
-
 policy = Array{Float32, 4}(undef, policysize);
-@btime policyovergrid!($policy, $t, $X, $V, $∇V, $P);
+@btime Model.policyovergrid!($policy, $t, $X, $V, $∇V, $instance, $calibration);
 
 # -- Benchmarking G
 if false

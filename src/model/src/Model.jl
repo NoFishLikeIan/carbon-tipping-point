@@ -2,8 +2,9 @@ module Model
 
 using UnPack
 using Polyester: @batch
-using Optim: optimize, minimizer, Newton
+using Optim: optimize, minimizer, IPNewton, Newton, TwiceDifferentiable, TwiceDifferentiableConstraints, Options
 using Roots: Bisection, find_zero
+using FastClosures: @closure
 
 include("calibration.jl")
 include("climate.jl")
