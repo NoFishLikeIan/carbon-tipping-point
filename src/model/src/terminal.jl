@@ -27,7 +27,6 @@ function optimalterminalpolicy(Xᵢ, Vᵢ, ∂yVᵢ, instance::ModelInstance)
     find_zero(g, (1f-3, 1f0), Bisection())
 end
 
-
 function ydrift!(w, policy, T, instance::ModelInstance)
     economy, hogg, _ = instance
     t = economy.t₁
