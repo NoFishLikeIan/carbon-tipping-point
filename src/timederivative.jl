@@ -18,11 +18,11 @@ function G!(∂ₜV, tmp, t, X, V, Ω, instance::Model.ModelInstance, calibratio
     return ∂ₜV
 end
 
-function terminalG(X, V, Ω, instance::Model.ModelInstance, calibration::Model.Calibration)
+function terminalG(X, V, Ω, instance::Model.ModelInstance)
     terminalG!(
         similar(V), similar(V, size(V)..., 4),
         X, V, Ω,
-        instance, calibration
+        instance
     )
 end
 """
@@ -45,6 +45,7 @@ function terminalG!(∂ₜV, tmp, X, V, Ω, instance::Model.ModelInstance)
 
     for idx in CartesianIndices(∂ₜV)
         ∂ₜV[idx] = Model.hjbterminal(policy[idx], X[idx, :], V[idx], ∂yV[idx], ∂²TV[idx], instance)
+        
     end
 
     return ∂ₜV
