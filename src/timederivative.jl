@@ -1,22 +1,20 @@
-using Model: terminalpolicyovergrid!, ydrift!, hjbterminal
-using Utils: central∂!, dir∂!, ∂²!
+using Model: policyovergrid!, drift!
+using Utils: ∂²!, central∇!, dir∇!
 
 function G(t, X, V, Ω, instance::Model.ModelInstance, calibration::Model.Calibration)
-    G!(
-        similar(V), similar(V, size(V)..., 4),
-        t, X, V, Ω, instance, calibration
-    )
+    ∂ₜV = similar(V);
+    ∇V = similar(V, size(V)..., 4);
+    ∂²V = similar(V);
+    policy = similar(V, size(V)..., 2);
+    w = similar(V, size(V)..., 3);
+
+    G!(∂ₜV, ∇V, ∂²V, policy, w, t, X, V, Ω, instance, calibration)
 end
 "Computes G! by modifying (∂ₜV, ∇V, policy, w)"
-function G!(∂ₜV, tmp, t, X, V, Ω, instance::Model.ModelInstance, calibration::Model.Calibration)
-    ∇V = @view tmp[:, :, 1]
-    ∂²V = @view tmp[:, :, 2]
-    policy = @view tmp[:, :, 3]
-    w = @view tmp[:, :, 4]
-
+function G!(∂ₜV, ∇V, ∂²V, policy, w, t, X, V, Ω, instance::Model.ModelInstance, calibration::Model.Calibration)
     central∇!(∇V, V, Ω)
     policyovergrid!(policy, t, X, V, ∇V, instance, calibration);
-    drift!(policy, α, t, X, instance, calibration);
+    drift!(w, t, X, policy, instance, calibration);
     dir∇!(∇V, V, w, Ω);
     ∂²!(∂²V, V, Ω; dim = 1)
 

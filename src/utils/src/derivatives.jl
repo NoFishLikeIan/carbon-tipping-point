@@ -26,7 +26,7 @@ function central∇!(D, V, grid::StateGrid)
 
     Iₗ, Iᵤ = CartesianIndices(V) |> extrema
 
-    @batch for I in CartesianIndices(V), l in last(axes(D))
+    @batch for I in CartesianIndices(V), l in 1:dimension
         D[I, l] = twoh⁻¹[l] * ( V[min(I + Δ[l], Iᵤ)] - V[max(I - Δ[l], Iₗ)] )
     end
 

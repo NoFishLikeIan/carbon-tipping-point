@@ -3,13 +3,16 @@ using Revise
 using Test: @test
 using BenchmarkTools
 using JLD2
+using FiniteDiff # To test gradients
 
-using Model
-using Utils
+using Model: Economy, Hogg, Albedo
+using Model: hjb, objective, gradientobjective!, hessianobjective!, optimalpolicy, policyovergrid!
 
-economy = Model.Economy();
-hogg = Model.Hogg();
-albedo = Model.Albedo();
+using Utils: makegrid, fromgridtoarray, central∇, ∂²
+
+economy = Economy();
+hogg = Hogg();
+albedo = Albedo();
 
 instance = (economy, hogg, albedo);
 @load "data/calibration.jld2" calibration;
@@ -20,22 +23,17 @@ statedomain = [
     (log(hogg.M₀), log(hogg.M̄), 51), 
     (log(economy.Y̲), log(economy.Ȳ), 51)
 ];
-Ω = Utils.makegrid(statedomain);
-X = Utils.fromgridtoarray(Ω);
+Ω = makegrid(statedomain);
+X = fromgridtoarray(Ω);
 
 # ---- Benchmarking
-begin # Test value function and derivatives
-    function vguess(Xᵢ)
-        ((exp(Xᵢ[3]) / economy.Ȳ)^2 - (exp(Xᵢ[2]) / hogg.Mᵖ)^2 *  (Xᵢ[1] / hogg.Tᵖ)^2)
-    end
-
-    V = Array{Float32}(undef, length.(Ω));
-    for I ∈ CartesianIndices(V) V[I] = vguess(X[I, :]) end
-    V .= 1f-1 .* (V ./ maximum(abs.(V)))
-
-    ∇V = Utils.central∇(V, Ω);
-    ∂²V = Utils.∂²(V, Ω);
-end;
+V = [
+    (exp(y) / economy.Ȳ)^2 - (exp(m) / hogg.Mᵖ)^2 *  (T / hogg.Tᵖ)^2 
+    for T ∈ Ω[1], m ∈ Ω[2], y ∈ Ω[3]
+];
+V .= 1f-1 .* (V ./ maximum(abs.(V))); # Renormalise V
+∇V = central∇(V, Ω);
+∂²V = ∂²(V, Ω);
 
 # Some sample data
 begin
@@ -49,23 +47,29 @@ begin
 end;
 
 println("HJB given control...")
-@btime Model.hjb($cᵢ, $t, $Xᵢ, $Vᵢ, $∇Vᵢ, $∂²Vᵢ, $instance, $calibration);
+@btime hjb($cᵢ, $t, $Xᵢ, $Vᵢ, $∇Vᵢ, $∂²Vᵢ, $instance, $calibration);
 
 println("Objective functional given control...")
-@btime Model.objective($cᵢ, $t, $Xᵢ, $Vᵢ, $∇Vᵢ, $instance, $calibration);
+@btime objective($cᵢ, $t, $Xᵢ, $Vᵢ, $∇Vᵢ, $instance, $calibration);
 
 ∇ = zeros(Float32, 2);
-@btime Model.gradientobjective!($∇, $cᵢ, $t, $Xᵢ, $Vᵢ, $∇Vᵢ, $instance, $calibration);
+@btime gradientobjective!($∇, $cᵢ, $t, $Xᵢ, $Vᵢ, $∇Vᵢ, $instance, $calibration);
+
+gradienterror = ∇ .- FiniteDiff.finite_difference_gradient(c -> objective(c, t, Xᵢ, Vᵢ, ∇Vᵢ, instance, calibration), cᵢ)
+@test all(gradienterror .< 1e-2)
 
 H = zeros(Float32, 2, 2);
-@btime Model.hessianobjective!($H, $cᵢ, $t, $Xᵢ, $Vᵢ, $∇Vᵢ, $instance, $calibration);
+@btime hessianobjective!($H, $cᵢ, $t, $Xᵢ, $Vᵢ, $∇Vᵢ, $instance, $calibration);
+
+hessianerror = H .- FiniteDiff.finite_difference_hessian(c -> objective(c, t, Xᵢ, Vᵢ, ∇Vᵢ, instance, calibration), cᵢ)
+@test all(hessianerror .< 1e-3)
 
 println("Optimal policy at a given point...")
-@btime Model.optimalpolicy(t, Xᵢ, Vᵢ, ∇Vᵢ, instance, calibration);
+@btime optimalpolicy($t, $Xᵢ, $Vᵢ, $∇Vᵢ, $instance, $calibration);
 
 policysize = (size(V)..., 2);
 policy = Array{Float32, 4}(undef, policysize);
-@btime Model.policyovergrid!($policy, $t, $X, $V, $∇V, $instance, $calibration);
+@btime policyovergrid!($policy, $t, $X, $V, $∇V, $instance, $calibration);
 
 # -- Benchmarking G
 if false
