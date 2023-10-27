@@ -1,5 +1,4 @@
 using Model: terminalpolicyovergrid!, ydrift!, hjbterminal
-
 using Utils: central∂!, dir∂!, ∂²!
 
 function G(t, X, V, Ω, instance::Model.ModelInstance, calibration::Model.Calibration)
@@ -10,15 +9,24 @@ function G(t, X, V, Ω, instance::Model.ModelInstance, calibration::Model.Calibr
 end
 "Computes G! by modifying (∂ₜV, ∇V, policy, w)"
 function G!(∂ₜV, tmp, t, X, V, Ω, instance::Model.ModelInstance, calibration::Model.Calibration)
-    economy = first(instance)
-    # FIXME: Using `tmp`
+    ∇V = @view tmp[:, :, 1]
+    ∂²V = @view tmp[:, :, 2]
+    policy = @view tmp[:, :, 3]
+    w = @view tmp[:, :, 4]
 
     central∇!(∇V, V, Ω)
     policyovergrid!(policy, t, X, V, ∇V, instance, calibration);
     drift!(policy, α, t, X, instance, calibration);
     dir∇!(∇V, V, w, Ω);
+    ∂²!(∂²V, V, Ω; dim = 1)
 
-    ∂ₜV .= f.(χ, X[:, :, :, 3], V, economy) + ∇V[:, :, :, 4] .+ ∂²(V, Ω; dim = 1) .* hogg.σ²ₜ / 2f0
+    economy = first(instance)
+
+    @batch for idx in CartesianIndices(∂ₜV)
+        ∂ₜV[idx] = 
+            f(policy[idx, 1], X[idx, 3], V[idx], economy) +
+            ∇[idx, 4] +  ∂²V[idx] * hogg.σ²ₜ / 2f0
+    end
 
     return ∂ₜV
 end
@@ -48,10 +56,7 @@ function terminalG!(∂ₜV, tmp, X, V, Ω, instance::Model.ModelInstance)
     ∂²!(∂²TV, V, Ω; dim = 1)
 
     for idx in CartesianIndices(∂ₜV)
-        ∂ₜV[idx] = ifelse(V[idx] < 0f0,
-            hjbterminal(policy[idx], X[idx, :], V[idx], ∂yV[idx], ∂²TV[idx], instance),
-            0f0
-        )
+        ∂ₜV[idx] = hjbterminal(policy[idx], X[idx, :], V[idx], ∂yV[idx], ∂²TV[idx], instance)
         
     end
 
