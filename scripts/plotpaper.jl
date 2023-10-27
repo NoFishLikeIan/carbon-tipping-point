@@ -32,6 +32,92 @@ include("../src/model/initialisation.jl")
 include("../src/utils/plotting.jl")
 include("../src/utils/dynamics.jl")
 
+mass_matrix(baseline) = diagm([baseline.ϵ / secondtoyears, 1.])
+
+kelvintocelsius = 273.15
+xpreindustrial = 14 + kelvintocelsius
+
+function stringtempdev(x::Real; digits = 2)
+    fsign = x > 0 ? "+" : ""
+    fmt = Printf.Format("$fsign%0.$(digits)f")
+    return Printf.format(fmt, x)
+end
+
+function makedevxlabels(from, to, climate; step = 0.5, withcurrent = false, digits = 2)
+
+    preindustrialx = range(from, to; step = step)
+    xticks = preindustrialx .+ xpreindustrial
+
+    xlabels = [stringtempdev(x, digits = digits) for x in preindustrialx]
+
+    if !withcurrent
+        return (xticks, xlabels)
+    end
+
+    xlabels = [xlabels..., "\$x_0\$"]
+    xticks = [xticks..., first(climate).x₀]
+    idxs = sortperm(xticks)
+    
+    return (xticks[idxs], xlabels[idxs])
+end
+
+function generateframes(total, frames)
+	step = total ÷ frames
+	return [range(1, total - 2step; step = step)..., total]
+end
+
+"""
+Drift dynamics of (T, m, N) given an abatement function γᵇ(T, m) and a business as usual growth rate g(t).
+"""
+function Fext!(du, u, parameters, t)
+	hogg, albedo, γᵇ, α = parameters
+	
+	T, m, N = @view u[1:3]
+	M = exp(m)
+
+	du[1] = μ(T, m, hogg, albedo)
+	du[2] = γᵇ(t) - α(T, m)
+	du[3] = δₘ(N, hogg) * M
+end
+
+function Gext!(du, u, parameters, t)
+	hogg = first(parameters)
+
+	du[1] = hogg.σ²ₜ 
+	du[2] = 0.
+	du[3] = 0.
+end
+
+function F!(du, u, parameters, t)
+	hogg, albedo, γᵇ, α = parameters
+	du[1] = μ(u[1], u[2], hogg, albedo)
+	du[2] = γᵇ(t) - α(u[1], u[2])
+end
+
+
+function G!(du, u, parameters, t)
+	hogg = first(parameters)
+
+	du[1] = hogg.σ²ₜ 
+	du[2] = 0.
+end
+
+
+function extractoptimalemissions(σₓ, sim, e::Function; Tsim = 1001)
+	T = first(sim).t |> last
+	timespan = range(0, T; length = Tsim)
+	nsim = size(sim, 3)
+
+	optemissions = Matrix{Float64}(undef, Tsim, nsim)
+
+	for idxsim in 1:nsim
+		optemissions[:, idxsim] .= [e(x, m, σₓ) for (x, m) in sim[idxsim](timespan).u]
+	end
+
+	return optemissions
+end
+
+
 @changeprecision Float32 begin
     @load joinpath(DATAPATH, "calibration.jld2") ipcc
     @unpack Mᵇ, Tᵇ, N₀, horizon = ipcc
