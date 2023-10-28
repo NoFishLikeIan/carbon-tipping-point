@@ -448,3 +448,4 @@ remote
 papers/presentations/figures
 .vscode
 **/*.mem
+*.code-workspace

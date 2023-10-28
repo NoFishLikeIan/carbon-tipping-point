@@ -1,53 +1,60 @@
 const ϵ = cbrt(eps(Float32));
+
 "Generate basis vectors in CartesianIndex of size n"
 function makeΔ(n)
-    ntuple(
-        i -> CartesianIndex(
-            ntuple(j -> j == i ? 1 : 0, n),
-        ),
-        n
-    )
+    ntuple(i -> CartesianIndex(ntuple(j -> j == i ? 1 : 0, n)), n)
+end
+
+"Constructs a `Pad` object of the dimension of A"
+function pad(A::AbstractArray, padding::Int)
+    Pad(ntuple(_ -> padding, length(size(A))))
 end
 
 """
 Given a Vₜ (n₁ × n₂ ... × nₘ) returns a matrix D (n₁ × n₂ ... × nₘ × m), with elements ∇Vₜ and last ∇Vₜ⋅w.
 """
-function central∇(V, grid)
+function central∇(V::AbstractArray, grid)
+    central∇(BorderArray(V, pad(V, 1)), grid)
+end
+function central∇(V::BorderArray, grid)
     D = Array{Float32}(undef, length.(grid)..., length(grid))
     central∇!(D, V, grid)
     return D
 end
-function central∇!(D, V, grid::StateGrid)
+function central∇!(D, V::BorderArray, grid)
     h = steps(grid); twoh⁻¹ = inv.(2f0 .* h);
     if any(h .< ϵ) @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
 
-    dimension = length(size(V))
-    Δ = makeΔ(dimension)
+    dimensions = length(grid)
+    Δ = makeΔ(dimensions)
 
-    Iₗ, Iᵤ = CartesianIndices(V) |> extrema
+    Idx = CartesianIndices(length.(grid))
 
-    @batch for I in CartesianIndices(V), l in 1:dimension
-        D[I, l] = twoh⁻¹[l] * ( V[min(I + Δ[l], Iᵤ)] - V[max(I - Δ[l], Iₗ)] )
+    @batch for I in Idx, l in 1:dimensions
+        D[I, l] = twoh⁻¹[l] * ( V[I + Δ[l]] - V[I - Δ[l]] )
     end
 
-    return D 
-end
-
-function central∂(V, grid; direction = 1)
-    D = similar(V)
-    central∂!(D, V, grid; direction = direction)
     return D
 end
-function central∂!(D, V, grid; direction = 1)
+
+function central∂(V::AbstractArray, grid; direction = 1)
+    central∂(BorderArray(V, pad(V, 1)), grid; direction = direction)
+end
+function central∂(V::BorderArray, grid; direction = 1)
+    D = Array{Float32}(undef, length.(grid))
+    central∂!(D, V, grid; direction = direction)
+end
+function central∂!(D, V::BorderArray, grid; direction = 1)
     h = steps(grid)[direction]; twoh⁻¹ = inv(2f0 .* h);
     if h < ϵ @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
 
-    Δᵢ = makeΔ(length(grid))[direction]
+    dimensions = length(grid)
+    Δᵢ = makeΔ(dimensions)[direction]
 
-    Iₗ, Iᵤ = CartesianIndices(V) |> extrema
+    Idx = CartesianIndices(length.(grid))
 
-    @batch for I in CartesianIndices(V)
-        D[I] = twoh⁻¹ * ( V[min(I + Δᵢ, Iᵤ)] - V[max(I - Δᵢ, Iₗ)] )
+    @batch for I in Idx
+        D[I] = twoh⁻¹ * (V[I + Δᵢ] - V[I - Δᵢ])
     end
 
     return D 
@@ -59,30 +66,32 @@ Given a `Vₜ` `(n₁ × n₂ ... × nₘ)` and a drift `w` `(n₁ × n₂ ... �
 The finite difference scheme is computed by using second order forward derivatives if the drift is positive and backwards if it is negative.
 
 """
-function dir∇(V, w, grid)
-    m = length(grid) + Int(withdot ? 1 : 0)
-
+function dir∇(V::AbstractArray, w, grid)
+    dir∇(BorderArray(V, pad(V, 2)), w, grid)
+end
+function dir∇(V::BorderArray, w, grid)
     D = Array{Float32}(undef, length.(grid)..., m)
     dir∇!(D, V, w, grid)
     return D
 end
-function dir∇!(D, V, w, grid)
+function dir∇!(D, V::BorderArray, w, grid)
     h = steps(grid); twoh⁻¹ = inv.(2f0 .* h);
     if any(h .< ϵ) @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
 
     dimension = length(grid)
     Δ = makeΔ(dimension)
-    
-    Iₗ, Iᵤ = CartesianIndices(V) |> extrema
-    temp = 0f0
 
-    @batch for I in CartesianIndices(V)
+    Idx = CartesianIndices(length.(grid))
+    
+    temp = 0f0
+    @batch for I in Idx
         temp = 0f0
 
         for l ∈ 1:dimension
-            D[I, l] = twoh⁻¹[l] * ifelse(w[I, l] > 0,
-                -V[min(I + 2Δ[l], Iᵤ)] + 4f0V[min(I + Δ[l], Iᵤ)] - 3f0V[I],
-                V[max(I - 2Δ[l], Iₗ)] - 4f0V[max(I - Δ[l], Iₗ)] + 3f0V[I]
+            D[I, l] = twoh⁻¹[l] * ifelse(
+                w[I, l] > 0,
+                -V[I + 2Δ[l]] + 4f0V[I + Δ[l]] - 3f0V[I],
+                V[I - 2Δ[l]] - 4f0V[I - Δ[l]] + 3f0V[I]
             )
 
             temp += D[I, l] * w[I, l]
@@ -94,23 +103,27 @@ function dir∇!(D, V, w, grid)
     return D 
 end
 
-function dir∂(V, w, grid; direction = 1)
+function dir∂(V::AbstractArray, w, grid; direction = 1)
+    dir∂(BorderArray(V, pad(V, 2)), w, grid; direction = direction)
+end
+function dir∂(V::BorderArray, w, grid; direction = 1)
     D = similar(V)
     dir∂!(D, V, w, grid; direction = direction)
     return D
 end
-function dir∂!(D, V, w, grid; direction = 1)
+function dir∂!(D, V::BorderArray, w, grid; direction = 1)
     h = steps(grid)[direction]; twoh⁻¹ = inv(2f0 .* h);
     if h < ϵ @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
 
     Δᵢ = makeΔ(length(grid))[direction]
 
-    Iₗ, Iᵤ = CartesianIndices(V) |> extrema
+    Idx = CartesianIndices(length.(grid))
 
-    @batch for I in CartesianIndices(V)
-        D[I, 1] = twoh⁻¹ * ifelse(w[I] > 0,
-            -V[min(I + 2Δᵢ, Iᵤ)] + 4f0V[min(I + Δᵢ, Iᵤ)] - 3f0V[I],
-            V[max(I - 2Δᵢ, Iₗ)] - 4f0V[max(I - Δᵢ, Iₗ)] + 3f0V[I]
+    @batch for I in Idx
+        D[I, 1] = twoh⁻¹ * ifelse(
+            w[I] > 0,
+            -V[I + 2Δᵢ] + 4f0V[I + Δᵢ] - 3f0V[I],
+            V[I - 2Δᵢ] - 4f0V[I - Δᵢ] + 3f0V[I]
         )
     end
 
@@ -120,24 +133,25 @@ end
 """
 Given a Vₜ (n₁ × n₂ × n₃) computes the second derivative in the direction of the l-th input xₗ.
 """
-function ∂²(V, grid; dim = 1)
+function ∂²(V::AbstractArray, grid; dim = 1)
+    ∂²(BorderArray(V, pad(V, 2)), grid; dim = dim)
+end
+function ∂²(V::BorderArray, grid; dim = 1)
     D² = similar(V)
     ∂²!(D², V, grid; dim = dim)
     return D²
 end
-function ∂²!(D², V, grid; dim = 1)
+function ∂²!(D², V::BorderArray, grid; dim = 1)
     hₗ = steps(grid)[dim]; hₗ⁻² = inv(hₗ^2)
     if (hₗ < ϵ) @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
 
     dimensions = length(grid)
     Δᵢ = makeΔ(dimensions)[dim]
 
-    Iₗ, Iᵤ = CartesianIndices(V) |> extrema
+    Idx = CartesianIndices(length.(grid))
     
-    @batch for idx in CartesianIndices(V)
-        D²[idx] = hₗ⁻² * (
-            V[min(idx + Δᵢ, Iᵤ)] - 2f0 * V[idx] + V[max(idx - Δᵢ, Iₗ)]
-        )
+    @batch for I in Idx
+        D²[I] = hₗ⁻² * (V[I + Δᵢ] - 2f0 * V[I] + V[I - Δᵢ])
     end
 
     return D² 
