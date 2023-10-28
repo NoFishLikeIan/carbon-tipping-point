@@ -21,8 +21,6 @@ begin # Initialise three dimensional cube
 end;
 
 # Generating mock data
-Xgrid = Iterators.product(grid...) |> collect;
-
 V = [T^2 * y^2 + log(m + 1) for T ∈ grid[1], m ∈ grid[2], y ∈ grid[3]];
 
 V′ = permutedims(reinterpret(reshape, Float32, 

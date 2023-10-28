@@ -28,9 +28,7 @@ function central∇!(D, V::BorderArray, grid)
     dimensions = length(grid)
     Δ = makeΔ(dimensions)
 
-    Idx = CartesianIndices(length.(grid))
-
-    @batch for I in Idx, l in 1:dimensions
+    @batch for I in CartesianIndices(V.inner), l in 1:dimensions
         D[I, l] = twoh⁻¹[l] * ( V[I + Δ[l]] - V[I - Δ[l]] )
     end
 
@@ -51,9 +49,7 @@ function central∂!(D, V::BorderArray, grid; direction = 1)
     dimensions = length(grid)
     Δᵢ = makeΔ(dimensions)[direction]
 
-    Idx = CartesianIndices(length.(grid))
-
-    @batch for I in Idx
+    @batch for I in CartesianIndices(V.inner)
         D[I] = twoh⁻¹ * (V[I + Δᵢ] - V[I - Δᵢ])
     end
 
@@ -80,11 +76,9 @@ function dir∇!(D, V::BorderArray, w, grid)
 
     dimension = length(grid)
     Δ = makeΔ(dimension)
-
-    Idx = CartesianIndices(length.(grid))
     
     temp = 0f0
-    @batch for I in Idx
+    @batch for I in CartesianIndices(V.inner)
         temp = 0f0
 
         for l ∈ 1:dimension
@@ -117,9 +111,7 @@ function dir∂!(D, V::BorderArray, w, grid; direction = 1)
 
     Δᵢ = makeΔ(length(grid))[direction]
 
-    Idx = CartesianIndices(length.(grid))
-
-    @batch for I in Idx
+    @batch for I in CartesianIndices(V.inner)
         D[I, 1] = twoh⁻¹ * ifelse(
             w[I] > 0,
             -V[I + 2Δᵢ] + 4f0V[I + Δᵢ] - 3f0V[I],
@@ -147,10 +139,8 @@ function ∂²!(D², V::BorderArray, grid; dim = 1)
 
     dimensions = length(grid)
     Δᵢ = makeΔ(dimensions)[dim]
-
-    Idx = CartesianIndices(length.(grid))
     
-    @batch for I in Idx
+    @batch for I in CartesianIndices(V.inner)
         D²[I] = hₗ⁻² * (V[I + Δᵢ] - 2f0 * V[I] + V[I - Δᵢ])
     end
 
