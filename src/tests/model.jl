@@ -5,10 +5,12 @@ using BenchmarkTools
 using JLD2
 using FiniteDiff # To test gradients
 
+using ImageFiltering: BorderArray
+
 using Model: Economy, Hogg, Albedo
 using Model: hjb, objective, gradientobjective!, hessianobjective!, optimalpolicy, policyovergrid!
 
-using Utils: makegrid, fromgridtoarray, central∇, ∂²
+using Utils: makegrid, fromgridtoarray, central∇!, ∂²!, pad
 
 economy = Economy();
 hogg = Hogg();
@@ -27,13 +29,17 @@ statedomain = [
 X = fromgridtoarray(Ω);
 
 # ---- Benchmarking
-V = [
+Vdata = [
     (exp(y) / economy.Ȳ)^2 - (exp(m) / hogg.Mᵖ)^2 *  (T / hogg.Tᵖ)^2 
     for T ∈ Ω[1], m ∈ Ω[2], y ∈ Ω[3]
 ];
-V .= 1f-1 .* (V ./ maximum(abs.(V))); # Renormalise V
-∇V = central∇(V, Ω);
-∂²V = ∂²(V, Ω);
+V = BorderArray(Vdata, pad(Vdata, 2));
+
+∇V = Array{Float32}(undef, length.(Ω)..., 4);
+central∇!(∇V, V, Ω);
+
+∂²V = Array{Float32}(undef, length.(Ω));
+∂²!(∂²V, V, Ω);
 
 # Some sample data
 begin

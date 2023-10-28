@@ -5,6 +5,8 @@ using Polyester: @batch
 using Optim: optimize, minimizer, IPNewton, Newton, TwiceDifferentiable, TwiceDifferentiableConstraints, Options
 using Roots: Bisection, find_zero
 using FastClosures: @closure
+using ImageFiltering: BorderArray, Pad
+using Utils: pad
 
 include("calibration.jl")
 include("climate.jl")
