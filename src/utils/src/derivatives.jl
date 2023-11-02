@@ -5,16 +5,16 @@ function makeΔ(n)
     ntuple(i -> CartesianIndex(ntuple(j -> j == i ? 1 : 0, n)), n)
 end
 
-"Constructs a `Pad` object of the dimension of A"
-function pad(A::AbstractArray, padding::Int)
-    Pad(ntuple(_ -> padding, length(size(A))))
+"Constructs a `Pad` object of the dimension of A for the first three coordinates"
+function paddims(A::AbstractArray, padding::Int, dims = 1:length(size(A)))
+    Pad(ntuple(i -> i ∈ dims ? padding : 0, length(size(A))))
 end
 
 """
 Given a Vₜ (n₁ × n₂ ... × nₘ) returns a matrix D (n₁ × n₂ ... × nₘ × m), with elements ∇Vₜ and last ∇Vₜ⋅w.
 """
 function central∇(V::AbstractArray, grid)
-    central∇(BorderArray(V, pad(V, 1)), grid)
+    central∇(BorderArray(V, paddims(V, 1)), grid)
 end
 function central∇(V::BorderArray, grid)
     D = Array{Float32}(undef, length.(grid)..., length(grid))
@@ -36,7 +36,7 @@ function central∇!(D, V::BorderArray, grid)
 end
 
 function central∂(V::AbstractArray, grid; direction = 1)
-    central∂(BorderArray(V, pad(V, 1)), grid; direction = direction)
+    central∂(BorderArray(V, paddims(V, 1)), grid; direction = direction)
 end
 function central∂(V::BorderArray, grid; direction = 1)
     D = Array{Float32}(undef, length.(grid))
@@ -63,7 +63,7 @@ The finite difference scheme is computed by using second order forward derivativ
 
 """
 function dir∇(V::AbstractArray, w, grid)
-    dir∇(BorderArray(V, pad(V, 2)), w, grid)
+    dir∇(BorderArray(V, paddims(V, 2)), w, grid)
 end
 function dir∇(V::BorderArray, w, grid)
     D = Array{Float32}(undef, length.(grid)..., m)
@@ -98,7 +98,7 @@ function dir∇!(D, V::BorderArray, w, grid)
 end
 
 function dir∂(V::AbstractArray, w, grid; direction = 1)
-    dir∂(BorderArray(V, pad(V, 2)), w, grid; direction = direction)
+    dir∂(BorderArray(V, paddims(V, 2)), w, grid; direction = direction)
 end
 function dir∂(V::BorderArray, w, grid; direction = 1)
     D = similar(V)
@@ -126,7 +126,7 @@ end
 Given a Vₜ (n₁ × n₂ × n₃) computes the second derivative in the direction of the l-th input xₗ.
 """
 function ∂²(V::AbstractArray, grid; dim = 1)
-    ∂²(BorderArray(V, pad(V, 2)), grid; dim = dim)
+    ∂²(BorderArray(V, paddims(V, 2)), grid; dim = dim)
 end
 function ∂²(V::BorderArray, grid; dim = 1)
     D² = similar(V)

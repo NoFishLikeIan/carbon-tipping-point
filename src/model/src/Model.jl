@@ -6,7 +6,7 @@ using Optim: optimize, minimizer, IPNewton, Newton, TwiceDifferentiable, TwiceDi
 using Roots: Bisection, find_zero
 using FastClosures: @closure
 using ImageFiltering: BorderArray, Pad
-using Utils: pad
+using Utils: paddims
 
 include("calibration.jl")
 include("climate.jl")
