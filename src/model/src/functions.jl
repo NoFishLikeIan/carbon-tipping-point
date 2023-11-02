@@ -10,19 +10,21 @@ function ε′(t, M, instance::ModelInstance, calibration::Calibration)
 end
 
 "Computes drift over whole state space `X`"
-drift(t, X, policy, instance::ModelInstance, calibration::Calibration) = drift!(similar(X), t, X, policy, instance, calibration)
-function drift!(w, t, X, policy, instance::ModelInstance, calibration::Calibration)
+drift(t, X, policy::AbstractArray, instance::ModelInstance, calibration::Calibration) = drift!(similar(X), t, X, policy, instance, calibration)
+function drift!(w, t, X, policy::AbstractArray, instance::ModelInstance, calibration::Calibration)
     economy, hogg, albedo = instance
 
     γₜ = γ(t, economy, calibration)
     Aₜ = A(t, economy)
 
-    @batch for idx in CartesianIndices(size(X)[1:3])
+    dimensions = size(X)[1:3]
+
+    @batch for idx in CartesianIndices(dimensions)
         c = @view policy[idx, :]
 
         w[idx, 1] = μ(X[idx, 1], X[idx, 2], hogg, albedo)
         w[idx, 2] = γₜ - c[2]
-        w[idx, 3] = economy.ϱ + ϕ(c[1], Aₜ, economy) -  # Economic growth
+        w[idx, 3] = economy.ϱ + ϕ(c[1], Aₜ, economy) -
             Aₜ *  β(t, ε(t, exp(X[idx, 2]), c[2], instance, calibration), economy) - 
             δₖ(X[idx, 1], economy, hogg)
 
@@ -82,11 +84,11 @@ function hessianobjective!(H, c, t, Xᵢ, Vᵢ, ∇Vᵢ, instance::ModelInstance
 end
 
 const optimoptions = Options(
-    x_abstol = 0f0,x_reltol = 0f0,f_abstol = 0f0,f_reltol = 0f0,g_abstol = 1f-8,g_reltol = 1f-8, outer_x_abstol = 0f0, outer_x_reltol = 0f0, outer_f_abstol = 0f0, outer_f_reltol = 0f0, outer_g_abstol = 1f-8, outer_g_reltol = 1f-8,
+    x_abstol = 0f0, x_reltol = 0f0, f_abstol = 0f0, f_reltol = 0f0, g_abstol = 1f-8, g_reltol = 1f-8, outer_x_abstol = 0f0, outer_x_reltol = 0f0, outer_f_abstol = 0f0, outer_f_reltol = 0f0, outer_g_abstol = 1f-8, outer_g_reltol = 1f-8,
     allow_f_increases = true, successive_f_tol = 3
 )
 
-const dfc = TwiceDifferentiableConstraints([0f0, 0f0], [1f0, 1f0])
+const dfc = TwiceDifferentiableConstraints([1f-3, 1f-3], [1f0 - 1f-3, 1f0 - 1f-3])
 
 "Numerically maximises the objective functional at point `Xᵢ`."
 function optimalpolicy(t, Xᵢ, Vᵢ, ∇Vᵢ, instance::ModelInstance, calibration::Calibration; c₀ = [0.5f0, 0.5f0])
@@ -102,15 +104,24 @@ end
 
 "Computes the optimal `policy = (χ, α)` over the state space `X`"
 function policyovergrid(t, X, V, ∇V, instance::ModelInstance, calibration::Calibration)
-    policyovergrid!(Array{Float32, 4}(undef, size(V)..., 2), t, X, V, ∇V, instance, calibration)
+
+    inner = ones(Float32, size(X, 1), size(X, 2), size(X, 3), 2) ./ 2f0
+    policy = BorderArray(inner, paddims(inner, 1, 1:length(size(V))))
+
+    policyovergrid!(policy, t, X, V, ∇V, instance, calibration)
 end
-function policyovergrid!(policy, t, X, V, ∇V, instance::ModelInstance, calibration::Calibration)
-    @batch for idx ∈ CartesianIndices(V)
+function policyovergrid!(policy::BorderArray, t, X, V::BorderArray, ∇V, instance::ModelInstance, calibration::Calibration)
+
+    I₁ = oneunit(first(CartesianIndices(V)))
+
+    for idx ∈ CartesianIndices(V.inner)
         Xᵢ = @view X[idx, :]
         ∇Vᵢ = @view ∇V[idx, :]
         Vᵢ = @view V[idx]
 
-        policy[idx, :] .= optimalpolicy(t, Xᵢ, Vᵢ, ∇Vᵢ, instance, calibration) # TODO: Set guess c₀
+        χ₀, α₀ = policy[idx - I₁, :]
+
+        policy.inner[idx, :] .= optimalpolicy(t, Xᵢ, Vᵢ, ∇Vᵢ, instance, calibration; c₀ = [χ₀, α₀])
     end
     
     return policy
