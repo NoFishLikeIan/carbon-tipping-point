@@ -1,15 +1,8 @@
-using Model: policyovergrid!, drift!
-using Utils: ∂²!, central∇!, dir∇!
+using Model: policyovergrid!, drift!, terminalpolicyovergrid!, ydrift!, hjbterminal
+using Model: ModelInstance, Calibration
+using Utils: ∂²!, central∇!, dir∇!, central∂!, dir∂!
+using Polyester: @batch
 
-function G(t, X, V, Ω, instance::Model.ModelInstance, calibration::Model.Calibration)
-    ∂ₜV = similar(V);
-    ∇V = similar(V, size(V)..., 4);
-    ∂²V = similar(V);
-    policy = similar(V, size(V)..., 2);
-    w = similar(V, size(V)..., 3);
-
-    G!(∂ₜV, ∇V, ∂²V, policy, w, t, X, V, Ω, instance, calibration)
-end
 "Computes G! by modifying (∂ₜV, ∇V, policy, w)"
 function G!(∂ₜV, ∇V, ∂²V, policy, w, t, X, V, Ω, instance::Model.ModelInstance, calibration::Model.Calibration)
     central∇!(∇V, V, Ω)
