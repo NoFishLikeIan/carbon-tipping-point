@@ -8,10 +8,26 @@ Putting it all together, letting $X$ be the state vector, the value function at 
     \end{split}
 \end{equation}
 
-Using a backward finite difference approximation \begin{equation}
-    -\partial_t V_t = \frac{V_{t - 1} - V_{t}}{\epsilon},
-\end{equation} we can rewrite \begin{equation}
-    V_{t - 1} = V_t + \epsilon \; G(t, X, V_t).
+
+\subsection{Post-transition phase}
+
+We suppose that at some point in the future $\tau$, abatement is free and is exogenously imposed such that carbon concentration remains constant. I call this the \textit{post-transition} phase. This yields the following climate dynamics \begin{align}
+    \d{m} &= 0 \text{ and } \\
+    \epsilon \; \d T &= \Big(\mu_T(T) + \mu_m(m),\Big) \; \d t + \sigma_x \; \d W^T.
+\end{align}
+
+On the economic side, we impose that technological progress is $\varrho = 0$. If $\tau$ is very large, this assumption yields a good approximation. 
+
+Since the abatement levels $\alpha$ are fixed and exogenous, the only choice variable available to the planner is the consumption rate $\chi \in (0, 1)$ and what is not consumed is invested, such that output evolves as \begin{equation}
+    \d y = \big(\phi(\chi) - \delta_k - d(T) \big) \d t.
+\end{equation}
+
+Furthermore, by assuming $T$ and $m$ to be in equilibrium, using Ito's Lemma the system can be reduced to depend only on $y$, \begin{equation}
+    \d y = \left(\phi(\chi) - \frac{\sigma^2_T}{2} d^{\prime\prime}(T) \right) \d t + \sigma_T \d W_t.
+\end{equation}
+
+Let $\bar{V}(T, m, y) = V(t, T, m, y)$ for all $t \geq \tau$ be the post-transition value function, which satisfies the autonomous Hamilton-Bellman-Jacobi equation \begin{equation}
+    0 = \sup_{\chi} \big\{f(\chi, y, \bar{V}) +  \partial_y \bar{V} \phi(\chi) \big\} +  \frac{\sigma_T^2}{2} \Big( \partial^2_y V - \partial_y V d^{\prime \prime}(T) \Big)
 \end{equation}
 
 \end{document}

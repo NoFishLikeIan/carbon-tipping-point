@@ -61,7 +61,7 @@ The social planner problem depends on time $t$ and three state variables: temper
 
 \begin{proposition}
     The value function satisfies the Hamilton-Bellman-Jacobi equation \begin{equation}
-        0 = \sup_{\control{\alpha}, \control{\chi}} \; \Bigg\{ f(\control{\chi}, y, V ) + \nabla_X V \cdot w + \frac{\sigma_T^2}{2} \; \Big(\partial^2_T V \Big) \Bigg\}
+        0 = \sup_{\control{\alpha}, \control{\chi}} \; \Bigg\{ f(\control{\chi}, y, V ) + \nabla_X V \cdot w  \Bigg\} + \frac{\sigma_T^2}{2} \; \Big(\partial^2_T V \Big) + \partial_t V
     \end{equation}
 \end{proposition}
 
