@@ -11,7 +11,8 @@ Base.@kwdef struct Economy
     
     # Damages
     δₖᵖ::Float32 = 1.5f-2 # Initial depreciation rate of capital
-    damagehalftime::Float32 = 1.04f0 # d(T) = 1/2 if T = damagehalftime Tᵖ 
+    ξ::Float32 = 7.5f-5
+    υ::Float32 = 3.25f0
 
     # Output
     A₀::Float32 = 0.113f0 # Initial TFP
@@ -20,11 +21,10 @@ Base.@kwdef struct Economy
     # Domain 
     t₀::Float32 = -15f0 # Initial time of IPCC report
     t₁::Float32 = 80f0 # Horizon of IPCC report
+    τ::Float32 = 500f0 # Steady state horizon
 
-    Y̲::Float32 = 0.9f0 * 75.8f0 # Current output is assumed to be minimum
-    Ȳ::Float32 = 1.3f0 * 75.8f0 # Maximum output
-
-    V̲::Float32 = 10f3
+    Y̲::Float32 = 0.9f0 * 75.8f0
+    Ȳ::Float32 = 1.3f0 * 75.8f0
 end
 
 "Epstein-Zin aggregator"
@@ -39,7 +39,8 @@ function f(χ, y, u, economy::Economy)
     return ρ * δu / (1 - 1 / ψ) * (R - 1)
 end
 
-function Y∂f(χ, y, u, economy::Economy)
+"Computes f, Y∂f, and Y²∂²f without recomputing factors"
+function epsteinzinsystem(χ, y, u, economy::Economy)
     @unpack ρ, θ, ψ = economy
 
     δu = max(0f0, (1 - θ) * u)
@@ -47,18 +48,11 @@ function Y∂f(χ, y, u, economy::Economy)
     c = χ * exp(y)
     R = (c / δu^inv(1 - θ))^(1 - 1 / ψ)
 
-    return ρ * δu * R / χ
-end
+    f₀ = ρ * δu / (1 - 1 / ψ) * (R - 1)
+    Yf₁ = ρ * δu * R / χ
+    Y²f₂ = -ρ * δu * R / (χ^2 * ψ)
 
-function Y²∂²f(χ, y, u, economy::Economy)
-    @unpack ρ, θ, ψ = economy
-
-    δu = max(0f0, (1 - θ) * u)
-
-    c = χ * exp(y)
-    R = (c / δu^inv(1 - θ))^(1 - 1 / ψ)
-
-    return -ρ * δu * R / (χ^2 * ψ)
+    return f₀, Yf₁, Y²f₂
 end
 
 "Cost of abatement as a fraction of GDP"
@@ -71,10 +65,18 @@ function β′(t, e, economy::Economy)
 end
 
 function d(T, economy::Economy, hogg::Hogg)
-    fct = 1 - (1 / economy.damagehalftime)
-    ΔT = fct * hogg.Tᵖ + (1 - fct) * (hogg.Tᵖ - T)
+    @unpack υ, ξ = economy
+    ξ * (T - hogg.Tᵖ)^υ
+end
 
-    return inv(1 + exp(ΔT / 3))
+function d′(T, economy::Economy, hogg::Hogg)
+    @unpack υ, ξ = economy
+    ξ * υ * (T - hogg.Tᵖ)^(υ - 1)
+end
+
+function d′′(T, economy::Economy, hogg::Hogg)
+    @unpack υ, ξ = economy
+    ξ * υ * (υ - 1) * (T - hogg.Tᵖ)^(υ - 2)
 end
 
 function δₖ(T, economy::Economy, hogg::Hogg)
@@ -107,8 +109,8 @@ end
 "Linear interpolation of emissions in `calibration`"
 Eᵇ(t, economy::Economy, calibration::Calibration) = Eᵇ(t, economy.t₀, economy.t₁, calibration.emissions)
 function Eᵇ(t, t₀, t₁, emissions)
-    if t < t₀ return first(emissions) end
-    if t > t₁ return last(emissions) end
+    if t ≤ t₀ return first(emissions) end
+    if t ≥ t₁ return last(emissions) end
 
     partition = range(t₀, t₁; length = length(emissions))
     udx = findfirst(tᵢ -> tᵢ > t, partition)

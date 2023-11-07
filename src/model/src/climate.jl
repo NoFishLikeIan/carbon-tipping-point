@@ -39,8 +39,8 @@ Base.@kwdef struct Hogg
     T̲::Float32 = 288.56f0 # Use initial levels because α > 0
     M̲::Float32 = 410f0 
 
-    T̄::Float32 = 287.15f0 + 8f0 # Max. temperature, +10
-    M̄::Float32 = 645f0 # Concentration consistent with T̄
+    T̄::Float32 = 287.15f0 + 10f0 # Max. temperature, +10
+    M̄::Float32 = 1010f0 # Concentration consistent with T̄
 end
 
 "Decay of carbon"

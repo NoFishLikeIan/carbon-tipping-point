@@ -1,14 +1,15 @@
 using Revise
 
 using Test: @test
-using BenchmarkTools
-using JLD2
+using BenchmarkTools, Random
+rng = MersenneTwister(123)
+
 using FiniteDiff # To test gradients
 
+using JLD2
 using ImageFiltering: BorderArray
-
 using Model: Economy, Hogg, Albedo
-using Model: hjb, objective, gradientobjective!, hessianobjective!, optimalpolicy, policyovergrid!
+using Model: hjb, objective!, optimalpolicy, policyovergrid!
 
 using Utils: makegrid, fromgridtoarray, central∇!, ∂²!, paddims
 
@@ -28,7 +29,11 @@ statedomain = [
 Ω = makegrid(statedomain);
 X = fromgridtoarray(Ω);
 
-# ---- Benchmarking
+# -- Benchmarking
+# ---- Steady state model
+T = @view X[:, :, :, 1];
+
+# ---- Full model
 Vdata = [
     (exp(y) / economy.Ȳ)^2 - (exp(m) / hogg.Mᵖ)^2 *  (T / hogg.Tᵖ)^2 
     for T ∈ Ω[1], m ∈ Ω[2], y ∈ Ω[3]
@@ -43,7 +48,7 @@ central∇!(∇V, V, Ω);
 # Some sample data
 begin
     t = 5f0
-    idx = rand(CartesianIndices(V))
+    idx = rand(rng, CartesianIndices(V.inner))
     Xᵢ = @view X[idx, :]
     Vᵢ = @view V[idx]
     ∇Vᵢ = @view ∇V[idx, :]
@@ -55,38 +60,16 @@ println("HJB given control...")
 @btime hjb($cᵢ, $t, $Xᵢ, $Vᵢ, $∇Vᵢ, $∂²Vᵢ, $instance, $calibration);
 
 println("Objective functional given control...")
-@btime objective($cᵢ, $t, $Xᵢ, $Vᵢ, $∇Vᵢ, $instance, $calibration);
-
 ∇ = zeros(Float32, 2);
-@btime gradientobjective!($∇, $cᵢ, $t, $Xᵢ, $Vᵢ, $∇Vᵢ, $instance, $calibration);
-
-gradienterror = ∇ .- FiniteDiff.finite_difference_gradient(c -> objective(c, t, Xᵢ, Vᵢ, ∇Vᵢ, instance, calibration), cᵢ)
-
 H = zeros(Float32, 2, 2);
-@btime hessianobjective!($H, $cᵢ, $t, $Xᵢ, $Vᵢ, $∇Vᵢ, $instance, $calibration);
-
-hessianerror = H .- FiniteDiff.finite_difference_hessian(c -> objective(c, t, Xᵢ, Vᵢ, ∇Vᵢ, instance, calibration), cᵢ)
-# @test all(hessianerror .< 1e-3)
+Z = 0f0;
+@btime objective!($Z, $∇, $H, $cᵢ, $t, $Xᵢ, $Vᵢ, $∇Vᵢ, $instance, $calibration);
 
 println("Optimal policy at a given point...")
-@btime optimalpolicy($t, $Xᵢ, $Vᵢ, $∇Vᵢ, $instance, $calibration; c₀ = [0.1f0, 0.8f0]);
+@btime optimalpolicy($t, $Xᵢ, $Vᵢ, $∇Vᵢ, $instance, $calibration; c₀ = $cᵢ);
 
 policysize = (size(V.inner)..., 2);
 inner = ones(Float32, policysize) ./ 2f0;
 policy = BorderArray(inner, paddims(inner, 1, (1, 2, 3)));
-policyovergrid!(policy, t, X, V, ∇V, instance, calibration);
-@btime policyovergrid!($policy, $t, $X, $V, $∇V, $instance, $calibration); # FIXME: Gives error
-
-# -- Benchmarking G
-∂ₜV = similar(V.inner);
-w = ones(Float32, size(X))
-
-G!(∂ₜV, ∇V, ∂²V, policy, w, t, X, V, Ω, instance, calibration);
-
-
-if false
-    w = Array{Float32}(undef, size(V)..., 3);
-    ∇V = Array{Float32}(undef, size(V)..., 4);
-    @btime G($t, $X, $V, $Ω, $P);
-    @btime G!($∂ₜV, $∇V, $w, $policy, $t, $X, $V, $Ω, $P);
-end
+println("Computing policy over grid")
+@btime policyovergrid!($policy, $t, $X, $V, $∇V, $instance, $calibration);

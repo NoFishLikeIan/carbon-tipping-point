@@ -1,57 +1,19 @@
-"Computes the terminal Hamilton-Jacobi-Bellmann equation at point Xᵢ"
-function hjbterminal(χᵢ, Xᵢ, Vᵢ, ∂yVᵢ, ∂²Vᵢ, instance::ModelInstance)
-    economy, hogg, _ = instance
-    t = economy.t₁
-
-    f(χᵢ, Xᵢ[2], Vᵢ[1], economy) + 
-        ∂yVᵢ[1] * (
-            ϕ(t, χᵢ, economy) - δₖ(Xᵢ[1], economy, hogg)
-        ) +
-        ∂²Vᵢ[1] * hogg.σ²ₜ / 2f0
-end
-
-function terfoc(χᵢ, Xᵢ, Vᵢ, ∂yVᵢ, instance::ModelInstance)
-    economy = first(instance)
-    t = economy.t₁
-    Y∂f(χᵢ, Xᵢ[2], Vᵢ[1], economy) + ∂yVᵢ[1] * ϕ′(t, χᵢ, economy)
-end
-
-function optimalterminalpolicy(Xᵢ, Vᵢ, ∂yVᵢ, instance::ModelInstance)
-    g = @closure χ -> terfoc(χ, Xᵢ, Vᵢ, ∂yVᵢ, instance)
-
-    if g(1f-3) * g(1f0) > 0 
-        if g(1f-3) < 0 return 1f-3 end
-        if g(1f0) > 0 return 1f0 end
-    end
-
-    find_zero(g, (1f-3, 1f0), Bisection())
-end
-
-function ydrift!(w, policy, T, instance::ModelInstance)
-    economy, hogg, _ = instance
-    t = economy.t₁
+"Computes the drift of `y` in the post transition phase."
+function ȳdrift!(w, X::AbstractArray, χ::AbstractArray, instance::ModelInstance)
+    economy, hogg, albedo = instance
 
     @batch for idx in CartesianIndices(w)
-        w[idx] = ϕ(t, policy[idx], economy) - δₖ(T[idx], economy, hogg)
+        T = @view X[idx, 1]
+        
+        w[idx] = ϕ(economy.τ, χ, economy) - economy.δₖᵖ + d′(T, economy, hogg) * μ(T, m, hogg, albedo) + (hogg.σ²ₜ / 2f0) * d′′(T, economy, hogg)
+                
     end
-
-    return w
 end
 
-"""
-Computes the optimal policy χ' over the state space X
-"""
-function terminalpolicyovergrid(X, V, ∂yV, instance::ModelInstance)
-    terminalpolicyovergrid!(similar(V), X, V, ∂yV, instance)
-end
-function terminalpolicyovergrid!(policy, X, V, ∂yV, instance::ModelInstance)
-    @batch for idx ∈ CartesianIndices(V)
-        Xᵢ = @view X[idx, :]
-        ∂yVᵢ = @view ∂yV[idx]
-        Vᵢ = @view V[idx]
+function objective!(z, ∂ᵪ, ∂²ᵪ, χ, Xᵢ, Vᵢ, ∂₁V, instance::ModelInstance, calibration::Calibration)
 
-        policy[idx] = optimalterminalpolicy(Xᵢ, Vᵢ, ∂yVᵢ, instance)
-    end
-    
-    return policy
+    economy = first(instance)
+    f₀, Yf₁, Y²f₂ = epsteinzinsystem(χ, Xᵢ[3], Vᵢ[1], economy)
+
+    # ... ? 
 end
