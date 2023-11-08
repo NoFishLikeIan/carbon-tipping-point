@@ -34,7 +34,7 @@ end
 
 println("Testing and benchmarking:")
 
-V = BorderArray(V, Utils.pad(V, 2));
+V = BorderArray(V, Utils.paddims(V, 2));
 D = Array{Float32}(undef, dimensions..., length(dimensions) + 1);
 
 # Central difference
@@ -44,7 +44,7 @@ centralε = absnorm(D[:, :, :, 1:3], V′, 1)
 @test centralε < ε¹
 
 ∂₂V = Array{Float32}(undef, dimensions);
-@btime Utils.central∂!($∂₂V, $V, $grid);
+@btime Utils.central∂!($∂₂V, $V, $grid, 1);
 @test all(∂₂V .≈ D[:, :, :, 1])
 
 # Upwind-downind difference
@@ -55,17 +55,18 @@ Utils.dir∇!(D, V, w, grid);
 
 fwdε = absnorm(D[:, :, :, 1:3], V′, 2)
 @test fwdε < ε¹
-
-Utils.dir∂!(∂₂V, V, w[:, :, :, 2], grid; direction = 2);
+Utils.dir∂!(∂₂V, V, w[:, :, :, 2], grid, 2);
 @test all(∂₂V .≈ D[:, :, :, 2])
 
 # Second derivative w.r.t. the first argument
+direction = 1
 ∂²Tv(T, m, y) = 2y^2
 ∂²TV = [2y^2 for T ∈ grid[1], m ∈ grid[2], y ∈ grid[3]]
 
 println("--- Second derivative")
+direction = 1
 D² = Array{Float32}(undef, dimensions);
-@btime Utils.∂²!($D², $V, $grid);
-Utils.∂²!(D², V, grid); 
+@btime Utils.∂²!($D², $V, $grid, $direction);
+Utils.∂²!(D², V, grid, direction); 
 T²ε = absnorm(D², ∂²TV, 2);
 @test all(T²ε .< ε²)

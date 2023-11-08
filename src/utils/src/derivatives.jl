@@ -34,21 +34,21 @@ function central∇!(D, V::BorderArray, grid)
     return D
 end
 
-function central∂(V::AbstractArray, grid; direction = 1)
+function central∂(V::AbstractArray, grid, direction)
     D = Array{Float32}(undef, length.(grid))
-    central∂!(D, V, grid; direction = direction)
+    central∂!(D, V, grid, direction)
 end
-function central∂!(D, V::AbstractArray, grid; direction = 1)
-    central∂!(D, BorderArray(V, paddims(V, 1)), grid; direction = direction)
+function central∂!(D, V::AbstractArray, grid, direction)
+    central∂!(D, BorderArray(V, paddims(V, 1)), grid, direction)
 end
-function central∂!(D, V::BorderArray, grid; direction = 1)
+function central∂!(D, V::BorderArray, grid, direction)
     h = steps(grid)[direction]; twoh⁻¹ = inv(2f0 .* h);
     if h < ϵ @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
 
     dimensions = length(grid)
     Δᵢ = makeΔ(dimensions)[direction]
 
-    for I in CartesianIndices(V.inner)
+    @batch for I in CartesianIndices(V.inner)
         D[I] = twoh⁻¹ * (V[I + Δᵢ] - V[I - Δᵢ])
     end
 
@@ -94,14 +94,14 @@ function dir∇!(D, V::BorderArray, w, grid)
     return D 
 end
 
-function dir∂(V::AbstractArray, w, grid; direction = 1)
+function dir∂(V::AbstractArray, w, grid, direction)
     D = similar(V)
-    dir∂!(D, V, w, grid; direction = direction)
+    dir∂!(D, V, w, grid, direction)
 end
-function dir∂!(D, V::AbstractArray, w, grid; direction = 1)
-    dir∂!(D, BorderArray(V, paddims(V, 2)), w, grid; direction = direction)
+function dir∂!(D, V::AbstractArray, w, grid, direction)
+    dir∂!(D, BorderArray(V, paddims(V, 2)), w, grid, direction)
 end
-function dir∂!(D, V::BorderArray, w, grid; direction = 1)
+function dir∂!(D, V::BorderArray, w, grid, direction)
     h = steps(grid)[direction]; twoh⁻¹ = inv(2f0 .* h);
     if h < ϵ @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
 
@@ -121,20 +121,20 @@ end
 """
 Given a Vₜ (n₁ × n₂ × n₃) computes the second derivative in the direction of the l-th input xₗ.
 """
-function ∂²(V::AbstractArray, grid; direction = 1)
+function ∂²(V::AbstractArray, grid, direction)
     D² = similar(V)
-    ∂²!(D², V, grid; direction = direction)
+    ∂²!(D², V, grid, direction)
     return D²
 end
-function ∂²!(D, V::AbstractArray, grid; direction = 1)
-    ∂²!(D, BorderArray(V, paddims(V, 2)), grid; direction = direction)
+function ∂²!(D, V::AbstractArray, grid, direction)
+    ∂²!(D, BorderArray(V, paddims(V, 2)), grid, direction)
 end
-function ∂²!(D², V::BorderArray, grid; direction = 1)
+function ∂²!(D², V::BorderArray, grid, direction)
     hₗ = steps(grid)[direction]; hₗ⁻² = inv(hₗ^2)
     if (hₗ < ϵ) @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
 
     dimensions = length(grid)
-    Δᵢ = makeΔ(dimensions)[dim]
+    Δᵢ = makeΔ(dimensions)[direction]
     
     @batch for I in CartesianIndices(V.inner)
         D²[I] = hₗ⁻² * (V[I + Δᵢ] - 2f0 * V[I] + V[I - Δᵢ])
