@@ -45,14 +45,24 @@ function policyovergrid!(policy::BorderArray, t, X, V::BorderArray, ∇V, instan
     return policy
 end
 
-@inline function optimalterminalpolicy(yᵢ, Vᵢ, ∂yVᵢ, economy::Economy)
+function optimalterminalpolicy(yᵢ, Vᵢ, ∂yVᵢ, economy::Economy; tol = 1f-3)
     g = @closure χ -> terminalfoc(χ, yᵢ, Vᵢ, ∂yVᵢ, economy) 
 
-    if g(0f0) ≤ 0f0
-        return 0f0
-    elseif g(1f0) ≥ 1f0
-        return 1f0
+    if g(tol) ≤ 0f0
+        return tol
+    elseif g(1f0 - tol) ≥ 0f0
+        return 1f0 - tol
     else
-        return find_zero(g, (0f0, 1f0), Bisection())
+        return find_zero(g, (tol, 1f0 - tol), Bisection())
+    end
+end
+
+function terminalpolicyovergrid!(policy, X, V::BorderArray, ∂yV, economy::Economy)
+    for idx ∈ CartesianIndices(V.inner)
+        yᵢ = @view X[idx, 2]
+        ∂yVᵢ = @view ∂yV[idx, :]
+        Vᵢ = @view V[idx]
+
+        policy[idx] = optimalterminalpolicy(yᵢ, Vᵢ, ∂yVᵢ, economy)
     end
 end
