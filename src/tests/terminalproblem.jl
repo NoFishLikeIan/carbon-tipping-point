@@ -23,23 +23,25 @@ terminaldomain = [
 Ω = Utils.makegrid(terminaldomain);
 X = Utils.fromgridtoarray(Ω);
 
-V = [ -2f0 + (exp(y) / economy.Y₀)^2 - (T / hogg.Tᵖ)^3 for T ∈ Ω[1], y ∈ Ω[2] ]
-V = BorderArray(V, Utils.paddims(V, 1))
+Vinner = [ -2f0 + (exp(y) / economy.Y₀)^2 - (T / hogg.Tᵖ)^3 for T ∈ Ω[1], y ∈ Ω[2] ]
+V = BorderArray(Vinner, Utils.paddims(Vinner, 2))
 
 ∂ₜV = similar(V.inner);
 policy = similar(V.inner);
 w = similar(V.inner);
 ∂yV = similar(V.inner);
-∂²TV = similar(V.inner);
+∂²yV = similar(V.inner);
+direction = 2;
 
-@btime Utils.central∂!(∂yV, V, Ω; direction = 2);
+@btime Utils.central∂!($∂yV, $V, $Ω, $direction);
+@btime Utils.∂²!($∂²yV, $V, $Ω, $direction);
 
 begin
     i = rand(CartesianIndices(V.inner))
     yᵢ = @view X[i, 2]
     Vᵢ = @view V[i]
     ∂yVᵢ = @view ∂yV[i]
-    ∂²TVᵢ = @view ∂²TV[i]
+    ∂²yVᵢ = @view ∂²yV[i]
     χᵢ = 0.5f0
 end;
 

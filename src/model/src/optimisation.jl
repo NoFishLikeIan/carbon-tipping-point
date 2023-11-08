@@ -58,11 +58,7 @@ function optimalterminalpolicy(yᵢ, Vᵢ, ∂yVᵢ, economy::Economy; tol = 1f-
 end
 
 function terminalpolicyovergrid!(policy, X, V::BorderArray, ∂yV, economy::Economy)
-    for idx ∈ CartesianIndices(V.inner)
-        yᵢ = @view X[idx, 2]
-        ∂yVᵢ = @view ∂yV[idx, :]
-        Vᵢ = @view V[idx]
-
-        policy[idx] = optimalterminalpolicy(yᵢ, Vᵢ, ∂yVᵢ, economy)
+    @batch for idx ∈ CartesianIndices(V.inner)
+        policy[idx] = optimalterminalpolicy(X[idx, 2], V[idx], ∂yV[idx], economy)
     end
 end
