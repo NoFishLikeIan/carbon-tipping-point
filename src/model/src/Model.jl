@@ -16,8 +16,8 @@ include("economy.jl")
 ModelInstance = Tuple{Economy, Hogg, Albedo}
 
 include("functions.jl")
+include("terminalfunctions.jl")
 include("optimisation.jl")
-include("terminal.jl")
 
 
 end # module Model
