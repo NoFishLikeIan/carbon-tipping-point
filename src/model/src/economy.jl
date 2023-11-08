@@ -39,6 +39,16 @@ function f(χ, y, u, economy::Economy)
     return ρ * δu / (1 - 1 / ψ) * (R - 1)
 end
 
+function Y∂f(χ, y, u, economy::Economy)
+    @unpack ρ, θ, ψ = economy
+    δu = max(0f0, (1 - θ) * u)
+
+    c = χ * exp(y)
+    R = (c / δu^inv(1 - θ))^(1 - 1 / ψ)
+
+    ρ * δu * R / χ
+end
+
 "Computes f, Y∂f, and Y²∂²f without recomputing factors"
 function epsteinzinsystem(χ, y, u, economy::Economy)
     @unpack ρ, θ, ψ = economy
