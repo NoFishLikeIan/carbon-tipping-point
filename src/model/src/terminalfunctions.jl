@@ -1,12 +1,9 @@
 "Computes the drift of `y` in the post transition phase."
 function ȳdrift!(w, X::AbstractArray, χ::AbstractArray, instance::ModelInstance)
-    economy, hogg, albedo = instance
+    economy, hogg, _ = instance
 
-    @batch for idx in CartesianIndices(w)
-        T = @view X[idx, 1]
-        
-        w[idx] = ϕ(economy.τ, χ, economy) - economy.δₖᵖ + d′(T, economy, hogg) * μ(T, m, hogg, albedo) + (hogg.σ²ₜ / 2f0) * d′′(T, economy, hogg)
-                
+    for idx in CartesianIndices(w)        
+        w[idx] = ϕ(economy.τ, χ[idx], economy) - economy.δₖᵖ - (hogg.σ²ₜ / 2f0) * d′′(X[idx, 1], economy, hogg)         
     end
 end
 
@@ -18,3 +15,14 @@ function terminalfoc(χ, yᵢ::Real, Vᵢ::Real, ∂yVᵢ::Real, economy::Econom
     Y∂f(χ, yᵢ, Vᵢ, economy) + ϕ′(economy.τ, χ, economy) * ∂yVᵢ
 end
 terminalfoc(χ, yᵢ::AbstractArray, Vᵢ::AbstractArray, ∂yVᵢ::AbstractArray, economy::Economy) = terminalfoc(χ, first(yᵢ), first(Vᵢ), first(∂yVᵢ), economy)
+
+function hjbterminal(χᵢ, Xᵢ, Vᵢ, ∂yVᵢ, ∂²yVᵢ, instance::ModelInstance)
+    economy, hogg, _ = instance
+
+    f(χᵢ, Xᵢ[2], Vᵢ[1], economy) + 
+        ∂yVᵢ[1] * ϕ(economy.τ, χᵢ, economy) + 
+        (hogg.σ²ₜ / 2f0) * (
+            ∂²yVᵢ[1] - ∂yVᵢ[1] * d′′(Xᵢ[1], economy, hogg)
+        )
+
+end
