@@ -6,42 +6,6 @@ const optimoptions = Options(
 
 const dfc = TwiceDifferentiableConstraints([0f0, 0f0], [1f0, 1f0])
 
-"Constructs the negative objective functional at `Xᵢ`."
-function objective!(Z, ∇, H, c, t, Xᵢ, Vᵢ, ∇Vᵢ, instance::ModelInstance, calibration::Calibration)
-    economy = first(instance)
-
-    f₀, Yf₁, Y²f₂ = epsteinzinsystem(c[1], Xᵢ[3], Vᵢ[1], economy)
-
-    εₜ = ε(t, exp(Xᵢ[2]), c[2], instance, calibration)
-    Aₜ = A(t, economy)
-
-    if !isnothing(∇)
-        ∇[1] = Yf₁ + ∇Vᵢ[3] * ϕ′(t, c[1], economy)
-        ∇[2] = -∇Vᵢ[2] - ∇Vᵢ[3] * Aₜ * β′(t, εₜ, economy) * ε′(t, exp(Xᵢ[2]), instance, calibration)
-    
-        ∇ .*= -1f0
-    end
-
-    if !isnothing(H)
-        H[1, 1] = Y²f₂ + ∇Vᵢ[3] * ϕ′′(t, economy)
-        H[1, 2] = 0f0
-        H[2, 1] = 0f0
-        H[2, 2] = -∇Vᵢ[3] * Aₜ * ε′(t, exp(Xᵢ[2]), instance, calibration)^2  * exp(-economy.ωᵣ * t)
-    
-        H .*= -1f0
-    end
-
-    if !isnothing(Z)
-        z = f₀ + 
-            ∇Vᵢ[2] * (γ(t, economy, calibration) - c[2]) + 
-            ∇Vᵢ[3] * (ϕ(t, c[1], economy) - Aₜ * β(t, εₜ, economy))
-
-        return -z
-    end
-
-        
-end
-
 "Numerically maximises the objective functional at point `Xᵢ`."
 function optimalpolicy(t, Xᵢ, Vᵢ, ∇Vᵢ, instance::ModelInstance, calibration::Calibration; c₀ = [0.5f0, 0.5f0])
 
@@ -79,4 +43,16 @@ function policyovergrid!(policy::BorderArray, t, X, V::BorderArray, ∇V, instan
     end
     
     return policy
+end
+
+@inline function optimalterminalpolicy(yᵢ, Vᵢ, ∂yVᵢ, economy::Economy)
+    g = @closure χ -> terminalfoc(χ, yᵢ, Vᵢ, ∂yVᵢ, economy) 
+
+    if g(0f0) ≤ 0f0
+        return 0f0
+    elseif g(1f0) ≥ 1f0
+        return 1f0
+    else
+        return find_zero(g, (0f0, 1f0), Bisection())
+    end
 end
