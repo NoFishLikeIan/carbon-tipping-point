@@ -10,10 +10,11 @@ function ȳdrift!(w, X::AbstractArray, χ::AbstractArray, instance::ModelInstan
     end
 end
 
-function objective!(z, ∂ᵪ, ∂²ᵪ, χ, Xᵢ, Vᵢ, ∂₁V, instance::ModelInstance, calibration::Calibration)
-
-    economy = first(instance)
-    f₀, Yf₁, Y²f₂ = epsteinzinsystem(χ, Xᵢ[3], Vᵢ[1], economy)
-
-    # ... ? 
+"""
+Computes the terminal first order condition of the univariate method, 
+    ∂ᵪf(χ, y, V) + ϕ′(χ) ∂yV = 0
+"""
+function terminalfoc(χ, yᵢ, Vᵢ::Real, ∂yVᵢ::Real, economy::Economy)
+    Y∂f(χ, yᵢ, Vᵢ, economy) + ϕ′(economy.τ, χ, economy) * ∂yVᵢ
 end
+terminalfoc(χ, yᵢ, Vᵢ::AbstractArray, ∂yVᵢ::AbstractArray, economy::Economy) = terminalfoc(χ, yᵢ, first(Vᵢ), first(∂yVᵢ), economy)
