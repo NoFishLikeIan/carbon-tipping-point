@@ -121,16 +121,16 @@ end
 """
 Given a Vₜ (n₁ × n₂ × n₃) computes the second derivative in the direction of the l-th input xₗ.
 """
-function ∂²(V::AbstractArray, grid; dim = 1)
+function ∂²(V::AbstractArray, grid; direction = 1)
     D² = similar(V)
-    ∂²!(D², V, grid; dim = dim)
+    ∂²!(D², V, grid; direction = direction)
     return D²
 end
-function ∂²!(D, V::AbstractArray, grid; dim = 1)
-    ∂²!(D, BorderArray(V, paddims(V, 2)), grid; dim = dim)
+function ∂²!(D, V::AbstractArray, grid; direction = 1)
+    ∂²!(D, BorderArray(V, paddims(V, 2)), grid; direction = direction)
 end
-function ∂²!(D², V::BorderArray, grid; dim = 1)
-    hₗ = steps(grid)[dim]; hₗ⁻² = inv(hₗ^2)
+function ∂²!(D², V::BorderArray, grid; direction = 1)
+    hₗ = steps(grid)[direction]; hₗ⁻² = inv(hₗ^2)
     if (hₗ < ϵ) @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
 
     dimensions = length(grid)
