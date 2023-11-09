@@ -6,7 +6,8 @@ using JLD2
 using ImageFiltering: BorderArray
 
 using Model: Economy, Hogg, Albedo
-using Utils: makegrid, fromgridtoarray, central∂, ∂², paddims, dir∂!
+using Utils: makegrid, fromgridtoarray, paddims
+using Utils: central∂, ∂²
 
 # To test...
 using Model: terminalpolicyovergrid!, ȳdrift!, terminalfoc, hjbterminal, optimalterminalpolicy
@@ -22,40 +23,42 @@ instance = (economy, hogg, albedo);
 
 terminaldomain = [
     (hogg.T₀, hogg.T̄, 101), 
+    (log(hogg.M̲), log(hogg.M̄), 51), 
     (log(economy.Y̲), log(economy.Ȳ), 51)
 ];
 
 Ω = makegrid(terminaldomain);
 X = fromgridtoarray(Ω);
 
-Vinner = [ -2f0 + (exp(y) / economy.Y₀)^2 - (T / hogg.Tᵖ)^3 for T ∈ Ω[1], y ∈ Ω[2] ];
+Vinner = [ -2f0 + (exp(y) / economy.Y₀)^2 - (T / hogg.Tᵖ)^3 for T ∈ Ω[1],  m ∈ Ω[2], y ∈ Ω[3] ];
 V = BorderArray(Vinner, paddims(Vinner, 2));
 
-∂ₜV = similar(V.inner);
 χ = similar(V.inner);
 ẏ = similar(V.inner);
 
-direction = 2;
-∂yV = central∂(V, Ω, direction);
-∂²yV = ∂²(V, Ω, direction);
+∂V∂T = central∂(V, Ω, 1);
+∂V∂y = central∂(V, Ω, 3); # ∂y
+∂²V∂T² = ∂²(V, Ω, 1);
 
 begin
     i = rand(CartesianIndices(V.inner))
     Xᵢ = @view X[i, :]
-    yᵢ = @view Xᵢ[2]
     Vᵢ = @view V[i]
-    ∂yVᵢ = @view ∂yV[i]
-    ∂²yVᵢ = @view ∂²yV[i]
+    ∂V∂Tᵢ = @view ∂V∂T[i]
+    ∂V∂yᵢ = @view ∂V∂y[i]
+    ∂²V∂T²ᵢ = @view ∂²V∂T²[i]
     χᵢ = 0.5f0
 end;
 
-@btime terminalfoc($χᵢ, $yᵢ, $Vᵢ, $∂yVᵢ, $economy)
-@btime optimalterminalpolicy($yᵢ, $Vᵢ, $∂yVᵢ, $economy)
-@btime terminalpolicyovergrid!($χ, $X, $V, $∂yV, $economy)
+@btime terminalfoc($χᵢ, $Xᵢ, $Vᵢ[1], $∂V∂yᵢ[1], $economy)
+@btime optimalterminalpolicy($Xᵢ, $Vᵢ[1], $∂V∂yᵢ[1], $economy)
+@btime terminalpolicyovergrid!($χ, $X, $V, $∂V∂y, $economy)
 
-@btime hjbterminal($χᵢ, $Xᵢ, $Vᵢ, $∂yVᵢ, $∂²yVᵢ, $instance)
+@btime hjbterminal($χᵢ, $Xᵢ, $Vᵢ[1], $∂V∂yᵢ[1], $∂V∂Tᵢ[1], $∂²V∂T²ᵢ[1], $instance)
 @btime ȳdrift!($ẏ, $X, $χ, $instance)
 
-dir∂!(∂yV, V, ẏ, Ω, direction);
+dir∂!(∂V∂T, V, ẏ, Ω, 1);
+dir∂!(∂V∂y, V, ẏ, Ω, 3);
 
-@btime terminalG!($∂ₜV, $∂yV, $∂²yV, $ẏ, $χ, $X, $V, $Ω, $instance);
+∂ₜV = similar(V.inner);
+# @btime terminalG!($∂ₜV, $∂yV, $∂²yV, $ẏ, $χ, $X, $V, $Ω, $instance);
