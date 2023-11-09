@@ -1,5 +1,9 @@
 module Model
 
+export Economy, Hogg, Albedo, Calibration, ModelInstance
+export hjb, objective!, optimalpolicy, policyovergrid!
+export hjbterminal, terminalfoc, terminalpolicyovergrid!, optimalterminalpolicy
+
 using UnPack
 using Polyester: @batch
 using Statistics: mean

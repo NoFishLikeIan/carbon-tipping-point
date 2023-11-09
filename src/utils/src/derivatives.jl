@@ -5,7 +5,7 @@ function makeΔ(n)
     ntuple(i -> CartesianIndex(ntuple(j -> j == i ? 1 : 0, n)), n)
 end
 
-"Constructs a `Pad` object of the dimension of A for the first three coordinates"
+"Constructs a `Pad` object of the dimension of A for the first `dims` coordinates"
 function paddims(A::AbstractArray, padding::Int, dims = 1:length(size(A)))
     Pad(ntuple(i -> i ∈ dims ? padding : 0, length(size(A))))
 end
@@ -13,42 +13,40 @@ end
 """
 Given a Vₜ (n₁ × n₂ ... × nₘ) returns a matrix D (n₁ × n₂ ... × nₘ × m), with elements ∇Vₜ and last ∇Vₜ⋅w.
 """
-function central∇(V::AbstractArray, grid)
-    D = Array{Float32}(undef, length.(grid)..., length(grid))
+function central∇(V::AbstractArray, grid::RegularGrid)
+    D = Array{Float32}(undef, size(grid)..., dimensions(grid) + 1)
     central∇!(D, V, grid)
 end
-function central∇!(D, V::AbstractArray, grid)
+function central∇!(D, V::AbstractArray, grid::RegularGrid)
     central∇!(D, BorderArray(V, paddims(V, 1)), grid)
 end
-function central∇!(D, V::BorderArray, grid)
+function central∇!(D, V::BorderArray, grid::RegularGrid)
     h = steps(grid); twoh⁻¹ = inv.(2f0 .* h);
     if any(h .< ϵ) @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
 
-    dimensions = length(grid)
-    Δ = makeΔ(dimensions)
+    Δ = makeΔ(dimensions(grid))
 
-    @batch for I in CartesianIndices(V.inner), l in 1:dimensions
+    @batch for I in CartesianIndices(grid), l in 1:dimensions(grid)
         D[I, l] = twoh⁻¹[l] * ( V[I + Δ[l]] - V[I - Δ[l]] )
     end
 
     return D
 end
 
-function central∂(V::AbstractArray, grid, direction)
+function central∂(V::AbstractArray, grid::RegularGrid, direction)
     D = Array{Float32}(undef, length.(grid))
     central∂!(D, V, grid, direction)
 end
-function central∂!(D, V::AbstractArray, grid, direction)
+function central∂!(D, V::AbstractArray, grid::RegularGrid, direction)
     central∂!(D, BorderArray(V, paddims(V, 1)), grid, direction)
 end
-function central∂!(D, V::BorderArray, grid, direction)
+function central∂!(D, V::BorderArray, grid::RegularGrid, direction)
     h = steps(grid)[direction]; twoh⁻¹ = inv(2f0 .* h);
     if h < ϵ @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
 
-    dimensions = length(grid)
-    Δᵢ = makeΔ(dimensions)[direction]
+    Δᵢ = makeΔ(dimensions(grid))[direction]
 
-    @batch for I in CartesianIndices(V.inner)
+    @batch for I in CartesianIndices(grid)
         D[I] = twoh⁻¹ * (V[I + Δᵢ] - V[I - Δᵢ])
     end
 
@@ -60,25 +58,25 @@ Given a `Vₜ` `(n₁ × n₂ ... × nₘ)` and a drift `w` `(n₁ × n₂ ... �
 
 The finite difference scheme is computed by using second order forward derivatives if the drift is positive and backwards if it is negative.
 """
-function dir∇(V::AbstractArray, w, grid)
+function dir∇(V::AbstractArray, w, grid::RegularGrid)
     D = Array{Float32}(undef, length.(grid)..., m)
     dir∇!(D, V, w, grid)
 end
-function dir∇!(D, V::AbstractArray, w, grid)
+function dir∇!(D, V::AbstractArray, w, grid::RegularGrid)
     dir∇!(D, BorderArray(V, paddims(V, 2)), w, grid)
 end
-function dir∇!(D, V::BorderArray, w, grid)
+function dir∇!(D, V::BorderArray, w, grid::RegularGrid)
     h = steps(grid); twoh⁻¹ = inv.(2f0 .* h);
     if any(h .< ϵ) @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
 
-    dimension = length(grid)
-    Δ = makeΔ(dimension)
+    d = dimensions(grid)
+    Δ = makeΔ(d)
     
     temp = 0f0
-    @batch for I in CartesianIndices(V.inner)
+    @batch for I in CartesianIndices(grid)
         temp = 0f0
 
-        for l ∈ 1:dimension
+        for l ∈ 1:d
             D[I, l] = twoh⁻¹[l] * ifelse(
                 w[I, l] > 0,
                 -V[I + 2Δ[l]] + 4f0V[I + Δ[l]] - 3f0V[I],
@@ -88,26 +86,26 @@ function dir∇!(D, V::BorderArray, w, grid)
             temp += D[I, l] * w[I, l]
         end
 
-        D[I, dimension + 1] = temp
+        D[I, d + 1] = temp
     end
 
     return D 
 end
 
-function dir∂(V::AbstractArray, w, grid, direction)
+function dir∂(V::AbstractArray, w, grid::RegularGrid, direction)
     D = similar(V)
     dir∂!(D, V, w, grid, direction)
 end
-function dir∂!(D, V::AbstractArray, w, grid, direction)
+function dir∂!(D, V::AbstractArray, w, grid::RegularGrid, direction)
     dir∂!(D, BorderArray(V, paddims(V, 2)), w, grid, direction)
 end
-function dir∂!(D, V::BorderArray, w, grid, direction)
+function dir∂!(D, V::BorderArray, w, grid::RegularGrid, direction)
     h = steps(grid)[direction]; twoh⁻¹ = inv(2f0 .* h);
     if h < ϵ @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
 
-    Δᵢ = makeΔ(length(grid))[direction]
+    Δᵢ = makeΔ(dimensions(grid))[direction]
 
-    @batch for I in CartesianIndices(V.inner)
+    @batch for I in CartesianIndices(grid)
         D[I, 1] = twoh⁻¹ * ifelse(
             w[I] > 0,
             -V[I + 2Δᵢ] + 4f0V[I + Δᵢ] - 3f0V[I],
@@ -121,22 +119,21 @@ end
 """
 Given a Vₜ (n₁ × n₂ × n₃) computes the second derivative in the direction of the l-th input xₗ.
 """
-function ∂²(V::AbstractArray, grid, direction)
+function ∂²(V::AbstractArray, grid::RegularGrid, direction)
     D² = similar(V)
     ∂²!(D², V, grid, direction)
     return D²
 end
-function ∂²!(D, V::AbstractArray, grid, direction)
+function ∂²!(D, V::AbstractArray, grid::RegularGrid, direction)
     ∂²!(D, BorderArray(V, paddims(V, 2)), grid, direction)
 end
-function ∂²!(D², V::BorderArray, grid, direction)
+function ∂²!(D², V::BorderArray, grid::RegularGrid, direction)
     hₗ = steps(grid)[direction]; hₗ⁻² = inv(hₗ^2)
     if (hₗ < ϵ) @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
 
-    dimensions = length(grid)
-    Δᵢ = makeΔ(dimensions)[direction]
+    Δᵢ = makeΔ(dimensions(grid))[direction]
     
-    @batch for I in CartesianIndices(V.inner)
+    @batch for I in CartesianIndices(grid)
         D²[I] = hₗ⁻² * (V[I + Δᵢ] - 2f0 * V[I] + V[I - Δᵢ])
     end
 
