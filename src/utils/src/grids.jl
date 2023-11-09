@@ -17,18 +17,18 @@ end
 # -- Definitions
 Domain = Tuple{Float32, Float32, Int};
 
-struct RegularGrid{N}
-    Ω::NTuple{N, Vector{Float32}}
-    X::AbstractArray
+struct RegularGrid
+    Ω::NTuple{3, Vector{Float32}}
+    X::Array{Float32, 4}
 
     function RegularGrid(domains)
         Ω = makegrid(domains)
         X = fromgridtoarray(Ω)
-        new{length(domains)}(Ω, X)
+        new(Ω, X)
     end
 end
 
-steps(Ω::NTuple{N, Vector{Float32}}) where N = ntuple(i -> Ω[i][2] - Ω[i][1], Val(N))
+steps(Ω::NTuple{3, Vector{Float32}}) = ntuple(i -> Ω[i][2] - Ω[i][1], Val(3))
 steps(grid::RegularGrid) = steps(grid.Ω)
 
 dimensions(grid::RegularGrid) = length(grid.Ω)

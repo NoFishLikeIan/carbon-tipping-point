@@ -34,7 +34,7 @@ function central∇!(D, V::BorderArray, grid::RegularGrid)
 end
 
 function central∂(V::AbstractArray, grid::RegularGrid, direction)
-    D = Array{Float32}(undef, length.(grid))
+    D = Array{Float32}(undef, size(grid))
     central∂!(D, V, grid, direction)
 end
 function central∂!(D, V::AbstractArray, grid::RegularGrid, direction)
@@ -54,12 +54,12 @@ function central∂!(D, V::BorderArray, grid::RegularGrid, direction)
 end
 
 """
-Given a `Vₜ` `(n₁ × n₂ ... × nₘ)` and a drift `w` `(n₁ × n₂ ... × nₘ × m)` returns a matrix `D` `(n₁ × n₂ ... × nₘ × (m + 1))`, with first three elements ∇Vₜ and last ∇Vₜ⋅w. If `withdot = false` then ∇Vₜ⋅w is not computed and `D` has size `(n₁ × n₂ ... × nₘ × m)`
+Given a `Vₜ` `(n₁ × n₂ ... × nₘ)` and a drift `w` `(n₁ × n₂ ... × nₘ × m)` returns a matrix `D` `(n₁ × n₂ ... × nₘ × (m + 1))`, with first three elements ∇Vₜ and last ∇Vₜ⋅w.
 
 The finite difference scheme is computed by using second order forward derivatives if the drift is positive and backwards if it is negative.
 """
 function dir∇(V::AbstractArray, w, grid::RegularGrid)
-    D = Array{Float32}(undef, length.(grid)..., m)
+    D = Array{Float32}(undef, size(grid)..., dimensions(grid) + 1)
     dir∇!(D, V, w, grid)
 end
 function dir∇!(D, V::AbstractArray, w, grid::RegularGrid)
@@ -93,7 +93,7 @@ function dir∇!(D, V::BorderArray, w, grid::RegularGrid)
 end
 
 function dir∂(V::AbstractArray, w, grid::RegularGrid, direction)
-    D = similar(V)
+    D = Array{Float32}(undef, size(grid))
     dir∂!(D, V, w, grid, direction)
 end
 function dir∂!(D, V::AbstractArray, w, grid::RegularGrid, direction)
@@ -120,7 +120,7 @@ end
 Given a Vₜ (n₁ × n₂ × n₃) computes the second derivative in the direction of the l-th input xₗ.
 """
 function ∂²(V::AbstractArray, grid::RegularGrid, direction)
-    D² = similar(V)
+    D² = Array{Float32}(undef, size(grid))
     ∂²!(D², V, grid, direction)
     return D²
 end
