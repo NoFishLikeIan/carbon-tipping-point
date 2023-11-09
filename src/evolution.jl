@@ -1,10 +1,11 @@
-using Model: policyovergrid!, drift!, terminalpolicyovergrid!, ydrift!, hjbterminal
-using Model: ModelInstance, Calibration
 using Utils: ∂²!, central∇!, dir∇!, central∂!, dir∂!
+using Model: terminalpolicyovergrid!, ȳdrift!, hjbterminal
+using Model: policyovergrid!, drift!
+using Model: ModelInstance, Calibration
 using Polyester: @batch
 
 "Computes G! by modifying (∂ₜV, ∇V, policy, w)"
-function G!(∂ₜV, ∇V, ∂²V, policy, w, t, X, V, Ω, instance::Model.ModelInstance, calibration::Model.Calibration)
+function G!(∂ₜV, ∇V, ∂²V, policy, w, t, X, V, Ω, instance::ModelInstance, calibration::Calibration)
     central∇!(∇V, V, Ω)
     policyovergrid!(policy, t, X, V, ∇V, instance, calibration);
     drift!(w, t, X, policy, instance, calibration);
@@ -22,33 +23,39 @@ function G!(∂ₜV, ∇V, ∂²V, policy, w, t, X, V, Ω, instance::Model.Model
     return ∂ₜV
 end
 
-function terminalG(X, V, Ω, instance::Model.ModelInstance)
+function terminalG(X, V::BorderArray, Ω, instance::ModelInstance)
+    ∂ₜV = similar(V.inner)
+    ∂yV = similar(V.inner)
+    ∂²yV = similar(V.inner)
+    ẏ = similar(V.inner)
+    χ = similar(V.inner)
+
     terminalG!(
-        similar(V), similar(V, size(V)..., 4),
+        ∂ₜV, ∂yV, ∂²yV, ẏ, χ,
         X, V, Ω,
         instance
     )
 end
 """
-Computes G! by modifying ∂ₜV and tmp = (∂yV, ∂²TV,  policy, w)
+Computes G! by modifying ∂ₜV. Takes as input X, V, Ω. Also modifies the derivatives matrices (∂V∂y, ∂V∂T, ∂²V∂T²) the policy χ and the drift ẏ.
 """
-function terminalG!(∂ₜV, tmp, X, V, Ω, instance::Model.ModelInstance)
-    ∂yV = @view tmp[:, :, 1]
-    ∂²TV = @view tmp[:, :, 2]
-    policy = @view tmp[:, :, 3]
-    w = @view tmp[:, :, 4]
+function terminalG!(
+    ∂ₜV, V::BorderArray, 
+    ∂V∂y, ∂V∂T, ∂²V∂T², χ, ẏ,
+    grid::RegularGrid, instance::ModelInstance)
+    
+    economy = first(instance)
 
-    T = @view X[:, :, 1]
-
-    central∂!(∂yV, V, Ω; direction = 2);
-    terminalpolicyovergrid!(policy, X, V, ∂yV, instance);
-    ydrift!(w, policy, T, instance);
-    dir∂!(∂yV, V, w, Ω; direction = 2);
-    ∂²!(∂²TV, V, Ω; dim = 1)
+    central∂!(∂V∂y, V, grid, 3)
+    terminalpolicyovergrid!(χ, V, ∂V∂y, grid, economy)
+    ȳdrift!(ẏ, χ, grid, instance)
+    
+    dir∂!(∂V∂T, V, ẏ, grid, 1)
+    dir∂!(∂V∂y, V, ẏ, grid, 3)
+    ∂²!(∂²V∂T², V, grid, 1);
 
     for idx in CartesianIndices(∂ₜV)
-        ∂ₜV[idx] = hjbterminal(policy[idx], X[idx, :], V[idx], ∂yV[idx], ∂²TV[idx], instance)
-        
+        ∂ₜV[idx] = hjbterminal(χ[idx], grid.X[idx, :], V[idx], ∂V∂y[idx], ∂V∂T[idx], ∂²V∂T²[idx], instance)
     end
 
     return ∂ₜV

@@ -1,9 +1,9 @@
 "Computes the drift of `y` in the post transition phase."
-function ȳdrift!(w, X::AbstractArray, χ::AbstractArray, instance::ModelInstance)
+function ȳdrift!(ẏ, χ::AbstractArray, grid::RegularGrid, instance::ModelInstance)
     economy, hogg, _ = instance
 
-    @batch for idx in CartesianIndices(w)     
-        w[idx] = ϕ(economy.τ, χ[idx], economy) - economy.δₖᵖ - d(X[idx, 1], economy, hogg)        
+    @batch for idx in CartesianIndices(grid) 
+        ẏ[idx] = ϕ(economy.τ, χ[idx], economy) - economy.δₖᵖ - d(grid.X[idx, 1], economy, hogg)        
     end
 end
 

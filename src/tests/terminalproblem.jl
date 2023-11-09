@@ -5,14 +5,10 @@ using BenchmarkTools
 using JLD2
 using ImageFiltering: BorderArray
 
-using Model: Economy, Hogg, Albedo
-using Utils: makegrid, fromgridtoarray, paddims
-using Utils: central∂, ∂²
+using Utils
+using Model
 
-# To test...
-using Model: terminalpolicyovergrid!, ȳdrift!, terminalfoc, hjbterminal, optimalterminalpolicy
-
-include("../evolution.jl")
+includet("../evolution.jl")
 
 economy = Economy();
 hogg = Hogg();
@@ -27,22 +23,21 @@ terminaldomain = [
     (log(economy.Y̲), log(economy.Ȳ), 51)
 ];
 
-Ω = makegrid(terminaldomain);
-X = fromgridtoarray(Ω);
+grid = RegularGrid(terminaldomain);
 
-Vinner = [ -2f0 + (exp(y) / economy.Y₀)^2 - (T / hogg.Tᵖ)^3 for T ∈ Ω[1],  m ∈ Ω[2], y ∈ Ω[3] ];
+Vinner = [ -2f0 + (exp(y) / economy.Y₀)^2 - (T / hogg.Tᵖ)^3 for T ∈ grid.Ω[1],  m ∈ grid.Ω[2], y ∈ grid.Ω[3] ];
 V = BorderArray(Vinner, paddims(Vinner, 2));
 
 χ = similar(V.inner);
 ẏ = similar(V.inner);
 
-∂V∂T = central∂(V, Ω, 1);
-∂V∂y = central∂(V, Ω, 3); # ∂y
-∂²V∂T² = ∂²(V, Ω, 1);
+∂V∂T = central∂(V, grid, 1);
+∂V∂y = central∂(V, grid, 3); # ∂y
+∂²V∂T² = ∂²(V, grid, 1);
 
 begin
-    i = rand(CartesianIndices(V.inner))
-    Xᵢ = @view X[i, :]
+    i = rand(CartesianIndices(grid))
+    Xᵢ = @view grid.X[i, :]
     Vᵢ = @view V[i]
     ∂V∂Tᵢ = @view ∂V∂T[i]
     ∂V∂yᵢ = @view ∂V∂y[i]
@@ -50,15 +45,25 @@ begin
     χᵢ = 0.5f0
 end;
 
+@code_warntype terminalfoc(χᵢ, Xᵢ, Vᵢ[1], ∂V∂yᵢ[1], economy)
 @btime terminalfoc($χᵢ, $Xᵢ, $Vᵢ[1], $∂V∂yᵢ[1], $economy)
+
+@code_warntype optimalterminalpolicy(Xᵢ, Vᵢ[1], ∂V∂yᵢ[1], economy)
 @btime optimalterminalpolicy($Xᵢ, $Vᵢ[1], $∂V∂yᵢ[1], $economy)
-@btime terminalpolicyovergrid!($χ, $X, $V, $∂V∂y, $economy)
 
+@code_warntype terminalpolicyovergrid!(χ, V, ∂V∂y, grid, economy)
+@btime terminalpolicyovergrid!($χ, $V, $∂V∂y, $grid, $economy)
+
+@code_warntype hjbterminal(χᵢ, Xᵢ, Vᵢ[1], ∂V∂yᵢ[1], ∂V∂Tᵢ[1], ∂²V∂T²ᵢ[1], instance)
 @btime hjbterminal($χᵢ, $Xᵢ, $Vᵢ[1], $∂V∂yᵢ[1], $∂V∂Tᵢ[1], $∂²V∂T²ᵢ[1], $instance)
-@btime ȳdrift!($ẏ, $X, $χ, $instance)
 
-dir∂!(∂V∂T, V, ẏ, Ω, 1);
-dir∂!(∂V∂y, V, ẏ, Ω, 3);
+@code_warntype ȳdrift!(ẏ, χ, grid, instance) 
+@btime ȳdrift!($ẏ, $χ, $grid, $instance)
+
+dir∂!(∂V∂T, V, ẏ, grid, 1);
+dir∂!(∂V∂y, V, ẏ, grid, 3);
+
 
 ∂ₜV = similar(V.inner);
-# @btime terminalG!($∂ₜV, $∂yV, $∂²yV, $ẏ, $χ, $X, $V, $Ω, $instance);
+@code_warntype terminalG!(∂ₜV, V, ∂V∂y, ∂V∂T, ∂²V∂T², χ, ẏ, grid, instance);
+@btime terminalG!($∂ₜV, $V, $∂V∂y, $∂V∂T, $∂²V∂T², $χ, $ẏ, $grid, $instance);

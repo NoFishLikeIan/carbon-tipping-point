@@ -47,19 +47,17 @@ end
 
 function optimalterminalpolicy(Xᵢ, Vᵢ::Real, ∂yVᵢ::Real, economy::Economy; tol = 1f-3)
     g = @closure χ -> terminalfoc(χ, Xᵢ, Vᵢ, ∂yVᵢ, economy) 
+    a, b = tol, 1f0 - tol
+    isbracketing = g(a) * g(b) < 0f0
 
-    if g(tol) ≤ 0f0
-        return tol
-    elseif g(1f0 - tol) ≥ 0f0
-        return 1f0 - tol
-    else
-        return find_zero(g, (tol, 1f0 - tol), Bisection())
-    end
+    ifelse(isbracketing,
+        bisection(g, a, b),
+        ifelse(g(a) < 0f0, a, b))
 end
 
-function terminalpolicyovergrid!(policy, X, V::BorderArray, ∂yV::AbstractArray, economy::Economy)
-    @batch for idx ∈ CartesianIndices(V.inner)
-        Xᵢ = @view X[idx, :]
+function terminalpolicyovergrid!(policy, V::BorderArray, ∂yV::AbstractArray, grid::RegularGrid, economy::Economy)
+    @batch for idx ∈ CartesianIndices(grid)
+        Xᵢ = @view grid.X[idx, :]
         policy[idx] = optimalterminalpolicy(Xᵢ, V[idx], ∂yV[idx], economy)
     end
 end
