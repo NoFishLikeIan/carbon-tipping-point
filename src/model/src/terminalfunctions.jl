@@ -2,8 +2,8 @@
 function ȳdrift!(w, X::AbstractArray, χ::AbstractArray, instance::ModelInstance)
     economy, hogg, _ = instance
 
-    for idx in CartesianIndices(w)        
-        w[idx] = ϕ(economy.τ, χ[idx], economy) - economy.δₖᵖ - (hogg.σ²ₜ / 2f0) * d′′(X[idx, 1], economy, hogg)         
+    @batch for idx in CartesianIndices(w)     
+        w[idx] = ϕ(economy.τ, χ[idx], economy) - economy.δₖᵖ - d(X[idx, 1], economy, hogg)        
     end
 end
 
@@ -11,18 +11,20 @@ end
 Computes the terminal first order condition of the univariate method, 
     ∂ᵪf(χ, y, V) + ϕ′(χ) ∂yV = 0
 """
-function terminalfoc(χ, yᵢ::Real, Vᵢ::Real, ∂yVᵢ::Real, economy::Economy)
-    Y∂f(χ, yᵢ, Vᵢ, economy) + ϕ′(economy.τ, χ, economy) * ∂yVᵢ
+
+function terminalfoc(χᵢ, Xᵢ, Vᵢ::Real, ∂V∂yᵢ::Real, economy::Economy)
+    y = Xᵢ[3]
+    Y∂f(χᵢ, y, Vᵢ, economy) + ϕ′(economy.τ, χᵢ, economy) * ∂V∂yᵢ
 end
-terminalfoc(χ, yᵢ::AbstractArray, Vᵢ::AbstractArray, ∂yVᵢ::AbstractArray, economy::Economy) = terminalfoc(χ, first(yᵢ), first(Vᵢ), first(∂yVᵢ), economy)
 
-function hjbterminal(χᵢ, Xᵢ, Vᵢ, ∂yVᵢ, ∂²yVᵢ, instance::ModelInstance)
-    economy, hogg, _ = instance
+function hjbterminal(χᵢ, Xᵢ, Vᵢ::Real, ∂V∂yᵢ::Real, ∂V∂Tᵢ::Real, ∂²V∂T²ᵢ::Real, instance::ModelInstance)
+    economy, hogg, albedo = instance
+    Tᵢ, mᵢ, yᵢ = Xᵢ
 
-    f(χᵢ, Xᵢ[2], Vᵢ[1], economy) + 
-        ∂yVᵢ[1] * ϕ(economy.τ, χᵢ, economy) + 
-        (hogg.σ²ₜ / 2f0) * (
-            ∂²yVᵢ[1] - ∂yVᵢ[1] * d′′(Xᵢ[1], economy, hogg)
-        )
-
+    f(χᵢ, yᵢ, Vᵢ, economy) + 
+        ∂V∂yᵢ * (
+            ϕ(economy.τ, χᵢ, economy) - economy.δₖᵖ - d(Tᵢ, economy, hogg)
+        ) +
+        ∂V∂Tᵢ * Model.μₑ(Tᵢ, mᵢ, hogg, albedo) +
+        ∂²V∂T²ᵢ * Model.σ²ₑ(hogg) / 2f0
 end

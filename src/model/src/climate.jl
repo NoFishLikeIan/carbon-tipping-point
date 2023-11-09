@@ -89,6 +89,11 @@ function μ(T, m, hogg::Hogg, albedo::Albedo)
     fₜ(T, hogg, albedo) + fₘ(m, hogg)
 end
 
+"μ(T, m) / ϵ"
+μₑ(T, m, hogg::Hogg, albedo::Albedo) = μ(T, m, hogg, albedo) / hogg.ϵ
+
+"σ²ₜ / ϵ"
+σ²ₑ(hogg) = hogg.σ²ₜ /  hogg.ϵ
 
 "Compute CO₂ concentration consistent with temperature T"
 function mstable(T, hogg::Hogg, albedo::Albedo)
