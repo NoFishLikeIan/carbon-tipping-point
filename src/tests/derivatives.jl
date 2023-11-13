@@ -37,32 +37,39 @@ D = Array{Float32}(undef, size(grid)..., dimensions(grid) + 1);
 
 # Central difference
 println("--- Central Difference Scheme")
+@code_warntype central∇!(D, V, grid); 
 @btime central∇!($D, $V, $grid);
 centralε = absnorm(D[:, :, :, 1:3], V′, 1)
 @test centralε < ε¹
 
 ∂₂V = similar(V.inner);
-@btime central∂!($∂₂V, $V, $grid, 1);
-@test all(∂₂V .≈ D[:, :, :, 1])
+dir = 1
+@code_warntype central∂!(∂₂V, V, grid, dir);
+@btime central∂!($∂₂V, $V, $grid, $dir);
+@test all(∂₂V .≈ D[:, :, :, dir])
 
 # Upwind-downind difference
 println("--- Upwind scheme")
 w = ones(Float32, size(grid)..., 3);
+@code_warntype dir∇!(D, V, w, grid); 
 @btime dir∇!($D, $V, $w, $grid);
-
 fwdε = absnorm(D[:, :, :, 1:3], V′, 2)
 @test fwdε < ε¹
-dir∂!(∂₂V, V, w[:, :, :, 2], grid, 2);
-@test all(∂₂V .≈ D[:, :, :, 2])
+
+dir = 2
+ẏ = w[:, :, :, dir];
+@code_warntype dir∂!(∂₂V, V, ẏ, grid, dir);
+@btime dir∂!($∂₂V, $V, $ẏ, $grid, $dir);
+@test all(∂₂V .≈ D[:, :, :, dir])
 
 # Second derivative w.r.t. the first argument
-direction = 1
+dir = 1
 ∂²Tv(T, m, y) = 2y^2
 ∂²TV = [2y^2 for T ∈ grid.Ω[1], m ∈ grid.Ω[2], y ∈ grid.Ω[3]]
 
 println("--- Second derivative")
-direction = 1
 D² = similar(V.inner);
+@code_warntype ∂²!(D², V, grid, direction);
 @btime ∂²!($D², $V, $grid, $direction);
 ∂²!(D², V, grid, direction); 
 T²ε = absnorm(D², ∂²TV, 2);

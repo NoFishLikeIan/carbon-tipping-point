@@ -51,17 +51,28 @@ end;
 @code_warntype optimalterminalpolicy(Xᵢ, Vᵢ[1], ∂V∂yᵢ[1], economy)
 @btime optimalterminalpolicy($Xᵢ, $Vᵢ[1], $∂V∂yᵢ[1], $economy)
 
-@code_warntype terminalpolicyovergrid!(χ, V, ∂V∂y, grid, economy)
-@btime terminalpolicyovergrid!($χ, $V, $∂V∂y, $grid, $economy)
+# Test calls inside terminalG!
+Tdir = 1
+ydir = 3
+
+@code_warntype central∂!(∂V∂y, V, grid, ydir);
+@btime central∂!($∂V∂y, $V, $grid, $ydir);
+
+@code_warntype terminalpolicyovergrid!(χ, V, ∂V∂y, grid, economy);
+@btime terminalpolicyovergrid!($χ, $V, $∂V∂y, $grid, $economy);
+
+@code_warntype ȳdrift!(ẏ, χ, grid, instance);
+@btime ȳdrift!($ẏ, $χ, $grid, $instance);
+
+@code_warntype dir∂!(∂V∂T, V, ẏ, grid, Tdir);
+@code_warntype dir∂!(∂V∂y, V, ẏ, grid, ydir);
+@btime dir∂!($∂V∂y, $V, $ẏ, $grid, $ydir);
+
+@code_warntype ∂²!(∂V∂T, V, grid, Tdir);
+@btime ∂²!($∂V∂T, $V, $grid, $Tdir);
 
 @code_warntype hjbterminal(χᵢ, Xᵢ, Vᵢ[1], ∂V∂yᵢ[1], ∂V∂Tᵢ[1], ∂²V∂T²ᵢ[1], instance)
 @btime hjbterminal($χᵢ, $Xᵢ, $Vᵢ[1], $∂V∂yᵢ[1], $∂V∂Tᵢ[1], $∂²V∂T²ᵢ[1], $instance)
-
-@code_warntype ȳdrift!(ẏ, χ, grid, instance) 
-@btime ȳdrift!($ẏ, $χ, $grid, $instance)
-
-dir∂!(∂V∂T, V, ẏ, grid, 1);
-dir∂!(∂V∂y, V, ẏ, grid, 3);
 
 
 ∂ₜV = similar(V.inner);

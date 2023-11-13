@@ -47,12 +47,7 @@ end
 
 function optimalterminalpolicy(Xᵢ, Vᵢ::Real, ∂yVᵢ::Real, economy::Economy; tol = 1f-3)
     g = @closure χ -> terminalfoc(χ, Xᵢ, Vᵢ, ∂yVᵢ, economy) 
-    a, b = tol, 1f0 - tol
-    isbracketing = g(a) * g(b) < 0f0
-
-    ifelse(isbracketing,
-        bisection(g, a, b),
-        ifelse(g(a) < 0f0, a, b))
+    first(bisection(g, tol, 1f0 - tol))
 end
 
 function terminalpolicyovergrid!(policy, V::BorderArray, ∂yV::AbstractArray, grid::RegularGrid, economy::Economy)

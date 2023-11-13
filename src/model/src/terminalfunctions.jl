@@ -11,7 +11,6 @@ end
 Computes the terminal first order condition of the univariate method, 
     ∂ᵪf(χ, y, V) + ϕ′(χ) ∂yV = 0
 """
-
 function terminalfoc(χᵢ, Xᵢ, Vᵢ::Real, ∂V∂yᵢ::Real, economy::Economy)
     y = Xᵢ[3]
     Y∂f(χᵢ, y, Vᵢ, economy) + ϕ′(economy.τ, χᵢ, economy) * ∂V∂yᵢ

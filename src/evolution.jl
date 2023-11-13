@@ -54,8 +54,9 @@ function terminalG!(
     dir∂!(∂V∂y, V, ẏ, grid, 3)
     ∂²!(∂²V∂T², V, grid, 1);
 
-    for idx in CartesianIndices(∂ₜV)
-        ∂ₜV[idx] = hjbterminal(χ[idx], grid.X[idx, :], V[idx], ∂V∂y[idx], ∂V∂T[idx], ∂²V∂T²[idx], instance)
+    @batch for I in CartesianIndices(grid)
+        Xᵢ = @view grid.X[I, :]
+        ∂ₜV[I] = hjbterminal(χ[I], Xᵢ, V[I], ∂V∂y[I], ∂V∂T[I], ∂²V∂T²[I], instance)
     end
 
     return ∂ₜV

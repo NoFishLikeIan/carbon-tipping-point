@@ -8,10 +8,9 @@ using UnPack
 using Polyester: @batch
 using Statistics: mean
 using Optim: optimize, minimizer, IPNewton, Newton, TwiceDifferentiable, TwiceDifferentiableConstraints, Options, only_fgh!
-using Roots: bisection
 using FastClosures: @closure
 using ImageFiltering: BorderArray, Pad
-using Utils: paddims, RegularGrid
+using Utils: paddims, RegularGrid, bisection
 
 include("calibration.jl")
 include("climate.jl")

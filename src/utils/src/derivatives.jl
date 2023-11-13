@@ -78,7 +78,7 @@ function dir∇!(D, V::BorderArray, w, grid::RegularGrid)
 
         for l ∈ 1:d
             D[I, l] = twoh⁻¹[l] * ifelse(
-                w[I, l] > 0,
+                w[I, l] > 0f0,
                 -V[I + 2Δ[l]] + 4f0V[I + Δ[l]] - 3f0V[I],
                 V[I - 2Δ[l]] - 4f0V[I - Δ[l]] + 3f0V[I]
             )
@@ -100,16 +100,19 @@ function dir∂!(D, V::AbstractArray, w, grid::RegularGrid, direction)
     dir∂!(D, BorderArray(V, paddims(V, 2)), w, grid, direction)
 end
 function dir∂!(D, V::BorderArray, w, grid::RegularGrid, direction)
-    h = steps(grid)[direction]; twoh⁻¹ = inv(2f0 .* h);
-    if h < ϵ @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
+    h = steps(grid)[direction]
+    twoh⁻¹ = inv(2f0h);
+    
+    if (h < ϵ) @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
 
-    Δᵢ = makeΔ(dimensions(grid))[direction]
-
-    @batch for I in CartesianIndices(grid)
-        D[I, 1] = twoh⁻¹ * ifelse(
-            w[I] > 0,
-            -V[I + 2Δᵢ] + 4f0V[I + Δᵢ] - 3f0V[I],
-            V[I - 2Δᵢ] - 4f0V[I - Δᵢ] + 3f0V[I]
+    d = dimensions(grid)
+    Δₗ = makeΔ(d)[direction]
+    
+    for I in CartesianIndices(grid)
+        D[I] = twoh⁻¹ * ifelse(
+            w[I] > 0f0,
+            -V[I + 2Δₗ] + 4f0V[I + Δₗ] - 3f0V[I],
+            V[I - 2Δₗ] - 4f0V[I - Δₗ] + 3f0V[I]
         )
     end
 
