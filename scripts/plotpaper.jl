@@ -1,4 +1,5 @@
-using JLD2, DotEnv
+using JLD2, DotEnv, CSV
+using DataFrames
 
 using UnPack
 using Dierckx
@@ -10,6 +11,7 @@ using DifferentialEquations, DifferentialEquations.EnsembleAnalysis
 
 using KernelDensity
 using Plots, Printf, PGFPlotsX, Colors
+using Model, Utils
 
 begin # Global variables
     env = DotEnv.config()
@@ -27,12 +29,15 @@ begin # Global variables
     SAVEFIG = false 
 end
 
-include("../src/model/initialisation.jl")
+economy = Model.Economy();
+hogg = Model.Hogg();
+albedo = Model.Albedo();
 
-include("../src/utils/plotting.jl")
-include("../src/utils/dynamics.jl")
+instance = (economy, hogg, albedo);
+calibration = load(joinpath(DATAPATH, "calibration.jld2"), "calibration");
 
-mass_matrix(baseline) = diagm([baseline.ϵ / secondtoyears, 1.])
+secondtoyears = 3.154f7
+mass = diagm([hogg.ϵ / secondtoyears, 1.])
 
 kelvintocelsius = 273.15
 xpreindustrial = 14 + kelvintocelsius
@@ -66,43 +71,6 @@ function generateframes(total, frames)
 	return [range(1, total - 2step; step = step)..., total]
 end
 
-"""
-Drift dynamics of (T, m, N) given an abatement function γᵇ(T, m) and a business as usual growth rate g(t).
-"""
-function Fext!(du, u, parameters, t)
-	hogg, albedo, γᵇ, α = parameters
-	
-	T, m, N = @view u[1:3]
-	M = exp(m)
-
-	du[1] = μ(T, m, hogg, albedo)
-	du[2] = γᵇ(t) - α(T, m)
-	du[3] = δₘ(N, hogg) * M
-end
-
-function Gext!(du, u, parameters, t)
-	hogg = first(parameters)
-
-	du[1] = hogg.σ²ₜ 
-	du[2] = 0.
-	du[3] = 0.
-end
-
-function F!(du, u, parameters, t)
-	hogg, albedo, γᵇ, α = parameters
-	du[1] = μ(u[1], u[2], hogg, albedo)
-	du[2] = γᵇ(t) - α(u[1], u[2])
-end
-
-
-function G!(du, u, parameters, t)
-	hogg = first(parameters)
-
-	du[1] = hogg.σ²ₜ 
-	du[2] = 0.
-end
-
-
 function extractoptimalemissions(σₓ, sim, e::Function; Tsim = 1001)
 	T = first(sim).t |> last
 	timespan = range(0, T; length = Tsim)
@@ -117,32 +85,23 @@ function extractoptimalemissions(σₓ, sim, e::Function; Tsim = 1001)
 	return optemissions
 end
 
-
-@changeprecision Float32 begin
-    @load joinpath(DATAPATH, "calibration.jld2") ipcc
-    @unpack Mᵇ, Tᵇ, N₀, horizon = ipcc
-end
-
 begin # labels and axis
     TEMPLABEL = raw"Temperature deviations $T - T^{\mathrm{p}}$"
-    Tspace = range(hogg.Tᵖ, 13f0 + hogg.Tᵖ; length = 51)
-    Tspacedev = Tspace .- xpreindustrial
-    T = horizon
-    yearlytime = collect(0:T)   
+    Tspacedev = range(0f0, 10f0; length = 51)
+    Tspace = Tspacedev .+ hogg.Tᵖ
+    yearlytime = collect(0:economy.t₁) 
     ΔTᵤ = last(Tspace) - first(Tspace)
     temperatureticks = makedevxlabels(0., ΔTᵤ, (hogg, albedo); step = 1, digits = 0)  
 end
 
 @changeprecision Float32 begin # Load IPCC data
-    Mᵇ = Float32.(Mᵇ)
-    Tᵇ = Float32.(Tᵇ)
-    N₀ = Float32(N₀)
-    horizon = Float32(horizon)
+    # Import IPCC data
+    IPCCDATAPATH = joinpath(DATAPATH, "climate-data", "proj-median.csv")
+    ipccproj = CSV.read(IPCCDATAPATH, DataFrame)
 
-    const Tₗ, Tᵤ = extrema(Tspace)
-    const Mₗ, Mᵤ = hogg.Mᵖ, mstable(Tₗ, hogg, albedo)
+    getscenario(s::Int64) = filter(:Scenario => isequal("SSP$(s) - Baseline"), ipccproj)
 
-    const n₀ = N₀ / hogg.M₀
+    bauscenario = getscenario(5)
 end
 
 begin # Albedo plot
@@ -150,7 +109,7 @@ begin # Albedo plot
     Δλmap = [0.02, 0.06, 0.08] 
     seqpaletteΔλ = generateseqpalette(length(Δλmap))
     
-    albedovariation = [(T -> λ(T, Albedo(λ₂ = albedo.λ₁ - Δλ))).(Tspace) for Δλ ∈ Δλmap]
+    albedovariation = [(T -> Model.λ(T, Albedo(λ₂ = albedo.λ₁ - Δλ))).(Tspace) for Δλ ∈ Δλmap]
 
 
     albedofig = @pgf Axis(
@@ -189,7 +148,7 @@ begin # Albedo plot
 end
 
 begin # Nullcline plot
-    nullclinevariation = [(T -> Mstable(T, hogg, Albedo(λ₂ = albedo.λ₁ - Δλ))).(Tspace) for Δλ ∈ Δλmap]
+    nullclinevariation = [(T -> Model.Mstable(T, hogg, Albedo(λ₂ = albedo.λ₁ - Δλ))).(Tspace) for Δλ ∈ Δλmap]
 
 
     nullclinefig = @pgf Axis(
@@ -228,6 +187,7 @@ begin # Nullcline plot
 end
 
 begin # Growth of carbon concentration
+    horizon = Int(last(yearlytime))
     gcolor = first(PALETTE)
 
     gfig = @pgf Axis(
@@ -237,14 +197,14 @@ begin # Growth of carbon concentration
             grid = "both",
             ylabel = raw"Growth rate $\gamma^{\mathrm{b}}$",
             xlabel = raw"Year",
-            xtick = 0:20:T,
-            xmin = 0, xmax = T,
-            xticklabels = BASELINE_YEAR .+ (0:20:T),
+            xtick = 0:20:horizon,
+            xmin = 0, xmax = horizon,
+            xticklabels = BASELINE_YEAR .+ (0:20:horizon),
             ultra_thick, xticklabel_style = {rotate = 45}
         }
     )   
     
-    gdata = γᵇ.(yearlytime)
+    gdata = [Model.γ(t, economy, calibration) for t ∈ yearlytime]
     coords = Coordinates(zip(yearlytime, gdata))
 
     markers = @pgf Plot({ only_marks, mark_options = {fill = gcolor, scale = 1.5, draw_opacity = 0}, mark_repeat = 10}, coords) 
@@ -260,24 +220,37 @@ begin # Growth of carbon concentration
     gfig
 end
 
-function simulatebau(Δλ::Float32; trajectories = 1000) # Business as Usual, ensemble simulation    
-    αbau = (_, _) -> 0f0
-    baualbedo = Albedo(λ₂ = albedo.λ₁ - Δλ)
+"Drift dynamics of (T, m)"
+function Fbau!(du, u, parameters, t)
+	instance, calibration = parameters
+    economy, hogg, albedo = instance
+
+	du[1] = Model.μ(u[1], u[2], hogg, albedo)
+	du[2] = Model.γ(t, economy, calibration)
+end
+function G!(du, u, parameters, t)
+	instance = first(parameters)
+    hogg = instance[2]
+
+	du[1] = hogg.σ²ₜ 
+	du[2] = 0f0
+end
+
+function simulatebau(Δλ::Float32; trajectories = 1000, tspan = (0f0, last(yearlytime))) # Business as Usual, ensemble simulation    
+    baualbedo = Albedo(λ₂ = albedo.λ₁ - Δλ)    
+    bauparameters = ((economy, hogg, baualbedo), calibration)
     
-    bauparameters = (hogg, baualbedo, γᵇ, αbau)
+    fn = SDEFunction(Fbau!, G!, mass_matrix = mass)
     
-    fn = SDEFunction(F!, G!, mass_matrix = mass_matrix(hogg))
-    
-    problembse = SDEProblem(fn, G!, [hogg.T₀, log(hogg.M₀)], (0, T), bauparameters)
+    problembse = SDEProblem(fn, G!, [hogg.T₀, log(hogg.M₀)], tspan, bauparameters)
     
     ensemblebse = EnsembleProblem(problembse)
     
     bausim = solve(ensemblebse, trajectories = trajectories)
-    baunullcline = (x -> mstable(x, hogg, baualbedo)).(Tspace)
+    baunullcline = (x -> Model.mstable(x, hogg, baualbedo)).(Tspace)
     
     return bausim, baunullcline
 end
-
 
 begin # Business as usual plots
     baufig = @pgf GroupPlot(
@@ -312,8 +285,10 @@ begin # Business as usual plots
                 mark_options = {scale = 1.5, draw_opacity = 0}, 
                 mark_repeat = 2
             }, 
-            Coordinates(zip(Mᵇ[3:end], Tᵇ[3:end]))
-        )
+            Coordinates(zip(
+                bauscenario[3:end, "CO2 concentration"], 
+                bauscenario[3:end, "Temperature"]
+            )))
 
         push!(Δλplots, ipccbau)
         
@@ -383,9 +358,9 @@ end
 
 begin # Density of business as usual scenario
     yearsofdensity = 10:10:80
-    densedomain = collect(0:0.01:12)
+    densedomain = collect(0:0.01f0:12)
     
-    baupossim, _ = simulatebau(8f-2; trajectories = 1001)
+    baupossim, _ = simulatebau(8f-2; trajectories = 2001)
     decadetemperatures = [first(componentwise_vectors_timepoint(baupossim, t)) .- hogg.Tᵖ for t in yearsofdensity]
     dists = (x -> kde(x)).(decadetemperatures)
     densities = [x -> pdf(d, x) for d in dists]
@@ -406,7 +381,7 @@ begin # Density of business as usual scenario
             ztick = collect(0:0.25:1.5),
             ytick = collect(yearsofdensity),
             x_dir = "reverse",
-            xlabel = raw"Temperature deviations $x_t - x^{\mathrm{p}}$",
+            xlabel = raw"Temperature deviations $T - T^{\mathrm{p}}$",
             ylabel = raw"Year",
             zlabel = raw"Density of temperature",
             yticklabels = yearsofdensity .+ BASELINE_YEAR
@@ -450,9 +425,8 @@ begin # Density of business as usual scenario
 end
 
 begin # Carbon decay calibration
-    
-    sinkspace = range(N₀, 1.2f0 * N₀; length = 101)
-    decay = [δₘ(N, hogg) for N in sinkspace]
+    sinkspace = range(hogg.N₀, 1.2f0 * hogg.N₀; length = 101)
+    decay = [Model.δₘ(N, hogg) for N in sinkspace]
 
     decayfig = @pgf Axis(
         {
@@ -487,10 +461,10 @@ end
 begin # Carbon decay path
     bausim, baunullcline = simulatebau(0f0; trajectories = 1)
     M = exp.([u[2] for u in bausim[1].u])
-    decaysim = δₘ.(n₀ .* M, Ref(hogg))
+    decaysim = Model.δₘ.(M, Ref(hogg))
     
-    Msparse = exp.([Float32(bausim(y)[1][2]) for y in 0:10:T])
-    decaysimsparse = δₘ.(n₀ .* Msparse, Ref(hogg))
+    Msparse = exp.([Float32(bausim(y)[1][2]) for y in 0:10:horizon])
+    decaysimsparse = Model.δₘ.(Msparse, Ref(hogg))
 
     decaypathfig = @pgf Axis(
         {
@@ -529,7 +503,6 @@ end
 
 
 begin # Albedo plot
-
     damagefig = @pgf Axis(
         {
             width = raw"1\textwidth",
@@ -547,7 +520,7 @@ begin # Albedo plot
     )
 
     @pgf damagecurve = Plot({color = PALETTE[2]},
-        Coordinates(Tspacedev, [δₖ(T, economy, hogg) for T in Tspace])
+        Coordinates(Tspacedev, [Model.δₖ(T, economy, hogg) for T in Tspace])
     )
 
     push!(damagefig, damagecurve)

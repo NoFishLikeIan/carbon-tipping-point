@@ -58,12 +58,12 @@ end
 "Heaviside function"
 H(T, Tₐ) = (1 + tanh(T / Tₐ)) / 2
 H(T, albedo::Albedo) = H(T, albedo.Tₐ)
-
+sigmoid(x) = inv(1 + exp(-x))
 
 "Transition function"
 function L(T, albedo::Albedo)
-    @unpack T₁, T₂ = albedo
-    ((T - T₁) / (T₂ - T₁)) * H(T - T₁, albedo) * H(T₂ - T, albedo) + H(T - T₂, albedo)
+    Tᵢ = (albedo.T₁ + albedo.T₂) / 2
+    return sigmoid(T - Tᵢ)
 end
 
 "Albedo coefficient"
