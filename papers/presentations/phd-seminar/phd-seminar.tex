@@ -34,6 +34,7 @@
 
 \pgfplotsset{compat=1.18}
 
+\newcommand{\X}{{\color{violet} X}}
 \newcommand{\inputtikz}[1]{%  
 
     \ifdraft{
@@ -49,12 +50,12 @@
 \pgfplotsset{compat=1.18}
 
 \usepackage[bibencoding=utf8, style=apa, backend=biber, eprint=false]{biblatex}
-\addbibresource{../../proposal/scc-tipping-points.bib}
+\addbibresource{../../scc-tipping-points.bib}
 
 \author{Andrea Titton}
 \title[Climate Tipping Points and Optimal Emissions]{\small Climate Tipping Points and\\ Optimal Emissions}
 \institute{CeNDEF, University of Amsterdam}
-\date{PhD seminar, 11/09}
+\date{TI seminar, 17 November}
 
 \begin{document}
 
@@ -155,7 +156,7 @@
 
 \begin{frame} \frametitle{Albedo loss}
     \begin{equation*}
-        \lambda({\color{red} T}) = \lambda_1 - (1 - L({\color{red} T})) \Delta \lambda
+        \lambda({\color{red} T}) = \lambda_1 - L({\color{red} T}) \Delta \lambda
     \end{equation*}
     \begin{figure}
     \resizebox{!}{0.4\linewidth}{
@@ -165,14 +166,8 @@
 \end{frame}
 
 \begin{frame} \frametitle{Albedo loss}
-    \begin{equation*}
-        {\color{orange} S_0} (1 - \lambda({\color{red} T})) = \eta \sigma {\color{red} T}^4 -  G_0 - G_1 \log {\color{blue} M} / M^{\mathrm{p}}  
-    \end{equation*}
-    \begin{figure}
-    \resizebox{!}{0.4\linewidth}{
-        \inputtikz{../../../plots/nullcline.tikz}
-    }
-    \end{figure}
+    \centering
+    \inputtikz{../../../plots/nullcline.tikz}
 \end{frame}
 
 \begin{frame} \frametitle{Carbon Concentration}
@@ -208,103 +203,40 @@
     \end{figure}
 \end{frame}
 
-\section{Economy}
-
-\begin{frame}{$AK$ Economy (\cite{hambel_optimal_2021})}
-    \begin{columns}
-        \column{0.3\linewidth}
-        \begin{itemize}
-            \item ${\color{cyan} y}$ log-output
-            \item ${\color{purple} k}$ log-capital
-            \item $I$ investment in capital
-            \item $B$ abatement expenditure
-            \item $C$ consumption
-        \end{itemize}
-        \column{0.6\linewidth}
-        \begin{align*}
-            {\color{cyan} y} &= \log(A) + {\color{purple} k} \text{ s.t.} \\
-            {\color{cyan} Y} &= I + B + C
-        \end{align*}
-    \end{columns}
-\end{frame}
-
-\begin{frame}{Climate change slows growth}
-    \begin{columns}
-        \column{0.3\linewidth}
-        \begin{itemize}
-            \item ${\color{purple} k}$ log-capital
-            \item ${\color{red} T}$ temperature
-            \item $I$ investment in capital
-            \item $B$ abatement expenditure
-        \end{itemize}
-        \column{0.6\linewidth}
-        \begin{equation*}
-            \d {{\color{purple} k}} = \left(\frac{I}{{\color{purple} K}} - \delta_k({\color{red} T}) - \frac{\kappa}{2} \left( \frac{I}{{\color{purple} K}}  + \frac{B}{{\color{purple} K}}\right)^2\right) \d t
-        \end{equation*}
-    \end{columns}
-\end{frame}
-
-
-\begin{frame}{Climate damages}
+\begin{frame}{Business-as-usual dynamics}
     \begin{figure}[H]
         \centering
-        \inputtikz{../../../plots/presentation/damagefig.tikz}
+        \inputtikz{../../../plots/presentation/bau-x-dens.tikz}
     \end{figure}
 \end{frame}
 
-\begin{frame}{Making everything a rate...}
+\section{Economy}
+\begin{frame} \frametitle{Economy... without climate change}
     \begin{columns}
         \column{0.3\linewidth}
-        \begin{itemize}
-            \item ${\color{cyan} Y}$ output
-            \item $B$ abatement expenditure
-            \item $C$ consumption
-            \item $\mathbf{\chi}$ consumption rate
-            \item $\mathbf{\varepsilon}$ emissivity rate
-        \end{itemize}
-        \column{0.6\linewidth}
         \begin{equation*}
-            \mathbf{\chi} \coloneqq \frac{C}{{\color{cyan} Y} } \text{ and } \frac{\omega}{2} \mathbf{\varepsilon}^2 \coloneqq \frac{B}{{\color{cyan} Y}}
+            \frac{\d {{\color{cyan} y}}}{\d t} = \phi(t, 1 - \control{\chi}) \; - \; \delta_k
         \end{equation*}
+        \column{0.6\linewidth}
+        \begin{figure}[H]
+            \centering
+            \inputtikz{../../../plots/phifig.tikz}
+        \end{figure}
     \end{columns}
 \end{frame}
 
-\begin{frame}{Emissivity rate $\varepsilon$ to abatement $\alpha$}
-    \begin{columns}
-        \column{0.3\linewidth}
-        \begin{itemize}
-            \item ${\color{blue} M}$ CO$_2$ concentration
-            \item $E^{\mathrm{B}}$ BaU emissions
-            \item $\delta_m({\color{blue} M})$ natural decay of CO$_2$
-            \item $\gamma^{\mathrm{B}}$ BaU growth of ${\color{blue} M}$
-        \end{itemize}
-        \column{0.6\linewidth}
-        \begin{equation*}
-            \varepsilon = 1 - \frac{{\color{blue} M}}{ E^{\mathrm{B}}} \left( \delta_m({\color{blue} M}) + \gamma^{\mathrm{B}} - \mathbf{\alpha} \right)
-        \end{equation*}
-    \end{columns}
-\end{frame}
-
-
-\begin{frame}{Putting it all back into capital...}
+\begin{frame} \frametitle{Economy... with climate change}
     \begin{equation*}
-        \frac{\d {{\color{purple} k}}}{\d t} = \overbrace{A (1 - \mathbf{\chi}) - \frac{A\kappa}{2} (1 - \mathbf{\chi})^2}^{\text{Standard consumption problem $\phi(\chi)$}} - \underbrace{\frac{A \omega}{2} \mathbf{\varepsilon}^2}_{\text{abatement}} - \overbrace{\delta_k({\color{red} T})}^{\text{climate change}}
-    \end{equation*}
-\end{frame}
-
-
-\begin{frame}{But we really care about output...}
-    \begin{equation*}
-        \frac{\d {{\color{cyan} y}}}{\d t} = \overbrace{\varrho + \phi(\chi)}^{\text{Economic growth}} - \underbrace{\frac{A \omega}{2} \mathbf{\varepsilon}^2}_{\text{abatement}} - \overbrace{\delta_k({\color{red} T})}^{\text{climate change}}
+        \frac{\d {{\color{cyan} y}}}{\d t} = \phi(t, 1 - \control{\chi}) - \delta_k - d({\color{red} T}) - \frac{\omega}{2} \left(1 - \frac{E(\control{\alpha})}{E^{\mathrm{B}}} \right)^2
     \end{equation*}
 \end{frame}
 
 \section{Optimal Emissions}
 
 \begin{frame}{Social Planner}
-    The social planner at time $\tau$ is trying to maximise \begin{equation*}
-        U(\tau, \alpha, \chi) = \mathbb{E} \int^\infty_\tau f(C(t), U(t, \alpha, \chi)) \d t
-    \end{equation*} where $f(C, U)$ is the Epstein-Zin aggregator.
+    The social planner at time $t$ is trying to maximise \begin{equation*}
+        U(t, \X, \control{\alpha}, \control{\chi}) = \mathbb{E}_{\X} \int^\infty_t f\Big(\underbrace{\control{\chi} e^{{\color{cyan} y}}}_{C}, U(t, \X, \control{\alpha}, \control{\chi})\Big) \; \d t
+    \end{equation*} where $f(C, U)$ is the Epstein-Zin aggregator and $\X = ({\color{red} T}, {\color{blue} m}, {\color{cyan} y})$.
 \end{frame}
 
 \begin{frame}{Why Epstein-Zin?}
@@ -317,29 +249,49 @@
 \end{frame}
 
 \begin{frame}{Value Function}
-    Looking for $V(t, \chi, \alpha) = \sup_{\chi, \alpha} U(t, \alpha, \chi)$, which satisfies
+    We are looking for $V(t, \X) = \sup_{\control{\chi}, \control{\alpha}} U(t, \X, \control{\alpha}, \control{\chi})$, which satisfies
     \begin{equation*}
-        -\partial_t V = f(\chi {\color{cyan} Y}, V) + \nabla V \cdot (\text{drift of state}) + \partial^2_T V \; \sigma^2_T
+        \begin{split}
+            -\partial_t V = \sup_{\control{\chi}, \control{\alpha}} \Big\{ &f(\control{\chi} e^{\color{cyan} y}, V) \; +\\
+            &\nabla_{\X} V \cdot \text{drift}(\X, \control{\chi}, \control{\alpha}) \Big\} \; + \\
+            &\Delta_{\X} V \cdot \text{noise}
+        \end{split}
     \end{equation*}
 \end{frame}
 
-
-\begin{frame}
-    We need to find functions $\alpha, \chi, V$ from a four dimensional state space $t, T, M, y$ to $\mathbb{R}$. We must do this numerically but how?
-    
-    \hspace{2em}
-
-    \pause No really... how?
-\end{frame}
-
-\section{Conclusion}
-\begin{frame}{Conclusion}
+\section{Solution method}
+\begin{frame}{Terminal condition}
     \begin{enumerate}
-        \item Tipping points in the climate systems are (mostly) induced by bifurcations
-        \pause \item Optimal emissions paths matter, not only total emissions (would you walk on the edge of a ditch)
-        \pause \item TODO: solve this HJB numerically?  
+        \item \textbf{Assume} that at some point $\tau$ (e.g. 500 years) abatement is free, hence $\d m = 0$.
+        \item Solve the ``terminal'' problem \begin{equation*}
+            0 = \sup_{\control{\chi}} f(\control{\chi} e^{\color{cyan} y}, \overline{V}) + \partial_y \overline{V} \times \Big( \phi(t, 1 - \control{\chi}) - \delta_k - d({\color{red} T}) \Big)
+        \end{equation*}
     \end{enumerate}
 \end{frame}
+
+\begin{frame}{Terminal condition}
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width = 0.8\linewidth]{../../../plots/presentation/termfig.png}
+    \end{figure}
+\end{frame}
+
+\begin{frame}{Simulate backwards...}
+    Given $\overline{V}$, numerically simulate backwards in time until today $t = 0$ using $\partial_t V$. But there are complications... \hspace{2em}
+    \begin{enumerate}
+        \item Cannot use first order conditions to find optimal $\control{\chi}, \control{\alpha}$;
+        \item Large state space $\X$ around 180 million points
+    \end{enumerate}
+\end{frame}
+
+\begin{frame}{Preliminary results...}
+    \begin{enumerate}
+        \item Optimal emissions prescribes steep reductions compared to business as usual
+        \item Unlike previous work, timing matters: reduce emissions early
+        \item As a consequence the social cost of carbon is increasing rapidly 
+    \end{enumerate}
+\end{frame}
+
 
 \begin{frame}{Thank you!}
     \centering

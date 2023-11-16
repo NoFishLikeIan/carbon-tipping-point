@@ -1,3 +1,4 @@
+using Revise
 using JLD2, DotEnv, CSV
 using DataFrames
 
@@ -25,8 +26,9 @@ begin # Global variables
     BASELINE_YEAR = parse(Int64, get(env, "BASELINE_YEAR", "2020"))
     DATAPATH = get(env, "DATAPATH", "data")
     PLOTPATH = get(env, "PLOTPATH", "plots")
+    PRESENTATIONPATH = joinpath(PLOTPATH, "presentation")
 
-    SAVEFIG = false 
+    SAVEFIG = true 
 end
 
 economy = Model.Economy();
@@ -236,6 +238,14 @@ function G!(du, u, parameters, t)
 	du[2] = 0f0
 end
 
+function Fterm!(du, u, parameters, t)
+	instance, calibration = parameters
+    economy, hogg, albedo = instance
+
+	du[1] = Model.μ(u[1], u[2], hogg, albedo)
+	du[2] = 0f0
+end
+
 function simulatebau(Δλ::Float32; trajectories = 1000, tspan = (0f0, last(yearlytime))) # Business as Usual, ensemble simulation    
     baualbedo = Albedo(λ₂ = albedo.λ₁ - Δλ)    
     bauparameters = ((economy, hogg, baualbedo), calibration)
@@ -355,10 +365,9 @@ begin # Business as usual plots
     baufig
 end
 
-
 begin # Density of business as usual scenario
     yearsofdensity = 10:10:80
-    densedomain = collect(0:0.01f0:12)
+    densedomain = collect(0:0.1f0:12)
     
     baupossim, _ = simulatebau(8f-2; trajectories = 2001)
     decadetemperatures = [first(componentwise_vectors_timepoint(baupossim, t)) .- hogg.Tᵖ for t in yearsofdensity]
@@ -378,13 +387,13 @@ begin # Density of business as usual scenario
             ymin = 0, ymax = 90,
             set_layers,
             view = "{-28}{50}",   # viewpoint
-            ztick = collect(0:0.25:1.5),
             ytick = collect(yearsofdensity),
             x_dir = "reverse",
             xlabel = raw"Temperature deviations $T - T^{\mathrm{p}}$",
             ylabel = raw"Year",
             zlabel = raw"Density of temperature",
-            yticklabels = yearsofdensity .+ BASELINE_YEAR
+            yticklabels = yearsofdensity .+ BASELINE_YEAR,
+            tick_label_style = {scale = 0.5}
         },
     )
 
@@ -418,7 +427,7 @@ begin # Density of business as usual scenario
     end 
 
     if SAVEFIG
-        PGFPlotsX.save(joinpath(PLOTPATH, "bau-x-dens.tikz"), densityfig; include_preamble = true) 
+        PGFPlotsX.save(joinpath(PRESENTATIONPATH, "bau-x-dens.tikz"), densityfig; include_preamble = true) 
     end
 
     densityfig
@@ -520,7 +529,7 @@ begin # Albedo plot
     )
 
     @pgf damagecurve = Plot({color = PALETTE[2]},
-        Coordinates(Tspacedev, [Model.δₖ(T, economy, hogg) for T in Tspace])
+        Coordinates(Tspacedev, [Model.d(T, economy, hogg) for T in Tspace])
     )
 
     push!(damagefig, damagecurve)
@@ -530,4 +539,37 @@ begin # Albedo plot
     end
 
     damagefig
+end
+
+begin
+    χspace = range(0f0, 1f0; length = 21)
+
+    outputfig = @pgf Axis(
+        {
+            width = raw"\linewidth",
+            height = raw"\linewidth",
+            grid = "both",
+            ylabel = raw"$\phi(t, 1 - \chi)$",
+            xlabel = raw"$\chi$",
+            xtick = 0:0.2:1,
+            ytick = 0:0.1:0.2,
+            xmin = 0, xmax = 1,
+            ymin = 0, ymax = 0.2,
+            ultra_thick, xticklabel_style = {rotate = 45},
+            legend_style={nodes={scale = 0.5}},
+        }
+    )
+
+    for (i, t) ∈ enumerate([0f0, 50f0])
+        data = [Model.ϕ(t, χ, economy) for χ ∈ χspace]
+        curve = @pgf Plot({color = PALETTE[i]}, Coordinates(zip(χspace, data))) 
+
+        push!(outputfig, curve, LegendEntry("\$t = $t\$"))
+    end
+
+    if SAVEFIG
+        PGFPlotsX.save(joinpath(PLOTPATH, "phifig.tikz"), outputfig; include_preamble = true) 
+    end
+
+    outputfig
 end
