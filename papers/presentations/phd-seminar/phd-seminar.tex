@@ -1,6 +1,7 @@
 \documentclass[pdf]{beamer}
 
 \usetheme{Berlin}
+\beamertemplatenavigationsymbolsempty
 
 \usepackage[utf8]{inputenc}
 \usepackage{hyperref}
@@ -92,10 +93,10 @@
 
 \begin{frame} \frametitle{Temperature}
     \begin{columns}
-        \column{0.3\linewidth}
+        \column{0.35\linewidth}
         \begin{itemize}
-            \item ${\color{orange} S}$ solar radiation
-            \item ${\color{red} T}$ temperature
+            \item ${\color{orange} S}$: solar radiation
+            \item ${\color{red} T}$: temperature
         \end{itemize}
         \column{0.6\linewidth}
         \begin{equation*}
@@ -106,11 +107,11 @@
 
 \begin{frame} \frametitle{Temperature}
     \begin{columns}
-        \column{0.3\linewidth}
+        \column{0.35\linewidth}
         \begin{itemize}
-            \item ${\color{orange} S}$ solar radiation
-            \item ${\color{red} T}$ temperature
-            \item ${\color{blue} M}$ carbon concentration
+            \item ${\color{orange} S}$: solar radiation
+            \item ${\color{red} T}$: temperature
+            \item ${\color{blue} M}$: carbon concentration
         \end{itemize}
         \column{0.6\linewidth}
         \begin{equation*}
@@ -121,11 +122,11 @@
 
 \begin{frame} \frametitle{Temperature}
     \begin{columns}
-        \column{0.3\linewidth}
+        \column{0.35\linewidth}
         \begin{itemize}
-            \item ${\color{orange} S_0} (1 - \lambda({\color{red} T}))$ solar radiation
-            \item ${\color{red} T}$ temperature
-            \item ${\color{blue} M}$ carbon concentration
+            \item ${\color{orange} S_0} (1 - \lambda({\color{red} T}))$: solar radiation
+            \item ${\color{red} T}$: temperature
+            \item ${\color{blue} M}$: carbon concentration
         \end{itemize}
         \column{0.6\linewidth}
         \begin{equation*}
@@ -137,11 +138,11 @@
 
 \begin{frame} \frametitle{Temperature}
     \begin{columns}
-        \column{0.3\linewidth}
+        \column{0.35\linewidth}
         \begin{itemize}
-            \item ${\color{orange} S_0} (1 - \lambda({\color{red} T}))$ solar radiation
-            \item ${\color{red} T}$ temperature
-            \item ${\color{blue} M}$ carbon concentration
+            \item ${\color{orange} S_0} (1 - \lambda({\color{red} T}))$: solar radiation
+            \item ${\color{red} T}$: temperature
+            \item ${\color{blue} M}$: carbon concentration
         \end{itemize}
         \column{0.6\linewidth}
         \begin{equation*}
@@ -172,8 +173,8 @@
 
 \begin{frame} \frametitle{Carbon Concentration}
     \begin{columns}
-        \column{0.3\linewidth}
-        Let $\gamma^\mathrm{b}$ be the growth rate of carbon concentration $M$ under the business-as-usual scenario.
+        \column{0.35\linewidth}
+        $\gamma^\mathrm{b}$: growth rate of carbon concentration $M$ under the business-as-usual scenario.
         \column{0.6\linewidth}
         \begin{figure}[H]
             \inputtikz{../../../plots/growthmfig.tikz}
@@ -184,7 +185,7 @@
 
 \begin{frame} \frametitle{Carbon Concentration}
     \begin{columns}
-        \column{0.3\linewidth}
+        \column{0.35\linewidth}
         \begin{equation*}
             \d m = \frac{\d M}{M} = \left( \gamma^\mathrm{b} - \control{\alpha} \right) \d t
         \end{equation*}
@@ -213,12 +214,12 @@
 \section{Economy}
 \begin{frame} \frametitle{Economy... without climate change}
     \begin{columns}
-        \column{0.3\linewidth}
+        \column{0.35\linewidth}
         \begin{equation*}
-            \frac{\d {{\color{cyan} y}}}{\d t} = \phi(t, 1 - \control{\chi}) \; - \; \delta_k
+            \frac{\d {{\color{cyan} y}}}{\d t} = \varrho \; - \; \delta_k + \phi(1 - \control{\chi})
         \end{equation*}
         \column{0.6\linewidth}
-        \begin{figure}[H]
+        \pause \begin{figure}[H]
             \centering
             \inputtikz{../../../plots/phifig.tikz}
         \end{figure}
@@ -227,7 +228,7 @@
 
 \begin{frame} \frametitle{Economy... with climate change}
     \begin{equation*}
-        \frac{\d {{\color{cyan} y}}}{\d t} = \phi(t, 1 - \control{\chi}) - \delta_k - d({\color{red} T}) - \frac{\omega}{2} \left(1 - \frac{E(\control{\alpha})}{E^{\mathrm{B}}} \right)^2
+        \frac{\d {{\color{cyan} y}}}{\d t} = \varrho - \delta_k + \phi(1 - \control{\chi}) - d({\color{red} T}) - \frac{\omega}{2} \left(1 - \frac{E(\control{\alpha})}{E^{\mathrm{B}}} \right)^2
     \end{equation*}
 \end{frame}
 
@@ -241,9 +242,9 @@
 
 \begin{frame}{Why Epstein-Zin?}
     \begin{columns}
-        \column{0.5\linewidth}
+        \pause \column{0.5\linewidth}
         I flip a coin today. You get $2$€ every day if it is head and $1$€ every day if it is tails.
-        \column{0.5\linewidth}
+        \pause \column{0.5\linewidth}
         Each day I flip a coin. That day you get $2$€ if it is head and $1$€ if it is tails.
     \end{columns}
 \end{frame}
@@ -263,7 +264,7 @@
 \begin{frame}{Terminal condition}
     \begin{enumerate}
         \item \textbf{Assume} that at some point $\tau$ (e.g. 500 years) abatement is free, hence $\d m = 0$.
-        \item Solve the ``terminal'' problem \begin{equation*}
+        \pause \item Solve the ``terminal'' problem \begin{equation*}
             0 = \sup_{\control{\chi}} f(\control{\chi} e^{\color{cyan} y}, \overline{V}) + \partial_y \overline{V} \times \Big( \phi(t, 1 - \control{\chi}) - \delta_k - d({\color{red} T}) \Big)
         \end{equation*}
     \end{enumerate}
@@ -279,22 +280,21 @@
 \begin{frame}{Simulate backwards...}
     Given $\overline{V}$, numerically simulate backwards in time until today $t = 0$ using $\partial_t V$. But there are complications... \hspace{2em}
     \begin{enumerate}
-        \item Cannot use first order conditions to find optimal $\control{\chi}, \control{\alpha}$;
-        \item Large state space $\X$ around 180 million points
+        \pause \item Cannot use first order conditions to find optimal $\control{\chi}, \control{\alpha}$;
+        \pause \item Large state space $\X$ around 180 million points
     \end{enumerate}
 \end{frame}
 
 \begin{frame}{Preliminary results...}
     \begin{enumerate}
-        \item Optimal emissions prescribes steep reductions compared to business as usual
-        \item Unlike previous work, timing matters: reduce emissions early
-        \item As a consequence the social cost of carbon is increasing rapidly 
+        \pause \item Optimal emissions prescribes steep reductions compared to business as usual
+        \pause \item Unlike previous work, timing matters: reduce emissions early
+        \pause \item As a consequence the social cost of carbon is increasing rapidly 
     \end{enumerate}
 \end{frame}
 
 
-\begin{frame}{Thank you!}
-    \centering
+\begin{frame}
     \begin{figure}
         \includegraphics[width = 0.7\linewidth]{../figures/netherlands.png}
         \caption{Ed Hawkins, Berkeley Earth data}

@@ -17,8 +17,13 @@ We suppose that at some point in the future $\tau$, abatement is free and is exo
     \d y &= \big( \varrho + \phi(\chi) - \delta_k^p - d(T) \big) \; \d t.
 \end{align}
 
-Let $K(T) \coloneqq \int^T_0 (1 - \lambda(x)) \; \d x$ and $p(T)$ be the steady state density of $T$. It can be shown that \begin{equation}
-    p(T, m) \propto \exp\left(-\frac{T - \frac{\eta \sigma^2}{5} T^5 + S_0 K(T)}{\sigma_T^2 / 2}\right).
+Let $p(T, \overline{m})$ be the steady state density of temperature $T$ given the constant level of carbon concentration $\bar{m}$. It can be shown that \begin{equation}
+    p(T, \overline{m}) \propto \exp\left(-\frac{\mu_m(\overline{m}) T + (1 - \lambda_1) S_0 T - \frac{\eta}{5} T^5 + S_0 (\lambda_1 - \lambda_2) \log(1 + \exp(T - T_i))}{\sigma_T^2 / 2\epsilon}\right).
+\end{equation}
+
+Ito's lemma on $d(T)$.
+\begin{equation}
+    \epsilon \; \d d(T) = \left(\mu(T, \overline{m}) d'(T) + \frac{\sigma^2_T}{2\epsilon} d''(T) \right) \d t + \sigma_T d'(T) \d W.
 \end{equation}
 
 \newpage

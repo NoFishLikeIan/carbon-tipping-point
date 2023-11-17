@@ -23,13 +23,9 @@ The aim of the paper is to look at optimal abatement strategies. To make the rel
 
 Global mean surface temperature $T$ is modelled using a stylised Budyko–Ghil–Sellers energy balance model (\cite{hogg_glacial_2008, ashwin_extreme_2020}). Earth's radiating balance, in its simplest form, prescribes that an equilibrium temperature $\bar{T}$, in $\unit{K}$, is determined by equating incoming solar radiation $S$, in $\unit{W}\unit{m}^{-2}$, with outgoing longwave radiations $\eta \sigma \bar{T}^4$, where $\sigma = 5.7 \times 10^{-8} \; \unit{W} \unit{m}^{-2} \unit{K}^{-4}$ is the Stefan-Boltzmann constant and $\eta$ is an emissivity rate. Due to the presence of greenhouse gasses, certain wavelengths are scattered and, hence, not emitted, which introduces an additional radiative forcing $G$, in $\unit{W}\unit{m}^{-2}$, which yields the balance equation $S = \eta \sigma \bar{T}^4 - G$. In this paper, we focus on the role of increased CO$_2$ concentration $M$ compared to pre-industrial levels $M^{\mathrm{p}}$, as opposed to other greenhouse gases, hence we can decompose the greenhouse radiative forcing term $G$ into a constant component $G_0$ and a component which depends on the steady state level of CO$_2$ concentration in the atmosphere $\bar{M}$ with respect to the pre-industrial level $M^{\mathrm{p}}$, such that $G = G_0 + G_1 \log(\bar{M} / M^{\mathrm{p}})$.
 
-In addition to these forces, to study the role of tipping points, I introduce the effects of land ice albedo on the radiation balance (as done in \cite{ghil_topics_2011,dijkstra_sensitivity_2015}). In particular, as temperatures rise, the area of ice caps, glaciers, and sea ice shrinks, which in turn reduces the planetary albedo $\lambda(T)$, that is, the fraction of solar radiation reflected by earths' surface. Hence, I decompose the incoming solar radiation which contributes to the energy balance as $S = S_0 \big(1 - \lambda(T)\big)$. We model this effect by letting the planetary albedo transition from a high level $\lambda_1$ to a lower level $(\lambda_1 - \Delta \lambda)$ via a smooth transition function $L(x)$, which is equal to $0$ if $T < T_1$ and $1$ if $T > T_2$ for some temperature thresholds $T_1, T_2$\footnote{
-    The function $L$ takes the form \begin{equation}
-        L(x) = \frac{x - T_1}{T_2 - T_1} H(x - T_1) H(T_2 - x) + H(x - T_2),
-    \end{equation} with \begin{equation}
-        H(x) = \frac{1 + \tanh(x / T_a)}{2} \xrightarrow{T_a \rightarrow 0} \mathbbm{1} \{x \geq 0\}.
-    \end{equation}
-} (Figure \ref{fig:albedo_coefficient}). Under this specification, the albedo coefficient can be written as a function of temperature \begin{equation} \label{eq:assumption:albedo}
+In addition to these forces, to study the role of tipping points, I introduce the effects of land ice albedo on the radiation balance (as done in \cite{ghil_topics_2011,dijkstra_sensitivity_2015}). In particular, as temperatures rise, the area of ice caps, glaciers, and sea ice shrinks, which in turn reduces the planetary albedo $\lambda(T)$, that is, the fraction of solar radiation reflected by earths' surface. Hence, I decompose the incoming solar radiation which contributes to the energy balance as $S = S_0 \big(1 - \lambda(T)\big)$. We model this effect by letting the planetary albedo transition from a high level $\lambda_1$ to a lower level $(\lambda_1 - \Delta \lambda)$ via a sigmoid transition function \begin{equation}
+    \sigma(x) = \frac{1}{1 + \exp(T_i - T)}
+\end{equation} where $T_i$ is a calibrated inflection point. Under this specification, the albedo coefficient can be written as a function of temperature (Figure \ref{fig:albedo_coefficient}) \begin{equation} \label{eq:assumption:albedo}
     \lambda(T) = \lambda_1 - (1 - L(x)) \Delta \lambda.
 \end{equation} 
 
@@ -40,7 +36,7 @@ In addition to these forces, to study the role of tipping points, I introduce th
     \label{fig:albedo_coefficient}
 \end{figure}
 
-It is the important to stress that the function $\lambda$ (\ref{eq:assumption:albedo}) is a highly stylised average model for a complex and spatially heterogeneous process, which, in turn, puts a lot of uncertainty around the parameters $T_1, T_2$ and $\Delta \lambda$. In the robustness checks we explore the sensitivity of our results to these parameters.
+It is the important to stress that the function $\lambda$ (\ref{eq:assumption:albedo}) is a highly stylised average model for a complex and spatially heterogeneous process, which, in turn, puts a lot of uncertainty around the parameters $T_i$ and $\Delta \lambda$. In the robustness checks we explore the sensitivity of our results to these parameters.
 
 Equating incoming solar radiation, net of the albedo effect, and outgoing longwave radiation, net of the greenhouse gas effect, we obtain the energy balance condition \begin{equation} \label{eq:radiative-balance}
     S_0 \big(1 - \lambda(\bar{T})\big) = \eta \sigma \bar{T}^4 - G_0 - G_1 \log(\bar{M} / M^{\mathrm{p}}).
@@ -91,12 +87,13 @@ Using the calibrated growth rate of carbon concentration $\gamma^{\mathrm{b}}$, 
     \end{enumerate}
 }
 
-\begin{figure}[H]
-    \centering
-    \inputtikz{../../../plots/bau-x-dens.tikz}
-    \caption{Density of temperature in a business-as-usual scenario with $\Delta \lambda = 0.08$.}
-    \label{fig:bau:density}
-\end{figure}
-
+\iffalse
+    \begin{figure}[H]
+        \centering
+        \inputtikz{../../../plots/bau-x-dens.tikz}
+        \caption{Density of temperature in a business-as-usual scenario with $\Delta \lambda = 0.08$.}
+        \label{fig:bau:density}
+    \end{figure}
+\fi
 
 \end{document}
