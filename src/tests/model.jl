@@ -24,30 +24,27 @@ statedomain = [
     (log(hogg.M₀), log(hogg.M̄), 51), 
     (log(economy.Y̲), log(economy.Ȳ), 51)
 ];
-Ω = makegrid(statedomain);
-X = fromgridtoarray(Ω);
+
+grid = RegularGrid(statedomain);
+T = @view grid.X[:, :, :, 1];
 
 # -- Benchmarking
-# ---- Steady state model
-T = @view X[:, :, :, 1];
-
-# ---- Full model
 Vdata = [
     (exp(y) / economy.Ȳ)^2 - (exp(m) / hogg.Mᵖ)^2 *  (T / hogg.Tᵖ)^2 
-    for T ∈ Ω[1], m ∈ Ω[2], y ∈ Ω[3]
+    for T ∈ grid.Ω[1], m ∈ grid.Ω[2], y ∈ grid.Ω[3]
 ];
 V = BorderArray(Vdata, paddims(Vdata, 2));
-∇V = Array{Float32}(undef, length.(Ω)..., 4);
-central∇!(∇V, V, Ω);
+∇V = Array{Float32}(undef, size(grid)..., 4);
+central∇!(∇V, V, grid);
 
-∂²V = Array{Float32}(undef, length.(Ω));
-∂²!(∂²V, V, Ω);
+∂²V = Array{Float32}(undef, size(grid));
+∂²!(∂²V, V, grid, 1);
 
 # Some sample data
 begin
     t = 5f0
-    idx = rand(rng, CartesianIndices(V.inner))
-    Xᵢ = @view X[idx, :]
+    idx = rand(rng, CartesianIndices(grid))
+    Xᵢ = @view grid.X[idx, :]
     Vᵢ = @view V[idx]
     ∇Vᵢ = @view ∇V[idx, :]
     ∂²Vᵢ = @view ∂²V[idx]

@@ -5,11 +5,6 @@ function makeΔ(n)
     ntuple(i -> CartesianIndex(ntuple(j -> j == i ? 1 : 0, n)), n)
 end
 
-"Constructs a `Pad` object of the dimension of A for the first `dims` coordinates"
-function paddims(A::AbstractArray, padding::Int, dims = 1:length(size(A)))
-    Pad(ntuple(i -> i ∈ dims ? padding : 0, length(size(A))))
-end
-
 """
 Given a Vₜ (n₁ × n₂ ... × nₘ) returns a matrix D (n₁ × n₂ ... × nₘ × m), with elements ∇Vₜ and last ∇Vₜ⋅w.
 """
@@ -18,16 +13,22 @@ function central∇(V::AbstractArray, grid::RegularGrid)
     central∇!(D, V, grid)
 end
 function central∇!(D, V::AbstractArray, grid::RegularGrid)
-    central∇!(D, BorderArray(V, paddims(V, 1)), grid)
-end
-function central∇!(D, V::BorderArray, grid::RegularGrid)
-    h = steps(grid); twoh⁻¹ = inv.(2f0 .* h);
+    h = steps(grid)
     if any(h .< ϵ) @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
 
-    Δ = makeΔ(dimensions(grid))
+    h⁻¹ = inv.(h)
+    twoh⁻¹ = h⁻¹ ./ 2f0;
 
-    @batch for I in CartesianIndices(grid), l in 1:dimensions(grid)
-        D[I, l] = twoh⁻¹[l] * ( V[I + Δ[l]] - V[I - Δ[l]] )
+    Δ = makeΔ(dimensions(grid))
+    I, R = extrema(CartesianIndices(grid))
+    
+   @batch for idx in CartesianIndices(grid), l in 1:dimensions(grid)
+        hᵢ = ifelse(isonboundary(idx, grid), h⁻¹[l], twoh⁻¹[l])   
+
+        D[idx, l] = hᵢ * ( 
+            V[min(idx + Δ[l], R)] - 
+            V[max(idx - Δ[l], I)] 
+        )
     end
 
     return D
@@ -38,16 +39,22 @@ function central∂(V::AbstractArray, grid::RegularGrid, direction)
     central∂!(D, V, grid, direction)
 end
 function central∂!(D, V::AbstractArray, grid::RegularGrid, direction)
-    central∂!(D, BorderArray(V, paddims(V, 1)), grid, direction)
-end
-function central∂!(D, V::BorderArray, grid::RegularGrid, direction)
-    h = steps(grid)[direction]; twoh⁻¹ = inv(2f0 .* h);
+    h = steps(grid)[direction]
     if h < ϵ @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
 
-    Δᵢ = makeΔ(dimensions(grid))[direction]
+    h⁻¹ = inv(h)
+    twoh⁻¹ = h⁻¹ / 2f0
 
-    @batch for I in CartesianIndices(grid)
-        D[I] = twoh⁻¹ * (V[I + Δᵢ] - V[I - Δᵢ])
+    Δᵢ = makeΔ(dimensions(grid))[direction]
+    I, R = extrema(CartesianIndices(grid))
+
+    @batch for idx in CartesianIndices(grid)
+        hᵢ = ifelse(isonboundary(idx, grid), h⁻¹, twoh⁻¹)   
+
+        D[idx] = hᵢ * ( 
+            V[min(idx + Δᵢ, R)] - 
+            V[max(idx - Δᵢ, I)] 
+        )
     end
 
     return D 
@@ -63,30 +70,33 @@ function dir∇(V::AbstractArray, w, grid::RegularGrid)
     dir∇!(D, V, w, grid)
 end
 function dir∇!(D, V::AbstractArray, w, grid::RegularGrid)
-    dir∇!(D, BorderArray(V, paddims(V, 2)), w, grid)
-end
-function dir∇!(D, V::BorderArray, w, grid::RegularGrid)
-    h = steps(grid); twoh⁻¹ = inv.(2f0 .* h);
+    h = steps(grid)
     if any(h .< ϵ) @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
+
+    h⁻¹ = inv.(h)
+    twoh⁻¹ = h⁻¹ ./ 2f0;
 
     d = dimensions(grid)
     Δ = makeΔ(d)
+    I, R = extrema(CartesianIndices(grid))
     
     temp = 0f0
-    @batch for I in CartesianIndices(grid)
+    @batch for idx in CartesianIndices(grid)
         temp = 0f0
 
         for l ∈ 1:d
-            D[I, l] = twoh⁻¹[l] * ifelse(
-                w[I, l] > 0f0,
-                -V[I + 2Δ[l]] + 4f0V[I + Δ[l]] - 3f0V[I],
-                V[I - 2Δ[l]] - 4f0V[I - Δ[l]] + 3f0V[I]
+            hᵢ = ifelse(isonboundary(idx, grid), h⁻¹[l], twoh⁻¹[l])
+
+            D[idx, l] = hᵢ * ifelse(
+                w[idx, l] > 0f0,
+                -V[min(idx + 2Δ[l], R)] + 4f0V[min(idx + Δ[l], R)] - 3f0V[idx],
+                V[max(idx - 2Δ[l], I)] - 4f0V[max(idx - Δ[l], I)] + 3f0V[idx]
             )
 
-            temp += D[I, l] * w[I, l]
+            temp += D[idx, l] * w[idx, l]
         end
 
-        D[I, d + 1] = temp
+        D[idx, d + 1] = temp
     end
 
     return D 
@@ -97,22 +107,22 @@ function dir∂(V::AbstractArray, w, grid::RegularGrid, direction)
     dir∂!(D, V, w, grid, direction)
 end
 function dir∂!(D, V::AbstractArray, w, grid::RegularGrid, direction)
-    dir∂!(D, BorderArray(V, paddims(V, 2)), w, grid, direction)
-end
-function dir∂!(D, V::BorderArray, w, grid::RegularGrid, direction)
     h = steps(grid)[direction]
-    twoh⁻¹ = inv(2f0h);
-    
-    if (h < ϵ) @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
+    if any(h < ϵ) @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
 
-    d = dimensions(grid)
-    Δₗ = makeΔ(d)[direction]
+    h⁻¹ = inv(h)
+    twoh⁻¹ = h⁻¹ / 2f0;
+
+    Δᵢ = makeΔ(dimensions(grid))[direction]
+    I, R = extrema(CartesianIndices(grid))
     
-    for I in CartesianIndices(grid)
-        D[I] = twoh⁻¹ * ifelse(
-            w[I] > 0f0,
-            -V[I + 2Δₗ] + 4f0V[I + Δₗ] - 3f0V[I],
-            V[I - 2Δₗ] - 4f0V[I - Δₗ] + 3f0V[I]
+    @batch for idx in CartesianIndices(grid)
+        hᵢ = ifelse(isonboundary(idx, grid), h⁻¹, twoh⁻¹)
+
+        D[idx] = hᵢ * ifelse(
+            w[idx] > 0f0,
+            -V[min(idx + 2Δᵢ, R)] + 4f0V[min(idx + Δᵢ, R)] - 3f0V[idx],
+            V[max(idx - 2Δᵢ, I)] - 4f0V[max(idx - Δᵢ, I)] + 3f0V[idx]
         )
     end
 
@@ -127,17 +137,19 @@ function ∂²(V::AbstractArray, grid::RegularGrid, direction)
     ∂²!(D², V, grid, direction)
     return D²
 end
-function ∂²!(D, V::AbstractArray, grid::RegularGrid, direction)
-    ∂²!(D, BorderArray(V, paddims(V, 2)), grid, direction)
-end
-function ∂²!(D², V::BorderArray, grid::RegularGrid, direction)
-    hₗ = steps(grid)[direction]; hₗ⁻² = inv(hₗ^2)
+function ∂²!(D², V::AbstractArray, grid::RegularGrid, direction)
+    hₗ = steps(grid)[direction]
     if (hₗ < ϵ) @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
 
+    hₗ⁻² = inv(hₗ^2)
     Δᵢ = makeΔ(dimensions(grid))[direction]
+    I, R = extrema(CartesianIndices(grid))
     
-    @batch for I in CartesianIndices(grid)
-        D²[I] = hₗ⁻² * (V[I + Δᵢ] - 2f0 * V[I] + V[I - Δᵢ])
+    @batch for idx in CartesianIndices(grid)
+        hᵢ = ifelse(isonboundary(idx, grid), 2hₗ⁻², hₗ⁻²)
+        D²[idx] = hᵢ * (
+            V[min(idx + Δᵢ, R)] - 2f0 * V[idx] + V[max(idx - Δᵢ, I)]
+        )
     end
 
     return D² 

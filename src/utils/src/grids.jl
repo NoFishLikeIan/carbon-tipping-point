@@ -35,3 +35,7 @@ dimensions(grid::RegularGrid) = length(grid.Ω)
 Base.size(grid::RegularGrid) = ntuple(c -> length(grid.Ω[c]), dimensions(grid))
 
 Base.CartesianIndices(grid::RegularGrid) = CartesianIndices(size(grid))
+
+function isonboundary(I::CartesianIndex, grid::RegularGrid)::Bool
+    any(I.I .== 1) || any(I.I .== size(grid))
+end

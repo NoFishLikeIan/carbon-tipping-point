@@ -1,10 +1,9 @@
 module Utils
 
-export RegularGrid, steps, dimensions, paddims, bisection
+export RegularGrid, steps, dimensions, paddims, bisection, isonboundary
 export central∇, central∇!, central∂, central∂!, dir∇, dir∇!, dir∂, dir∂!, ∂², ∂²!
 
-using Base.Iterators: product
-using ImageFiltering: BorderArray, Pad
+using Base.Iterators: product, flatten
 using Polyester: @batch
 using Statistics: middle
 
