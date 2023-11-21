@@ -1,6 +1,6 @@
 Base.@kwdef struct Economy
     # Preferences
-    ρ::Float32 = 1.5f-3 # Discount rate 
+    ρ::Float32 = 1.5f-2 # Discount rate 
     θ::Float32 = 10f0 # Relative risk aversion
     ψ::Float32 = 1.5f0 # Elasticity of intertemporal substitution 
 
@@ -21,7 +21,7 @@ Base.@kwdef struct Economy
     # Domain 
     t₀::Float32 = -15f0 # Initial time of IPCC report
     t₁::Float32 = 80f0 # Horizon of IPCC report
-    τ::Float32 = 500f0 # Steady state horizon
+    τ::Float32 = 250f0 # Steady state horizon
 
     Y̲::Float32 = 0.9f0 * 75.8f0
     Ȳ::Float32 = 1.3f0 * 75.8f0
@@ -38,7 +38,6 @@ function f(χ, y, u, economy::Economy)
 
     return ρ * δu / (1 - 1 / ψ) * (R - 1)
 end
-
 function Y∂f(χ, y, u, economy::Economy)
     @unpack ρ, θ, ψ = economy
     δu = max(0f0, (1 - θ) * u)
@@ -90,13 +89,11 @@ function d′′(T, economy::Economy, hogg::Hogg)
 end
 
 function δₖ(T, economy::Economy, hogg::Hogg)
-    @unpack δₖᵖ = economy
-
-    return δₖᵖ + (1 - δₖᵖ) * d(T, economy, hogg)
+    economy.δₖᵖ + d(T, economy, hogg)
 end
 
 function ϕ(t, χ, economy::Economy)
-    (1 - χ) * A(t, economy) * (1 - (1 - χ) * A(t, economy) * economy.κ / 2)
+    (1 - χ) * A(t, economy) - (economy.κ / 2f0) * (1 - χ)^2 * A(t, economy)^2 
 end
 function ϕ′(t, χ, economy::Economy)
     economy.κ * A(t, economy)^2 * (1 - χ) - A(t, economy)

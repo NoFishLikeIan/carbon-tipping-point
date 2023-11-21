@@ -41,7 +41,7 @@ Computes G! by modifying ∂ₜV. Takes as input X, V, Ω. Also modifies the der
 """
 function terminalG!(
     ∂ₜV, V::BorderArray, 
-    ∂V∂y, ∂V∂T, ∂²V∂T², χ, ẏ,
+    ∂V∂T, ∂V∂y, ∂²V∂T², χ, ẏ,
     grid::RegularGrid, instance::ModelInstance)
     
     economy = first(instance)
@@ -56,7 +56,7 @@ function terminalG!(
 
     @batch for I in CartesianIndices(grid)
         Xᵢ = @view grid.X[I, :]
-        ∂ₜV[I] = hjbterminal(χ[I], Xᵢ, V[I], ∂V∂y[I], ∂V∂T[I], ∂²V∂T²[I], instance)
+        ∂ₜV[I] = -hjbterminal(χ[I], Xᵢ, V[I], ∂V∂T[I], ∂V∂y[I], ∂²V∂T²[I], instance)
     end
 
     return ∂ₜV

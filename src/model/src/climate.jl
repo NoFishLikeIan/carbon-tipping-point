@@ -24,7 +24,7 @@ Base.@kwdef struct Hogg
     # Climate sensitwivity
     S₀::Float32 = 342f0 # [W / m²] Mean solar radiation
 
-    ϵ::Float32 = 5f8 # [J / m² K] Heat capacity of the ocean
+    ϵ::Float32 = 5f8 / secondstoyears # years * [J / m² K] / s Heat capacity of the ocean
     η::Float32 = 5.67f-8 # Stefan-Boltzmann constant 
     
     G₁::Float32 = 20.5f0 # [W / m²] Effect of CO₂ on radiation budget
@@ -88,13 +88,6 @@ end
 function μ(T, m, hogg::Hogg, albedo::Albedo)
     fₜ(T, hogg, albedo) + fₘ(m, hogg)
 end
-
-"μ(T, m) / ϵ"
-μₑ(T, m, hogg::Hogg, albedo::Albedo) = μ(T, m, hogg, albedo) / hogg.ϵ
-
-"σ²ₜ / ϵ"
-σ²ₑ(hogg) = hogg.σ²ₜ /  hogg.ϵ
-
 "Compute CO₂ concentration consistent with temperature T"
 function mstable(T, hogg::Hogg, albedo::Albedo)
     fₘ⁻¹(-fₜ(T, hogg, albedo), hogg)

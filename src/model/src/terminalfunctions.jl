@@ -3,7 +3,7 @@ function ȳdrift!(ẏ, χ::AbstractArray, grid::RegularGrid, instance::ModelIns
     economy, hogg, _ = instance
 
     @batch for idx in CartesianIndices(grid) 
-        ẏ[idx] = ϕ(economy.τ, χ[idx], economy) - economy.δₖᵖ - d(grid.X[idx, 1], economy, hogg)        
+        ẏ[idx] = ϕ(economy.τ, χ[idx], economy) - economy.δₖᵖ - d(grid.X[idx, 1], economy, hogg)
     end
 end
 
@@ -16,7 +16,7 @@ function terminalfoc(χᵢ, Xᵢ, Vᵢ::Real, ∂V∂yᵢ::Real, economy::Econom
     Y∂f(χᵢ, y, Vᵢ, economy) + ϕ′(economy.τ, χᵢ, economy) * ∂V∂yᵢ
 end
 
-function hjbterminal(χᵢ, Xᵢ, Vᵢ::Real, ∂V∂yᵢ::Real, ∂V∂Tᵢ::Real, ∂²V∂T²ᵢ::Real, instance::ModelInstance)
+function hjbterminal(χᵢ, Xᵢ, Vᵢ::Real, ∂V∂Tᵢ::Real, ∂V∂yᵢ::Real, ∂²V∂T²ᵢ::Real, instance::ModelInstance)
     economy, hogg, albedo = instance
     Tᵢ, mᵢ, yᵢ = Xᵢ
 
@@ -24,6 +24,6 @@ function hjbterminal(χᵢ, Xᵢ, Vᵢ::Real, ∂V∂yᵢ::Real, ∂V∂Tᵢ::Re
         ∂V∂yᵢ * (
             ϕ(economy.τ, χᵢ, economy) - economy.δₖᵖ - d(Tᵢ, economy, hogg)
         ) +
-        ∂V∂Tᵢ * Model.μₑ(Tᵢ, mᵢ, hogg, albedo) +
-        ∂²V∂T²ᵢ * Model.σ²ₑ(hogg) / 2f0
+        ∂V∂Tᵢ * Model.μ(Tᵢ, mᵢ, hogg, albedo) / hogg.ϵ +
+        ∂²V∂T²ᵢ * hogg.σ²ₜ / 2f0hogg.ϵ^2
 end
