@@ -65,8 +65,6 @@ Z = 0f0;
 println("Optimal policy at a given point...")
 @btime optimalpolicy($t, $Xᵢ, $Vᵢ, $∇Vᵢ, $instance, $calibration; c₀ = $cᵢ);
 
-policysize = (size(V.inner)..., 2);
-inner = ones(Float32, policysize) ./ 2f0;
-policy = BorderArray(inner, paddims(inner, 1, (1, 2, 3)));
+policy = ones(Float32, size(V)..., 2);
 println("Computing policy over grid")
 @btime policyovergrid!($policy, $t, $X, $V, $∇V, $instance, $calibration);

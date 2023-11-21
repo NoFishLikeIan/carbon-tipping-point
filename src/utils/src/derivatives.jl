@@ -17,13 +17,13 @@ function central∇!(D, V::AbstractArray, grid::RegularGrid)
     if any(h .< ϵ) @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
 
     h⁻¹ = inv.(h)
-    twoh⁻¹ = h⁻¹ ./ 2f0;
+    twoh⁻¹ = h⁻¹ ./ 2f0
 
     Δ = makeΔ(dimensions(grid))
     I, R = extrema(CartesianIndices(grid))
     
    @batch for idx in CartesianIndices(grid), l in 1:dimensions(grid)
-        hᵢ = ifelse(isonboundary(idx, grid), h⁻¹[l], twoh⁻¹[l])   
+        hᵢ = ifelse(isonboundary(idx, grid, l), h⁻¹[l], twoh⁻¹[l])
 
         D[idx, l] = hᵢ * ( 
             V[min(idx + Δ[l], R)] - 
@@ -49,7 +49,7 @@ function central∂!(D, V::AbstractArray, grid::RegularGrid, direction)
     I, R = extrema(CartesianIndices(grid))
 
     @batch for idx in CartesianIndices(grid)
-        hᵢ = ifelse(isonboundary(idx, grid), h⁻¹, twoh⁻¹)   
+        hᵢ = ifelse(isonboundary(idx, grid, direction), h⁻¹, twoh⁻¹)   
 
         D[idx] = hᵢ * ( 
             V[min(idx + Δᵢ, R)] - 
@@ -74,24 +74,26 @@ function dir∇!(D, V::AbstractArray, w, grid::RegularGrid)
     if any(h .< ϵ) @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
 
     h⁻¹ = inv.(h)
-    twoh⁻¹ = h⁻¹ ./ 2f0;
+    twoh⁻¹ = h⁻¹ ./ 2f0
 
     d = dimensions(grid)
+    sizes = size(grid)
     Δ = makeΔ(d)
-    I, R = extrema(CartesianIndices(grid))
     
     temp = 0f0
     @batch for idx in CartesianIndices(grid)
         temp = 0f0
 
         for l ∈ 1:d
-            hᵢ = ifelse(isonboundary(idx, grid), h⁻¹[l], twoh⁻¹[l])
-
-            D[idx, l] = hᵢ * ifelse(
-                w[idx, l] > 0f0,
-                -V[min(idx + 2Δ[l], R)] + 4f0V[min(idx + Δ[l], R)] - 3f0V[idx],
-                V[max(idx - 2Δ[l], I)] - 4f0V[max(idx - Δ[l], I)] + 3f0V[idx]
-            )
+            D[idx, l] = if idx.I[l] ≤ 2
+                h⁻¹[l] * (V[idx + Δ[l]] - V[idx])
+            elseif idx.I[l] ≥ sizes[l] - 1
+                h⁻¹[l] * (V[idx] - V[idx -  Δ[l]])
+            elseif w[idx, l] > 0f0
+                twoh⁻¹[l] * (-3f0V[idx] + 4f0V[idx + Δ[l]] - V[idx + 2Δ[l]])
+            else
+                twoh⁻¹[l] * (3f0V[idx] - 4f0V[idx - Δ[l]] + V[idx - 2Δ[l]])
+            end
 
             temp += D[idx, l] * w[idx, l]
         end
@@ -106,24 +108,27 @@ function dir∂(V::AbstractArray, w, grid::RegularGrid, direction)
     D = Array{Float32}(undef, size(grid))
     dir∂!(D, V, w, grid, direction)
 end
-function dir∂!(D, V::AbstractArray, w, grid::RegularGrid, direction)
-    h = steps(grid)[direction]
+function dir∂!(D, V::AbstractArray, w, grid::RegularGrid, l)
+    h = steps(grid)[l]
     if any(h < ϵ) @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
 
+    sizes = size(grid)
     h⁻¹ = inv(h)
     twoh⁻¹ = h⁻¹ / 2f0;
 
-    Δᵢ = makeΔ(dimensions(grid))[direction]
-    I, R = extrema(CartesianIndices(grid))
+    Δᵢ = makeΔ(dimensions(grid))[l]
     
     @batch for idx in CartesianIndices(grid)
-        hᵢ = ifelse(isonboundary(idx, grid), h⁻¹, twoh⁻¹)
 
-        D[idx] = hᵢ * ifelse(
-            w[idx] > 0f0,
-            -V[min(idx + 2Δᵢ, R)] + 4f0V[min(idx + Δᵢ, R)] - 3f0V[idx],
-            V[max(idx - 2Δᵢ, I)] - 4f0V[max(idx - Δᵢ, I)] + 3f0V[idx]
-        )
+        D[idx] = if idx.I[l] ≤ 2
+            h⁻¹ * (V[idx + Δᵢ] - V[idx])
+        elseif idx.I[l] ≥ sizes[l] - 1
+            h⁻¹ * (V[idx] - V[idx -  Δᵢ])
+        elseif w[idx] > 0f0
+            twoh⁻¹ * (-3f0V[idx] + 4f0V[idx + Δᵢ] - V[idx + 2Δᵢ])
+        else
+            twoh⁻¹ * (3f0V[idx] - 4f0V[idx - Δᵢ] + V[idx - 2Δᵢ])
+        end
     end
 
     return D 
@@ -137,20 +142,24 @@ function ∂²(V::AbstractArray, grid::RegularGrid, direction)
     ∂²!(D², V, grid, direction)
     return D²
 end
-function ∂²!(D², V::AbstractArray, grid::RegularGrid, direction)
-    hₗ = steps(grid)[direction]
+function ∂²!(D², V::AbstractArray, grid::RegularGrid, l)
+    hₗ = steps(grid)[l]
     if (hₗ < ϵ) @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
 
     hₗ⁻² = inv(hₗ^2)
-    Δᵢ = makeΔ(dimensions(grid))[direction]
-    I, R = extrema(CartesianIndices(grid))
+    sizes = size(grid)
+    Δᵢ = makeΔ(dimensions(grid))[l]
     
-    @batch for idx in CartesianIndices(grid)
-        hᵢ = ifelse(isonboundary(idx, grid), 2hₗ⁻², hₗ⁻²)
-        D²[idx] = hᵢ * (
-            V[min(idx + Δᵢ, R)] - 2f0 * V[idx] + V[max(idx - Δᵢ, I)]
-        )
+    for idx in CartesianIndices(grid)
+
+        D²[idx] = if idx.I[l] ≤ 1
+            hₗ⁻² * (V[idx + 2Δᵢ] - 2f0V[idx + Δᵢ] + V[idx])
+        elseif idx.I[l] ≥ sizes[l]
+            hₗ⁻² * (V[idx] - 2f0V[idx - Δᵢ] + V[idx - 2Δᵢ])
+        else
+            hₗ⁻² * (V[idx + Δᵢ] - 2f0V[idx] + V[idx - Δᵢ])
+        end
     end
 
-    return D² 
+    return D²
 end

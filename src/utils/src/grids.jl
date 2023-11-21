@@ -36,6 +36,7 @@ Base.size(grid::RegularGrid) = ntuple(c -> length(grid.Ω[c]), dimensions(grid))
 
 Base.CartesianIndices(grid::RegularGrid) = CartesianIndices(size(grid))
 
-function isonboundary(I::CartesianIndex, grid::RegularGrid)::Bool
-    any(I.I .== 1) || any(I.I .== size(grid))
+"Check whether I is on the boundary of the grid along the l dimension"
+function isonboundary(idx::CartesianIndex, grid::RegularGrid, l::Int)::Bool
+    (idx.I[l] ≤ 1) || (idx.I[l] ≥ size(grid)[l])
 end
