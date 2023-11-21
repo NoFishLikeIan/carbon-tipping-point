@@ -3,7 +3,6 @@ using Revise
 using Test: @test
 using BenchmarkTools
 using JLD2
-using ImageFiltering: BorderArray
 using FiniteDiff
 
 using Utils
@@ -27,15 +26,14 @@ terminaldomain = [
 grid = RegularGrid(terminaldomain);
 
 vfunc(T, m, y) = -2f0 + (y / log(economy.Y₀))^2 - (T / hogg.Tᵖ)^2;
-Vinner = [ vfunc(T, m, y) for T ∈ grid.Ω[1],  m ∈ grid.Ω[2], y ∈ grid.Ω[3] ];
-V = BorderArray(Vinner, paddims(Vinner, 2));
+V = [ vfunc(T, m, y) for T ∈ grid.Ω[1],  m ∈ grid.Ω[2], y ∈ grid.Ω[3] ];
  
-χ = similar(V.inner);
-ẏ = similar(V.inner);
+χ = similar(V);
+ẏ = similar(V);
 
-∂V∂T = similar(Vinner); central∂!(∂V∂T, V, grid, 1);
-∂V∂y = similar(Vinner); central∂!(∂V∂y, V, grid, 3); # ∂y
-∂²V∂T² = similar(Vinner); ∂²!(∂²V∂T², V, grid, 1);
+∂V∂T = similar(V); central∂!(∂V∂T, V, grid, 1);
+∂V∂y = similar(V); central∂!(∂V∂y, V, grid, 3); # ∂y
+∂²V∂T² = similar(V); ∂²!(∂²V∂T², V, grid, 1);
 
 begin
     i = rand(CartesianIndices(grid))
@@ -94,7 +92,7 @@ hjbterminal(χᵢ, Xᵢ, Vᵢ[1], ∂V∂Tᵢ[1], ∂V∂yᵢ[1], ∂²V∂T²�
 @code_warntype hjbterminal(χᵢ, Xᵢ, Vᵢ[1], ∂V∂Tᵢ[1], ∂V∂yᵢ[1], ∂²V∂T²ᵢ[1], instance)
 @btime hjbterminal($χᵢ, $Xᵢ, $Vᵢ[1], $∂V∂Tᵢ[1], $∂V∂yᵢ[1], $∂²V∂T²ᵢ[1], $instance);
 
-∂ₜV = similar(V.inner);
+∂ₜV = similar(V);
 terminalG!(∂ₜV, V, ∂V∂y, ∂V∂T, ∂²V∂T², χ, ẏ, grid, instance);
 @code_warntype terminalG!(∂ₜV, V, ∂V∂y, ∂V∂T, ∂²V∂T², χ, ẏ, grid, instance);
 @btime terminalG!($∂ₜV, $V, $∂V∂y, $∂V∂T, $∂²V∂T², $χ, $ẏ, $grid, $instance);

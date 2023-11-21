@@ -1,6 +1,6 @@
 module Utils
 
-export RegularGrid, steps, dimensions, paddims, bisection, isonboundary
+export RegularGrid, steps, dimensions, bisection, isonboundary
 export central∇, central∇!, central∂, central∂!, dir∇, dir∇!, dir∂, dir∂!, ∂², ∂²!
 
 using Base.Iterators: product, flatten

@@ -19,25 +19,18 @@ function optimalpolicy(t, Xᵢ, Vᵢ, ∇Vᵢ, instance::ModelInstance, calibrat
 end
 
 "Computes the optimal `policy = (χ, α)` over the state space `X`"
-function policyovergrid(t, X, V, ∇V, instance::ModelInstance, calibration::Calibration; shrink = 1f-3)
-
-    inner = ones(Float32, size(X, 1), size(X, 2), size(X, 3), 2) ./ 2f0
-    policy = BorderArray(inner, paddims(inner, 1, 1:length(size(V))))
-
-    policyovergrid!(policy, t, X, V, ∇V, instance, calibration; shrink = shrink)
+function policyovergrid(t, X, V, ∇V, instance::ModelInstance, calibration::Calibration)
+    policy = ones(Float32, size(X, 1), size(X, 2), size(X, 3), 2) ./ 2f0
+    policyovergrid!(policy, t, X, V, ∇V, instance, calibration)
 end
-function policyovergrid!(policy::BorderArray, t, X, V::BorderArray, ∇V, instance::ModelInstance, calibration::Calibration; shrink = 1f-3)
+function policyovergrid!(policy, t, X, V, ∇V, instance::ModelInstance, calibration::Calibration)
 
-    I₁ = oneunit(first(CartesianIndices(V)))
     c₀ = zeros(Float32, 2)
 
     for idx ∈ CartesianIndices(V.inner)
         Xᵢ = @view X[idx, :]
         ∇Vᵢ = @view ∇V[idx, :]
         Vᵢ = @view V[idx]
-
-        c₀[1] = mean(policy[(idx - I₁):idx, 1]) * (1f0 - 2shrink) + shrink
-        c₀[2] = mean(policy[(idx - I₁):idx, 2]) * (1f0 - 2shrink) + shrink
         
         policy.inner[idx, :] .= optimalpolicy(t, Xᵢ, Vᵢ, ∇Vᵢ, instance, calibration; c₀ = c₀)
     end
@@ -50,7 +43,7 @@ function optimalterminalpolicy(Xᵢ, Vᵢ::Real, ∂yVᵢ::Real, economy::Econom
     first(bisection(g, tol, 1f0 - tol))
 end
 
-function terminalpolicyovergrid!(policy, V::BorderArray, ∂yV::AbstractArray, grid::RegularGrid, economy::Economy)
+function terminalpolicyovergrid!(policy, V, ∂yV::AbstractArray, grid::RegularGrid, economy::Economy)
     @batch for idx ∈ CartesianIndices(grid)
         Xᵢ = @view grid.X[idx, :]
         policy[idx] = optimalterminalpolicy(Xᵢ, V[idx], ∂yV[idx], economy)

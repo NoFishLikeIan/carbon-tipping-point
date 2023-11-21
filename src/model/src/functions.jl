@@ -40,14 +40,13 @@ function hjb(c, t, Xᵢ, Vᵢ, ∇Vᵢ, ∂²Vᵢ, instance::ModelInstance, cali
     economy, hogg, albedo = instance
 
     f(c[1], Xᵢ[3], Vᵢ[1], economy) + 
-        ∇Vᵢ[1] * μ(Xᵢ[1], Xᵢ[2], hogg, albedo) +
+        ∇Vᵢ[1] * μ(Xᵢ[1], Xᵢ[2], hogg, albedo) / hogg.ϵ +
         ∇Vᵢ[2] * (γ(t, economy, calibration) - c[2]) + 
         ∇Vᵢ[3] * (
-            economy.ϱ + ϕ(t, c[1], economy) - 
-            A(t, economy) * β(t, ε(t, exp(Xᵢ[2]), c[2], instance, calibration), economy) -
-            δₖ(Xᵢ[1], economy, hogg)
+            economy.ϱ + ϕ(t, c[1], economy) - economy.δₖᵖ - d(Xᵢ[1], economy, hogg) -
+            A(t, economy) * β(t, ε(t, exp(Xᵢ[2]), c[2], instance, calibration), economy)
         ) +
-        ∂²Vᵢ[1] * hogg.σ²ₜ / 2f0
+        ∂²Vᵢ[1] * hogg.σ²ₜ / 2f0hogg.ϵ^2
 end
 
 "Constructs the negative objective functional at `Xᵢ`."

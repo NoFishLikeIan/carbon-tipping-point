@@ -5,10 +5,9 @@ using BenchmarkTools, Random
 rng = MersenneTwister(123)
 
 using FiniteDiff # To test gradients
-
 using JLD2
-using ImageFiltering: BorderArray
-using Model
+
+using Model: hjb, objective!
 using Utils
 
 economy = Economy();
@@ -29,11 +28,11 @@ grid = RegularGrid(statedomain);
 T = @view grid.X[:, :, :, 1];
 
 # -- Benchmarking
-Vdata = [
-    (exp(y) / economy.Ȳ)^2 - (exp(m) / hogg.Mᵖ)^2 *  (T / hogg.Tᵖ)^2 
+V = [
+    (y / log(economy.Ȳ))^2 - (exp(m) / hogg.Mᵖ)^2 *  (T / hogg.Tᵖ)^2 
     for T ∈ grid.Ω[1], m ∈ grid.Ω[2], y ∈ grid.Ω[3]
 ];
-V = BorderArray(Vdata, paddims(Vdata, 2));
+
 ∇V = Array{Float32}(undef, size(grid)..., 4);
 central∇!(∇V, V, grid);
 
@@ -52,12 +51,15 @@ begin
 end;
 
 println("HJB given control...")
+hjb(cᵢ, t, Xᵢ, Vᵢ, ∇Vᵢ, ∂²Vᵢ, instance, calibration)
+@code_warntype hjb(cᵢ, t, Xᵢ, Vᵢ, ∇Vᵢ, ∂²Vᵢ, instance, calibration);
 @btime hjb($cᵢ, $t, $Xᵢ, $Vᵢ, $∇Vᵢ, $∂²Vᵢ, $instance, $calibration);
 
 println("Objective functional given control...")
 ∇ = zeros(Float32, 2);
 H = zeros(Float32, 2, 2);
 Z = 0f0;
+@code_warntype objective!(Z, ∇, H, cᵢ, t, Xᵢ, Vᵢ, ∇Vᵢ, instance, calibration);
 @btime objective!($Z, $∇, $H, $cᵢ, $t, $Xᵢ, $Vᵢ, $∇Vᵢ, $instance, $calibration);
 
 println("Optimal policy at a given point...")

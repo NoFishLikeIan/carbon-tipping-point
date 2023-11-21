@@ -23,12 +23,12 @@ function G!(∂ₜV, ∇V, ∂²V, policy, w, t, X, V, Ω, instance::ModelInstan
     return ∂ₜV
 end
 
-function terminalG(X, V::BorderArray, Ω, instance::ModelInstance)
-    ∂ₜV = similar(V.inner)
-    ∂yV = similar(V.inner)
-    ∂²yV = similar(V.inner)
-    ẏ = similar(V.inner)
-    χ = similar(V.inner)
+function terminalG(X, V, Ω, instance::ModelInstance)
+    ∂ₜV = similar(V)
+    ∂yV = similar(V)
+    ∂²yV = similar(V)
+    ẏ = similar(V)
+    χ = similar(V)
 
     terminalG!(
         ∂ₜV, ∂yV, ∂²yV, ẏ, χ,
@@ -40,7 +40,7 @@ end
 Computes G! by modifying ∂ₜV. Takes as input X, V, Ω. Also modifies the derivatives matrices (∂V∂y, ∂V∂T, ∂²V∂T²) the policy χ and the drift ẏ.
 """
 function terminalG!(
-    ∂ₜV, V::BorderArray, 
+    ∂ₜV, V, 
     ∂V∂T, ∂V∂y, ∂²V∂T², χ, ẏ,
     grid::RegularGrid, instance::ModelInstance)
     
