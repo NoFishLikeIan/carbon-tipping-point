@@ -25,10 +25,7 @@ function central∇!(D, V::AbstractArray, grid::RegularGrid)
    @batch for idx in CartesianIndices(grid), l in 1:dimensions(grid)
         hᵢ = ifelse(isonboundary(idx, grid, l), h⁻¹[l], twoh⁻¹[l])
 
-        D[idx, l] = hᵢ * ( 
-            V[min(idx + Δ[l], R)] - 
-            V[max(idx - Δ[l], I)] 
-        )
+        D[idx, l] = hᵢ * ( V[min(idx + Δ[l], R)] - V[max(idx - Δ[l], I)] )
     end
 
     return D
@@ -124,7 +121,7 @@ function dir∂!(D, V::AbstractArray, w, grid::RegularGrid, l)
             h⁻¹ * (V[idx + Δᵢ] - V[idx])
         elseif idx.I[l] ≥ sizes[l] - 1
             h⁻¹ * (V[idx] - V[idx -  Δᵢ])
-        elseif w[idx] > 0f0
+        elseif w[idx] ≥ 0f0
             twoh⁻¹ * (-3f0V[idx] + 4f0V[idx + Δᵢ] - V[idx + 2Δᵢ])
         else
             twoh⁻¹ * (3f0V[idx] - 4f0V[idx - Δᵢ] + V[idx - 2Δᵢ])
@@ -133,6 +130,21 @@ function dir∂!(D, V::AbstractArray, w, grid::RegularGrid, l)
 
     return D 
 end
+function dir∂!(D, V::AbstractArray, grid::RegularGrid, l)
+    h = steps(grid)[l]
+    if any(h < ϵ) @warn "Step size smaller than machine ϵ ≈ 4.9e-3" end
+
+    twoh⁻¹ = inv(2f0 * h)
+
+    Δᵢ = makeΔ(dimensions(grid))[l]
+    
+    @batch for idx in CartesianIndices(grid)
+        twoh⁻¹ * (-3f0V[idx] + 4f0V[idx + Δᵢ] - V[idx + 2Δᵢ])
+    end
+
+    return D 
+end
+
 
 """
 Given a Vₜ (n₁ × n₂ × n₃) computes the second derivative in the direction of the l-th input xₗ.

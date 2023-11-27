@@ -44,10 +44,8 @@ function terminalG!(
     ∂V∂T, ∂V∂y, ∂²V∂T², χ, ẏ,
     grid::RegularGrid, instance::ModelInstance)
     
-    economy = first(instance)
-
-    central∂!(∂V∂y, V, grid, 3)
-    terminalpolicyovergrid!(χ, V, ∂V∂y, grid, economy)
+    dir∂!(∂V∂y, V, grid, 1)
+    terminalpolicyovergrid!(χ, V, ∂V∂y, grid, first(instance))
     ȳdrift!(ẏ, χ, grid, instance)
     
     dir∂!(∂V∂T, V, ẏ, grid, 1)

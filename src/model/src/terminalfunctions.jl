@@ -24,6 +24,6 @@ function hjbterminal(χᵢ, Xᵢ, Vᵢ::Real, ∂V∂Tᵢ::Real, ∂V∂yᵢ::Re
         ∂V∂yᵢ * (
             ϕ(economy.τ, χᵢ, economy) - economy.δₖᵖ - d(Tᵢ, economy, hogg)
         ) +
-        ∂V∂Tᵢ * Model.μ(Tᵢ, mᵢ, hogg, albedo) / hogg.ϵ +
+        ∂V∂Tᵢ * (Model.μ(Tᵢ, mᵢ, hogg, albedo) / hogg.ϵ) +
         ∂²V∂T²ᵢ * hogg.σ²ₜ / 2f0hogg.ϵ^2
 end

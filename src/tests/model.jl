@@ -7,7 +7,8 @@ rng = MersenneTwister(123)
 using FiniteDiff # To test gradients
 using JLD2
 
-using Model: hjb, objective!
+using Model: hjb, objective!, Economy, Hogg, Albedo, Calibration
+using Model: optimalpolicy
 using Utils
 
 economy = Economy();
@@ -61,10 +62,3 @@ H = zeros(Float32, 2, 2);
 Z = 0f0;
 @code_warntype objective!(Z, ∇, H, cᵢ, t, Xᵢ, Vᵢ, ∇Vᵢ, instance, calibration);
 @btime objective!($Z, $∇, $H, $cᵢ, $t, $Xᵢ, $Vᵢ, $∇Vᵢ, $instance, $calibration);
-
-println("Optimal policy at a given point...")
-@btime optimalpolicy($t, $Xᵢ, $Vᵢ, $∇Vᵢ, $instance, $calibration; c₀ = $cᵢ);
-
-policy = ones(Float32, size(V)..., 2);
-println("Computing policy over grid")
-@btime policyovergrid!($policy, $t, $X, $V, $∇V, $instance, $calibration);

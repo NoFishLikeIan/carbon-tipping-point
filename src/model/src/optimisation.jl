@@ -38,8 +38,8 @@ function policyovergrid!(policy, t, X, V, ∇V, instance::ModelInstance, calibra
     return policy
 end
 
-function optimalterminalpolicy(Xᵢ, Vᵢ::Real, ∂yVᵢ::Real, economy::Economy; tol = 1f-3)
-    g = @closure χ -> terminalfoc(χ, Xᵢ, Vᵢ, ∂yVᵢ, economy) 
+function optimalterminalpolicy(Xᵢ, Vᵢ::Real, ∂V∂yᵢ::Real, economy::Economy; tol = 1f-3)
+    g = @closure χ -> terminalfoc(χ, Xᵢ, Vᵢ, ∂V∂yᵢ, economy) 
     first(bisection(g, tol, 1f0 - tol))
 end
 

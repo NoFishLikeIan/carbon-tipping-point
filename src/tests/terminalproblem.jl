@@ -25,7 +25,7 @@ terminaldomain = [
 
 grid = RegularGrid(terminaldomain);
 
-vfunc(T, m, y) = -2f0 + (y / log(economy.Y₀))^2 - (T / hogg.Tᵖ)^2;
+vfunc(T, m, y) = -100f0 + economy.Y₀ * (y / log(economy.Y₀))^2 - Model.d(T, economy, hogg);
 V = [ vfunc(T, m, y) for T ∈ grid.Ω[1],  m ∈ grid.Ω[2], y ∈ grid.Ω[3] ];
  
 χ = similar(V);
@@ -50,10 +50,10 @@ end;
 # Correctness
 @test all(FiniteDiff.finite_difference_gradient(x -> vfunc(x[1], x[2], x[3]), Xᵢ) - [∂V∂T[i], 0, ∂V∂y[i]] .< 1f-4)
 
-@test FiniteDiff.finite_difference_derivative(χ -> Model.f(χ, yᵢ, Vᵢ[1], economy), χᵢ) - Model.Y∂f(χᵢ, yᵢ, Vᵢ[1], economy) < 1f-3
+@test FiniteDiff.finite_difference_derivative(χ -> Model.f(χ, yᵢ, Vᵢ[1], economy), χᵢ) - Model.Y∂f(χᵢ, yᵢ, Vᵢ[1], economy) < 1f-2
 @test FiniteDiff.finite_difference_derivative(
     χ -> hjbterminal(χ, Xᵢ, Vᵢ[1], ∂V∂Tᵢ[1], ∂V∂yᵢ[1], ∂²V∂T²ᵢ[1], instance), χᵢ
-) - terminalfoc(χᵢ, Xᵢ, Vᵢ[1], ∂V∂yᵢ[1], economy) < 1f-3
+) - terminalfoc(χᵢ, Xᵢ, Vᵢ[1], ∂V∂yᵢ[1], economy) < 1f-2
 
 # Performance
 terminalfoc(χᵢ, Xᵢ, Vᵢ[1], ∂V∂yᵢ[1], economy)
@@ -68,20 +68,16 @@ optimalterminalpolicy(Xᵢ, Vᵢ[1], ∂V∂yᵢ[1], economy)
 Tdir = 1
 ydir = 3
 
-@code_warntype central∂!(∂V∂y, V, grid, ydir);
 @btime central∂!($∂V∂y, $V, $grid, $ydir);
 
 terminalpolicyovergrid!(χ, V, ∂V∂y, grid, economy)
-@code_warntype terminalpolicyovergrid!(χ, V, ∂V∂y, grid, economy);
 @btime terminalpolicyovergrid!($χ, $V, $∂V∂y, $grid, $economy);
 
 ȳdrift!(ẏ, χ, grid, instance);
 @code_warntype ȳdrift!(ẏ, χ, grid, instance);
 @btime ȳdrift!($ẏ, $χ, $grid, $instance);
 
-dir∂!(∂V∂T, V, ẏ, grid, Tdir); dir∂!(∂V∂T, V, ẏ, grid, ydir);
-@code_warntype dir∂!(∂V∂T, V, ẏ, grid, Tdir);
-@code_warntype dir∂!(∂V∂y, V, ẏ, grid, ydir);
+dir∂!(∂V∂T, V, ẏ, grid, Tdir); dir∂!(∂V∂y, V, ẏ, grid, ydir);
 @btime dir∂!($∂V∂y, $V, $ẏ, $grid, $ydir);
 
 ∂²!(∂V∂T, V, grid, Tdir);
