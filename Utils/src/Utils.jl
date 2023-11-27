@@ -1,7 +1,7 @@
 module Utils
 
-export RegularGrid, steps, dimensions, bisection, isonboundary
-export central∇, central∇!, central∂, central∂!, dir∇, dir∇!, dir∂, dir∂!, ∂², ∂²!
+export RegularGrid, dimensions
+export bisection
 
 using Base.Iterators: product, flatten
 using Polyester: @batch

@@ -17,6 +17,7 @@ Base.@kwdef struct Economy
     # Output
     A₀::Float32 = 0.113f0 # Initial TFP
     Y₀::Float32 = 75.8f0
+    σₖ::Float32 = 1.62f-2 # Variance of GDP
 
     # Domain 
     t₀::Float32 = -15f0 # Initial time of IPCC report
