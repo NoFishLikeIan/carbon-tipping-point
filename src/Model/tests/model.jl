@@ -7,10 +7,6 @@ rng = MersenneTwister(123)
 using FiniteDiff # To test gradients
 using JLD2
 
-using Model: hjb, objective!, Economy, Hogg, Albedo, Calibration
-using Model: optimalpolicy
-using Utils
-
 economy = Economy();
 hogg = Hogg();
 albedo = Albedo();
