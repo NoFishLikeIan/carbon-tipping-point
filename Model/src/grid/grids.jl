@@ -1,5 +1,3 @@
-# Utilities for state grid, which have to be regular;
-# -- Definitions
 Domain = Tuple{Float32, Float32};
 
 struct RegularGrid{T}
