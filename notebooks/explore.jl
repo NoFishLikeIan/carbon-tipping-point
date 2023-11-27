@@ -93,14 +93,22 @@ ar = diff(collect(extrema(Ω[1]))) / diff(collect(extrema(Ω[3])));
 
 # ╔═╡ 51512c63-296d-4f4a-aa97-97e91df1304f
 begin
-	termfig = contourf(Ω[1], Ω[3], V̄'; 
-		xlabel = "\$T\$", ylabel = "\$y\$", title = "\$\\bar{V}(T, y)\$",
-		linewidth = 0, aspect_ratio = ar, 
+	Y = exp.(Ω[3])
+	ΔT = Ω[1] .- hogg.Tᵖ
+	
+	termfig = contourf(ΔT, Y, V̄'; 
+		xlabel = "\$T - T^p\$", ylabel = "\$Y\$", title = "\$\\bar{V}(T, y)\$",
+		linewidth = 0, aspect_ratio = (ΔT[end] - ΔT[1]) / (Y[end] - Y[1]), 
 		cmap = defcmap, 
-		xlims = extrema(Ω[1]), ylims = extrema(Ω[3]),
+		xlims = extrema(ΔT), ylims = extrema(Y),
 		cbar = false, dpi = 180
 	)
+
+	scatter!(termfig, [hogg.T₀ - hogg.Tᵖ], [economy.Y₀]; c = :black, markersize = 4, label = false)
 end
+
+# ╔═╡ 87fd816d-ca40-4faf-bfdf-dc4260addae4
+hogg.Tᵖ
 
 # ╔═╡ 51700462-1e9f-4548-aa07-d82f0fcd20cb
 savefig(termfig, joinpath(PLOTPATH, "termfig.png"))
@@ -110,6 +118,9 @@ md"
 ## Optimisation problem
 "
 
+# ╔═╡ 6be1d1aa-79e7-40e2-8c8c-caef46f1d273
+grid = RegularGrid(domain);
+
 # ╔═╡ 4be58ce5-6c41-446d-b5a2-8e47d84c4569
 begin
 	Vₜ = Array{Float32}(undef, n₁, n₂, n₂)
@@ -118,7 +129,7 @@ begin
 		Vₜ[:, j, :] .= V̄
 	end
 
-	∇Vₜ = Utils.central∇(Vₜ, Ω)
+	∇Vₜ = Utils.central∇(Vₜ, grid)
 end;
 
 # ╔═╡ ef2c5271-40d0-4226-8088-770853122a3e
@@ -174,12 +185,7 @@ let
 		title = "Objective with \$(T_i, M_i, Y_i) = $pos\$",
 		camera = (42, 36), levels = 30, legend = false
 	)
-
-	climatefig = plot(M̄, Ω[1])
 end
-
-# ╔═╡ 3e1a79b1-b4a3-4781-a6f6-dda13e1f4e75
-Model.Mstable(0.5)
 
 # ╔═╡ Cell order:
 # ╠═ed817ffc-f1f4-423c-8374-975e34d449eb
@@ -201,9 +207,11 @@ Model.Mstable(0.5)
 # ╠═dc2cd7ba-63ef-44aa-b9f4-e6bd003b8cf3
 # ╠═f08b07ce-c488-4ff7-adb9-18752a0a3a2e
 # ╠═51512c63-296d-4f4a-aa97-97e91df1304f
+# ╠═87fd816d-ca40-4faf-bfdf-dc4260addae4
 # ╠═51700462-1e9f-4548-aa07-d82f0fcd20cb
 # ╟─f49ffc11-6204-4bdc-a17f-80c4f7e8cdce
 # ╠═7d0297b2-a0e7-45b6-b573-cb6015b1c283
+# ╠═6be1d1aa-79e7-40e2-8c8c-caef46f1d273
 # ╠═4be58ce5-6c41-446d-b5a2-8e47d84c4569
 # ╠═36782b8c-9802-48c6-a621-528db54b535c
 # ╠═ef2c5271-40d0-4226-8088-770853122a3e
@@ -211,4 +219,3 @@ Model.Mstable(0.5)
 # ╟─d202dcee-1a0f-4f18-a355-bed3c5db4bef
 # ╠═885b4f32-d4bd-44e5-bb63-a1dd8ee9a11e
 # ╠═803b44e3-c482-4aa6-9569-4396c1fb17c0
-# ╠═3e1a79b1-b4a3-4781-a6f6-dda13e1f4e75

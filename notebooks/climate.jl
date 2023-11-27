@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.32
+# v0.19.30
 
 using Markdown
 using InteractiveUtils
@@ -62,9 +62,12 @@ end;
 let
 	M = hogg.M₀
 		
-	plot(Tspace, T -> V(T, log(M), albedo); c = :darkred, linewidth = 2, label = "\$V(t)\$")
+	plot(Tspace, T -> V(T, log(1.2M), Albedo(λ₂ = 0.20)); c = :darkred, linewidth = 2, label = "\$V(t)\$")
 	vline!([hogg.T₀]; c = :black, linestyle = :dashdot, label = "\$T_0\$")
 end
+
+# ╔═╡ 6ecc6397-8a26-4a7c-8145-4415ba6bf94d
+hogg.Tᵖ + 1.4
 
 # ╔═╡ 3be104fd-a0ae-4eb5-88f8-04aa8b9a48b1
 function p(T, m, albedo; Vz = 10f-4)
@@ -104,6 +107,7 @@ sum(p̂[:, 200])
 # ╠═698fd792-b847-49e2-871d-bcb558461b5e
 # ╠═517a32a7-098d-4c89-b428-eed70c41e1d4
 # ╠═a0a13647-a2af-4ad9-8eb6-c20c1d18d7bb
+# ╠═6ecc6397-8a26-4a7c-8145-4415ba6bf94d
 # ╠═3be104fd-a0ae-4eb5-88f8-04aa8b9a48b1
 # ╠═aeda50d8-02e1-49af-b814-adc59a3d7a8a
 # ╠═762208c8-9027-4eb2-bbd5-f62493d1b19d
