@@ -1,26 +1,29 @@
 module Model
 
 export Economy, Hogg, Albedo, Calibration, ModelInstance
+
 export hjb, objective!, optimalpolicy, policyovergrid!
 export hjbterminal, terminalfoc, terminalpolicyovergrid!, optimalterminalpolicy
 
 using UnPack
 using Polyester: @batch
-using Statistics: mean
+using Statistics: mean, middle
 using Optim: optimize, minimizer, IPNewton, Newton, TwiceDifferentiable, TwiceDifferentiableConstraints, Options, only_fgh!
 using FastClosures: @closure
-using ImageFiltering: BorderArray, Pad
-using Utils: RegularGrid, bisection
+using Base.Iterators: product, flatten
 
-include("calibration.jl")
-include("climate.jl")
-include("economy.jl")
+
+include("models/calibration.jl")
+include("models/climate.jl")
+include("models/economy.jl")
 
 ModelInstance = Tuple{Economy, Hogg, Albedo}
 
-include("functions.jl")
-include("terminalfunctions.jl")
-include("optimisation.jl")
+include("models/functions.jl")
+include("models/terminalfunctions.jl")
+
+include("routines/optimisation.jl")
+include("routines/bisection.jl")
 
 
 end # module Model
