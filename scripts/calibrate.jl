@@ -49,8 +49,8 @@ end
 
 calibration = Model.Calibration(
     bauscenario.Year, 
-    Float32.(Eᵇ), 
-    Float32.(Tuple(γparameters))
+    Eᵇ, 
+    Tuple(γparameters)
 )
 
 @save joinpath(DATAPATH, "calibration.jld2") calibration

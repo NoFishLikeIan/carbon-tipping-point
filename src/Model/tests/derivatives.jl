@@ -5,8 +5,8 @@ using BenchmarkTools
 
 
 # Tolerance for first and second derivatives
-ε¹ = 1f-3
-ε² = 2f-2
+ε¹ = 1e-3
+ε² = 2e-2
 
 # Initialise three dimensional cube
 n = 200
@@ -19,7 +19,7 @@ V = [
     for T ∈ grid.Ω[1], m ∈ grid.Ω[2], y ∈ grid.Ω[3]
 ];
 
-V′ = permutedims(reinterpret(reshape, Float32, [(2T * y^2, 1 / (m + 1), 2y * T^2) for T ∈ grid.Ω[1], m ∈ grid.Ω[2], y ∈ grid.Ω[3]]), (2, 3, 4, 1));
+V′ = permutedims(reinterpret(reshape, Float64, [(2T * y^2, 1 / (m + 1), 2y * T^2) for T ∈ grid.Ω[1], m ∈ grid.Ω[2], y ∈ grid.Ω[3]]), (2, 3, 4, 1));
 
 function absnorm(grid::RegularGrid, A, B; s = 0)
     L, R = extrema(CartesianIndices(grid))
@@ -30,7 +30,7 @@ end
 
 println("Testing and benchmarking:")
 
-D = Array{Float32}(undef, size(grid)..., dimensions(grid) + 1);
+D = Array{Float64}(undef, size(grid)..., dimensions(grid) + 1);
 
 # Boundary / Interior division
 idx = CartesianIndex((1, size(grid)[2], 2));
@@ -56,7 +56,7 @@ dir = 1
 
 # Upwind-downind difference
 println("--- Upwind scheme")
-w = ones(Float32, size(grid)..., 3);
+w = ones(Float64, size(grid)..., 3);
 dir∇!(D, V, w, grid); 
 @code_warntype dir∇!(D, V, w, grid); 
 @btime dir∇!($D, $V, $w, $grid);

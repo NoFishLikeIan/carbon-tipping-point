@@ -1,5 +1,5 @@
 const optimoptions = Options(
-    x_abstol = 0f0, x_reltol = 0f0, f_abstol = 0f0, f_reltol = 0f0, g_abstol = eps(Float32), g_reltol = eps(Float32), outer_x_abstol = 0f0, outer_x_reltol = 0f0, outer_f_abstol = 0f0, outer_f_reltol = 0f0, outer_g_abstol = eps(Float32), outer_g_reltol = eps(Float32),
+    x_abstol = 0f0, x_reltol = 0f0, f_abstol = 0f0, f_reltol = 0f0, g_abstol = eps(Float64), g_reltol = eps(Float64), outer_x_abstol = 0f0, outer_x_reltol = 0f0, outer_f_abstol = 0f0, outer_f_reltol = 0f0, outer_g_abstol = eps(Float64), outer_g_reltol = eps(Float64),
     allow_f_increases = true, successive_f_tol = 3,
     iterations = 100, outer_iterations = 100
 )
@@ -20,12 +20,12 @@ end
 
 "Computes the optimal `policy = (χ, α)` over the state space `X`"
 function policyovergrid(t, X, V, ∇V, instance::ModelInstance, calibration::Calibration)
-    policy = ones(Float32, size(X, 1), size(X, 2), size(X, 3), 2) ./ 2f0
+    policy = ones(Float64, size(X, 1), size(X, 2), size(X, 3), 2) ./ 2f0
     policyovergrid!(policy, t, X, V, ∇V, instance, calibration)
 end
 function policyovergrid!(policy, t, X, V, ∇V, instance::ModelInstance, calibration::Calibration)
 
-    c₀ = zeros(Float32, 2)
+    c₀ = zeros(Float64, 2)
 
     for idx ∈ CartesianIndices(V.inner)
         Xᵢ = @view X[idx, :]
@@ -38,7 +38,7 @@ function policyovergrid!(policy, t, X, V, ∇V, instance::ModelInstance, calibra
     return policy
 end
 
-function optimalterminalpolicy(Xᵢ, Vᵢ::Real, ∂V∂yᵢ::Real, economy::Economy; tol = 1f-3)
+function optimalterminalpolicy(Xᵢ, Vᵢ::Real, ∂V∂yᵢ::Real, economy::Economy; tol = 1e-3)
     g = @closure χ -> terminalfoc(χ, Xᵢ, Vᵢ, ∂V∂yᵢ, economy) 
     first(bisection(g, tol, 1f0 - tol))
 end

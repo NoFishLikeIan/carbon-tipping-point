@@ -1,46 +1,46 @@
-const secondstoyears = Float32(60 * 60 * 24 * 365.25)
-const Gtonoverppm = Float32(1 / 7.821)
+const secondstoyears = 60 * 60 * 24 * 365.25
+const Gtonoverppm = 1 / 7.821
 
 Base.@kwdef struct Albedo
-    Tₐ::Float32 = 3f0 # Transition rate
-	T₁::Float32 = 290.5f0 # Pre-transition temperature
-    T₂::Float32 = 295f0 # Post-transition temeprature 
+    Tₐ::Float64 = 3 # Transition rate
+	T₁::Float64 = 290.5 # Pre-transition temperature
+    T₂::Float64 = 295 # Post-transition temeprature 
      
-    λ₁::Float32 = 0.31f0 # Pre-transition albedo
-    λ₂::Float32 = 0.23f0 # Post-transition albedo
+    λ₁::Float64 = 0.31 # Pre-transition albedo
+    λ₂::Float64 = 0.23 # Post-transition albedo
 end
 
 Base.@kwdef struct Hogg
     # Current and pre-industrial data temperature and carbon concentration
-    T₀::Float32 = 288.56f0 # [K]
-    Tᵖ::Float32 = 287.15f0 # [K]
-    M₀::Float32 = 410f0 # [p.p.m.]
-    Mᵖ::Float32 = 280f0 # [p.p.m.]
+    T₀::Float64 = 288.56 # [K]
+    Tᵖ::Float64 = 287.15 # [K]
+    M₀::Float64 = 410 # [p.p.m.]
+    Mᵖ::Float64 = 280 # [p.p.m.]
 
-    N₀::Float32 = 286.65543f0 # [p.p.m.]
+    N₀::Float64 = 286.65543 # [p.p.m.]
     
-    σₜ::Float32 = 0.5477226f0 # Volatility of temperature
+    σₜ::Float64 = 0.5477226 # Volatility of temperature
 
     # Climate sensitwivity
-    S₀::Float32 = 342f0 # [W / m²] Mean solar radiation
+    S₀::Float64 = 342 # [W / m²] Mean solar radiation
 
-    ϵ::Float32 = 5f8 / secondstoyears # years * [J / m² K] / s Heat capacity of the ocean
-    η::Float32 = 5.67f-8 # Stefan-Boltzmann constant 
+    ϵ::Float64 = 5f8 / secondstoyears # years * [J / m² K] / s Heat capacity of the ocean
+    η::Float64 = 5.67e-8 # Stefan-Boltzmann constant 
     
-    G₁::Float32 = 20.5f0 # [W / m²] Effect of CO₂ on radiation budget
-    G₀::Float32 = 150f0 # [W / m²] Pre-industrial GHG radiation budget
+    G₁::Float64 = 20.5 # [W / m²] Effect of CO₂ on radiation budget
+    G₀::Float64 = 150 # [W / m²] Pre-industrial GHG radiation budget
     
     # Decay rate of carbon concentration
-    aδ::Float32 = 0.0176f0
-    bδ::Float32 = -27.36f0
-    cδ::Float32 = 314.8f0
+    aδ::Float64 = 0.0176
+    bδ::Float64 = -27.36
+    cδ::Float64 = 314.8
 
     # Domain
-    T̲::Float32 = 288.56f0 # Use initial levels because α > 0
-    M̲::Float32 = 410f0 
+    T̲::Float64 = 288.56 # Use initial levels because α > 0
+    M̲::Float64 = 410 
 
-    T̄::Float32 = 287.15f0 + 10f0 # Max. temperature, +10
-    M̄::Float32 = 1010f0 # Concentration consistent with T̄
+    T̄::Float64 = 287.15 + 10 # Max. temperature, +10
+    M̄::Float64 = 1010 # Concentration consistent with T̄
 end
 
 "Decay of carbon"

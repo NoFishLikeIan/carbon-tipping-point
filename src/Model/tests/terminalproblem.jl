@@ -49,12 +49,12 @@ begin
 end;
 
 # Correctness
-@test all(FiniteDiff.finite_difference_gradient(x -> vfunc(x[1], x[2], x[3]), Xᵢ) - [∂V∂T[i], 0, ∂V∂y[i]] .< 1f-4)
+@test all(FiniteDiff.finite_difference_gradient(x -> vfunc(x[1], x[2], x[3]), Xᵢ) - [∂V∂T[i], 0, ∂V∂y[i]] .< 1e-4)
 
-@test FiniteDiff.finite_difference_derivative(χ -> Model.f(χ, yᵢ, Vᵢ[1], economy), χᵢ) - Model.Y∂f(χᵢ, yᵢ, Vᵢ[1], economy) < 1f-2
+@test FiniteDiff.finite_difference_derivative(χ -> Model.f(χ, yᵢ, Vᵢ[1], economy), χᵢ) - Model.Y∂f(χᵢ, yᵢ, Vᵢ[1], economy) < 1e-2
 @test FiniteDiff.finite_difference_derivative(
     χ -> hjbterminal(χ, Xᵢ, Vᵢ[1], ∂V∂Tᵢ[1], ∂V∂yᵢ[1], ∂²V∂T²ᵢ[1], instance), χᵢ
-) - terminalfoc(χᵢ, Xᵢ, Vᵢ[1], ∂V∂yᵢ[1], economy) < 1f-2
+) - terminalfoc(χᵢ, Xᵢ, Vᵢ[1], ∂V∂yᵢ[1], economy) < 1e-2
 
 # Performance
 terminalfoc(χᵢ, Xᵢ, Vᵢ[1], ∂V∂yᵢ[1], economy)

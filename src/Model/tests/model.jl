@@ -26,10 +26,10 @@ V = [
     for Xᵢ ∈ grid.X
 ];
 
-∇V = Array{Float32}(undef, size(grid)..., 4);
+∇V = Array{Float64}(undef, size(grid)..., 4);
 central∇!(∇V, V, grid);
 
-∂²V = Array{Float32}(undef, size(grid));
+∂²V = Array{Float64}(undef, size(grid));
 ∂²!(∂²V, V, grid, 1);
 
 # Some sample data
@@ -40,7 +40,7 @@ begin
     Vᵢ = @view V[idx]
     ∇Vᵢ = @view ∇V[idx, :]
     ∂²Vᵢ = @view ∂²V[idx]
-    cᵢ = rand(Float32, 2)
+    cᵢ = rand(Float64, 2)
 end;
 
 println("HJB given control...")
@@ -49,8 +49,8 @@ hjb(cᵢ, t, Xᵢ, Vᵢ, ∇Vᵢ, ∂²Vᵢ, instance, calibration)
 @btime hjb($cᵢ, $t, $Xᵢ, $Vᵢ, $∇Vᵢ, $∂²Vᵢ, $instance, $calibration);
 
 println("Objective functional given control...")
-∇ = zeros(Float32, 2);
-H = zeros(Float32, 2, 2);
+∇ = zeros(Float64, 2);
+H = zeros(Float64, 2, 2);
 Z = 0f0;
 @code_warntype objective!(Z, ∇, H, cᵢ, t, Xᵢ, Vᵢ, ∇Vᵢ, instance, calibration);
 @btime objective!($Z, $∇, $H, $cᵢ, $t, $Xᵢ, $Vᵢ, $∇Vᵢ, $instance, $calibration);

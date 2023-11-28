@@ -1,31 +1,31 @@
 Base.@kwdef struct Economy
     # Preferences
-    ρ::Float32 = 1.5f-2 # Discount rate 
-    θ::Float32 = 10f0 # Relative risk aversion
-    ψ::Float32 = 1.5f0 # Elasticity of intertemporal substitution 
+    ρ::Float64 = 1.5e-2 # Discount rate 
+    θ::Float64 = 10f0 # Relative risk aversion
+    ψ::Float64 = 1.5f0 # Elasticity of intertemporal substitution 
 
     # Technology
-    ωᵣ::Float32 = 2f-3 # Speed of abatement technology cost reduction
-    ϱ::Float32 = 8f-3 # Growth of TFP
-    κ::Float32 = 3.72f-1 # Adjustment costs of abatement technology
+    ωᵣ::Float64 = 2e-3 # Speed of abatement technology cost reduction
+    ϱ::Float64 = 8e-3 # Growth of TFP
+    κ::Float64 = 3.72e-1 # Adjustment costs of abatement technology
     
     # Damages
-    δₖᵖ::Float32 = 1.5f-2 # Initial depreciation rate of capital
-    ξ::Float32 = 7.5f-5
-    υ::Float32 = 3.25f0
+    δₖᵖ::Float64 = 1.5e-2 # Initial depreciation rate of capital
+    ξ::Float64 = 7.5e-5
+    υ::Float64 = 3.25f0
 
     # Output
-    A₀::Float32 = 0.113f0 # Initial TFP
-    Y₀::Float32 = 75.8f0
-    σₖ::Float32 = 1.62f-2 # Variance of GDP
+    A₀::Float64 = 0.113f0 # Initial TFP
+    Y₀::Float64 = 75.8f0
+    σₖ::Float64 = 1.62e-2 # Variance of GDP
 
     # Domain 
-    t₀::Float32 = -15f0 # Initial time of IPCC report
-    t₁::Float32 = 80f0 # Horizon of IPCC report
-    τ::Float32 = 250f0 # Steady state horizon
+    t₀::Float64 = -15f0 # Initial time of IPCC report
+    t₁::Float64 = 80f0 # Horizon of IPCC report
+    τ::Float64 = 250f0 # Steady state horizon
 
-    Y̲::Float32 = 0.9f0 * 75.8f0
-    Ȳ::Float32 = 1.3f0 * 75.8f0
+    Y̲::Float64 = 0.9f0 * 75.8f0
+    Ȳ::Float64 = 1.3f0 * 75.8f0
 end
 
 "Epstein-Zin aggregator"
