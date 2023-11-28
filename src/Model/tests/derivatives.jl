@@ -2,9 +2,7 @@ using Revise
 
 using Test: @test
 using BenchmarkTools
-using LinearAlgebra
 
-using Utils
 
 # Tolerance for first and second derivatives
 ε¹ = 1f-3

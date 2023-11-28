@@ -1,33 +1,29 @@
 using Revise
+using Model
 
 using Test: @test
 using BenchmarkTools, Random
-rng = MersenneTwister(123)
-
-using FiniteDiff # To test gradients
 using JLD2
 
-economy = Economy();
-hogg = Hogg();
-albedo = Albedo();
+rng = MersenneTwister(123)
 
-instance = (economy, hogg, albedo);
-@load "data/calibration.jld2" calibration;
+N = 100
+grid = RegularGrid([
+    (Hogg().Tᵖ, Hogg().T̄), 
+    (log(Hogg().M₀), log(Hogg().M̄)), 
+    (Economy().Y̲, Economy().Ȳ)
+], N);
 
-# -- Generate state cube
-statedomain = [
-    (hogg.T₀, hogg.T̄, 101), 
-    (log(hogg.M₀), log(hogg.M̄), 51), 
-    (log(economy.Y̲), log(economy.Ȳ), 51)
-];
-
-grid = RegularGrid(statedomain);
-T = @view grid.X[:, :, :, 1];
+@load "../../data/calibration.jld2" calibration;
+model = ModelInstance(calibration = calibration, grid = grid);
+t = rand(rng) * 80f0;
+Xᵢ = rand(rng, model.grid.X);
+policy = Policy(0.5f0, Model.γ(t, model.economy, model.calibration) / 2)
 
 # -- Benchmarking
 V = [
-    (y / log(economy.Ȳ))^2 - (exp(m) / hogg.Mᵖ)^2 *  (T / hogg.Tᵖ)^2 
-    for T ∈ grid.Ω[1], m ∈ grid.Ω[2], y ∈ grid.Ω[3]
+    (Xᵢ.y / log(instance.economy.Ȳ))^2 - (exp(Xᵢ.m) / instance.hogg.Mᵖ)^2 *  (Xᵢ.T / instance.hogg.Tᵖ)^2 
+    for Xᵢ ∈ grid.X
 ];
 
 ∇V = Array{Float32}(undef, size(grid)..., 4);

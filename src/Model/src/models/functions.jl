@@ -1,86 +1,64 @@
 "Emissivity rate implied by abatement `α` at time `t` and carbon concentration `M`"
-function ε(t, M, α, instance::ModelInstance, calibration::Calibration)
-    economy, hogg, _ = instance
-
-    1f0 - M * (δₘ(M, hogg) + γ(t, economy, calibration) - α) / (Gtonoverppm * Eᵇ(t, economy, calibration))
+function ε(t, M, α, model::ModelInstance)
+    1f0 - M * (δₘ(M, model.hogg) + γ(t, model.economy, model.calibration) - α) / (Gtonoverppm * Eᵇ(t, model.economy, model.calibration))
+end
+function ε′(t, M, model::ModelInstance)
+    M / (Gtonoverppm * Eᵇ(t, model.economy, model.calibration))
 end
 
-function ε′(t, M, instance::ModelInstance, calibration::Calibration)
-    M / (Gtonoverppm * Eᵇ(t, instance[1], calibration))
-end
+"Drift of the state space"
+function b(t, Xᵢ::Point, policy::Policy, model::ModelInstance)
+    @unpack economy, hogg, albedo, calibration = model
 
-"Computes drift over whole state space `X`"
-drift(t, X, policy::AbstractArray, instance::ModelInstance, calibration::Calibration) = drift!(similar(X), t, X, policy, instance, calibration)
-function drift!(w, t, X, policy::AbstractArray, instance::ModelInstance, calibration::Calibration)
-    economy, hogg, albedo = instance
-
-    γₜ = γ(t, economy, calibration)
-    Aₜ = A(t, economy)
-
-    dimensions = size(X)[1:3]
-
-    @batch for idx in CartesianIndices(dimensions)
-        c = @view policy[idx, :]
-
-        w[idx, 1] = μ(X[idx, 1], X[idx, 2], hogg, albedo)
-        w[idx, 2] = γₜ - c[2]
-        w[idx, 3] = economy.ϱ + ϕ(t, c[1], economy) -
-            Aₜ *  β(t, ε(t, exp(X[idx, 2]), c[2], instance, calibration), economy) - 
-            δₖ(X[idx, 1], economy, hogg)
-
-    end
-
-    return w
-end
-
-"""
-Computes the Hamilton-Jacobi-Bellmann equation at point `Xᵢ`.
-"""
-function hjb(c, t, Xᵢ, Vᵢ, ∇Vᵢ, ∂²Vᵢ, instance::ModelInstance, calibration::Calibration)
-    economy, hogg, albedo = instance
-
-    f(c[1], Xᵢ[3], Vᵢ[1], economy) + 
-        ∇Vᵢ[1] * μ(Xᵢ[1], Xᵢ[2], hogg, albedo) / hogg.ϵ +
-        ∇Vᵢ[2] * (γ(t, economy, calibration) - c[2]) + 
-        ∇Vᵢ[3] * (
-            economy.ϱ + ϕ(t, c[1], economy) - economy.δₖᵖ - d(Xᵢ[1], economy, hogg) -
-            A(t, economy) * β(t, ε(t, exp(Xᵢ[2]), c[2], instance, calibration), economy)
-        ) +
-        ∂²Vᵢ[1] * hogg.σ²ₜ / 2f0hogg.ϵ^2
-end
-
-"Constructs the negative objective functional at `Xᵢ`."
-function objective!(Z, ∇, H, c, t, Xᵢ, Vᵢ, ∇Vᵢ, instance::ModelInstance, calibration::Calibration)
-    economy = first(instance)
-
-    f₀, Yf₁, Y²f₂ = epsteinzinsystem(c[1], Xᵢ[3], Vᵢ[1], economy)
-
-    εₜ = ε(t, exp(Xᵢ[2]), c[2], instance, calibration)
-    Aₜ = A(t, economy)
-
-    if !isnothing(∇)
-        ∇[1] = Yf₁ + ∇Vᵢ[3] * ϕ′(t, c[1], economy)
-        ∇[2] = -∇Vᵢ[2] - ∇Vᵢ[3] * Aₜ * β′(t, εₜ, economy) * ε′(t, exp(Xᵢ[2]), instance, calibration)
+    abatement = A(t, economy) * β(t, ε(t, exp(Xᵢ.m), policy.α, model), economy)
     
-        ∇ .*= -1f0
-    end
+    Drift(
+        μ(Xᵢ.T, Xᵢ.m, hogg, albedo),
+        γ(t, economy, calibration) - policy.α,
+        economy.ϱ - economy.δₖᵖ + ϕ(t, policy.χ, economy) - abatement - d(Xᵢ.T, economy, hogg)
+    )
+end
 
-    if !isnothing(H)
-        H[1, 1] = Y²f₂ + ∇Vᵢ[3] * ϕ′′(t, economy)
-        H[1, 2] = 0f0
-        H[2, 1] = 0f0
-        H[2, 2] = -∇Vᵢ[3] * Aₜ * ε′(t, exp(Xᵢ[2]), instance, calibration)^2  * exp(-economy.ωᵣ * t)
+"Maximum absolute drift of the state space"
+function b̄(t, Xᵢ::Point, model::ModelInstance)
+    @unpack economy, hogg, albedo, calibration = model
     
-        H .*= -1f0
-    end
+    Drift(
+        abs(μ(Xᵢ.T, Xᵢ.m, hogg, albedo)),
+        γ(t, economy, calibration),
+        abs(economy.ϱ - economy.δₖᵖ - d(Xᵢ.T, economy, hogg) + ϕ(t, 0f0, economy))
+    )
+end
 
-    if !isnothing(Z)
-        z = f₀ + 
-            ∇Vᵢ[2] * (γ(t, economy, calibration) - c[2]) + 
-            ∇Vᵢ[3] * (ϕ(t, c[1], economy) - Aₜ * β(t, εₜ, economy))
+function var(model::ModelInstance)
+    [
+        (model.hogg.σₜ / (model.grid.Δ[1] * model.hogg.ϵ))^2, 
+        0f0, 
+        (model.economy.σₖ / model.grid.Δ[3])^2
+    ]
+end
 
-        return -z
-    end
+function Q(t, Xᵢ::Point, model::ModelInstance)
+    hᵢ = model.grid.h ./ model.grid.Δ
+    drift = dot(hᵢ, Model.b̄(t, Xᵢ, model))
 
-        
+    return drift + sum(var(model))
+end
+
+function Δt(t, Xᵢ::Point, model::ModelInstance)
+    model.grid.h^2 / Q(t, Xᵢ, model)
+end
+
+function p(t, Xᵢ::Point, policy::Policy, model::ModelInstance)
+    hᵢ = model.grid.h ./ model.grid.Δ
+    bᵢ = b(t, Xᵢ, policy, model)
+
+    b⁺ = max.(bᵢ, 0f0)
+    b⁻ = max.(-bᵢ, 0f0)
+
+    σ² = var(model) ./ 2f0
+
+    p = [σ² .+ hᵢ .* b⁺; σ² .+ hᵢ .* b⁻] ./ Q(t, Xᵢ, model)
+
+    p |> TransitionProbability
 end
