@@ -1,5 +1,10 @@
 const maxN = floor(Int, 1 / sqrt(eps(Float64)))
 
+const I = (
+    CartesianIndex((1, 0, 0)), 
+    CartesianIndex((0, 1, 0)), 
+    CartesianIndex((0, 0, 1)))
+
 Domain = Tuple{Float64, Float64}
 
 struct Point <: FieldVector{3, Float64}
@@ -18,17 +23,6 @@ struct Drift <: FieldVector{3, Float64}
     dm::Float64
     dy::Float64
 end
-
-struct TransitionProbability <: FieldVector{6, Float64}
-    Δ₊T::Float64
-    Δ₊m::Float64
-    Δ₊y::Float64
-    Δ₋T::Float64
-    Δ₋m::Float64
-    Δ₋y::Float64
-end
-
-PΔ₀(p::TransitionProbability) = 1 - sum(p)
 
 struct RegularGrid{N}
     X::Array{Point, 3}

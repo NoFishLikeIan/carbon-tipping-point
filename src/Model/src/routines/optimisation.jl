@@ -1,51 +1,43 @@
-const optimoptions = Options(
-    x_abstol = 0f0, x_reltol = 0f0, f_abstol = 0f0, f_reltol = 0f0, g_abstol = eps(Float64), g_reltol = eps(Float64), outer_x_abstol = 0f0, outer_x_reltol = 0f0, outer_f_abstol = 0f0, outer_f_reltol = 0f0, outer_g_abstol = eps(Float64), outer_g_reltol = eps(Float64),
-    allow_f_increases = true, successive_f_tol = 3,
-    iterations = 100, outer_iterations = 100
-)
+function optimalpolicy(t, Xᵢ::Point, Vᵢ, Vᵢy₊, Vᵢy₋, Vᵢm₊, model::ModelInstance; policy₀ = [0.01, 0.01])
+    @unpack economy, hogg, albedo, calibration, grid = model
+    γₜ = γ(t, economy, calibration)
+    dc = TwiceDifferentiableConstraints([0., 0.], [1., γₜ])
 
-const dfc = TwiceDifferentiableConstraints([0f0, 0f0], [1f0, 1f0])
+    function objective!(z, ∇, H, u)
+        χ, α = u
+        bᵢ = b(t, Xᵢ, Policy(χ, α), model)
+        bsgn = sign(bᵢ)
+        Vᵢy = ifelse(bᵢ > 0, Vᵢy₊, Vᵢy₋)
 
-"Numerically maximises the objective functional at point `Xᵢ`."
-function optimalpolicy(t, Xᵢ, Vᵢ, ∇Vᵢ, instance::ModelInstance, calibration::Calibration; c₀ = [0.5f0, 0.5f0])
+        M = exp(Xᵢ.m)
+        Aₜ = A(t, economy)
+        εₜ = ε(t, M, α, model)
+        εₜ′ = ε′(t, M, model)
 
-    df = TwiceDifferentiable(
-        only_fgh!(
-            @closure (F, ∇, H, c) -> objective!(F, ∇, H, c, t, Xᵢ, Vᵢ, ∇Vᵢ, instance, calibration)
-        ), c₀)
-    res = optimize(df, dfc, c₀, IPNewton(), optimoptions)
+        fᵢ, Y∂fᵢ, Y²∂²fᵢ = epsteinzinsystem(χ, Xᵢ.y, Vᵢ, economy) .* grid.h
 
-    return minimizer(res)
-end
+        if !isnothing(∇) 
+            ∇[1] = -Y∂fᵢ - bsgn * ϕ′(t, χ, economy) * Vᵢy
+            ∇[2] = Vᵢm₊ + bsgn * Aₜ * β′(t, εₜ, model.economy) * εₜ′ * Vᵢy
+        end
 
-"Computes the optimal `policy = (χ, α)` over the state space `X`"
-function policyovergrid(t, X, V, ∇V, instance::ModelInstance, calibration::Calibration)
-    policy = ones(Float64, size(X, 1), size(X, 2), size(X, 3), 2) ./ 2f0
-    policyovergrid!(policy, t, X, V, ∇V, instance, calibration)
-end
-function policyovergrid!(policy, t, X, V, ∇V, instance::ModelInstance, calibration::Calibration)
-
-    c₀ = zeros(Float64, 2)
-
-    for idx ∈ CartesianIndices(V.inner)
-        Xᵢ = @view X[idx, :]
-        ∇Vᵢ = @view ∇V[idx, :]
-        Vᵢ = @view V[idx]
+        if !isnothing(H)
+            H[1, 2] = 0.
+            H[2, 1] = 0.
+            
+            H[1, 1] = -Y²∂²fᵢ + bsgn * economy.κ * Aₜ^2 * Vᵢy
+            H[2, 2] = bsgn * Aₜ * (εₜ′)^2 * exp(-economy.ωᵣ * t) * Vᵢy
+        end
         
-        policy.inner[idx, :] .= optimalpolicy(t, Xᵢ, Vᵢ, ∇Vᵢ, instance, calibration; c₀ = c₀)
+        if !isnothing(z)
+            z = α * Vᵢm₊ - abs(bᵢ) * Vᵢy - fᵢ
+            return z
+        end
     end
+
+    df = TwiceDifferentiable(only_fgh!(objective!), policy₀)
     
-    return policy
-end
-
-function optimalterminalpolicy(Xᵢ, Vᵢ::Real, ∂V∂yᵢ::Real, economy::Economy; tol = 1e-3)
-    g = @closure χ -> terminalfoc(χ, Xᵢ, Vᵢ, ∂V∂yᵢ, economy) 
-    first(bisection(g, tol, 1f0 - tol))
-end
-
-function terminalpolicyovergrid!(policy, V, ∂yV::AbstractArray, grid::RegularGrid, economy::Economy)
-    @batch for idx ∈ CartesianIndices(grid)
-        Xᵢ = @view grid.X[idx, :]
-        policy[idx] = optimalterminalpolicy(Xᵢ, V[idx], ∂yV[idx], economy)
-    end
+    res = optimize(df, dc, policy₀, IPNewton())
+    
+    return res
 end
