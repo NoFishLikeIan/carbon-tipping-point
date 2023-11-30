@@ -8,12 +8,12 @@ export Domain, RegularGrid, Point, Policy, Drift
 export dimensions, emptyscalarfield, emptyvectorfield
 
 # Functions
-export optimalpolicy
-export hjbterminal, terminalfoc
-export jacobi!
+export drift, driftterminal
+export optimalpolicy, optimalterminalpolicy
 
 # Routines
 export bisection
+export jacobi!, terminaljacobi!
 
 # Packages
 using Base.Iterators: product, flatten
@@ -37,7 +37,6 @@ include("models/economy.jl")
 include("models/instance.jl")
 
 include("models/functions.jl")
-include("models/terminalfunctions.jl")
 
 include("routines/optimisation.jl")
 include("routines/bisection.jl")

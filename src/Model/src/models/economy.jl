@@ -1,38 +1,38 @@
 Base.@kwdef struct Economy
     # Preferences
     ρ::Float64 = 1.5e-2 # Discount rate 
-    θ::Float64 = 10f0 # Relative risk aversion
-    ψ::Float64 = 1.5f0 # Elasticity of intertemporal substitution 
+    θ::Float64 = 10 # Relative risk aversion
+    ψ::Float64 = 1.5 # Elasticity of intertemporal substitution 
 
     # Technology
     ωᵣ::Float64 = 2e-3 # Speed of abatement technology cost reduction
     ϱ::Float64 = 8e-3 # Growth of TFP
-    κ::Float64 = 3.72e-1 # Adjustment costs of abatement technology
+    κ::Float64 = 0.372 # Adjustment costs of abatement technology
     
     # Damages
-    δₖᵖ::Float64 = 1.5e-2 # Initial depreciation rate of capital
+    δₖᵖ::Float64 = 1.5e-1 # Initial depreciation rate of capital
     ξ::Float64 = 7.5e-5
-    υ::Float64 = 3.25f0
+    υ::Float64 = 3.25
 
     # Output
-    A₀::Float64 = 0.113f0 # Initial TFP
-    Y₀::Float64 = 75.8f0
+    A₀::Float64 = 0.113 # Initial TFP
+    Y₀::Float64 = 75.8
     σₖ::Float64 = 1.62e-2 # Variance of GDP
 
     # Domain 
-    t₀::Float64 = -15f0 # Initial time of IPCC report
-    t₁::Float64 = 80f0 # Horizon of IPCC report
-    τ::Float64 = 250f0 # Steady state horizon
+    t₀::Float64 = -15. # Initial time of IPCC report
+    t₁::Float64 = 80. # Horizon of IPCC report
+    τ::Float64 = 300. # Steady state horizon
 
-    Y̲::Float64 = 0.9f0 * 75.8f0
-    Ȳ::Float64 = 1.3f0 * 75.8f0
+    Y̲::Float64 = 0.9 * 75.8
+    Ȳ::Float64 = 1.3 * 75.8
 end
 
 "Epstein-Zin aggregator"
 function f(χ, y, u, economy::Economy)
     @unpack ρ, θ, ψ = economy
 
-    δu = max(0f0, (1 - θ) * u)
+    δu = max(0, (1 - θ) * u)
 
     c = χ * exp(y)
     R = (c / δu^inv(1 - θ))^(1 - 1 / ψ)
@@ -41,7 +41,7 @@ function f(χ, y, u, economy::Economy)
 end
 function Y∂f(χ, y, u, economy::Economy)
     @unpack ρ, θ, ψ = economy
-    δu = max(0f0, (1 - θ) * u)
+    δu = max(0, (1 - θ) * u)
 
     c = χ * exp(y)
     R = (c / δu^inv(1 - θ))^(1 - 1 / ψ)
@@ -53,7 +53,7 @@ end
 function epsteinzinsystem(χ, y, u, economy::Economy)
     @unpack ρ, θ, ψ = economy
 
-    δu = max(0f0, (1 - θ) * u)
+    δu = max(0, (1 - θ) * u)
 
     c = χ * exp(y)
     R = (c / δu^inv(1 - θ))^(1 - 1 / ψ)
@@ -94,7 +94,7 @@ function δₖ(T, economy::Economy, hogg::Hogg)
 end
 
 function ϕ(t, χ, economy::Economy)
-    (1 - χ) * A(t, economy) - (economy.κ / 2f0) * (1 - χ)^2 * A(t, economy)^2 
+    (1 - χ) * A(t, economy) - (economy.κ / 2) * (1 - χ)^2 * A(t, economy)^2 
 end
 function ϕ′(t, χ, economy::Economy)
     economy.κ * A(t, economy)^2 * (1 - χ) - A(t, economy)

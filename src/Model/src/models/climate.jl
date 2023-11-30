@@ -19,7 +19,7 @@ Base.@kwdef struct Hogg
 
     N₀::Float64 = 286.65543 # [p.p.m.]
     
-    σₜ::Float64 = 0.5477226 # Volatility of temperature
+    σₜ::Float64 = 1.5844043907014476 # Volatility of temperature
 
     # Climate sensitwivity
     S₀::Float64 = 342 # [W / m²] Mean solar radiation

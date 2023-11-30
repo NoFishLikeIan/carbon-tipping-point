@@ -1,19 +1,3 @@
-function bterminal(Xᵢ::Point, χ, model::ModelInstance)
-    @unpack economy, hogg = model
-    ϕ(economy.τ, χ, economy) - economy.δₖᵖ - d(Xᵢ.T, economy, hogg)
-end
-
-function b(t, Xᵢ::Point, policy::Policy, model::ModelInstance)
-    @unpack economy, hogg = model
-
-    εₜ = ε(t, exp(Xᵢ.m), policy.α, model)
-    Aₜ = A(t, economy)
-
-    abatement = Aₜ * β(t, εₜ, economy)
-
-    economy.ϱ + ϕ(t, policy.χ, economy) - economy.δₖᵖ - abatement - d(Xᵢ.T, economy, hogg)
-end
-
 "Emissivity rate implied by abatement `α` at time `t` and carbon concentration `M`"
 function ε(t, M, α, model::ModelInstance)
     1f0 - M * (δₘ(M, model.hogg) + γ(t, model.economy, model.calibration) - α) / (Gtonoverppm * Eᵇ(t, model.economy, model.calibration))
@@ -33,6 +17,18 @@ function drift(t, Xᵢ::Point, policy::Policy, model::ModelInstance)
     )
 end
 
+function b(t, Xᵢ::Point, policy::Policy, model::ModelInstance)
+    @unpack economy, hogg = model
+
+    εₜ = ε(t, exp(Xᵢ.m), policy.α, model)
+    Aₜ = A(t, economy)
+
+    abatement = Aₜ * β(t, εₜ, economy)
+
+    economy.ϱ + ϕ(t, policy.χ, economy) - economy.δₖᵖ - abatement - d(Xᵢ.T, economy, hogg)
+end
+
+
 "Maximum absolute drift on the unit cube"
 function bounddrift(t, Xᵢ::Point, model::ModelInstance)
     @unpack economy, hogg, albedo, calibration = model
@@ -44,19 +40,15 @@ function bounddrift(t, Xᵢ::Point, model::ModelInstance)
     )
 end
 
-function terminaldrift(Xᵢ::Point, χ, model::ModelInstance)
-    TerminalDrift(
-        μ(Xᵢ.T, Xᵢ.m, model.hogg, model.albedo) / (model.hogg.ϵ * model.grid.Δ[1]),
-        bterminal(Xᵢ, χ, model) / model.grid.Δ[3]
-    )
+"Drift of dy in the terminal state, t ≥ τ."
+function bterminal(Xᵢ::Point, χ, model::ModelInstance)
+    ϕ(model.economy.τ, χ, model.economy) - model.economy.δₖᵖ - d(Xᵢ.T, model.economy, model.hogg)
 end
 
-function boundterminaldrift(Xᵢ::Point, model::ModelInstance)
-    @unpack economy, hogg, albedo, calibration = model
-    
+function driftterminal(Xᵢ::Point, χ, model::ModelInstance)
     TerminalDrift(
-        abs(μ(Xᵢ.T, Xᵢ.m, hogg, albedo) / (model.hogg.ϵ * model.grid.Δ[1])),
-        abs(bterminal(Xᵢ, 0f0, model)) / model.grid.Δ[3]
+        μ(Xᵢ.T, Xᵢ.m, model.hogg, model.albedo) / model.hogg.ϵ,
+        bterminal(Xᵢ, χ, model)
     )
 end
 

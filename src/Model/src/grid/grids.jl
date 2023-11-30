@@ -32,7 +32,7 @@ end
 struct RegularGrid{N}
     X::Array{Point, 3}
     h::Float64
-    Δ::NTuple{3, Float64}
+    Δ::NamedTuple{(:T, :m, :y), NTuple{3, Float64}}
     domains::AbstractArray{Domain}
 
     function RegularGrid(domains::AbstractVector{Domain}, N::Int)
@@ -44,7 +44,11 @@ struct RegularGrid{N}
 
         h = Float64(inv(N))
         Ω = (range(d[1], d[2]; length = N) for d in domains) 
-        Δ = ntuple(i -> domains[i][2] - domains[i][1], 3)
+        Δ = (;
+            :T => domains[1][2] - domains[1][1],
+            :m => domains[2][2] - domains[2][1],
+            :y => domains[3][2] - domains[3][1]
+        )
         
         X = Point.(product(Ω...))
 

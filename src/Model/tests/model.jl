@@ -16,7 +16,7 @@ grid = RegularGrid([
 ], N);
 
 @load "../../data/calibration.jld2" calibration;
-model = ModelInstance(calibration = calibration, grid = grid);
+model = ModelInstance(calibration = calibration, grid = grid, economy = Economy(ϱ = 0.));
 
 # Mock data
 t = rand(rng) * 80.;
@@ -25,8 +25,11 @@ Xᵢ = model.grid.X[idx];
 policy = Policy(rand(rng), Model.γ(t, model.economy, model.calibration) / 2)
 
 # -- Benchmarking
-vfunc(T, m, y) = model.economy.Y₀ * ((y / log(model.economy.Y₀))^2 - Model.d(T, model.economy, model.hogg)) - model.hogg.M₀ * (m / log(model.hogg.M₀));
-V = [ vfunc(Xᵢ.T, Xᵢ.m, Xᵢ.y) for Xᵢ ∈ model.grid.X ];
+function vfunc(X::Model.Point)
+    model.economy.Y₀ * ((X.y / log(model.economy.Y₀))^2 - Model.d(X.T, model.economy, model.hogg)) - model.hogg.M₀ * (X.m / log(model.hogg.M₀))
+end
+
+V = vfunc.(model.grid.X)
 
 Vᵢ = V[idx]
 Vᵢy₊ = V[idx + Model.I[3]]

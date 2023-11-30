@@ -44,12 +44,12 @@ end
 
 function optimalterminalpolicy(Xᵢ::Point, Vᵢ, Vᵢy₊, Vᵢy₋, model::ModelInstance)
     @unpack economy, hogg, albedo, calibration, grid = model
-    Δy = model.grid.Δ[3]
+    Δy = model.grid.Δ[:y]
     
     function objective(χ)
         bᵢ = bterminal(Xᵢ, χ, model) / Δy
         Vᵢy = ifelse(bᵢ > 0, Vᵢy₊, Vᵢy₋)
-        -f(χ, Xᵢ.y, Vᵢ, economy) * grid.h - abs(bᵢ) * Vᵢy
+        -(f(χ, Xᵢ.y, Vᵢ, economy) * grid.h + abs(bᵢ) * Vᵢy)
     end
 
     res = optimize(objective, 0., 1.)

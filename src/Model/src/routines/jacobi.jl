@@ -26,30 +26,42 @@ function jacobi!(Vₜ::Array{Float64, 3}, t, model::ModelInstance)
 end
 
 function terminaljacobi!(V̄::Array{Float64, 3}, policy::Array{Float64, 3}, model::ModelInstance)
-    @unpack grid, economy = model
+    @unpack grid, economy, hogg, albedo = model
 
-    σ̃²ₜ, σ̃²ₖ = σ̃²(model)
-    ∑σ² = σ̃²ₜ + σ̃²ₖ 
+    σ̃ₜ² = (hogg.σₜ / (hogg.ϵ * grid.Δ[:T]))^2
+    σ̃ₖ² = (economy.σₖ / grid.Δ[:y])^2
+
+    ∑σ² = σ̃ₜ² + σ̃ₖ²
+
     indices = CartesianIndices(grid)
     L, R = extrema(indices)
 
     let Vᵢ = 0.
     for idx in CartesianIndices(grid) 
-        Qᵢ = ∑σ² + grid.h * sum(boundterminaldrift(grid.X[idx], model))
+        Xᵢ = grid.X[idx]
+        dT = μ(Xᵢ.T, Xᵢ.m, hogg, albedo)
+        dȳ = max(abs(bterminal(Xᵢ, 0., model)), abs(bterminal(Xᵢ, 1., model)))
+
+        Qᵢ = ∑σ² + grid.h * (abs(dT / grid.Δ[:T]) + abs(dȳ / grid.Δ[:y]))
+
         Vᵢ = V̄[idx]
-        VᵢT₊, VᵢT₋ = V̄[min(idx + I[1], R)], V̄[max(idx - I[1], L)]
+
+        # Temperature
+        VᵢT₊, VᵢT₋ = V̄[min(idx + I[1], R)], V̄[max(idx - I[1], L)]   
+        VᵢT = ifelse(dT > 0, VᵢT₊, VᵢT₋)
+        V̄[idx] = ((σ̃ₜ² / 2.) * (VᵢT₊ + VᵢT₋) + grid.h * abs(dT / grid.Δ[:T]) * VᵢT) / Qᵢ
+
+        # GDP
         Vᵢy₊, Vᵢy₋ = V̄[min(idx + I[3], R)], V̄[max(idx - I[3], L)]
+        χ, objᵪ = optimalterminalpolicy(Xᵢ, Vᵢ, Vᵢy₊, Vᵢy₋, model)
 
-        χ, objᵪ = optimalterminalpolicy(grid.X[idx], Vᵢ, Vᵢy₊, Vᵢy₋, model)
+        V̄[idx] += ((σ̃ₖ² / 2.) * (Vᵢy₊ + Vᵢy₋) + grid.h * objᵪ) / Qᵢ
 
+        # Probability of remaining in the same state
+        p = ∑σ² + grid.h * (abs(dT / grid.Δ[:T]) + abs(bterminal(Xᵢ, χ, model) / grid.Δ[:y]))
+        V̄[idx] += Vᵢ * (1 - p / Qᵢ)
+
+        # Policy
         policy[idx] = χ
-        V̄[idx] = ( 
-            ∂TVᵢ(grid.X[idx], σ̃²ₜ, VᵢT₊, VᵢT₋, model) + # Temperature component
-            (σ̃²ₖ / 2.) * (Vᵢy₊ + Vᵢy₋) + objᵪ * grid.h  # GDP component
-        ) / Qᵢ
-
-        p = (∑σ² + grid.h * sum(terminaldrift(grid.X[idx], χ, model))) / Qᵢ
-
-        V̄[idx] += Vᵢ * (1 - p)
     end end
 end
