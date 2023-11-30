@@ -39,5 +39,20 @@ function optimalpolicy(t, Xᵢ::Point, Vᵢ, Vᵢy₊, Vᵢy₋, Vᵢm₊, model
     
     res = optimize(df, dc, policy₀, IPNewton())
     
-    return res
+    return Policy(minimizer(res)), -minimum(res)
+end
+
+function optimalterminalpolicy(Xᵢ::Point, Vᵢ, Vᵢy₊, Vᵢy₋, model::ModelInstance)
+    @unpack economy, hogg, albedo, calibration, grid = model
+    Δy = model.grid.Δ[3]
+    
+    function objective(χ)
+        bᵢ = bterminal(Xᵢ, χ, model) / Δy
+        Vᵢy = ifelse(bᵢ > 0, Vᵢy₊, Vᵢy₋)
+        -f(χ, Xᵢ.y, Vᵢ, economy) * grid.h - abs(bᵢ) * Vᵢy
+    end
+
+    res = optimize(objective, 0., 1.)
+    
+    return minimizer(res), -minimum(res)
 end

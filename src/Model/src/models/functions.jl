@@ -1,5 +1,10 @@
+function bterminal(Xᵢ::Point, χ, model::ModelInstance)
+    @unpack economy, hogg = model
+    ϕ(economy.τ, χ, economy) - economy.δₖᵖ - d(Xᵢ.T, economy, hogg)
+end
+
 function b(t, Xᵢ::Point, policy::Policy, model::ModelInstance)
-    @unpack economy, hogg, albedo, calibration = model
+    @unpack economy, hogg = model
 
     εₜ = ε(t, exp(Xᵢ.m), policy.α, model)
     Aₜ = A(t, economy)
@@ -17,39 +22,45 @@ function ε′(t, M, model::ModelInstance)
     M / (Gtonoverppm * Eᵇ(t, model.economy, model.calibration))
 end
 
-"Drift of the state space"
+"Drift on the unit cube"
 function drift(t, Xᵢ::Point, policy::Policy, model::ModelInstance)
     @unpack economy, hogg, albedo, calibration = model
-
-    abatement = A(t, economy) * β(t, ε(t, exp(Xᵢ.m), policy.α, model), economy)
     
     Drift(
-        μ(Xᵢ.T, Xᵢ.m, hogg, albedo) / model.hogg.ϵ,
-        γ(t, economy, calibration) - policy.α,
-        economy.ϱ - economy.δₖᵖ + ϕ(t, policy.χ, economy) - abatement - d(Xᵢ.T, economy, hogg)
+        μ(Xᵢ.T, Xᵢ.m, hogg, albedo) / (hogg.ϵ * model.grid.Δ[1]),
+        (γ(t, economy, calibration) - policy.α) / model.grid.Δ[2],
+        b(t, Xᵢ, policy, model) / model.grid.Δ[3]
     )
 end
 
-"Maximum absolute drift of the state space"
+"Maximum absolute drift on the unit cube"
 function bounddrift(t, Xᵢ::Point, model::ModelInstance)
     @unpack economy, hogg, albedo, calibration = model
     
     Drift(
-        abs(μ(Xᵢ.T, Xᵢ.m, hogg, albedo) / model.hogg.ϵ),
-        γ(t, economy, calibration),
-        abs(economy.ϱ - economy.δₖᵖ - d(Xᵢ.T, economy, hogg) + ϕ(t, 0f0, economy))
+        abs(μ(Xᵢ.T, Xᵢ.m, hogg, albedo) / (hogg.ϵ * model.grid.Δ[1])),
+        γ(t, economy, calibration) / model.grid.Δ[2],
+        abs(b(t, Xᵢ, Policy(0f0, 0f0), model)) / model.grid.Δ[3]
     )
 end
 
-function var(model::ModelInstance)
-    [
-        (model.hogg.σₜ / (model.grid.Δ[1] * model.hogg.ϵ))^2, 
-        0.0, 
-        (model.economy.σₖ / model.grid.Δ[3])^2
-    ]
+function terminaldrift(Xᵢ::Point, χ, model::ModelInstance)
+    TerminalDrift(
+        μ(Xᵢ.T, Xᵢ.m, model.hogg, model.albedo) / (model.hogg.ϵ * model.grid.Δ[1]),
+        bterminal(Xᵢ, χ, model) / model.grid.Δ[3]
+    )
 end
 
-function Q(t, Xᵢ::Point, model::ModelInstance)
-    hᵢ = model.grid.h ./ model.grid.Δ
-    return dot(hᵢ, bounddrift(t, Xᵢ, model)) + sum(var(model))
+function boundterminaldrift(Xᵢ::Point, model::ModelInstance)
+    @unpack economy, hogg, albedo, calibration = model
+    
+    TerminalDrift(
+        abs(μ(Xᵢ.T, Xᵢ.m, hogg, albedo) / (model.hogg.ϵ * model.grid.Δ[1])),
+        abs(bterminal(Xᵢ, 0f0, model)) / model.grid.Δ[3]
+    )
+end
+
+"Computes the normalised square variances of the model"
+function σ̃²(model::ModelInstance)
+    (model.hogg.σₜ / (model.grid.Δ[1] * model.hogg.ϵ))^2, (model.economy.σₖ / model.grid.Δ[3])^2
 end

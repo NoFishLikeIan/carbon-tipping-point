@@ -26,7 +26,7 @@ using FastClosures: @closure
 using StaticArraysCore: StaticArray
 using StaticArrays: FieldVector
 
-using Optim: TwiceDifferentiableConstraints, TwiceDifferentiable, only_fgh!, optimize, IPNewton, minimizer
+using Optim: TwiceDifferentiableConstraints, TwiceDifferentiable, only_fgh!, optimize, IPNewton, minimizer, GoldenSection
 
 include("grid/grids.jl")
 include("models/calibration.jl")

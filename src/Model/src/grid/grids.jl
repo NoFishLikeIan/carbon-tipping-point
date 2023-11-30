@@ -24,6 +24,11 @@ struct Drift <: FieldVector{3, Float64}
     dy::Float64
 end
 
+struct TerminalDrift <: FieldVector{2, Float64}
+    dT::Float64
+    dy::Float64
+end
+
 struct RegularGrid{N}
     X::Array{Point, 3}
     h::Float64
@@ -47,7 +52,7 @@ struct RegularGrid{N}
     end
 end
 
-
+Base.size(grid::RegularGrid) = size(grid.X)
 Base.CartesianIndices(grid::RegularGrid) = CartesianIndices(grid.X)
 
 emptyscalarfield(grid::RegularGrid) = Array{Float64}(undef, size(grid))
