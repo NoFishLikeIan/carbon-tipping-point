@@ -1,75 +1,44 @@
 using Revise
-
-using DifferentialEquations: SteadyStateProblem, ODEProblem, solve, init, step!, Tsit5
-using PreallocationTools
-using DotEnv, JLD2
+using JLD2
 
 using Model
-using Utils
 
-include("../src/evolution.jl")
+function vfunc(x::Model.Point)
+    economy = Economy()
+    hogg = Hogg()
 
-const economy = Model.Economy();
-const hogg = Model.Hogg(σ²ₜ = 0f0);
-const albedo = Model.Albedo();
-
-const instance = (economy, hogg, albedo);
-
-const domain = [
-    (hogg.T₀, hogg.T̄, 101), 
-    (log(hogg.M̲), log(hogg.M̄), 51), 
-    (log(economy.Y̲), log(economy.Ȳ), 51)
-];
-
-const grid = RegularGrid(domain);
-begin
-    const χcache = DiffCache(Array{Float32}(undef, size(grid)))
-    const ẏcache = DiffCache(Array{Float32}(undef, size(grid)))
-    const ∂V∂Tcache = DiffCache(Array{Float32}(undef, size(grid)))
-    const ∂V∂ycache = DiffCache(Array{Float32}(undef, size(grid)))
-    const ∂²V∂T²cache = DiffCache(Array{Float32}(undef, size(grid)))
-    const parameters = (χcache, ẏcache, ∂V∂Tcache, ∂V∂ycache, ∂²V∂T²cache)
-end;
-
-function terminalsteadystate!(∂ₜV, Vₜ, p, t)
-    χ = get_tmp(p[1], ∂ₜV)
-    ẏ = get_tmp(p[2], ∂ₜV)
-    ∂V∂T = get_tmp(p[3], ∂ₜV)
-    ∂V∂y = get_tmp(p[4], ∂ₜV)
-    ∂²V∂T² = get_tmp(p[5], ∂ₜV)
-
-    terminalG!(∂ₜV, Vₜ, ∂V∂T, ∂V∂y, ∂²V∂T², χ, ẏ, grid, instance)
+    -100f0 + economy.Y₀ * ((x.y / log(economy.Y₀))^2 - Model.d(x.T, economy, hogg))
 end
 
-vfunc(T, m, y) = -100f0 + economy.Y₀ * (y / log(economy.Y₀))^2 - Model.d(T, economy, hogg);
-V₀ = [ vfunc(T, m, y) for T ∈ grid.Ω[1],  m ∈ grid.Ω[2], y ∈ grid.Ω[3] ];
-∂ₜV₀ = Array{Float32}(undef, size(grid));
+function terminaliteration(N::Int; tol = 1f-3, maxiter = 100, verbose = false)
+    @load "data/calibration.jld2" calibration
+    domain = [
+        (Hogg().Tᵖ, Hogg().T̄), 
+        (log(Hogg().M₀), log(Hogg().M̄)), 
+        (log(Economy().Y̲), log(Economy().Ȳ))
+    ]
 
-terminalsteadystate!(∂ₜV₀, V₀, parameters, 0f0);
+    model = ModelInstance(calibration = calibration, grid = RegularGrid(domain, N));
 
-# Solver - plot
-prob = ODEProblem(terminalsteadystate!, V₀, (0f0, 1f0), parameters);
+    V₀ = vfunc.(model.grid.X);
+    policy = similar(V₀)
 
-# Analyse
-using Plots
+    verbose && println("Starting iterations...")
 
-function surfaceslice(grid::RegularGrid, F::AbstractArray; idx = 1, plotkwargs...)
-    surface(grid.Ω[1], grid.Ω[3], F[:, idx, :]'; 
-        c = :viridis, xlabel = "\$T\$", ylabel = "\$y\$", 
-        plotkwargs...)
+    Vᵢ, Vᵢ₊₁ = copy(V₀), copy(V₀);
+    for iter in 1:maxiter
+        terminaljacobi!(Vᵢ₊₁, policy, model)
+        ε = maximum(abs.(Vᵢ₊₁ - Vᵢ))
+        if ε < tol
+            return Vᵢ₊₁, policy
+        end
+        
+        Vᵢ .= Vᵢ₊₁
+        verbose && print("Iteration $iter / $maxiter, ε = $ε...\r")
+    end
+
+    verbose && println("Done without convergence.")
+    return Vᵢ₊₁, policy
 end
-function contourfslice(grid::RegularGrid, F::AbstractArray; idx = 1, plotkwargs...)
-    contourf(grid.Ω[1], grid.Ω[3], F[:, idx, :]'; 
-        c = :viridis, xlabel = "\$T\$", ylabel = "\$y\$", 
-        linewidth = 0,
-        plotkwargs...)
-end
 
-iterator = init(prob, Tsit5())
-anim = @animate for iter in 1:10
-
-    step!(iterator)
-    surfaceslice(grid, iterator.u)
-end
-
-gif(anim, "diff-eq-test.gif", fps = 5)
+V̄, policy = terminaliteration(101; verbose = true, maxiter = 1000);
