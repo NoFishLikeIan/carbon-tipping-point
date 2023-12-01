@@ -37,8 +37,11 @@ function terminaliteration(N::Int; tol = 1f-3, maxiter = 100, verbose = false)
         verbose && print("Iteration $iter / $maxiter, ε = $ε...\r")
     end
 
-    verbose && println("Done without convergence.")
-    return Vᵢ₊₁, policy
+    verbose && println("\nDone without convergence.")
+    return Vᵢ₊₁, policy, model
 end
 
-V̄, policy = terminaliteration(101; verbose = true, maxiter = 1000);
+V̄, policy, model = terminaliteration(101; verbose = true, maxiter = 10_000);
+
+println("Saving solution into data/terminal.jld2...")
+@save "data/terminal.jld2" V̄ policy model
