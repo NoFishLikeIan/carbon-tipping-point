@@ -1,61 +1,21 @@
-using Utils: ∂²!, central∇!, dir∇!, central∂!, dir∂!
-using Model: terminalpolicyovergrid!, ȳdrift!, hjbterminal
-using Model: policyovergrid!, drift!
-using Model: ModelInstance, Calibration
-using Polyester: @batch
+function terminaliteration(V₀::Array{Float64, 3}, model::ModelInstance; tol = 1e-3, maxiter = 100_000, verbose = false)
+    policy = similar(V₀)
 
-"Computes G! by modifying (∂ₜV, ∇V, policy, w)"
-function G!(∂ₜV, ∇V, ∂²V, policy, w, t, X, V, Ω, instance::ModelInstance, calibration::Calibration)
-    central∇!(∇V, V, Ω)
-    policyovergrid!(policy, t, X, V, ∇V, instance, calibration);
-    drift!(w, t, X, policy, instance, calibration);
-    dir∇!(∇V, V, w, Ω);
-    ∂²!(∂²V, V, Ω; dim = 1)
+    verbose && println("Starting iterations...")
 
-    economy = first(instance)
+    Vᵢ, Vᵢ₊₁ = copy(V₀), copy(V₀);
+    for iter in 1:maxiter
 
-    @batch for idx in CartesianIndices(∂ₜV)
-        ∂ₜV[idx] = 
-            f(policy[idx, 1], X[idx, 3], V[idx], economy) +
-            ∇[idx, 4] +  ∂²V[idx] * hogg.σ²ₜ / 2f0
+        terminaljacobi!(Vᵢ₊₁, policy, model; fwdpass = true)
+        ε = maximum(abs.(Vᵢ₊₁ - Vᵢ))
+        if ε < tol
+            return Vᵢ₊₁, policy, model
+        end
+        
+        Vᵢ .= Vᵢ₊₁
+        verbose && print("Iteration $iter / $maxiter, ε = $ε...\r")
     end
 
-    return ∂ₜV
-end
-
-function terminalG(X, V, Ω, instance::ModelInstance)
-    ∂ₜV = similar(V)
-    ∂yV = similar(V)
-    ∂²yV = similar(V)
-    ẏ = similar(V)
-    χ = similar(V)
-
-    terminalG!(
-        ∂ₜV, ∂yV, ∂²yV, ẏ, χ,
-        X, V, Ω,
-        instance
-    )
-end
-"""
-Computes G! by modifying ∂ₜV. Takes as input X, V, Ω. Also modifies the derivatives matrices (∂V∂y, ∂V∂T, ∂²V∂T²) the policy χ and the drift ẏ.
-"""
-function terminalG!(
-    ∂ₜV, V, 
-    ∂V∂T, ∂V∂y, ∂²V∂T², χ, ẏ,
-    grid::RegularGrid, instance::ModelInstance)
-    
-    dir∂!(∂V∂y, V, grid, 1)
-    terminalpolicyovergrid!(χ, V, ∂V∂y, grid, first(instance))
-    ȳdrift!(ẏ, χ, grid, instance)
-    
-    dir∂!(∂V∂T, V, ẏ, grid, 1)
-    dir∂!(∂V∂y, V, ẏ, grid, 3)
-    ∂²!(∂²V∂T², V, grid, 1);
-
-    @batch for I in CartesianIndices(grid)
-        Xᵢ = @view grid.X[I, :]
-        ∂ₜV[I] = -hjbterminal(χ[I], Xᵢ, V[I], ∂V∂T[I], ∂V∂y[I], ∂²V∂T²[I], instance)
-    end
-
-    return ∂ₜV
+    verbose && println("\nDone without convergence.")
+    return Vᵢ₊₁, policy, model
 end
