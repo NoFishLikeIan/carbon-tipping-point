@@ -9,10 +9,10 @@ export dimensions, emptyscalarfield, emptyvectorfield
 
 # Functions
 export drift, driftterminal
-export optimalpolicy, optimalterminalpolicy
+export optimalpolicy, optimalterminalpolicy, gssoptimalterminalpolicy
 
 # Routines
-export bisection
+export bisection, gss
 export jacobi!, terminaljacobi!
 
 # Packages

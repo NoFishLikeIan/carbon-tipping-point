@@ -34,13 +34,6 @@ Base.@kwdef struct Hogg
     aδ::Float64 = 0.0176
     bδ::Float64 = -27.36
     cδ::Float64 = 314.8
-
-    # Domain
-    T̲::Float64 = 288.56 # Use initial levels because α > 0
-    M̲::Float64 = 410 
-
-    T̄::Float64 = 287.15 + 10 # Max. temperature, +10
-    M̄::Float64 = 1010 # Concentration consistent with T̄
 end
 
 "Decay of carbon"

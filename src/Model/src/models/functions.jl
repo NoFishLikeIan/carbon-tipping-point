@@ -42,17 +42,6 @@ end
 
 "Drift of dy in the terminal state, t ≥ τ."
 function bterminal(Xᵢ::Point, χ, model::ModelInstance)
-    ϕ(model.economy.τ, χ, model.economy) - model.economy.δₖᵖ - d(Xᵢ.T, model.economy, model.hogg)
-end
-
-function driftterminal(Xᵢ::Point, χ, model::ModelInstance)
-    TerminalDrift(
-        μ(Xᵢ.T, Xᵢ.m, model.hogg, model.albedo) / model.hogg.ϵ,
-        bterminal(Xᵢ, χ, model)
-    )
-end
-
-"Computes the normalised square variances of the model"
-function σ̃²(model::ModelInstance)
-    (model.hogg.σₜ / (model.grid.Δ[1] * model.hogg.ϵ))^2, (model.economy.σₖ / model.grid.Δ[3])^2
+    model.economy.ϱ + - model.economy.δₖᵖ + 
+    ϕ(model.economy.τ, χ, model.economy) - d(Xᵢ.T, model.economy, model.hogg)
 end

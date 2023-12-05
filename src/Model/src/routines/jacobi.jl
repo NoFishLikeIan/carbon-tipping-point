@@ -1,11 +1,3 @@
-function ∂TVᵢ(Xᵢ::Point, σ²ₜ, VᵢT₊, VᵢT₋, model::ModelInstance)
-    μᵢ = μ(Xᵢ.T, Xᵢ.m, model.hogg, model.albedo) * model.grid.h / model.grid.Δ[1]
-
-    VᵢT = ifelse(μᵢ > 0, VᵢT₊, VᵢT₋)
-
-    return (σ²ₜ / 2.) * (VᵢT₊ + VᵢT₋) + abs(μᵢ) * VᵢT
-end
-
 function jacobi!(Vₜ::Array{Float64, 3}, t, model::ModelInstance)
     @unpack grid, economy = model
 
@@ -25,43 +17,61 @@ function jacobi!(Vₜ::Array{Float64, 3}, t, model::ModelInstance)
     end end
 end
 
-function terminaljacobi!(V̄::Array{Float64, 3}, policy::Array{Float64, 3}, model::ModelInstance)
+"""
+Computes the Jacobi iteration for the terminal problem, V̄. 
+"""
+function terminaljacobi!(V̄::AbstractArray{Float64, 3}, policy::AbstractArray{Float64, 3}, model::ModelInstance; fwdpass = true)
     @unpack grid, economy, hogg, albedo = model
 
-    σ̃ₜ² = (hogg.σₜ / (hogg.ϵ * grid.Δ[:T]))^2
-    σ̃ₖ² = (economy.σₖ / grid.Δ[:y])^2
+    σ̃ₜ² = (hogg.σₜ / (hogg.ϵ * grid.Δ.T))^2
+    σ̃ₖ² = (economy.σₖ / grid.Δ.y)^2
 
     ∑σ² = σ̃ₜ² + σ̃ₖ²
 
     indices = CartesianIndices(grid)
     L, R = extrema(indices)
 
-    let Vᵢ = 0.
-    for idx in CartesianIndices(grid) 
+    @batch for idx in (fwdpass ? indices : reverse(indices)) 
         Xᵢ = grid.X[idx]
-        dT = μ(Xᵢ.T, Xᵢ.m, hogg, albedo)
-        dȳ = max(abs(bterminal(Xᵢ, 0., model)), abs(bterminal(Xᵢ, 1., model)))
+        dT = μ(Xᵢ.T, Xᵢ.m, hogg, albedo) / (hogg.ϵ * grid.Δ.T)
 
-        Qᵢ = ∑σ² + grid.h * (abs(dT / grid.Δ[:T]) + abs(dȳ / grid.Δ[:y]))
+        # Upper bounds on drift
+        dT̄ = abs(dT) 
+        dȳ = max(
+            abs(bterminal(Xᵢ, 0., model)), 
+            abs(bterminal(Xᵢ, 1., model))
+        ) / grid.Δ.y
 
-        Vᵢ = V̄[idx]
+        Qᵢ = ∑σ² + grid.h * (dT̄ + dȳ)
 
-        # Temperature
-        VᵢT₊, VᵢT₋ = V̄[min(idx + I[1], R)], V̄[max(idx - I[1], L)]   
-        VᵢT = ifelse(dT > 0, VᵢT₊, VᵢT₋)
-        V̄[idx] = ((σ̃ₜ² / 2.) * (VᵢT₊ + VᵢT₋) + grid.h * abs(dT / grid.Δ[:T]) * VᵢT) / Qᵢ
-
-        # GDP
+        # Neighbouring nodes
         Vᵢy₊, Vᵢy₋ = V̄[min(idx + I[3], R)], V̄[max(idx - I[3], L)]
-        χ, objᵪ = optimalterminalpolicy(Xᵢ, Vᵢ, Vᵢy₊, Vᵢy₋, model)
+        VᵢT₊, VᵢT₋ = V̄[min(idx + I[1], R)], V̄[max(idx - I[1], L)]
 
-        V̄[idx] += ((σ̃ₖ² / 2.) * (Vᵢy₊ + Vᵢy₋) + grid.h * objᵪ) / Qᵢ
+        # Optimal control
+        χ = optimalterminalpolicy(Xᵢ, V̄[idx], Vᵢy₊, Vᵢy₋, model)
 
-        # Probability of remaining in the same state
-        p = ∑σ² + grid.h * (abs(dT / grid.Δ[:T]) + abs(bterminal(Xᵢ, χ, model) / grid.Δ[:y]))
-        V̄[idx] += Vᵢ * (1 - p / Qᵢ)
+        # Probabilities
+        # -- GDP
+        dy = bterminal(Xᵢ, χ, model) / grid.Δ.y
+        Py₊ = ((σ̃ₖ² / 2.) + grid.h * max(dy, 0.)) / Qᵢ
+        Py₋ = ((σ̃ₖ² / 2.) + grid.h * max(-dy, 0.)) / Qᵢ
 
-        # Policy
+        # -- Temperature
+        PT₊ = ((σ̃ₜ² / 2.) + grid.h * max(dT, 0.)) / Qᵢ
+        PT₋ = ((σ̃ₜ² / 2.) + grid.h * max(-dT, 0.)) / Qᵢ
+
+        # -- Residual
+        P = Py₊ + Py₋ + PT₊ + PT₋
+
+        V̄[idx] = (
+            PT₊ * VᵢT₊ + PT₋ * VᵢT₋ +
+            Py₊ * Vᵢy₊ + Py₋ * Vᵢy₋ +
+            (grid.h)^2 * f(χ, Xᵢ.y, V̄[idx], economy)
+        ) / P
+
         policy[idx] = χ
-    end end
+    end
+
+    return V̄, policy
 end

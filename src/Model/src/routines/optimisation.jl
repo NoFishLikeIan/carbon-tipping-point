@@ -42,17 +42,14 @@ function optimalpolicy(t, Xᵢ::Point, Vᵢ, Vᵢy₊, Vᵢy₋, Vᵢm₊, model
     return Policy(minimizer(res)), -minimum(res)
 end
 
-function optimalterminalpolicy(Xᵢ::Point, Vᵢ, Vᵢy₊, Vᵢy₋, model::ModelInstance)
+function optimalterminalpolicy(Xᵢ::Point, Vᵢ, Vᵢy₊, Vᵢy₋, model::ModelInstance; tol = 1e-3)
     @unpack economy, hogg, albedo, calibration, grid = model
-    Δy = model.grid.Δ[:y]
-    
+
     function objective(χ)
-        bᵢ = bterminal(Xᵢ, χ, model) / Δy
-        Vᵢy = ifelse(bᵢ > 0, Vᵢy₊, Vᵢy₋)
-        -(f(χ, Xᵢ.y, Vᵢ, economy) * grid.h + abs(bᵢ) * Vᵢy)
+        bᵢ = bterminal(Xᵢ, χ, model) / grid.Δ.y        
+        f(χ, Xᵢ.y, Vᵢ, economy) * grid.h + 
+            Vᵢy₊ * max(bᵢ, 0.) + Vᵢy₋ * max(-bᵢ, 0.)
     end
 
-    res = optimize(objective, 0., 1.)
-    
-    return minimizer(res), -minimum(res)
+    gss(objective, 0., 1.; tol = tol)
 end
