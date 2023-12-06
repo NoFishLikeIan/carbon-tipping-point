@@ -8,38 +8,49 @@ using FiniteDiff, Optim
 
 rng = MersenneTwister(123)
 
-N = 100
-grid = RegularGrid([
-    (Hogg().Tᵖ, Hogg().T̄), 
-    (log(Hogg().M₀), log(Hogg().M̄)), 
-    (log(Economy().Y̲), log(Economy().Ȳ))
-], N);
+begin # Setup
+    N = 50
 
-@load "data/calibration.jld2" calibration;
-model = ModelInstance(calibration = calibration, grid = grid, economy = Economy(ϱ = 0.));
+    @load joinpath("data", "calibration.jld2") calibration 
+    hogg = Hogg();
+    economy = Economy(τ = 120.);
+    albedo = Albedo();
 
-# Mock data
-t = rand(rng) * 80.;
-idx = rand(rng, CartesianIndices(model.grid))
-Xᵢ = model.grid.X[idx];
-policy = Policy(rand(rng), Model.γ(t, model.economy, model.calibration) / 2)
+    domains = [
+        (hogg.Tᵖ, hogg.Tᵖ + 10.), 
+        (log(hogg.M₀), Model.mstable(hogg.Tᵖ + 10., hogg, albedo)), 
+        (log(economy.Y₀ / 2), log(economy.Y₀ * 2))
+    ]
 
-# -- Benchmarking
-function vfunc(X::Model.Point)
-    model.economy.Y₀ * ((X.y / log(model.economy.Y₀))^2 - Model.d(X.T, model.economy, model.hogg)) - model.hogg.M₀ * (X.m / log(model.hogg.M₀))
+    grid = RegularGrid(domains, N);
+
+    model = ModelInstance(
+        economy = economy, hogg = hogg, albedo = albedo,
+        grid = grid, calibration = calibration
+    );
+
+    V = -model.grid.h * ones(size(model.grid));
+
+    indices = CartesianIndices(grid)
+    L, R = extrema(indices)
+    idx = rand(indices)
+
+    Xᵢ = grid.X[idx]
+    Vᵢ = V[idx]
+    VᵢT₊, VᵢT₋ = V[min(idx + Model.I[1], R)], V[max(idx - Model.I[1], L)]
+    Vᵢm₊ = V[min(idx + Model.I[2], R)]
+    Vᵢy₊, Vᵢy₋ = V[min(idx + Model.I[3], R)], V[max(idx - Model.I[3], L)]
 end
 
-V = vfunc.(model.grid.X)
-
-Vᵢ = V[idx]
-Vᵢy₊ = V[idx + Model.I[3]]
-Vᵢy₋ = V[idx - Model.I[3]]
-Vᵢm₊ = V[idx + Model.I[2]]
-
-# --- Terminal Problem
-Model.optimalterminalpolicy(Xᵢ, Vᵢ, Vᵢy₊, Vᵢy₋, model)
-@btime Model.optimalterminalpolicy($Xᵢ, $Vᵢ, $Vᵢy₊, $Vᵢy₋, $model)
-
+# Terminal problem
+@btime optimalterminalpolicy($Xᵢ, $Vᵢ, $Vᵢy₊, $Vᵢy₋, $model);
 terminalpolicy = Array{Float64}(undef, size(grid));
 Model.terminaljacobi!(V, terminalpolicy, model);
 @btime Model.terminaljacobi!($V, $terminalpolicy, $model);
+
+# General problem
+optimalpolicy(economy.τ, Xᵢ, Vᵢ, Vᵢy₊, Vᵢy₋, Vᵢm₊, model)
+@btime optimalpolicy($economy.τ, $Xᵢ, $Vᵢ, $Vᵢy₊, $Vᵢy₋, Vᵢm₊, $model);
+policy = [Policy(χ, 1e-3) for χ ∈ terminalpolicy]
+Model.jacobi!(V, policy, economy.τ, model);
+@btime Model.jacobi!($V, $policy, $economy.τ, $model);

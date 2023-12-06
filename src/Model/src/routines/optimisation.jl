@@ -1,11 +1,11 @@
-function optimalpolicy(t, Xᵢ::Point, Vᵢ, Vᵢy₊, Vᵢy₋, Vᵢm₊, model::ModelInstance; policy₀ = [0.01, 0.01])
+function optimalpolicy(t, Xᵢ::Point, Vᵢ, Vᵢy₊, Vᵢy₋, Vᵢm₊, model::ModelInstance; policy₀ = [0.5, 1e-5])
     @unpack economy, hogg, albedo, calibration, grid = model
     γₜ = γ(t, economy, calibration)
     dc = TwiceDifferentiableConstraints([0., 0.], [1., γₜ])
 
     function objective!(z, ∇, H, u)
         χ, α = u
-        bᵢ = b(t, Xᵢ, Policy(χ, α), model)
+        bᵢ = b(t, Xᵢ, χ, α, model) / model.grid.Δ.y
         bsgn = sign(bᵢ)
         Vᵢy = ifelse(bᵢ > 0, Vᵢy₊, Vᵢy₋)
 
@@ -38,8 +38,9 @@ function optimalpolicy(t, Xᵢ::Point, Vᵢ, Vᵢy₊, Vᵢy₋, Vᵢm₊, model
     df = TwiceDifferentiable(only_fgh!(objective!), policy₀)
     
     res = optimize(df, dc, policy₀, IPNewton())
+    u = minimizer(res)
     
-    return Policy(minimizer(res)), -minimum(res)
+    return Policy(u[1], u[2])
 end
 
 function optimalterminalpolicy(Xᵢ::Point, Vᵢ, Vᵢy₊, Vᵢy₋, model::ModelInstance; tol = 1e-3)

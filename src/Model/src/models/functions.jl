@@ -6,17 +6,7 @@ function ε′(t, M, model::ModelInstance)
     M / (Gtonoverppm * Eᵇ(t, model.economy, model.calibration))
 end
 
-"Drift on the unit cube"
-function drift(t, Xᵢ::Point, policy::Policy, model::ModelInstance)
-    @unpack economy, hogg, albedo, calibration = model
-    
-    Drift(
-        μ(Xᵢ.T, Xᵢ.m, hogg, albedo) / (hogg.ϵ * model.grid.Δ[1]),
-        (γ(t, economy, calibration) - policy.α) / model.grid.Δ[2],
-        b(t, Xᵢ, policy, model) / model.grid.Δ[3]
-    )
-end
-
+b(t, Xᵢ::Point, χ::Float64, α::Float64, model::ModelInstance) = b(t, Xᵢ, Policy(χ, α), model) 
 function b(t, Xᵢ::Point, policy::Policy, model::ModelInstance)
     @unpack economy, hogg = model
 
