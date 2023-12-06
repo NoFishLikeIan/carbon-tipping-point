@@ -1,13 +1,40 @@
 \documentclass[../../main.tex]{subfiles}
 \begin{document}
 
-Putting it all together, letting $X$ be the state vector, the value function at time $t$ satisfies \begin{equation}
+\subsection{Markov Chain approximation}
+
+Let the state vector be $X = (T, m, y)$ and the control vector $u = (\chi, \alpha) \in \mathcal{U} = [0, 1] \times [0, \gamma^\b]$. Then we can define the operator \begin{equation}
     \begin{split}
-        -\partial_t V_t &= G(t, X, V_t) \\
-        &\coloneqq f(\control{\chi}(X, \nabla V_t), X, V_t) + \nabla V_t \cdot w(t, X, \control{\chi}(X), \control{\alpha}(X),  \nabla V_t) + \frac{\sigma^2}{2} \partial_{T}^2 V_t
+        \mathcal{L}_t^u = \; &\frac{\mu(T, m)}{\epsilon} \frac{\partial}{\partial T} + \big(\varrho + \phi(\chi) - \delta_k - d(T) - A \beta(\alpha) \big) \frac{\partial}{\partial y} + (\gamma^\b - \alpha)\frac{\partial}{\partial m} + \\
+        &\frac{(\sigma_T / \epsilon)^2}{2} \frac{\partial^2}{\partial T^2} + \frac{\sigma^2_y}{2} \frac{\partial^2}{\partial y^2} 
     \end{split}
+\end{equation} the objective functional at time $t$ satisfies \begin{equation} \label{eq:operator-definition}
+    -\partial_t J_t =  \mathcal{L}_t^u J_t + f(\chi, y, J_t).
 \end{equation}
 
+We seek to define a Markov chain consistent with (\ref{eq:operator-definition}), over the unit cube \begin{equation}\Omega = \{0, h, 2h \ldots 1 - h, 1\}^3.\end{equation} First we define the state dynamics over the unit cube by letting $\tilde{X} = X / \lvert\mathcal{X}\rvert$ where \begin{equation}
+    \mathcal{X} = [T^p, T^p + \Delta T] \times [m_0, \overline{m}] \times [y_0, \overline{y}]
+\end{equation} and defining the dynamics \begin{equation}
+    d \tilde{X} = \omega(t, X, u) \; \d{t} + \Sigma \; \d w
+\end{equation} where \begin{equation}
+    \omega(t, X, u) = \begin{pmatrix}
+        \mu(T, m) / \epsilon \Delta T \\
+        (\gamma^{\b} - \alpha) / (\overline{m} - m_0) \\
+        \big(\varrho + \phi(\chi) - \delta_k - d(T) - A \beta(\alpha) \big) / (\overline{y} - y_0)
+    \end{pmatrix} 
+\end{equation} and \begin{equation}
+    \Sigma = \begin{pmatrix}
+        \sigma_T / \epsilon \Delta T  & 0 & 0 \\
+        0 & 0 & 0 \\
+        0 & 0 & \sigma_K / (\overline{y} - y_0)\\
+    \end{pmatrix}.
+\end{equation}
+
+For a given state $X_i$ we can now define the transition probabilities. Let \begin{equation}
+    Q(X_i) = \left(\frac{\sigma_T}{\epsilon \Delta T}\right)^2 + \left(\frac{\sigma_K}{\overline{y} - y_0}\right)^2 + h \max_u \; \lvert \omega(t, X_i, u)  \rvert
+\end{equation} then \begin{equation}
+    p(X_i, X_i \pm h \Delta T) = \frac{\frac{\sigma^2_T}{2(\epsilon \Delta T)^2} + h \; \omega^{\pm}_T(t, X_i, u)}{Q(X_i)}
+\end{equation}
 
 \subsection{Post-transition phase}
 

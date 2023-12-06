@@ -43,7 +43,7 @@ To simplify matters I will assume that the amount of carbon sinks present in the
 \begin{figure}[H]
     \centering
     \inputtikz{../../../plots/decaypathfig.tikz}
-    \caption{Estimated decay of carbon $\delta_m$ under the business as usual emission scenario $M^{\mathrm{b}}$. Each marker is the decay after every decade.}
+    \caption{Estimated decay of carbon $\delta_m$ under the business as usual emission scenario $M^{\b}$. Each marker is the decay after every decade.}
     \label{fig:decaypath}
 \end{figure}
 
@@ -54,7 +54,7 @@ The social planner problem depends on time $t$ and three state variables: temper
 \end{equation} where the two controls $\control{\chi}, \control{\alpha}$ are functions $[0, \infty) \times \mathcal{S} \mapsto [0, 1]$. The state vector $X$ follows the drift \begin{equation}
     w(t, X,  \control{\chi}, \control{\alpha}) = \begin{pmatrix}
         \mu_T(T) + \mu_m(m) \\
-        \gamma^{\mathrm{b}} - \control{\alpha} \\
+        \gamma^{\b} - \control{\alpha} \\
         \varrho + \phi(t, \control{\chi}) - A(t) \beta(t, \control{\alpha}) - \delta_K(T)
     \end{pmatrix}
 \end{equation}
@@ -96,9 +96,9 @@ Similarly, we can compute the first order condition for the abatement level, \be
 \end{equation}
 
 Given that \begin{equation}
-    \beta(\control{\alpha}) = \frac{\omega}{2} \left(1 - \frac{M}{\xi  E^{\mathrm{b}}} \big( \delta_m(M) + \gamma^{\mathrm{b}} - \control{\alpha} \big) \right)^2,  
+    \beta(\control{\alpha}) = \frac{\omega}{2} \left(1 - \frac{M}{\xi  E^{\b}} \big( \delta_m(M) + \gamma^{\b} - \control{\alpha} \big) \right)^2,  
 \end{equation} the optimal abatement level is \begin{equation}
-    \control{\alpha} = 1 - \frac{M}{\xi  E^{\mathrm{b}}} \left( \delta_m(M) + \gamma^{\mathrm{b}} - A \; \omega \; \frac{\partial_m V}{\partial_y V} \right)
+    \control{\alpha} = 1 - \frac{M}{\xi  E^{\b}} \left( \delta_m(M) + \gamma^{\b} - A \; \omega \; \frac{\partial_m V}{\partial_y V} \right)
 \end{equation}
 
 
