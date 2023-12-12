@@ -1,77 +1,74 @@
-function jacobi!(Vₜ::Array{Float64, 3}, policy::AbstractArray{Policy, 3}, t, model::ModelInstance)
+"Backward simulates from V̄ = V(τ) down to V(0). Stores nothing."
+function backwardsimulation!(V::AbstractArray{Float64, 3}, policy::AbstractArray{Policy, 3}, model::ModelInstance; verbose = false)
     @unpack grid, economy, hogg, albedo, calibration = model
-
-    σ̃ₜ² = (hogg.σₜ / (hogg.ϵ * grid.Δ.T))^2
-    σ̃ₖ² = (economy.σₖ / grid.Δ.y)^2
-
-    ∑σ² = σ̃ₜ² + σ̃ₖ²
-
-    γₜ = γ(t, economy, calibration)
-    dm̄ = γₜ / grid.Δ.m
+    σₜ² = (hogg.σₜ / (hogg.ϵ * grid.Δ.T))^2
+    σₖ² = (economy.σₖ / grid.Δ.y)^2
 
     indices = CartesianIndices(grid)
     L, R = extrema(indices)
-    U = oneunit(L)
 
-    @batch for idx in indices
+    timequeue = PriorityQueue{typeof(L), Float64}(
+        Base.Order.Reverse, indices .=> economy.τ);
+
+    verbose && println("Starting backward simulation...")
+
+    while !isempty(timequeue)
+        idx, tᵢ = dequeue_pair!(timequeue)
         Xᵢ = grid.X[idx]
-        dT = μ(Xᵢ.T, Xᵢ.m, hogg, albedo) / (hogg.ϵ * grid.Δ.T)
+        d = driftbounds(tᵢ, Xᵢ, model)
+        verbose && print("Remaining values $(length(timequeue)), time $tᵢ\r")
 
-        # Upper bounds on drift
-        dT̄ = abs(dT) 
-        dȳ = max(abs(bterminal(Xᵢ, 0., model)), abs(bterminal(Xᵢ, 1., model))) / grid.Δ.y
-
-        Qᵢ = ∑σ² + grid.h * (dT̄ + dȳ + dm̄)
+        Qᵢ = σₜ² + σₖ² + grid.h * sum(abs(d))
+        Δtᵢ = (grid.h)^2 / Qᵢ 
 
         # Neighbouring nodes
-        cube = (max(idx - U, L)):(min(idx + U, R))
-
-        VᵢT₊, VᵢT₋ = Vₜ[min(idx + I[1], R)], Vₜ[max(idx - I[1], L)]
-        Vᵢm₊ = Vₜ[min(idx + I[2], R)]
-        Vᵢy₊, Vᵢy₋ = Vₜ[min(idx + I[3], R)], Vₜ[max(idx - I[3], L)]
+        VᵢT₊, VᵢT₋ = V[min(idx + I[1], R)], V[max(idx - I[1], L)]
+        Vᵢm₊ = V[min(idx + I[2], R)]
+        Vᵢy₊, Vᵢy₋ = V[min(idx + I[3], R)], V[max(idx - I[3], L)]
 
         # Optimal control
-        policyᵢ = optimalpolicy(
-            t, Xᵢ, Vₜ[idx], Vᵢy₊, Vᵢm₊, Vᵢy₋, model; 
-            policy₀ = Vector(mean(policy[cube]))
-        )
+        cube = max(idx - oneunit(L), L):min(idx + oneunit(R), R)
+        policyguess = mean(policy[cube])
+        optpolicy = optimalpolicy(tᵢ, Xᵢ, V[idx], Vᵢy₊, Vᵢm₊, Vᵢy₋, model; p₀ = policyguess)
 
-        # Probabilities
         # -- Temperature
-        PT₊ = ((σ̃ₜ² / 2.) + grid.h * max(dT, 0.)) / Qᵢ
-        PT₋ = ((σ̃ₜ² / 2.) + grid.h * max(-dT, 0.)) / Qᵢ
+        PT₊ = ((σₜ² / 2.) + grid.h * max(d.dT, 0.)) / Qᵢ
+        PT₋ = ((σₜ² / 2.) + grid.h * max(-d.dT, 0.)) / Qᵢ
 
         # -- Carbon concentration
-        dm = γₜ - policyᵢ.α
+        dm = d.dm - (optpolicy.α / grid.Δ.m)
         Pm₊ = grid.h * dm / Qᵢ
 
         # -- GDP
-        dy = b(t, Xᵢ, policyᵢ, model) / grid.Δ.y
-        Py₊ = ((σ̃ₖ² / 2.) + grid.h * max(dy, 0.)) / Qᵢ
-        Py₋ = ((σ̃ₖ² / 2.) + grid.h * max(-dy, 0.)) / Qᵢ
+        dy = b(tᵢ, Xᵢ, optpolicy, model) / grid.Δ.y
+        Py₊ = ((σₖ² / 2.) + grid.h * max(dy, 0.)) / Qᵢ
+        Py₋ = ((σₖ² / 2.) + grid.h * max(-dy, 0.)) / Qᵢ
 
         # -- Residual
         P = Py₊ + Py₋ + PT₊ + PT₋ + Pm₊
 
-        Vₜ[idx] = (
+        V[idx] = (
             PT₊ * VᵢT₊ + PT₋ * VᵢT₋ +
             Py₊ * Vᵢy₊ + Py₋ * Vᵢy₋ +
-            Pm₊ * Vᵢm₊ +
-            (grid.h)^2 * f(policyᵢ.χ, Xᵢ.y, Vₜ[idx], economy)
-        ) / P
+            Pm₊ * Vᵢm₊ ) / P +
+            Δtᵢ * f(optpolicy.χ, Xᵢ.y, V[idx], economy)
 
-        policy[idx] = policyᵢ
+        if tᵢ > 0
+            push!(timequeue, idx => tᵢ - Δtᵢ)
+        end        
     end
+
+    return V, policy
 end
 
 "Computes the Jacobi iteration for the terminal problem, V̄."
 function terminaljacobi!(V̄::AbstractArray{Float64, 3}, policy::AbstractArray{Float64, 3}, model::ModelInstance)
     @unpack grid, economy, hogg, albedo = model
 
-    σ̃ₜ² = (hogg.σₜ / (hogg.ϵ * grid.Δ.T))^2
-    σ̃ₖ² = (economy.σₖ / grid.Δ.y)^2
+    σₜ² = (hogg.σₜ / (hogg.ϵ * grid.Δ.T))^2
+    σₖ² = (economy.σₖ / grid.Δ.y)^2
 
-    ∑σ² = σ̃ₜ² + σ̃ₖ²
+    ∑σ² = σₜ² + σₖ²
 
     indices = CartesianIndices(grid)
     L, R = extrema(indices)
@@ -99,12 +96,12 @@ function terminaljacobi!(V̄::AbstractArray{Float64, 3}, policy::AbstractArray{F
         # Probabilities
         # -- GDP
         dy = bterminal(Xᵢ, χ, model) / grid.Δ.y
-        Py₊ = ((σ̃ₖ² / 2.) + grid.h * max(dy, 0.)) / Qᵢ
-        Py₋ = ((σ̃ₖ² / 2.) + grid.h * max(-dy, 0.)) / Qᵢ
+        Py₊ = ((σₖ² / 2.) + grid.h * max(dy, 0.)) / Qᵢ
+        Py₋ = ((σₖ² / 2.) + grid.h * max(-dy, 0.)) / Qᵢ
 
         # -- Temperature
-        PT₊ = ((σ̃ₜ² / 2.) + grid.h * max(dT, 0.)) / Qᵢ
-        PT₋ = ((σ̃ₜ² / 2.) + grid.h * max(-dT, 0.)) / Qᵢ
+        PT₊ = ((σₜ² / 2.) + grid.h * max(dT, 0.)) / Qᵢ
+        PT₋ = ((σₜ² / 2.) + grid.h * max(-dT, 0.)) / Qᵢ
 
         # -- Residual
         P = Py₊ + Py₋ + PT₊ + PT₋

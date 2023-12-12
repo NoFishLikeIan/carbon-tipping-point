@@ -6,32 +6,41 @@ function ε′(t, M, model::ModelInstance)
     M / (Gtonoverppm * Eᵇ(t, model.economy, model.calibration))
 end
 
-b(t, Xᵢ::Point, χ::Float64, α::Float64, model::ModelInstance) = b(t, Xᵢ, Policy(χ, α), model) 
-function b(t, Xᵢ::Point, policy::Policy, model::ModelInstance)
-    @unpack economy, hogg = model
-
-    εₜ = ε(t, exp(Xᵢ.m), policy.α, model)
-    Aₜ = A(t, economy)
-
-    abatement = Aₜ * β(t, εₜ, economy)
-
-    economy.ϱ + ϕ(t, policy.χ, economy) - economy.δₖᵖ - abatement - d(Xᵢ.T, economy, hogg)
-end
-
-
-"Maximum absolute drift on the unit cube"
-function bounddrift(t, Xᵢ::Point, model::ModelInstance)
-    @unpack economy, hogg, albedo, calibration = model
-    
-    Drift(
-        abs(μ(Xᵢ.T, Xᵢ.m, hogg, albedo) / (hogg.ϵ * model.grid.Δ[1])),
-        γ(t, economy, calibration) / model.grid.Δ[2],
-        abs(b(t, Xᵢ, Policy(0f0, 0f0), model)) / model.grid.Δ[3]
-    )
-end
-
 "Drift of dy in the terminal state, t ≥ τ."
 function bterminal(Xᵢ::Point, χ, model::ModelInstance)
     model.economy.ϱ + - model.economy.δₖᵖ + 
     ϕ(model.economy.τ, χ, model.economy) - d(Xᵢ.T, model.economy, model.hogg)
+end
+
+"Drift of dy."
+b(t, Xᵢ::Point, χ::Float64, α::Float64, model::ModelInstance) = b(t, Xᵢ, Policy(χ, α), model) 
+function b(t, Xᵢ::Point, pᵢ::Policy, model::ModelInstance)
+    @unpack economy, hogg = model
+
+    εₜ = ε(t, exp(Xᵢ.m), pᵢ.α, model)
+    Aₜ = A(t, economy)
+
+    abatement = Aₜ * β(t, εₜ, economy)
+
+    economy.ϱ + ϕ(t, pᵢ.χ, economy) - economy.δₖᵖ - abatement - d(Xᵢ.T, economy, hogg)
+end
+
+"Largest drift on the unit cube."
+driftbounds(t, model::ModelInstance) = driftbounds!(similar(Array{Drift}, axes(model.grid)), t, model)
+function driftbounds(t, Xᵢ::Point, model::ModelInstance)
+    dT = μ(Xᵢ.T, Xᵢ.m, model.hogg, model.albedo) / (model.hogg.ϵ * model.grid.Δ.T)
+    dm = γ(t, model.economy, model.calibration) / model.grid.Δ.m
+
+    b₁ = b(t, Xᵢ, 1., 0., model)
+    b₀ = b(t, Xᵢ, 0., 0., model)
+    dy = ifelse(abs(b₁) > abs(b₀), b₁, b₀) / model.grid.Δ.y
+
+    return Drift(dT, dm, dy)
+end
+function driftbounds!(maxdrift::AbstractArray{Drift, 3}, t, model::ModelInstance)
+    @batch for idx in CartesianIndices(model.grid)
+        maxdrift[idx] = driftbounds(t, model.grid.X[idx], model)
+    end
+
+    return maxdrift
 end

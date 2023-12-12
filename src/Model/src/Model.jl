@@ -8,12 +8,12 @@ export Domain, RegularGrid, Point, Policy, Drift
 export dimensions, emptyscalarfield, emptyvectorfield
 
 # Functions
-export drift, driftterminal
-export optimalpolicy, optimalterminalpolicy, gssoptimalterminalpolicy
+export driftbounds, driftbounds!
+export optimalpolicy, optimalterminalpolicy
 
 # Routines
 export bisection, gss
-export jacobi!, terminaljacobi!
+export backwardsimulation!, terminaljacobi!
 
 # Packages
 using Base.Iterators: product, flatten
@@ -25,8 +25,9 @@ using FastClosures: @closure
 
 using StaticArraysCore: StaticArray
 using StaticArrays: FieldVector
+using DataStructures: PriorityQueue, dequeue_pair!
 
-using Optim: TwiceDifferentiableConstraints, TwiceDifferentiable, only_fgh!, optimize, IPNewton, minimizer, GoldenSection
+using Optim: TwiceDifferentiableConstraints, TwiceDifferentiable, only_fgh!, optimize, IPNewton, minimizer, GoldenSection, Options
 
 include("grid/grids.jl")
 include("models/calibration.jl")

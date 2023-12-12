@@ -5,6 +5,7 @@ using Test: @test
 using BenchmarkTools, Random
 using JLD2
 using FiniteDiff, Optim
+using UnPack: @unpack
 
 rng = MersenneTwister(123)
 
@@ -29,7 +30,7 @@ begin # Setup
         grid = grid, calibration = calibration
     );
 
-    V = -model.grid.h * ones(size(model.grid));
+    V = load(joinpath("data", "terminal.jld2"))["V̄"]
 
     indices = CartesianIndices(grid)
     L, R = extrema(indices)
@@ -49,8 +50,12 @@ Model.terminaljacobi!(V, terminalpolicy, model);
 @btime Model.terminaljacobi!($V, $terminalpolicy, $model);
 
 # General problem
-optimalpolicy(economy.τ, Xᵢ, Vᵢ, Vᵢy₊, Vᵢy₋, Vᵢm₊, model)
-@btime optimalpolicy($economy.τ, $Xᵢ, $Vᵢ, $Vᵢy₊, $Vᵢy₋, Vᵢm₊, $model);
-policy = [Policy(χ, 1e-3) for χ ∈ terminalpolicy]
-Model.jacobi!(V, policy, economy.τ, model);
-@btime Model.jacobi!($V, $policy, $economy.τ, $model);
+t = economy.τ
+γₜ = Model.γ(t, economy, calibration)
+policy = [Policy(χ, rand() * γₜ) for χ ∈ terminalpolicy];
+options = Optim.Options(allow_f_increases = true, successive_f_tol = 2);
+cube = max(idx - oneunit(L), L):min(idx + oneunit(R), R);
+p₀ᵢ = mean(policy[cube])
+
+Model.optimalpolicy(t, Xᵢ, Vᵢ, Vᵢy₊, Vᵢy₋, Vᵢm₊, model; p₀ = p₀ᵢ)
+@btime Model.optimalpolicy($t, $Xᵢ, $Vᵢ, $Vᵢy₊, $Vᵢy₋, Vᵢm₊, $model);
