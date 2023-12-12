@@ -58,6 +58,7 @@ end
 
 Base.size(grid::RegularGrid) = size(grid.X)
 Base.CartesianIndices(grid::RegularGrid) = CartesianIndices(grid.X)
+Base.abs(d::Drift) = abs.(d)
 
 emptyscalarfield(grid::RegularGrid) = Array{Float64}(undef, size(grid))
 emptyvectorfield(grid::RegularGrid) = Array{Float64}(undef, size(grid)..., dimensions(grid))
