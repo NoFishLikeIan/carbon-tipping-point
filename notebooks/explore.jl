@@ -20,202 +20,228 @@ begin
     import Pkg
     Pkg.activate(Base.current_project())
     Pkg.instantiate()
-
-	using UnPack, JLD2, DotEnv
 end
 
+# ╔═╡ 1643c6b6-e6c4-4f81-8e63-198c3ad9543e
+using UnPack, JLD2, DotEnv
+
 # ╔═╡ f3d4f91d-ebac-43cb-9789-df38f9a87a8c
-using Model, Utils
+using Model
+
+# ╔═╡ bbc92008-2dfb-43e3-9e16-4c60d91a2ed1
+using Random
 
 # ╔═╡ e11b7094-b8d0-458c-9e4a-8ebe3b588dfc
 using Plots, PlutoUI
 
-# ╔═╡ 7d0297b2-a0e7-45b6-b573-cb6015b1c283
+# ╔═╡ 9a954586-c41b-44bb-917e-2262c00b958a
+using Roots
+
+# ╔═╡ d8a70e6a-e977-4335-8698-e4aee9220a01
 using Optim
 
+# ╔═╡ b29e58b6-dda0-4da9-b85d-d8d7c6472155
+TableOfContents()
+
 # ╔═╡ e74335e3-a230-4d11-8aad-3323961801aa
-default(size = 500 .* (√2, 1), dpi = 180, titlefontsize = 12)
-
-# ╔═╡ 713208a4-2d81-4db5-afd4-9b99816518dc
-defcmap = cgrad(:YlGnBu, rev = true);
-
-# ╔═╡ b3ac7b02-2aa5-4da9-9459-0ea24d703697
-PLOTPATH = "../plots/presentation/" 
-
-# ╔═╡ 3c65c27d-ee8f-45cf-81ec-5183e1949a59
-md"## Epstein-Zin"
-
-# ╔═╡ 2dc66eff-a2e5-4da9-909f-f95fb5f2b6b9
-md"## Import terminal condition"
+default(size = 500 .* (√2, 1), dpi = 180, titlefontsize = 12, cmap = :viridis)
 
 # ╔═╡ 4607f0c4-027b-4402-a8b1-f98750696b6f
-datapath = joinpath("..", get(DotEnv.config(), "DATAPATH", "data/")) 
-
-# ╔═╡ 5d878f4a-279e-424f-8da5-d9de5e491a8d
-@load joinpath(datapath, "calibration.jld2") calibration;
-
-# ╔═╡ 002cf9d6-369a-48e2-8797-31f251637866
-@load joinpath(datapath, "terminal.jld2") V̄;
-
-# ╔═╡ ddea2917-4271-4c72-b9f0-4e1aa6be42de
-economy = Model.Economy(); hogg = Model.Hogg(); albedo = Model.Albedo();
-
-# ╔═╡ 7ca9d16e-a543-429e-b126-29db7bb51796
 begin
-	consumption = range(0, economy.Ȳ; length = 101)
-	utility = range(-2, 0; length = 101)
-	
-	contourf(consumption, utility, (c, u) -> Model.f(c, 0, u, economy), c = :viridis, linewidth = 0, aspect_ratio = economy.Ȳ / 2, xlims = extrema(consumption), ylims = extrema(utility), xlabel = "\$c\$", ylabel = "\$u\$", title = "\$f(c, u)\$")
-end
-
-# ╔═╡ a948f29f-4ad7-4f59-a624-6dae9c5c2f42
-instance = (economy, hogg, albedo);
-
-# ╔═╡ a85e9db2-88eb-409b-b44f-9e7c8820e1b9
-begin
-	n₁, n₂ = size(V̄)
-	domain = [
-		(hogg.T₀, hogg.T̄, n₁), 
-		(log(hogg.M₀), log(hogg.M₀ + 400f0), n₂), 
-		(log(economy.Y̲), log(economy.Ȳ), n₂)
-	]
-	Ω = Utils.makegrid(domain)
+	env = DotEnv.config()
+	datapath = joinpath("..", get(env, "DATAPATH", "data/"))
+	@load joinpath(datapath, "calibration.jld2") calibration
+	@load joinpath(datapath, "terminal.jld2") V̄ policy model
 end;
 
-# ╔═╡ 5ba540ee-6ac3-4265-82bd-1a9a840bc927
-Model.Mstable(287.15f0 + 10f0, hogg, albedo)
+# ╔═╡ d51a7ae6-aaac-4ea2-8b3c-dd261222c0f8
+rng = MersenneTwister(123);
 
-# ╔═╡ dc2cd7ba-63ef-44aa-b9f4-e6bd003b8cf3
-hogg.T̄ - hogg.T₀
+# ╔═╡ c9396e59-ed2f-4f73-bf48-e94ccf6e55bd
+md"""
+# Terminal problem
+"""
 
-# ╔═╡ f08b07ce-c488-4ff7-adb9-18752a0a3a2e
-ar = diff(collect(extrema(Ω[1]))) / diff(collect(extrema(Ω[3])));
-
-# ╔═╡ 51512c63-296d-4f4a-aa97-97e91df1304f
-begin
-	Y = exp.(Ω[3])
-	ΔT = Ω[1] .- hogg.Tᵖ
-	
-	termfig = contourf(ΔT, Y, V̄'; 
-		xlabel = "\$T - T^p\$", ylabel = "\$Y\$", title = "\$\\bar{V}(T, y)\$",
-		linewidth = 0, aspect_ratio = (ΔT[end] - ΔT[1]) / (Y[end] - Y[1]), 
-		cmap = defcmap, 
-		xlims = extrema(ΔT), ylims = extrema(Y),
-		cbar = false, dpi = 180
-	)
-
-	scatter!(termfig, [hogg.T₀ - hogg.Tᵖ], [economy.Y₀]; c = :black, markersize = 4, label = false)
-end
-
-# ╔═╡ 87fd816d-ca40-4faf-bfdf-dc4260addae4
-hogg.Tᵖ
-
-# ╔═╡ 51700462-1e9f-4548-aa07-d82f0fcd20cb
-savefig(termfig, joinpath(PLOTPATH, "termfig.png"))
-
-# ╔═╡ f49ffc11-6204-4bdc-a17f-80c4f7e8cdce
+# ╔═╡ 0df664cb-2652-486f-9b83-a3bbe6314b1e
 md"
-## Optimisation problem
+## Optimal Policy
+
+$\begin{equation}
+\max_{{\color{red} \chi} \in [0, 1]} h f({\color{red} \chi}; \; y, V_i) + b^{+}({\color{red} \chi}; \; T) V_{i + \delta y} + b^{-}({\color{red} \chi}; \; T) V_{i - \delta y}
+\end{equation}$
 "
 
-# ╔═╡ 6be1d1aa-79e7-40e2-8c8c-caef46f1d273
-grid = RegularGrid(domain);
-
-# ╔═╡ 4be58ce5-6c41-446d-b5a2-8e47d84c4569
+# ╔═╡ 45c6ee36-d1ca-464f-8e35-0b992cecb910
 begin
-	Vₜ = Array{Float32}(undef, n₁, n₂, n₂)
+	@unpack grid, economy = model
+	
+	idx = rand(rng, CartesianIndices(grid))
+	Xᵢ = grid.X[idx] + [0., 0., 0.]
+	Vᵢ = V̄[idx]
+	Vᵢ₊ = V̄[idx + CartesianIndex(1, 0, 0)]
+	Vᵢ₋ = V̄[idx - CartesianIndex(1, 0, 0)]
 
-	for j ∈ axes(Vₜ, 2)
-		Vₜ[:, j, :] .= V̄
+	b⁺(χ) = max(Model.bterminal(Xᵢ, χ, model), 0.) / grid.Δ.y
+	b⁻(χ) = max(-Model.bterminal(Xᵢ, χ, model), 0.) / grid.Δ.y
+	f(χ) = Model.f(χ, Xᵢ.y, Vᵢ, economy)
+
+	function termobjective(χ)
+		grid.h * f(χ) + b⁺(χ) * Vᵢ₊ + b⁻(χ) * Vᵢ₋
 	end
-
-	∇Vₜ = Utils.central∇(Vₜ, grid)
-end;
-
-# ╔═╡ ef2c5271-40d0-4226-8088-770853122a3e
-t = 10f0;
-
-# ╔═╡ 36782b8c-9802-48c6-a621-528db54b535c
-function objective(χ, α, Xᵢ, Vᵢ, ∇Vᵢ)
-	Model.f(χ, Xᵢ[3], Vᵢ[1], economy) + 
-        ∇Vᵢ[2] * (Model.γ(t, economy, calibration) - α) + 
-        ∇Vᵢ[3] * (
-			Model.ϕ(t, χ, economy) - 
-            Model.A(t, economy) * 
-				Model.β(t, Model.ε(t, exp(Xᵢ[2]), α, instance, calibration), economy)
-        )
-end;
-
-# ╔═╡ d202dcee-1a0f-4f18-a355-bed3c5db4bef
-md"
-- ``T_i = `` $(@bind Tᵢ Slider(Ω[1], show_value = true, default = hogg.T₀))
-- ``m_i = `` $(@bind mᵢ Slider(Ω[2], show_value = true, default = log(hogg.M₀)))
-- ``y_i = `` $(@bind yᵢ Slider(Ω[3], show_value = true, default = log(economy.Y₀)))
-"
-
-# ╔═╡ 53b622db-b269-4c82-98ac-bcde2d576af4
-begin
-	i = findfirst(x -> Tᵢ == x, Ω[1]) 
-	j = findfirst(x -> mᵢ == x, Ω[2]) 
-	k = findfirst(x -> yᵢ == x, Ω[3]) 
-
-	idx = CartesianIndex(i, j, k)
-
-	Xᵢ = [Tᵢ, mᵢ, yᵢ]
-	∇Vᵢ = @view ∇Vₜ[idx, 1:3]
-	Vᵢ = @view Vₜ[idx]
-end;
-
-# ╔═╡ 885b4f32-d4bd-44e5-bb63-a1dd8ee9a11e
-begin
-	M̄ = [Model.Mstable(T, hogg, albedo) for T ∈ Ω[1]];
 end
 
-# ╔═╡ 803b44e3-c482-4aa6-9569-4396c1fb17c0
+# ╔═╡ 7e333750-df9b-47e6-b0d4-1ca8dd26339d
+plot(0:0.01:1, termobjective)
+
+# ╔═╡ 69b1534c-2dd3-47cf-9640-f4f044e059b3
+contourf(
+	0:0.01:1, range(extrema(V̄)...; length = 101),
+	(χ, v) -> Model.f(χ, Xᵢ.y, v, Economy(ρ = 0.02));
+	linewidth = 0)
+
+# ╔═╡ 2dc66eff-a2e5-4da9-909f-f95fb5f2b6b9
+md"## Terminal condition"
+
+# ╔═╡ 15e1875d-0aa0-4f74-aa4a-6504b17d1feb
+ẏ = [Model.bterminal(grid.X[idx], policy[idx], model) for idx in CartesianIndices(grid)];
+
+# ╔═╡ 4c5e5ac4-f15b-476d-b05f-e06e9b35eae4
+function plotsection(F, z; zdim = 3, surf = false, 
+	labels = ("\$T\$", "\$m\$", "\$y\$"), kwargs...)
+	Nᵢ = size(model.grid.X)
+
+	Ω = [range(Δ...; length = Nᵢ[i]) for (i, Δ) in enumerate(model.grid.domains)]
+
+	xdim, ydim = filter(!=(zdim), 1:3)
+    jdx = findfirst(x -> x ≥ z, Ω[zdim])
+
+    aspect_ratio = model.grid.Δ[xdim] / model.grid.Δ[ydim]
+
+	Z = selectdim(F, zdim, jdx)
+	
+    (surf ? Plots.wireframe : Plots.contourf)(
+		Ω[xdim], Ω[ydim], Z'; 
+        aspect_ratio, 
+		xlims = model.grid.domains[xdim], 
+		ylims = model.grid.domains[ydim], 
+        xlabel = labels[xdim], ylabel = labels[ydim],
+		clims = (minimum(Z), 0.), linewidth = 0,
+		kwargs...)
+end;
+
+# ╔═╡ c5f9e376-6ab9-4a4f-960d-7dcaf8d03fb6
+md"
+``m``: $(@bind m Slider(range(model.grid.domains[2]...; length = 101), show_value = true, default = log(model.hogg.M₀)))
+"
+
+# ╔═╡ 7550e9af-e0e7-44f2-98d4-c431bdd47394
 let
-	unit = range(0f0, 1f0; step = 0.01f0)
+	vfig = plotsection(V̄, m; zdim = 2, title = "\$\\overline{V}\$", surf = true)
+	pfig = plotsection(policy, m; zdim = 2, title = "\$\\chi\$", surf = true)
 
-	pos = (x -> round(Float64(x), digits = 2)).([Tᵢ, exp(mᵢ), exp(yᵢ)])
+	
+	plot(vfig, pfig)
+end
 
-	objfig = contourf(
-		unit, unit, (χ, α) -> objective(χ, α, Xᵢ, Vᵢ, ∇Vᵢ), 
-		cmap = :coolwarm, linewidth = 0, aspect_ratio = 1,
-		xlabel = "\$\\chi\$", xlims = (0, 1),
-		ylabel = "\$\\alpha\$", ylims = (0, 1),
-		title = "Objective with \$(T_i, M_i, Y_i) = $pos\$",
-		camera = (42, 36), levels = 30, legend = false
+# ╔═╡ 6fe67c9b-fe20-42e4-b817-b31dad586e55
+md"""
+# General problem
+## Terminal policy
+"""
+
+# ╔═╡ 60aa84fd-8f83-4dd6-a86d-0b0d0630f158
+begin
+	L, R = extrema(CartesianIndices(grid))
+    VᵢT₊, VᵢT₋ = V̄[min(idx + Model.I[1], R)], V̄[max(idx - Model.I[1], L)]
+    Vᵢm₊ = V̄[min(idx + Model.I[2], R)]
+    Vᵢy₊, Vᵢy₋ = V̄[min(idx + Model.I[3], R)], V̄[max(idx - Model.I[3], L)]
+
+	t = 120
+	γₜ = Model.γ(t, economy, calibration)
+end;
+
+# ╔═╡ 21726b66-3f36-4d53-9722-58177385759c
+function objective!(z, ∇, H, u)
+        χ, α = u
+        bᵢ = Model.b(t, Xᵢ, χ, α, model) / model.grid.Δ.y
+        bsgn = sign(bᵢ)
+        Vᵢy = ifelse(bᵢ > 0, Vᵢy₊, Vᵢy₋)
+
+        M = exp(Xᵢ.m)
+        Aₜ = Model.A(t, economy)
+        εₜ = Model.ε(t, M, α, model)
+        εₜ′ = Model.ε′(t, M, model)
+
+        fᵢ, Y∂fᵢ, Y²∂²fᵢ = Model.epsteinzinsystem(χ, Xᵢ.y, Vᵢ, economy) .* grid.h
+
+        if !isnothing(∇) 
+            ∇[1] = -Y∂fᵢ - bsgn * Model.ϕ′(t, χ, economy) * Vᵢy
+            ∇[2] = Vᵢm₊ + bsgn * Aₜ * Model.β′(t, εₜ, model.economy) * εₜ′ * Vᵢy
+        end
+
+        if !isnothing(H)
+            H[1, 2] = 0.
+            H[2, 1] = 0.
+            
+            H[1, 1] = -Y²∂²fᵢ + bsgn * economy.κ * Aₜ^2 * Vᵢy
+            H[2, 2] = bsgn * Aₜ * (εₜ′)^2 * exp(-economy.ωᵣ * t) * Vᵢy
+        end
+        
+        if !isnothing(z)
+            z = α * Vᵢm₊ - abs(bᵢ) * Vᵢy - fᵢ
+            return z
+        end
+    end
+
+# ╔═╡ b6225e9c-2b82-4768-ab02-c1c9a09bcb11
+begin
+	p₀ = [1e-3, 1e-3]
+	dc = TwiceDifferentiableConstraints([0., 0.], [1., γₜ])
+	df = TwiceDifferentiable(Optim.only_fgh!(objective!), p₀)
+	res = optimize(df, dc, p₀, IPNewton())
+end
+
+# ╔═╡ 61fba0ff-4e94-472d-a69c-9799e7c4698f
+let
+	Cspace = range(0, 1; length = 31)
+	Aspace = range(0, γₜ; length = 31)
+
+	contourf(Cspace, Aspace, (χ, α) -> Model.b(t, Xᵢ, χ, α, model); 
+		ylabel = "\$\\alpha\$", xlabel = "\$\\chi\$",
+		camera = (20, 65), cbar = false, 
+		ylims = extrema(Aspace), xlims = extrema(Cspace),
+		linewidth = 0
 	)
+
+	χᵢ, αᵢ = Optim.minimizer(res)
+
+	scatter!([χᵢ], [αᵢ]; c = :red, label = false)
 end
 
 # ╔═╡ Cell order:
 # ╠═ed817ffc-f1f4-423c-8374-975e34d449eb
+# ╠═1643c6b6-e6c4-4f81-8e63-198c3ad9543e
 # ╠═f3d4f91d-ebac-43cb-9789-df38f9a87a8c
+# ╠═bbc92008-2dfb-43e3-9e16-4c60d91a2ed1
 # ╠═e11b7094-b8d0-458c-9e4a-8ebe3b588dfc
+# ╠═9a954586-c41b-44bb-917e-2262c00b958a
+# ╠═b29e58b6-dda0-4da9-b85d-d8d7c6472155
 # ╠═e74335e3-a230-4d11-8aad-3323961801aa
-# ╠═713208a4-2d81-4db5-afd4-9b99816518dc
-# ╠═b3ac7b02-2aa5-4da9-9459-0ea24d703697
-# ╟─3c65c27d-ee8f-45cf-81ec-5183e1949a59
-# ╟─7ca9d16e-a543-429e-b126-29db7bb51796
-# ╟─2dc66eff-a2e5-4da9-909f-f95fb5f2b6b9
 # ╠═4607f0c4-027b-4402-a8b1-f98750696b6f
-# ╠═5d878f4a-279e-424f-8da5-d9de5e491a8d
-# ╠═002cf9d6-369a-48e2-8797-31f251637866
-# ╠═ddea2917-4271-4c72-b9f0-4e1aa6be42de
-# ╠═a948f29f-4ad7-4f59-a624-6dae9c5c2f42
-# ╠═a85e9db2-88eb-409b-b44f-9e7c8820e1b9
-# ╠═5ba540ee-6ac3-4265-82bd-1a9a840bc927
-# ╠═dc2cd7ba-63ef-44aa-b9f4-e6bd003b8cf3
-# ╠═f08b07ce-c488-4ff7-adb9-18752a0a3a2e
-# ╠═51512c63-296d-4f4a-aa97-97e91df1304f
-# ╠═87fd816d-ca40-4faf-bfdf-dc4260addae4
-# ╠═51700462-1e9f-4548-aa07-d82f0fcd20cb
-# ╟─f49ffc11-6204-4bdc-a17f-80c4f7e8cdce
-# ╠═7d0297b2-a0e7-45b6-b573-cb6015b1c283
-# ╠═6be1d1aa-79e7-40e2-8c8c-caef46f1d273
-# ╠═4be58ce5-6c41-446d-b5a2-8e47d84c4569
-# ╠═36782b8c-9802-48c6-a621-528db54b535c
-# ╠═ef2c5271-40d0-4226-8088-770853122a3e
-# ╠═53b622db-b269-4c82-98ac-bcde2d576af4
-# ╟─d202dcee-1a0f-4f18-a355-bed3c5db4bef
-# ╠═885b4f32-d4bd-44e5-bb63-a1dd8ee9a11e
-# ╠═803b44e3-c482-4aa6-9569-4396c1fb17c0
+# ╠═d51a7ae6-aaac-4ea2-8b3c-dd261222c0f8
+# ╟─c9396e59-ed2f-4f73-bf48-e94ccf6e55bd
+# ╟─0df664cb-2652-486f-9b83-a3bbe6314b1e
+# ╟─45c6ee36-d1ca-464f-8e35-0b992cecb910
+# ╟─7e333750-df9b-47e6-b0d4-1ca8dd26339d
+# ╠═69b1534c-2dd3-47cf-9640-f4f044e059b3
+# ╟─2dc66eff-a2e5-4da9-909f-f95fb5f2b6b9
+# ╠═15e1875d-0aa0-4f74-aa4a-6504b17d1feb
+# ╠═4c5e5ac4-f15b-476d-b05f-e06e9b35eae4
+# ╟─c5f9e376-6ab9-4a4f-960d-7dcaf8d03fb6
+# ╟─7550e9af-e0e7-44f2-98d4-c431bdd47394
+# ╟─6fe67c9b-fe20-42e4-b817-b31dad586e55
+# ╠═d8a70e6a-e977-4335-8698-e4aee9220a01
+# ╠═60aa84fd-8f83-4dd6-a86d-0b0d0630f158
+# ╠═21726b66-3f36-4d53-9722-58177385759c
+# ╠═b6225e9c-2b82-4768-ab02-c1c9a09bcb11
+# ╠═61fba0ff-4e94-472d-a69c-9799e7c4698f
