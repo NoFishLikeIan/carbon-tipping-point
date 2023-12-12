@@ -53,4 +53,4 @@ calibration = Model.Calibration(
     Tuple(γparameters)
 )
 
-@save joinpath(DATAPATH, "calibration.jld2") calibration
+save_object(joinpath(DATAPATH, "calibration.jld2"), calibration)
