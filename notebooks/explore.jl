@@ -37,9 +37,6 @@ using Plots, PlutoUI
 # ╔═╡ 9a954586-c41b-44bb-917e-2262c00b958a
 using Roots
 
-# ╔═╡ d8a70e6a-e977-4335-8698-e4aee9220a01
-using Optim
-
 # ╔═╡ b29e58b6-dda0-4da9-b85d-d8d7c6472155
 TableOfContents()
 
@@ -50,8 +47,12 @@ default(size = 500 .* (√2, 1), dpi = 180, titlefontsize = 12, cmap = :viridis)
 begin
 	env = DotEnv.config()
 	datapath = joinpath("..", get(env, "DATAPATH", "data/"))
-	@load joinpath(datapath, "calibration.jld2") calibration
-	@load joinpath(datapath, "terminal.jld2") V̄ policy model
+	calibration = load_object(joinpath(datapath, "calibration.jld2"))
+	termpath = joinpath(datapath, "terminal", "N=50_Δλ=0.08.jld2")
+
+	V̄ = load(termpath, "V̄")
+	model = load(termpath, "model")
+	termpolicy = load(termpath, "policy")
 end;
 
 # ╔═╡ d51a7ae6-aaac-4ea2-8b3c-dd261222c0f8
@@ -90,20 +91,11 @@ begin
 	end
 end
 
-# ╔═╡ 7e333750-df9b-47e6-b0d4-1ca8dd26339d
-plot(0:0.01:1, termobjective)
-
-# ╔═╡ 69b1534c-2dd3-47cf-9640-f4f044e059b3
-contourf(
-	0:0.01:1, range(extrema(V̄)...; length = 101),
-	(χ, v) -> Model.f(χ, Xᵢ.y, v, Economy(ρ = 0.02));
-	linewidth = 0)
-
 # ╔═╡ 2dc66eff-a2e5-4da9-909f-f95fb5f2b6b9
 md"## Terminal condition"
 
 # ╔═╡ 15e1875d-0aa0-4f74-aa4a-6504b17d1feb
-ẏ = [Model.bterminal(grid.X[idx], policy[idx], model) for idx in CartesianIndices(grid)];
+ẏ = [Model.bterminal(grid.X[idx], termpolicy[idx], model) for idx in CartesianIndices(grid)];
 
 # ╔═╡ 4c5e5ac4-f15b-476d-b05f-e06e9b35eae4
 function plotsection(F, z; zdim = 3, surf = false, 
@@ -131,91 +123,94 @@ end;
 
 # ╔═╡ c5f9e376-6ab9-4a4f-960d-7dcaf8d03fb6
 md"
-``m``: $(@bind m Slider(range(model.grid.domains[2]...; length = 101), show_value = true, default = log(model.hogg.M₀)))
+``m``: $(@bind mterm Slider(range(model.grid.domains[2]...; length = 101), show_value = true, default = log(model.hogg.M₀)))
 "
 
 # ╔═╡ 7550e9af-e0e7-44f2-98d4-c431bdd47394
 let
-	vfig = plotsection(V̄, m; zdim = 2, title = "\$\\overline{V}\$", surf = true)
-	pfig = plotsection(policy, m; zdim = 2, title = "\$\\chi\$", surf = true)
+	vfig = plotsection(V̄, mterm; zdim = 2, title = "\$\\overline{V}\$", surf = true)
+	pfig = plotsection(termpolicy, mterm; zdim = 2, title = "\$\\chi\$", surf = true)
 
 	
 	plot(vfig, pfig)
 end
 
 # ╔═╡ 6fe67c9b-fe20-42e4-b817-b31dad586e55
-md"""
-# General problem
-## Terminal policy
-"""
+md"# General problem"
 
-# ╔═╡ 60aa84fd-8f83-4dd6-a86d-0b0d0630f158
-begin
-	L, R = extrema(CartesianIndices(grid))
-    VᵢT₊, VᵢT₋ = V̄[min(idx + Model.I[1], R)], V̄[max(idx - Model.I[1], L)]
-    Vᵢm₊ = V̄[min(idx + Model.I[2], R)]
-    Vᵢy₊, Vᵢy₋ = V̄[min(idx + Model.I[3], R)], V̄[max(idx - Model.I[3], L)]
+# ╔═╡ 24b805aa-eedc-4433-b396-d70e04a917fd
+function plotpolicy(F::AbstractArray{Policy}, z; zdim = 3, surf = false, 
+	labels = ("\$T\$", "\$m\$", "\$y\$"), kwargs...)
+	Nᵢ = size(model.grid.X)
 
-	t = 120
-	γₜ = Model.γ(t, economy, calibration)
+	Ω = [range(Δ...; length = Nᵢ[i]) for (i, Δ) in enumerate(model.grid.domains)]
+
+	xdim, ydim = filter(!=(zdim), 1:3)
+    jdx = findfirst(x -> x ≥ z, Ω[zdim])
+
+    aspect_ratio = model.grid.Δ[xdim] / model.grid.Δ[ydim]
+
+	Z = selectdim(F, zdim, jdx)
+
+	routine = surf ? Plots.wireframe : Plots.contourf
+
+	χ = first.(Z)
+	α = last.(Z)
+	χfig = routine(
+		Ω[xdim], Ω[ydim], χ'; 
+        aspect_ratio, 
+		xlims = model.grid.domains[xdim], 
+		ylims = model.grid.domains[ydim], 
+        xlabel = labels[xdim], ylabel = labels[ydim],
+		clims = zlims = (0., 1.), linewidth = 0,
+		title = "\$\\chi\$",
+		kwargs...)
+	αfig = routine(
+		Ω[xdim], Ω[ydim], α'; 
+        aspect_ratio, 
+		xlims = model.grid.domains[xdim], 
+		ylims = model.grid.domains[ydim], 
+        xlabel = labels[xdim], ylabel = labels[ydim],
+		clims = zlims = (0., 1.), linewidth = 0,
+		title = "\$\\alpha\$",
+		kwargs...)
+
+	return χfig, αfig
 end;
 
-# ╔═╡ 21726b66-3f36-4d53-9722-58177385759c
-function objective!(z, ∇, H, u)
-        χ, α = u
-        bᵢ = Model.b(t, Xᵢ, χ, α, model) / model.grid.Δ.y
-        bsgn = sign(bᵢ)
-        Vᵢy = ifelse(bᵢ > 0, Vᵢy₊, Vᵢy₋)
-
-        M = exp(Xᵢ.m)
-        Aₜ = Model.A(t, economy)
-        εₜ = Model.ε(t, M, α, model)
-        εₜ′ = Model.ε′(t, M, model)
-
-        fᵢ, Y∂fᵢ, Y²∂²fᵢ = Model.epsteinzinsystem(χ, Xᵢ.y, Vᵢ, economy) .* grid.h
-
-        if !isnothing(∇) 
-            ∇[1] = -Y∂fᵢ - bsgn * Model.ϕ′(t, χ, economy) * Vᵢy
-            ∇[2] = Vᵢm₊ + bsgn * Aₜ * Model.β′(t, εₜ, model.economy) * εₜ′ * Vᵢy
-        end
-
-        if !isnothing(H)
-            H[1, 2] = 0.
-            H[2, 1] = 0.
-            
-            H[1, 1] = -Y²∂²fᵢ + bsgn * economy.κ * Aₜ^2 * Vᵢy
-            H[2, 2] = bsgn * Aₜ * (εₜ′)^2 * exp(-economy.ωᵣ * t) * Vᵢy
-        end
-        
-        if !isnothing(z)
-            z = α * Vᵢm₊ - abs(bᵢ) * Vᵢy - fᵢ
-            return z
-        end
-    end
-
-# ╔═╡ b6225e9c-2b82-4768-ab02-c1c9a09bcb11
+# ╔═╡ 9bcfa0d7-0442-40f0-b63f-7d39f38c1310
 begin
-	p₀ = [1e-3, 1e-3]
-	dc = TwiceDifferentiableConstraints([0., 0.], [1., γₜ])
-	df = TwiceDifferentiable(Optim.only_fgh!(objective!), p₀)
-	res = optimize(df, dc, p₀, IPNewton())
+	simpath = joinpath(datapath, "total", "N=50_Δλ=0.08.jld2")
+	file = jldopen(simpath, "r")
+	timesteps = keys(file)
+	V = Array{Float64}(undef, 50, 50, 50, length(timesteps))
+	policy = Array{Policy}(undef, 50, 50, 50, length(timesteps))
+
+	for t in timesteps
+		V[:, :, :, tryparse(Int, t) + 1] = file[t]["V"]
+		policy[:, :, :, tryparse(Int, t) + 1] = file[t]["policy"]
+	end
+	
+	close(file)
 end
 
-# ╔═╡ 61fba0ff-4e94-472d-a69c-9799e7c4698f
+# ╔═╡ 754dea44-74f4-471d-87b4-d991134b378f
+md"
+``m``: $(@bind m Slider(range(model.grid.domains[2]...; length = 101), show_value = true, default = log(model.hogg.M₀)))
+
+``t``: $(@bind t Slider(0:(size(V, 4) - 1), show_value = true, default = size(V, 4) - 0))
+"
+
+# ╔═╡ 7fbce055-705c-4d58-8c1a-5fffbbe66037
 let
-	Cspace = range(0, 1; length = 31)
-	Aspace = range(0, γₜ; length = 31)
+	plotsection(V[:, :, :, t + 1], m; zdim = 2, title = "\$\\overline{V}\$", surf = true)
+end
 
-	contourf(Cspace, Aspace, (χ, α) -> Model.b(t, Xᵢ, χ, α, model); 
-		ylabel = "\$\\alpha\$", xlabel = "\$\\chi\$",
-		camera = (20, 65), cbar = false, 
-		ylims = extrema(Aspace), xlims = extrema(Cspace),
-		linewidth = 0
-	)
+# ╔═╡ 285a3e22-e1cd-4c94-939f-6d011c8db8ca
+let
+	χfig, αfig = plotpolicy(policy[:, :, :, t + 1], m; zdim = 2, surf = true)
 
-	χᵢ, αᵢ = Optim.minimizer(res)
-
-	scatter!([χᵢ], [αᵢ]; c = :red, label = false)
+	plot(χfig, αfig)
 end
 
 # ╔═╡ Cell order:
@@ -232,16 +227,14 @@ end
 # ╟─c9396e59-ed2f-4f73-bf48-e94ccf6e55bd
 # ╟─0df664cb-2652-486f-9b83-a3bbe6314b1e
 # ╟─45c6ee36-d1ca-464f-8e35-0b992cecb910
-# ╟─7e333750-df9b-47e6-b0d4-1ca8dd26339d
-# ╠═69b1534c-2dd3-47cf-9640-f4f044e059b3
 # ╟─2dc66eff-a2e5-4da9-909f-f95fb5f2b6b9
 # ╠═15e1875d-0aa0-4f74-aa4a-6504b17d1feb
 # ╠═4c5e5ac4-f15b-476d-b05f-e06e9b35eae4
 # ╟─c5f9e376-6ab9-4a4f-960d-7dcaf8d03fb6
 # ╟─7550e9af-e0e7-44f2-98d4-c431bdd47394
 # ╟─6fe67c9b-fe20-42e4-b817-b31dad586e55
-# ╠═d8a70e6a-e977-4335-8698-e4aee9220a01
-# ╠═60aa84fd-8f83-4dd6-a86d-0b0d0630f158
-# ╠═21726b66-3f36-4d53-9722-58177385759c
-# ╠═b6225e9c-2b82-4768-ab02-c1c9a09bcb11
-# ╠═61fba0ff-4e94-472d-a69c-9799e7c4698f
+# ╠═24b805aa-eedc-4433-b396-d70e04a917fd
+# ╠═9bcfa0d7-0442-40f0-b63f-7d39f38c1310
+# ╟─754dea44-74f4-471d-87b4-d991134b378f
+# ╠═7fbce055-705c-4d58-8c1a-5fffbbe66037
+# ╠═285a3e22-e1cd-4c94-939f-6d011c8db8ca
