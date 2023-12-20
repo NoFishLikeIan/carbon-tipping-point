@@ -13,6 +13,7 @@ function bterminal(Xᵢ::Point, χ, model::ModelInstance)
 end
 
 "Drift of dy."
+b(t, Xᵢ::AbstractVector{Float64}, χ::Float64, α::Float64, model::ModelInstance) = b(t, Point(Xᵢ[1], Xᵢ[2], Xᵢ[3]), χ, α, model);
 b(t, Xᵢ::Point, χ::Float64, α::Float64, model::ModelInstance) = b(t, Xᵢ, Policy(χ, α), model) 
 function b(t, Xᵢ::Point, pᵢ::Policy, model::ModelInstance)
     @unpack economy, hogg = model

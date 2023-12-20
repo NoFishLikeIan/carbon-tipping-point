@@ -10,9 +10,9 @@ using UnPack: @unpack
 rng = MersenneTwister(123)
 
 begin # Setup
-    N = 50
+    N = 51
 
-    @load joinpath("data", "calibration.jld2") calibration 
+    calibration = load_object(joinpath("data", "calibration.jld2"))
     hogg = Hogg();
     economy = Economy(τ = 120.);
     albedo = Albedo();
@@ -30,7 +30,7 @@ begin # Setup
         grid = grid, calibration = calibration
     );
 
-    V = load(joinpath("data", "terminal.jld2"))["V̄"]
+    V = load(joinpath("data", "terminal", "N=$(N)_Δλ=0.08.jld2"))["V̄"]
 
     indices = CartesianIndices(grid)
     L, R = extrema(indices)
@@ -46,8 +46,6 @@ end
 # Terminal problem
 @btime optimalterminalpolicy($Xᵢ, $Vᵢ, $Vᵢy₊, $Vᵢy₋, $model);
 terminalpolicy = Array{Float64}(undef, size(grid));
-Model.terminaljacobi!(V, terminalpolicy, model);
-@btime Model.terminaljacobi!($V, $terminalpolicy, $model);
 
 # General problem
 t = economy.τ
@@ -59,3 +57,4 @@ p₀ᵢ = mean(policy[cube])
 
 Model.optimalpolicy(t, Xᵢ, Vᵢ, Vᵢy₊, Vᵢy₋, Vᵢm₊, model; p₀ = p₀ᵢ)
 @btime Model.optimalpolicy($t, $Xᵢ, $Vᵢ, $Vᵢy₊, $Vᵢy₋, Vᵢm₊, $model);
+

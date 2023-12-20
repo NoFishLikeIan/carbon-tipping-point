@@ -2,10 +2,12 @@ module Model
 
 # Models
 export Economy, Hogg, Albedo, Calibration, ModelInstance
+export μ, b, bterminal, γ, f
 
 # Grid
 export Domain, RegularGrid, Point, Policy, Drift
 export dimensions, emptyscalarfield, emptyvectorfield
+export I
 
 # Functions
 export driftbounds, driftbounds!
@@ -28,6 +30,8 @@ using StaticArrays: FieldVector
 using DataStructures: PriorityQueue, dequeue_pair!
 
 using Optim: TwiceDifferentiableConstraints, TwiceDifferentiable, only_fgh!, optimize, IPNewton, minimizer, GoldenSection, Options
+
+using JLD2: jldopen, Group
 
 include("grid/grids.jl")
 include("models/calibration.jl")
