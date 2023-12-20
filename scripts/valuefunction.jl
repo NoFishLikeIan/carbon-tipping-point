@@ -10,13 +10,23 @@ function getterminal(N, Δλ)::Tuple{Array{Float64, 3}, Array{Float64, 3}, Model
     return V̄, policy, model
 end
 
-function computevalue(N::Int, Δλ = 0.08; kwargs...)
+function computevalue(N::Int, Δλ = 0.08; cache = false, kwargs...)
+    filename = "N=$(N)_Δλ=$(Δλ).jld2"
+    cachepath = cache ? joinpath(DATAPATH, "total", filename) : nothing
+
     V̄, terminalpolicy, model = getterminal(N, Δλ)
 
     policy = [Policy(χ, 1e-5) for χ ∈ terminalpolicy]
     V = copy(V̄)
 
-    Model.backwardsimulation!(V, policy, model; kwargs...)
+    Model.backwardsimulation!(V, policy, model; cachepath, kwargs...)
     
-    return V, policy, model
+    println("\nSaving solution into $savepath...")
+    jldopen(cachepath, "a+") do cachefile 
+        g = JLD2.Group(cachefile, "endpoint")
+        g["V"] = V
+        g["policy"] = policy
+    end
+    
+    return V, policy
 end
