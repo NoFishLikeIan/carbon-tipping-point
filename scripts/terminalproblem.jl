@@ -1,20 +1,80 @@
 using Model
 using JLD2, DotEnv
+using UnPack: @unpack
+using Polyester: @batch
 
 const env = DotEnv.config()
-const DATAPATH = get(env, "DATAPATH", "data/") 
+const DATAPATH = get(env, "DATAPATH", "data/")
 
-function terminaliteration(V₀::Array{Float64, 3}, model::ModelInstance; tol = 1e-3, maxiter = 100_000, verbose = false)
+"Computes the Jacobi iteration for the terminal problem, V̄."
+function terminaljacobi!(V̄::AbstractArray{Float64, 3}, policy::AbstractArray{Float64, 3}, model::ModelInstance)
+    @unpack grid, economy, hogg, albedo = model
+
+    σₜ² = (hogg.σₜ / (hogg.ϵ * grid.Δ.T))^2
+    σₖ² = (economy.σₖ / grid.Δ.y)^2
+
+    ∑σ² = σₜ² + σₖ²
+
+    indices = CartesianIndices(grid)
+    L, R = extrema(indices)
+
+    @batch for idx in indices
+        Xᵢ = grid.X[idx]
+        dT = μ(Xᵢ.T, Xᵢ.m, hogg, albedo) / (hogg.ϵ * grid.Δ.T)
+
+        # Upper bounds on drift
+        dT̄ = abs(dT) 
+        dȳ = max(
+            abs(bterminal(Xᵢ, 0., model)), 
+            abs(bterminal(Xᵢ, 1., model))
+        ) / grid.Δ.y
+
+        Qᵢ = ∑σ² + grid.h * (dT̄ + dȳ)
+
+        # Neighbouring nodes
+        Vᵢy₊, Vᵢy₋ = V̄[min(idx + I[3], R)], V̄[max(idx - I[3], L)]
+        VᵢT₊, VᵢT₋ = V̄[min(idx + I[1], R)], V̄[max(idx - I[1], L)]
+
+        # Optimal control
+        χ = optimalterminalpolicy(Xᵢ, V̄[idx], Vᵢy₊, Vᵢy₋, model)
+
+        # Probabilities
+        # -- GDP
+        dy = bterminal(Xᵢ, χ, model) / grid.Δ.y
+        Py₊ = ((σₖ² / 2.) + grid.h * max(dy, 0.)) / Qᵢ
+        Py₋ = ((σₖ² / 2.) + grid.h * max(-dy, 0.)) / Qᵢ
+
+        # -- Temperature
+        PT₊ = ((σₜ² / 2.) + grid.h * max(dT, 0.)) / Qᵢ
+        PT₋ = ((σₜ² / 2.) + grid.h * max(-dT, 0.)) / Qᵢ
+
+        # -- Residual
+        P = Py₊ + Py₋ + PT₊ + PT₋
+
+        V̄[idx] = (
+            PT₊ * VᵢT₊ + PT₋ * VᵢT₋ +
+            Py₊ * Vᵢy₊ + Py₋ * Vᵢy₋ +
+            (grid.h)^2 * f(χ, Xᵢ.y, V̄[idx], economy)
+        ) / P
+
+        policy[idx] = χ
+    end
+
+    return V̄, policy
+end
+
+relerror(x, y) = abs(x - y) / abs(y)
+
+function terminaliteration(V₀::AbstractArray{Float64, 3}, model::ModelInstance; rtol = 1e-3, maxiter = 100_000, verbose = false)
     policy = similar(V₀)
 
     verbose && println("Starting iterations...")
 
     Vᵢ, Vᵢ₊₁ = copy(V₀), copy(V₀);
     for iter in 1:maxiter
-
         terminaljacobi!(Vᵢ₊₁, policy, model)
-        ε = maximum(abs.((Vᵢ₊₁ - Vᵢ) ./ Vᵢ))
-        if ε < tol
+        ε = maximum(relerror.(Vᵢ₊₁, Vᵢ))
+        if ε < rtol
             return Vᵢ₊₁, policy, model
         end
         
