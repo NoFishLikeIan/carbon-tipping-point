@@ -27,7 +27,6 @@ using FastClosures: @closure
 
 using StaticArraysCore: StaticArray
 using StaticArrays: FieldVector
-using DataStructures: PriorityQueue, dequeue_pair!
 
 using Optim: TwiceDifferentiableConstraints, TwiceDifferentiable, only_fgh!, optimize, IPNewton, minimizer, GoldenSection, Options
 
@@ -45,7 +44,6 @@ include("models/functions.jl")
 
 include("routines/optimisation.jl")
 include("routines/bisection.jl")
-include("routines/jacobi.jl")
 
 
 end # module Model

@@ -6,7 +6,7 @@ Base.@kwdef struct Economy
 
     # Technology
     ωᵣ::Float64 = 2e-3 # Speed of abatement technology cost reduction
-    ϱ::Float64 = 4e-3 # Growth of TFP
+    ϱ::Float64 = 9e-3 # Growth of TFP
     κ::Float64 = 0.372 # Adjustment costs of abatement technology
     
     # Damages

@@ -1,3 +1,12 @@
+using Model
+using JLD2, DotEnv
+using UnPack: @unpack
+using DataStructures: PriorityQueue, dequeue_pair!
+using Base: Order
+
+const env = DotEnv.config()
+const DATAPATH = get(env, "DATAPATH", "data")
+
 "Backward simulates from V̄ = V(τ) down to V(0). Stores nothing."
 function backwardsimulation!(V::AbstractArray{Float64, 3}, policy::AbstractArray{Policy, 3}, model::ModelInstance; verbose = false, cachepath = nothing, tmin = 0.)
     @unpack grid, economy, hogg, albedo, calibration = model
@@ -7,8 +16,7 @@ function backwardsimulation!(V::AbstractArray{Float64, 3}, policy::AbstractArray
     indices = CartesianIndices(grid)
     L, R = extrema(indices)
 
-    timequeue = PriorityQueue{typeof(L), Float64}(
-        Base.Order.Reverse, indices .=> economy.τ);
+    timequeue = PriorityQueue{typeof(L), Float64}(Order.Reverse, indices .=> economy.τ);
 
     verbose && println("Starting backward simulation...")
     cache = !isnothing(cachepath)
@@ -77,4 +85,32 @@ function backwardsimulation!(V::AbstractArray{Float64, 3}, policy::AbstractArray
     end
 
     return V, optpolicy
+end
+
+function getterminal(N, Δλ)::Tuple{Array{Float64, 3}, Array{Float64, 3}, ModelInstance}
+    termpath = joinpath(DATAPATH, "terminal", "N=$(N)_Δλ=$(Δλ).jld2")
+    @load termpath V̄ policy model
+    return V̄, policy, model
+end
+
+function computevalue(N::Int, Δλ = 0.08; cache = false, kwargs...)
+    filename = "N=$(N)_Δλ=$(Δλ).jld2"
+    savepath = joinpath(DATAPATH, "total", filename)
+    cachepath = cache ? savepath : nothing
+
+    V̄, terminalpolicy, model = getterminal(N, Δλ)
+
+    policy = [Policy(χ, 1e-5) for χ ∈ terminalpolicy]
+    V = copy(V̄)
+
+    backwardsimulation!(V, policy, model; cachepath, kwargs...)
+    
+    println("\nSaving solution into $savepath...")
+    jldopen(savepath, "a+") do cachefile 
+        g = JLD2.Group(cachefile, "endpoint")
+        g["V"] = V
+        g["policy"] = policy
+    end
+    
+    return V, policy
 end
