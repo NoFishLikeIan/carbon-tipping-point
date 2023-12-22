@@ -40,7 +40,7 @@ struct RegularGrid{N}
             throw("Domain length $(length(domains)) ≠ 3.") 
         end
 
-        if N > maxN @warn "h < ϵ: ensure N > $maxN" end
+        if N > maxN @warn "h < ϵ: ensure N ≤ $maxN" end
 
         h = Float64(inv(N))
         Ω = (range(d[1], d[2]; length = N) for d in domains) 
@@ -57,8 +57,27 @@ struct RegularGrid{N}
 end
 
 Base.size(grid::RegularGrid) = size(grid.X)
+Base.size(grid::RegularGrid, axis::Int) = size(grid.X, axis)
 Base.CartesianIndices(grid::RegularGrid) = CartesianIndices(grid.X)
 Base.abs(d::Drift) = abs.(d)
 
-emptyscalarfield(grid::RegularGrid) = Array{Float64}(undef, size(grid))
-emptyvectorfield(grid::RegularGrid) = Array{Float64}(undef, size(grid)..., dimensions(grid))
+function interpolateovergrid(fromgrid::RegularGrid, V::AbstractArray, togrid::RegularGrid)
+    interpolateovergrid(fromgrid, V, togrid.X)
+end
+
+function interpolateovergrid(grid::RegularGrid, V::AbstractArray{Float64, 3}, xs::AbstractArray{Point})
+    N = size(grid, 1)
+    knots = ntuple(i -> range(grid.domains[i][1], grid.domains[i][2], length = N), 3)
+    itp = scale(interpolate(V, BSpline(Linear())), knots)    
+
+    [itp(x.T, x.m, x.y) for x ∈ xs]
+end
+
+function interpolateovergrid(grid::RegularGrid, P::AbstractArray{Policy, 3}, xs::AbstractArray{Point})
+    N = size(grid, 1)
+    knots = ntuple(i -> range(grid.domains[i][1], grid.domains[i][2], length = N), 3)
+    itpχ = scale(interpolate(first.(P), BSpline(Linear())), knots)
+    itpα = scale(interpolate(last.(P), BSpline(Linear())), knots)
+
+    [Policy(itpχ(x.T, x.m, x.y), itpα(x.T, x.m, x.y)) for x ∈ xs]
+end 

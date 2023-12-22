@@ -5,9 +5,8 @@ export Economy, Hogg, Albedo, Calibration, ModelInstance
 export μ, b, bterminal, γ, f
 
 # Grid
-export Domain, RegularGrid, Point, Policy, Drift
-export dimensions, emptyscalarfield, emptyvectorfield
-export I
+export Domain, RegularGrid, Point, Policy, Drift, I
+export interpolateovergrid
 
 # Functions
 export driftbounds, driftbounds!
@@ -29,6 +28,7 @@ using StaticArraysCore: StaticArray
 using StaticArrays: FieldVector
 
 using Optim: TwiceDifferentiableConstraints, TwiceDifferentiable, only_fgh!, optimize, IPNewton, minimizer, GoldenSection, Options
+using Interpolations: interpolate, BSpline, Linear, scale
 
 using JLD2: jldopen, Group
 

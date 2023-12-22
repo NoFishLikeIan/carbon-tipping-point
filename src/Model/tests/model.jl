@@ -10,7 +10,7 @@ using UnPack: @unpack
 rng = MersenneTwister(123)
 
 begin # Setup
-    N = 51
+    N = 50
 
     calibration = load_object(joinpath("data", "calibration.jld2"))
     hogg = Hogg();
@@ -31,6 +31,8 @@ begin # Setup
     );
 
     V = load(joinpath("data", "terminal", "N=$(N)_Δλ=0.08.jld2"))["V̄"]
+    
+    policy = [Policy(χ, 1e-5) for χ ∈ load(joinpath("data", "terminal", "N=$(N)_Δλ=0.08.jld2"))["policy"]]
 
     indices = CartesianIndices(grid)
     L, R = extrema(indices)
@@ -41,7 +43,12 @@ begin # Setup
     VᵢT₊, VᵢT₋ = V[min(idx + Model.I[1], R)], V[max(idx - Model.I[1], L)]
     Vᵢm₊ = V[min(idx + Model.I[2], R)]
     Vᵢy₊, Vᵢy₋ = V[min(idx + Model.I[3], R)], V[max(idx - Model.I[3], L)]
-end
+end;
+
+# Interpolations
+xs = [xᵢ + rand(rng, 3) / 10 for xᵢ ∈ grid.X[idx:(idx + oneunit(idx))]];
+@btime interpolateovergrid($grid, $V, $xs);
+@btime interpolateovergrid($grid, $P, $xs);
 
 # Terminal problem
 @btime optimalterminalpolicy($Xᵢ, $Vᵢ, $Vᵢy₊, $Vᵢy₋, $model);
