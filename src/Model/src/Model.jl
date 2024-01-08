@@ -39,8 +39,8 @@ include("models/economy.jl")
 
 
 include("models/instance.jl")
-
 include("models/functions.jl")
+include("grid/interpolations.jl")
 
 include("routines/optimisation.jl")
 include("routines/bisection.jl")
