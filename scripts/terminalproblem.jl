@@ -23,7 +23,7 @@ function terminaljacobi!(V̄::AbstractArray{Float64, 3}, policy::AbstractArray{F
         dT = μ(Xᵢ.T, Xᵢ.m, hogg, albedo) / (hogg.ϵ * grid.Δ.T)
 
         # Upper bounds on drift
-        dT̄ = abs(dT) 
+        dT̄ = abs(dT)
         dȳ = max(
             abs(bterminal(Xᵢ, 0., model)), 
             abs(bterminal(Xᵢ, 1., model))
@@ -36,7 +36,7 @@ function terminaljacobi!(V̄::AbstractArray{Float64, 3}, policy::AbstractArray{F
         VᵢT₊, VᵢT₋ = V̄[min(idx + I[1], R)], V̄[max(idx - I[1], L)]
 
         # Optimal control
-        χ = optimalterminalpolicy(Xᵢ, V̄[idx], Vᵢy₊, Vᵢy₋, model)
+        χ = optimalterminalpolicy(Xᵢ, V̄[idx], Vᵢy₊, Vᵢy₋, model; tol = 1e-15)
 
         # Probabilities
         # -- GDP
@@ -86,7 +86,11 @@ function terminaliteration(V₀::AbstractArray{Float64, 3}, model::ModelInstance
     return Vᵢ₊₁, policy, model
 end
 
-function computeterminal(N::Int, Δλ = 0.08; iterkwargs...)
+function computeterminal(N::Int, Δλ = 0.08; 
+    consapprox = [10, 4, 2], rtol = 1e-4, 
+    verbose = true, withsave = true, 
+    iterkwargs...)
+
     calibration = load_object(joinpath(DATAPATH, "calibration.jld2"))
     hogg = Hogg()
     economy = Economy()
@@ -98,17 +102,40 @@ function computeterminal(N::Int, Δλ = 0.08; iterkwargs...)
         (log(economy.Y₀ / 2), log(economy.Y₀ * 2))
     ]
 
-    model = ModelInstance(
-        economy = economy, hogg = hogg, albedo = albedo,
-        grid = RegularGrid(domains, N),
-        calibration = calibration
-    )
+    h = 1 / N
 
-    V₀ = -model.grid.h * ones(size(model.grid))
-    V̄, policy, model = terminaliteration(V₀, model; iterkwargs...)
+    verbose && println("Constructing initial condition...")
+    hs = consapprox .* h
+    rtols = rtol ./ consapprox
+    
+    gⁱ⁻¹ = RegularGrid(domains, first(hs))
+    V̄ = -h * ones(size(gⁱ⁻¹))
 
-    savepath = joinpath(DATAPATH, "terminal", "N=$(N)_Δλ=$(Δλ).jld2")
-    println("\nSaving solution into $savepath...")
+    for (i, hⁱ) in enumerate(hs)
+        verbose && println("\nApproximation $i / $(length(consapprox)) with hⁱ = $hⁱ")
 
-    jldsave(savepath; V̄, policy, model)
+        gⁱ = RegularGrid(domains, hⁱ)
+        V₀ = interpolateovergrid(gⁱ⁻¹, V̄, gⁱ)
+
+        modelⁱ = ModelInstance(economy, hogg, albedo, gⁱ, calibration)
+
+        V̄ = first(terminaliteration(V₀, modelⁱ; verbose, rtol = rtols[i], iterkwargs...))
+        gⁱ⁻¹ = gⁱ
+    end
+
+    verbose && println("Computing with h = $h...")
+    grid = RegularGrid(domains, h)
+    model = ModelInstance(economy, hogg, albedo, grid, calibration)
+
+    V₀ = interpolateovergrid(gⁱ⁻¹, V̄, grid)
+    V̄, policy, model = terminaliteration(V₀, model; verbose, rtol = rtol, iterkwargs...)
+
+    if withsave
+        savepath = joinpath(DATAPATH, "terminal", "N=$(N)_Δλ=$(Δλ).jld2")
+        println("\nSaving solution into $savepath...")
+
+        jldsave(savepath; V̄, policy, model)
+    end
+
+    return V̄
 end
