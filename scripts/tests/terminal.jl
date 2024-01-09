@@ -5,11 +5,11 @@ using BenchmarkTools: @btime
 includet("../terminalproblem.jl")
 
 begin # Setup
-    N = 101
+    N = 50
 
     calibration = load_object(joinpath("data", "calibration.jld2"))
     hogg = Hogg();
-    economy = Economy(τ = 120.);
+    economy = Economy();
     albedo = Albedo();
 
     domains = [
@@ -20,13 +20,10 @@ begin # Setup
 
     grid = RegularGrid(domains, N);
 
-    model = ModelInstance(
-        economy = economy, hogg = hogg, albedo = albedo,
-        grid = grid, calibration = calibration
-    );
+    model = ModelInstance(economy, hogg, albedo, grid, calibration);
 end;
 
-V₀ = -1e-3 * ones(size(grid));
+V₀ = -ones(size(grid));
 V = copy(V₀);
 terminalpolicy = 0.5 * ones(size(grid));
 

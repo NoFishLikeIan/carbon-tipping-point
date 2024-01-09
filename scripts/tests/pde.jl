@@ -4,9 +4,18 @@ using BenchmarkTools: @btime
 
 includet("../pde.jl")
 
-V̄, terminalpolicy, model = getterminal(50, 0.08);
+N, Δλ = 50, 0.08
+filename = "N=$(N)_Δλ=$(Δλ).jld2"
+termpath = joinpath(DATAPATH, "terminal", filename)
 
-policy = [Policy(χ, 1e-5) for χ ∈ terminalpolicy];
+termsim = load(termpath)
+V̄ = termsim["V̄"]
+terminalpolicy = termsim["policy"]
+model = termsim["model"]
 
-V = copy(V̄);
-backwardsimulation!(V, policy, model; tmin = 119.5, verbose = true);
+policy = [Policy(χ, 1e-5) for χ ∈ terminalpolicy]
+V = copy(V̄)
+
+cachepath = "test.jld2"
+
+backwardsimulation!(V, policy, model; tmin = 119.5, verbose = true, cachepath = cachepath);
