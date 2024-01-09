@@ -33,7 +33,7 @@ function backwardsimulation!(V::AbstractArray{Float64, 3}, policy::AbstractArray
         verbose && print("Remaining values $(length(timequeue)), time $tᵢ\r")
 
         Qᵢ = σₜ² + σₖ² + grid.h * sum(abs(d))
-        Δtᵢ = (grid.h)^2 / Qᵢ 
+        Δtᵢ = (grid.h)^2 / Qᵢ
 
         # Neighbouring nodes
         VᵢT₊, VᵢT₋ = V[min(idx + I[1], R)], V[max(idx - I[1], L)]
@@ -73,7 +73,7 @@ function backwardsimulation!(V::AbstractArray{Float64, 3}, policy::AbstractArray
         
         if cache && tᵢ ≤ tcache 
             verbose && println("\nSaving cache at $(floor(Int, tcache))...")
-            g = Group(cachefile, "$(floor(Int, tcache))")
+            g = JLD2.Group(cachefile, "$(floor(Int, tcache))")
             g["V"] = V
             g["policy"] = policy
             tcache -= 1.      
@@ -87,18 +87,21 @@ function backwardsimulation!(V::AbstractArray{Float64, 3}, policy::AbstractArray
     return V, optpolicy
 end
 
-function getterminal(N, Δλ)::Tuple{Array{Float64, 3}, Array{Float64, 3}, ModelInstance}
-    termpath = joinpath(DATAPATH, "terminal", "N=$(N)_Δλ=$(Δλ).jld2")
-    @load termpath V̄ policy model
-    return V̄, policy, model
-end
-
 function computevalue(N::Int, Δλ = 0.08; cache = false, kwargs...)
     filename = "N=$(N)_Δλ=$(Δλ).jld2"
+    termpath = joinpath(DATAPATH, "terminal", filename)
+
+    if !isfile(termpath)
+        throw("$termpath simulation not found!")
+    end
+
     savepath = joinpath(DATAPATH, "total", filename)
     cachepath = cache ? savepath : nothing
 
-    V̄, terminalpolicy, model = getterminal(N, Δλ)
+    termsim = load(termpath)
+    V̄ = termsim["V̄"]
+    terminalpolicy = termsim["policy"]
+    model = termsim["model"]
 
     policy = [Policy(χ, 1e-5) for χ ∈ terminalpolicy]
     V = copy(V̄)
