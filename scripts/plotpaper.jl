@@ -1,18 +1,14 @@
 using Revise
+using UnPack
 using JLD2, DotEnv, CSV
 using DataFrames
-
-using UnPack
-using Dierckx
-using LinearAlgebra
-
-using ChangePrecision
 
 using DifferentialEquations, DifferentialEquations.EnsembleAnalysis
 
 using KernelDensity
 using Plots, Printf, PGFPlotsX, Colors
-using Model, Utils
+
+using Model
 
 begin # Global variables
     env = DotEnv.config()
@@ -28,21 +24,37 @@ begin # Global variables
     PLOTPATH = get(env, "PLOTPATH", "plots")
     PRESENTATIONPATH = joinpath(PLOTPATH, "presentation")
 
-    SAVEFIG = true 
+    SAVEFIG = false 
+    kelvintocelsius = 273.15
 end
 
-economy = Model.Economy();
-hogg = Model.Hogg();
-albedo = Model.Albedo();
+function readsimulation(simfile)
+    termpath = joinpath(DATAPATH, "terminal", simfile)
+    model = load(termpath, "model")
 
-instance = (economy, hogg, albedo);
-calibration = load(joinpath(DATAPATH, "calibration.jld2"), "calibration");
+	simpath = joinpath(DATAPATH, "total", simfile)
+	file = jldopen(simpath, "r")
+	timesteps = keys(file)
+	V = Array{Float64}(undef, 50, 50, 50, length(timesteps))
+	policy = Array{Policy}(undef, 50, 50, 50, length(timesteps))
 
-secondtoyears = 3.154f7
-mass = diagm([hogg.ϵ / secondtoyears, 1.])
+	for t in timesteps
+		V[:, :, :, tryparse(Int, t) + 1] = file[t]["V"]
+		policy[:, :, :, tryparse(Int, t) + 1] = file[t]["policy"]
+	end
+	
+	close(file)
 
-kelvintocelsius = 273.15
-xpreindustrial = 14 + kelvintocelsius
+    return V, policy, model
+end
+
+begin # Import
+    highsimpath = "N=50_Δλ=0.08.jld2"
+    lowsimpath = "N=50_Δλ=0.01.jld2"
+    Vh, policyh, modelh = readsimulation(highsimpath)
+    # TODO: Vl, policyl, modell = readsimulation(lowsimpath)
+    m = modelh
+end;
 
 function stringtempdev(x::Real; digits = 2)
     fsign = x > 0 ? "+" : ""
@@ -50,10 +62,10 @@ function stringtempdev(x::Real; digits = 2)
     return Printf.format(fmt, x)
 end
 
-function makedevxlabels(from, to, climate; step = 0.5, withcurrent = false, digits = 2)
+function makedevxlabels(from, to, model::ModelInstance; step = 0.5, withcurrent = false, digits = 2)
 
     preindustrialx = range(from, to; step = step)
-    xticks = preindustrialx .+ xpreindustrial
+    xticks = model.hogg.Tᵖ .+ preindustrialx
 
     xlabels = [stringtempdev(x, digits = digits) for x in preindustrialx]
 
@@ -89,15 +101,14 @@ end
 
 begin # labels and axis
     TEMPLABEL = raw"Temperature deviations $T - T^{\mathrm{p}}$"
-    Tspacedev = range(0f0, 10f0; length = 51)
-    Tspace = Tspacedev .+ hogg.Tᵖ
-    yearlytime = collect(0:economy.t₁) 
+    Tspacedev = range(0., 10.; length = 51)
+    Tspace = Tspacedev .+ m.hogg.Tᵖ
+    yearlytime = collect(0:m.economy.t₁) 
     ΔTᵤ = last(Tspace) - first(Tspace)
-    temperatureticks = makedevxlabels(0., ΔTᵤ, (hogg, albedo); step = 1, digits = 0)  
+    temperatureticks = makedevxlabels(0., ΔTᵤ, modelh; step = 1, digits = 0)
 end
 
-@changeprecision Float32 begin # Load IPCC data
-    # Import IPCC data
+begin # Load IPCC data
     IPCCDATAPATH = joinpath(DATAPATH, "climate-data", "proj-median.csv")
     ipccproj = CSV.read(IPCCDATAPATH, DataFrame)
 
@@ -107,11 +118,10 @@ end
 end
 
 begin # Albedo plot
-    
     Δλmap = [0.02, 0.06, 0.08] 
     seqpaletteΔλ = generateseqpalette(length(Δλmap))
     
-    albedovariation = [(T -> Model.λ(T, Albedo(λ₂ = albedo.λ₁ - Δλ))).(Tspace) for Δλ ∈ Δλmap]
+    albedovariation = [(T -> Model.λ(T, Albedo(λ₂ = m.albedo.λ₁ - Δλ))).(Tspace) for Δλ ∈ Δλmap]
 
 
     albedofig = @pgf Axis(
@@ -150,7 +160,7 @@ begin # Albedo plot
 end
 
 begin # Nullcline plot
-    nullclinevariation = [(T -> Model.Mstable(T, hogg, Albedo(λ₂ = albedo.λ₁ - Δλ))).(Tspace) for Δλ ∈ Δλmap]
+    nullclinevariation = [(T -> Model.Mstable(T, m.hogg, Albedo(λ₂ = m.albedo.λ₁ - Δλ))).(Tspace) for Δλ ∈ Δλmap]
 
 
     nullclinefig = @pgf Axis(
@@ -160,7 +170,7 @@ begin # Nullcline plot
             grid = "both",
             ylabel = TEMPLABEL,
             xlabel = raw"Carbon concentration $M$",
-            xmin = hogg.Mᵖ, xmax = 1200,
+            xmin = m.hogg.Mᵖ, xmax = 1200,
             xtick = 200:200:1200,
             yticklabels = temperatureticks[2],
             ytick = 0:1:ΔTᵤ,
@@ -206,7 +216,7 @@ begin # Growth of carbon concentration
         }
     )   
     
-    gdata = [Model.γ(t, economy, calibration) for t ∈ yearlytime]
+    gdata = [γ(t, m.economy, m.calibration) for t ∈ yearlytime]
     coords = Coordinates(zip(yearlytime, gdata))
 
     markers = @pgf Plot({ only_marks, mark_options = {fill = gcolor, scale = 1.5, draw_opacity = 0}, mark_repeat = 10}, coords) 
@@ -222,42 +232,32 @@ begin # Growth of carbon concentration
     gfig
 end
 
+# --- Business-as-usual dynamics
 "Drift dynamics of (T, m)"
 function Fbau!(du, u, parameters, t)
-	instance, calibration = parameters
-    economy, hogg, albedo = instance
+	model = first(parameters)
 
-	du[1] = Model.μ(u[1], u[2], hogg, albedo)
-	du[2] = Model.γ(t, economy, calibration)
+	du[1] = μ(u[1], u[2], model.hogg, model.albedo) / m.hogg.ϵ
+	du[2] = γ(t, model.economy, model.calibration)
 end
 function G!(du, u, parameters, t)
-	instance = first(parameters)
-    hogg = instance[2]
-
-	du[1] = hogg.σ²ₜ 
-	du[2] = 0f0
+	model = first(parameters)
+	du[1] = model.hogg.σₜ / m.hogg.ϵ
+	du[2] = 0.
 end
 
-function Fterm!(du, u, parameters, t)
-	instance, calibration = parameters
-    economy, hogg, albedo = instance
-
-	du[1] = Model.μ(u[1], u[2], hogg, albedo)
-	du[2] = 0f0
-end
-
-function simulatebau(Δλ::Float32; trajectories = 1000, tspan = (0f0, last(yearlytime))) # Business as Usual, ensemble simulation    
-    baualbedo = Albedo(λ₂ = albedo.λ₁ - Δλ)    
-    bauparameters = ((economy, hogg, baualbedo), calibration)
+function simulatebau(Δλ; trajectories = 1000, tspan = (0., last(yearlytime))) # Business as Usual, ensemble simulation    
+    albedo = Albedo(λ₂ = m.albedo.λ₁ - Δλ)
+    model = ModelInstance(m.economy, m.hogg, albedo, m.grid, m.calibration)
     
-    fn = SDEFunction(Fbau!, G!, mass_matrix = mass)
+    fn = SDEFunction(Fbau!, G!)
     
-    problembse = SDEProblem(fn, G!, [hogg.T₀, log(hogg.M₀)], tspan, bauparameters)
+    prob = SDEProblem(fn, G!, [model.hogg.T₀, log(model.hogg.M₀)], tspan, (model, ))
     
-    ensemblebse = EnsembleProblem(problembse)
+    ensemble = EnsembleProblem(prob)
     
-    bausim = solve(ensemblebse, trajectories = trajectories)
-    baunullcline = (x -> Model.mstable(x, hogg, baualbedo)).(Tspace)
+    bausim = solve(ensemble; trajectories)
+    baunullcline = (x -> Model.mstable(x, m.hogg, albedo)).(Tspace)
     
     return bausim, baunullcline
 end
@@ -275,13 +275,13 @@ begin # Business as usual plots
             yticklabels = temperatureticks[2],
             ytick = 0:1:ΔTᵤ,
             ymin = 0, ymax = ΔTᵤ,
-            xmin = hogg.Mᵖ, xmax = 1200,
+            xmin = m.hogg.Mᵖ, xmax = 1200,
             xtick = 200:100:1100,
             grid = "both"
         }
     )
 
-    @pgf for (i, Δλ) ∈ enumerate([0f0, 8f-2])
+    @pgf for (i, Δλ) ∈ enumerate([0.01, 0.08])
         isfirst = i == 1
         Δλplots = []
         timeseriescolor = isfirst ? seqpaletteΔλ[1] : seqpaletteΔλ[end]
@@ -309,7 +309,7 @@ begin # Business as usual plots
         bausim, baunullcline = simulatebau(Δλ; trajectories = 20)
         baumedian = [timepoint_median(bausim, t) for t in yearlytime]
         baumedianM = @. exp([u[2] for u in baumedian])
-        baumedianT = @. first(baumedian) - hogg.Tᵖ
+        baumedianT = @. first(baumedian) - m.hogg.Tᵖ
 
 
         # Nullcline
@@ -336,7 +336,7 @@ begin # Business as usual plots
             path = sim.(yearlytime)
 
             mpath = @. exp([u[2] for u in path])
-            xpath = @. first(path) - hogg.Tᵖ
+            xpath = @. first(path) - m.hogg.Tᵖ
 
             push!(
                 Δλplots, 
@@ -365,77 +365,9 @@ begin # Business as usual plots
     baufig
 end
 
-begin # Density of business as usual scenario
-    yearsofdensity = 10:10:80
-    densedomain = collect(0:0.1f0:12)
-    
-    baupossim, _ = simulatebau(8f-2; trajectories = 2001)
-    decadetemperatures = [first(componentwise_vectors_timepoint(baupossim, t)) .- hogg.Tᵖ for t in yearsofdensity]
-    dists = (x -> kde(x)).(decadetemperatures)
-    densities = [x -> pdf(d, x) for d in dists]
-
-    poscolor = PALETTE[1]
-    densedomain_ext = [[densedomain[1]]; densedomain; [densedomain[end]]]
-
-    densityfig = @pgf Axis(
-        {
-            width = raw"1\textwidth",
-            height = raw"0.6\textwidth",
-            grid = "both",
-            xmax = densedomain[end], xmin = densedomain[1], 
-            zmin = 0, 
-            ymin = 0, ymax = 90,
-            set_layers,
-            view = "{-28}{50}",   # viewpoint
-            ytick = collect(yearsofdensity),
-            x_dir = "reverse",
-            xlabel = raw"Temperature deviations $T - T^{\mathrm{p}}$",
-            ylabel = raw"Year",
-            zlabel = raw"Density of temperature",
-            yticklabels = yearsofdensity .+ BASELINE_YEAR,
-            tick_label_style = {scale = 0.5}
-        },
-    )
-
-    @pgf for i in eachindex(dists)
-    
-        # add a pdf-curve on top of each second data set
-        curve = Plot3(
-            {
-                no_marks,
-                style = {thick},
-                color = poscolor
-            },
-            Table(
-                x = densedomain,
-                y = 10i * ones(length(densedomain)),
-                z = densities[i].(densedomain)
-            )
-        )
-
-        fill = Plot3(
-            {
-                draw = "none",
-                fill = poscolor,
-                fill_opacity = 0.25
-            },
-            Table(x = densedomain_ext,
-                    y = 10i * ones(length(densedomain_ext)),
-                    z = [[0]; densities[i].(densedomain); [0]])
-        )
-        push!(densityfig, curve, fill)
-    end 
-
-    if SAVEFIG
-        PGFPlotsX.save(joinpath(PRESENTATIONPATH, "bau-x-dens.tikz"), densityfig; include_preamble = true) 
-    end
-
-    densityfig
-end
-
 begin # Carbon decay calibration
-    sinkspace = range(hogg.N₀, 1.2f0 * hogg.N₀; length = 101)
-    decay = [Model.δₘ(N, hogg) for N in sinkspace]
+    sinkspace = range(m.hogg.N₀, 1.2 * m.hogg.N₀; length = 101)
+    decay = (n -> Model.δₘ(n, m.hogg)).(sinkspace)
 
     decayfig = @pgf Axis(
         {
@@ -468,12 +400,12 @@ begin # Carbon decay calibration
 end
 
 begin # Carbon decay path
-    bausim, baunullcline = simulatebau(0f0; trajectories = 1)
+    bausim, baunullcline = simulatebau(0.; trajectories = 1)
     M = exp.([u[2] for u in bausim[1].u])
-    decaysim = Model.δₘ.(M, Ref(hogg))
+    decaysim = Model.δₘ.(M, Ref(m.hogg))
     
     Msparse = exp.([Float32(bausim(y)[1][2]) for y in 0:10:horizon])
-    decaysimsparse = Model.δₘ.(Msparse, Ref(hogg))
+    decaysimsparse = Model.δₘ.(Msparse, Ref(m.hogg))
 
     decaypathfig = @pgf Axis(
         {
@@ -484,7 +416,7 @@ begin # Carbon decay path
             ylabel = raw"Decay of CO$_2$ in the atmosphere $\delta_m$",
             no_markers,
             ultra_thick,
-            xmin = hogg.M₀, xmax = maximum(M),
+            xmin = m.hogg.M₀, xmax = maximum(M),
             ymin = -1e-3
         }
     )
@@ -510,7 +442,6 @@ begin # Carbon decay path
     decaypathfig
 end
 
-
 begin # Albedo plot
     damagefig = @pgf Axis(
         {
@@ -529,7 +460,7 @@ begin # Albedo plot
     )
 
     @pgf damagecurve = Plot({color = PALETTE[2]},
-        Coordinates(Tspacedev, [Model.d(T, economy, hogg) for T in Tspace])
+        Coordinates(Tspacedev, [Model.d(T, m.economy, m.hogg) for T in Tspace])
     )
 
     push!(damagefig, damagecurve)
@@ -541,35 +472,4 @@ begin # Albedo plot
     damagefig
 end
 
-begin
-    χspace = range(0f0, 1f0; length = 21)
-
-    outputfig = @pgf Axis(
-        {
-            width = raw"\linewidth",
-            height = raw"\linewidth",
-            grid = "both",
-            ylabel = raw"$\phi(t, 1 - \chi)$",
-            xlabel = raw"$\chi$",
-            xtick = 0:0.2:1,
-            ytick = 0:0.1:0.2,
-            xmin = 0, xmax = 1,
-            ymin = 0, ymax = 0.2,
-            ultra_thick, xticklabel_style = {rotate = 45},
-            legend_style={nodes={scale = 0.5}},
-        }
-    )
-
-    for (i, t) ∈ enumerate([0f0, 50f0])
-        data = [Model.ϕ(t, χ, economy) for χ ∈ χspace]
-        curve = @pgf Plot({color = PALETTE[i]}, Coordinates(zip(χspace, data))) 
-
-        push!(outputfig, curve, LegendEntry("\$t = $t\$"))
-    end
-
-    if SAVEFIG
-        PGFPlotsX.save(joinpath(PLOTPATH, "phifig.tikz"), outputfig; include_preamble = true) 
-    end
-
-    outputfig
-end
+# -- Optimal strategy
