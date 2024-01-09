@@ -40,7 +40,7 @@ function optimalpolicy(t, Xᵢ::Point, Vᵢ, Vᵢy₊, Vᵢy₋, Vᵢm₊, model
     return Policy(u[1], u[2])
 end
 
-function optimalterminalpolicy(Xᵢ::Point, Vᵢ, Vᵢy₊, Vᵢy₋, model::ModelInstance; tol = 1e-3)
+function optimalterminalpolicy(Xᵢ::Point, Vᵢ, Vᵢy₊, Vᵢy₋, model::ModelInstance; tol = 1e-15)
     @unpack economy, hogg, albedo, calibration, grid = model
 
     function objective(χ)

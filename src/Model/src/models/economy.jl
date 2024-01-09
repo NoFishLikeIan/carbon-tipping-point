@@ -2,7 +2,7 @@ Base.@kwdef struct Economy
     # Preferences
     ρ::Float64 = 0.02 # Discount rate 
     θ::Float64 = 10.0 # Relative risk aversion
-    ψ::Float64 = 1.5 # Elasticity of intertemporal substitution 
+    ψ::Float64 = 1.5 # Elasticity of intertemporal complementarity 
 
     # Technology
     ωᵣ::Float64 = 2e-3 # Speed of abatement technology cost reduction

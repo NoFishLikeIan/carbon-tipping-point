@@ -14,7 +14,7 @@ begin # Setup
 
     calibration = load_object(joinpath("data", "calibration.jld2"))
     hogg = Hogg();
-    economy = Economy(τ = 120.);
+    economy = Economy();
     albedo = Albedo();
 
     domains = [
