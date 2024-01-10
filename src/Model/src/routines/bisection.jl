@@ -22,10 +22,10 @@ function bisection(f, a_, b_; atol = 2eps(Float64), increasing = sign(f(b_)))
     a, b
 end
 
-function gss(f, a, b; tol = 1e-5)
-    ϕ⁻¹ = (√(5.) - 1.) / 2.
-    ϕ⁻² = (3. - √(5.)) / 2.
+const ϕ⁻¹ = (√(5.) - 1.) / 2.
+const ϕ⁻² = (3. - √(5.)) / 2.
 
+function gss(f, a, b; tol = 1e-5)
     Δ = b - a
     
     n = ceil(Int, log(tol / Δ) / log(ϕ⁻¹))
@@ -53,8 +53,8 @@ function gss(f, a, b; tol = 1e-5)
     end
 
     if yc > yd
-        return (a + d) / 2
+        return yc, (a + d) / 2
     else
-        return (c + b) / 2
+        return yd, (c + b) / 2
     end
 end

@@ -8,8 +8,11 @@ end
 
 "Drift of dy in the terminal state, t ≥ τ."
 function bterminal(Xᵢ::Point, χ, model::ModelInstance)
-    model.economy.ϱ + - model.economy.δₖᵖ + 
-    ϕ(model.economy.τ, χ, model.economy) - d(Xᵢ.T, model.economy, model.hogg)
+    investment = ϕ(model.economy.τ, χ, model.economy)
+    depreciaton = model.economy.δₖᵖ
+    damage = d(Xᵢ.T, model.economy, model.hogg)
+
+    investment - depreciaton - damage
 end
 
 "Drift of dy."

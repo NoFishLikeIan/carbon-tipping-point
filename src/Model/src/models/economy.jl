@@ -1,8 +1,6 @@
-const PREFSCALE = 20.
-
 Base.@kwdef struct Economy
     # Preferences
-    ρ::Float64 = 0.02 # Discount rate 
+    ρ::Float64 = 0.015 # Discount rate 
     θ::Float64 = 10.0 # Relative risk aversion
     ψ::Float64 = 1.5 # Elasticity of intertemporal complementarity 
 
@@ -29,30 +27,25 @@ end
 
 "Epstein-Zin aggregator"
 function f(χ, y, u, economy::Economy)
-    if u > 0. return 0. end
     @unpack ρ, θ, ψ = economy
+    c = χ * exp(y) # Consumption
 
-    δu = (1 - θ) * u
+    v = (1 - θ) * u
 
-    c = χ * exp(y)
-    R = (c / δu^inv(1 - θ))^(1 - 1 / ψ)
-
-    return PREFSCALE * ρ * (δu / (1 - 1 / ψ)) * (R - 1)
+    ρ * (v / (1 - 1/ψ)) * ((c / v^inv(1 - θ))^(1 - 1/ψ) - 1)
 end
 function Y∂f(χ, y, u, economy::Economy)
-    if u > 0. return 0. end
     @unpack ρ, θ, ψ = economy
     δu = (1 - θ) * u
 
     c = χ * exp(y)
     R = (c / δu^inv(1 - θ))^(1 - 1 / ψ)
 
-    PREFSCALE * ρ * δu * R / χ
+    ρ * δu * R / χ
 end
 
 "Computes f, Y∂f, and Y²∂²f without recomputing factors"
 function epsteinzinsystem(χ, y, u, economy::Economy)
-    if u > 0. return 0., 0., 0. end
     @unpack ρ, θ, ψ = economy
 
     δu = (1 - θ) * u
@@ -60,9 +53,9 @@ function epsteinzinsystem(χ, y, u, economy::Economy)
     c = χ * exp(y)
     R = (c / δu^inv(1 - θ))^(1 - 1 / ψ)
 
-    f₀ = PREFSCALE * ρ * δu / (1 - 1 / ψ) * (R - 1)
-    Yf₁ = PREFSCALE * ρ * δu * R / χ
-    Y²f₂ = -PREFSCALE * ρ * δu * R / (χ^2 * ψ)
+    f₀ = ρ * δu / (1 - 1 / ψ) * (R - 1)
+    Yf₁ = ρ * δu * R / χ
+    Y²f₂ = -ρ * δu * R / (χ^2 * ψ)
 
     return f₀, Yf₁, Y²f₂
 end

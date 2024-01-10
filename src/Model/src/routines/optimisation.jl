@@ -44,7 +44,7 @@ function optimalterminalpolicy(Xᵢ::Point, Vᵢ, Vᵢy₊, Vᵢy₋, model::Mod
     @unpack economy, hogg, albedo, calibration, grid = model
 
     function objective(χ)
-        bᵢ = bterminal(Xᵢ, χ, model) / grid.Δ.y        
+        bᵢ = bterminal(Xᵢ, χ, model) / grid.Δ.y
         f(χ, Xᵢ.y, Vᵢ, economy) * grid.h + 
             Vᵢy₊ * max(bᵢ, 0.) + Vᵢy₋ * max(-bᵢ, 0.)
     end
