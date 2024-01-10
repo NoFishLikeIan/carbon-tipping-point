@@ -29,158 +29,133 @@ using UnPack, JLD2, DotEnv
 using Model
 
 # ╔═╡ bbc92008-2dfb-43e3-9e16-4c60d91a2ed1
-using Random
+using Random; rng = MersenneTwister(123);
 
 # ╔═╡ e11b7094-b8d0-458c-9e4a-8ebe3b588dfc
 using Plots, PlutoUI
 
 # ╔═╡ 9a954586-c41b-44bb-917e-2262c00b958a
-using Roots
+using Roots, Interpolations
+
+# ╔═╡ a1f3534e-8c07-42b1-80ac-440bc016a652
+using DifferentialEquations
+
+# ╔═╡ d04d558a-c152-43a1-8668-ab3b040e6701
+using DifferentialEquations: EnsembleAnalysis, EnsembleDistributed
 
 # ╔═╡ b29e58b6-dda0-4da9-b85d-d8d7c6472155
 TableOfContents()
 
 # ╔═╡ e74335e3-a230-4d11-8aad-3323961801aa
-default(size = 500 .* (√2, 1), dpi = 180, titlefontsize = 12, cmap = :viridis)
+default(size = 500 .* (√2, 1), dpi = 180, titlefontsize = 12)
+
+# ╔═╡ c25e9def-d474-4e97-8919-c066bb11338c
+md"
+## Parameters
+
+``\Delta\lambda =`` $(@bind Δλ Slider([1e-5, 0.01, 0.08], show_value = true, default = 0.08))
+"
+
+# ╔═╡ c9396e59-ed2f-4f73-bf48-e94ccf6e55bd
+md"""
+# Post-transition phase
+"""
 
 # ╔═╡ 4607f0c4-027b-4402-a8b1-f98750696b6f
 begin
 	env = DotEnv.config()
 	datapath = joinpath("..", get(env, "DATAPATH", "data/"))
-	calibration = load_object(joinpath(datapath, "calibration.jld2"))
-	termpath = joinpath(datapath, "terminal", "N=50_Δλ=0.08.jld2")
+	termpath = joinpath(datapath, "terminal", "N=50_Δλ=$(Δλ).jld2")
 
 	V̄ = load(termpath, "V̄")
 	model = load(termpath, "model")
 	termpolicy = load(termpath, "policy")
+
+	@unpack economy, hogg, albedo, grid, calibration = model
 end;
 
-# ╔═╡ d51a7ae6-aaac-4ea2-8b3c-dd261222c0f8
-rng = MersenneTwister(123);
+# ╔═╡ 35f6e02d-70cb-4111-8e33-e43c8db5e7a8
+X₀ = Point(hogg.T₀, log(hogg.M₀), log(economy.Y₀));
 
-# ╔═╡ c9396e59-ed2f-4f73-bf48-e94ccf6e55bd
-md"""
-# Terminal problem
-"""
-
-# ╔═╡ 0df664cb-2652-486f-9b83-a3bbe6314b1e
-md"
-## Optimal Policy
-
-$\begin{equation}
-\max_{{\color{red} \chi} \in [0, 1]} h f({\color{red} \chi}; \; y, V_i) + b^{+}({\color{red} \chi}; \; T) V_{i + \delta y} + b^{-}({\color{red} \chi}; \; T) V_{i - \delta y}
-\end{equation}$
-"
-
-# ╔═╡ 45c6ee36-d1ca-464f-8e35-0b992cecb910
+# ╔═╡ 4c5e5ac4-f15b-476d-b05f-e06e9b35eae4
 begin
-	@unpack grid, economy = model
+	plotsection(F, z; kwargs...) = plotsection!(plot(), F, z; kwargs...)
+	function plotsection!(fig, F, z; zdim = 3, surf = false, labels = ("\$T\$", "\$m\$", "\$y\$"), kwargs...)
+		Nᵢ = size(grid)
 	
-	idx = rand(rng, CartesianIndices(grid))
-	Xᵢ = grid.X[idx] + [0., 0., 0.]
-	Vᵢ = V̄[idx]
-	Vᵢ₊ = V̄[idx + CartesianIndex(1, 0, 0)]
-	Vᵢ₋ = V̄[idx - CartesianIndex(1, 0, 0)]
+		Ω = [range(Δ...; length = Nᵢ[i]) for (i, Δ) in enumerate(grid.domains)]
+	
+		xdim, ydim = filter(!=(zdim), 1:3)
+	    jdx = findfirst(x -> x ≥ z, Ω[zdim])
+	
+	    aspect_ratio = grid.Δ[xdim] / grid.Δ[ydim]
+	
+		Z = selectdim(F, zdim, jdx)
+	
+		if surf
+			Plots.surface!(fig,
+				Ω[xdim], Ω[ydim], Z'; 
+				aspect_ratio, 
+				xlims = grid.domains[xdim], 
+				ylims = grid.domains[ydim], 
+		        xlabel = labels[xdim], ylabel = labels[ydim],
+				kwargs...
+			)
 
-	b⁺(χ) = max(Model.bterminal(Xᵢ, χ, model), 0.) / grid.Δ.y
-	b⁻(χ) = max(-Model.bterminal(Xᵢ, χ, model), 0.) / grid.Δ.y
-	f(χ) = Model.f(χ, Xᵢ.y, Vᵢ, economy)
-
-	function termobjective(χ)
-		grid.h * f(χ) + b⁺(χ) * Vᵢ₊ + b⁻(χ) * Vᵢ₋
+		else
+			Plots.contourf!(fig, 
+				Ω[xdim], Ω[ydim], Z'; 
+				aspect_ratio, 
+				xlims = grid.domains[xdim], 
+				ylims = grid.domains[ydim], 
+		        xlabel = labels[xdim], ylabel = labels[ydim],
+				kwargs...
+			)
+	
+		end
 	end
 end
 
-# ╔═╡ 2dc66eff-a2e5-4da9-909f-f95fb5f2b6b9
-md"## Terminal condition"
-
-# ╔═╡ 15e1875d-0aa0-4f74-aa4a-6504b17d1feb
-ẏ = [Model.bterminal(grid.X[idx], termpolicy[idx], model) for idx in CartesianIndices(grid)];
-
-# ╔═╡ 4c5e5ac4-f15b-476d-b05f-e06e9b35eae4
-function plotsection(F, z; zdim = 3, surf = false, 
-	labels = ("\$T\$", "\$m\$", "\$y\$"), kwargs...)
-	Nᵢ = size(model.grid.X)
-
-	Ω = [range(Δ...; length = Nᵢ[i]) for (i, Δ) in enumerate(model.grid.domains)]
-
-	xdim, ydim = filter(!=(zdim), 1:3)
-    jdx = findfirst(x -> x ≥ z, Ω[zdim])
-
-    aspect_ratio = model.grid.Δ[xdim] / model.grid.Δ[ydim]
-
-	Z = selectdim(F, zdim, jdx)
-	
-    (surf ? Plots.wireframe : Plots.contourf)(
-		Ω[xdim], Ω[ydim], Z'; 
-        aspect_ratio, 
-		xlims = model.grid.domains[xdim], 
-		ylims = model.grid.domains[ydim], 
-        xlabel = labels[xdim], ylabel = labels[ydim],
-		clims = (minimum(Z), 0.), linewidth = 0,
-		kwargs...)
-end;
-
 # ╔═╡ c5f9e376-6ab9-4a4f-960d-7dcaf8d03fb6
 md"
-``m``: $(@bind mterm Slider(range(model.grid.domains[2]...; length = 101), show_value = true, default = log(model.hogg.M₀)))
+``y``: $(@bind yterm Slider(range(model.grid.domains[3]...; length = 101), show_value = true, default = X₀.y))
 "
 
-# ╔═╡ 7550e9af-e0e7-44f2-98d4-c431bdd47394
-let
-	vfig = plotsection(V̄, mterm; zdim = 2, title = "\$\\overline{V}\$", surf = true)
-	pfig = plotsection(termpolicy, mterm; zdim = 2, title = "\$\\chi\$", surf = true)
+# ╔═╡ f321f780-ee30-49ee-8c76-d9dbe28ede2f
+md"- H. camera: $(@bind hcamera Slider(0:90, default = 45, show_value = true))"
 
+# ╔═╡ 21777279-fbf0-4e33-87f3-58e866b39937
+
+
+# ╔═╡ 98749904-9225-4e92-913e-b084eeba4fd7
+begin
+	vfig = plotsection(V̄, yterm; title = "\$\\chi\$", surf = false, c = :viridis, camera = (hcamera, 39))
+
+	polfig = plotsection(termpolicy, yterm; title = "\$\\chi\$", surf = true, cmap = :Reds, zlims = (0, 1), clims = (0, 1), camera = (hcamera, 39))
+
+	Tspace = range(model.grid.domains[1]...; length = 101)
+	mnull = Model.mstable.(Tspace, Ref(hogg), Ref(albedo))
+	plot!(vfig, Tspace, mnull; c = :black, linewidth = 3)
 	
-	plot(vfig, pfig)
+
+	plot(vfig, polfig, size = 600 .* (2√2, 1))
 end
 
+# ╔═╡ aaed5ea4-4d95-4f37-9c08-c245bb246380
+[Model.mstable(T, hogg, albedo) for T ∈ range(model.grid.domains[1]...; length = 101)]
+
+# ╔═╡ 44aab57b-ad89-4cd5-a122-b9b67156d2ba
+V̄[:, :, 1]
+
 # ╔═╡ 6fe67c9b-fe20-42e4-b817-b31dad586e55
-md"# General problem"
+md"# Backward Simulation"
 
-# ╔═╡ 24b805aa-eedc-4433-b396-d70e04a917fd
-function plotpolicy(F::AbstractArray{Policy}, z; zdim = 3, surf = false, 
-	labels = ("\$T\$", "\$m\$", "\$y\$"), kwargs...)
-	Nᵢ = size(model.grid.X)
-
-	Ω = [range(Δ...; length = Nᵢ[i]) for (i, Δ) in enumerate(model.grid.domains)]
-
-	xdim, ydim = filter(!=(zdim), 1:3)
-    jdx = findfirst(x -> x ≥ z, Ω[zdim])
-
-    aspect_ratio = model.grid.Δ[xdim] / model.grid.Δ[ydim]
-
-	Z = selectdim(F, zdim, jdx)
-
-	routine = surf ? Plots.wireframe : Plots.contourf
-
-	χ = first.(Z)
-	α = last.(Z)
-	χfig = routine(
-		Ω[xdim], Ω[ydim], χ'; 
-        aspect_ratio, 
-		xlims = model.grid.domains[xdim], 
-		ylims = model.grid.domains[ydim], 
-        xlabel = labels[xdim], ylabel = labels[ydim],
-		clims = zlims = (0., 1.), linewidth = 0,
-		title = "\$\\chi\$",
-		kwargs...)
-	αfig = routine(
-		Ω[xdim], Ω[ydim], α'; 
-        aspect_ratio, 
-		xlims = model.grid.domains[xdim], 
-		ylims = model.grid.domains[ydim], 
-        xlabel = labels[xdim], ylabel = labels[ydim],
-		clims = zlims = (0., 1.), linewidth = 0,
-		title = "\$\\alpha\$",
-		kwargs...)
-
-	return χfig, αfig
-end;
+# ╔═╡ fc2c9720-3607-4ee2-a48c-f8e22d4404bd
+md"## Constructing interpolations"
 
 # ╔═╡ 9bcfa0d7-0442-40f0-b63f-7d39f38c1310
 begin
-	simpath = joinpath(datapath, "total", "N=50_Δλ=0.08.jld2")
+	simpath = joinpath(datapath, "total", "N=50_Δλ=$(Δλ).jld2")
 	file = jldopen(simpath, "r")
 	timesteps = keys(file)
 	V = Array{Float64}(undef, 50, 50, 50, length(timesteps))
@@ -194,23 +169,92 @@ begin
 	close(file)
 end
 
-# ╔═╡ 754dea44-74f4-471d-87b4-d991134b378f
-md"
-``m``: $(@bind m Slider(range(model.grid.domains[2]...; length = 101), show_value = true, default = log(model.hogg.M₀)))
+# ╔═╡ d2c83cdf-002a-47dc-81f9-22b76f183587
+begin
+	ΔT, Δm, Δy = grid.domains
 
-``t``: $(@bind t Slider(0:(size(V, 4) - 1), show_value = true, default = size(V, 4) - 0))
-"
+	nodes = (
+		range(ΔT[1], ΔT[2]; length = size(grid, 1)),
+		range(Δm[1], Δm[2]; length = size(grid, 2)),
+		range(Δy[1], Δy[2]; length = size(grid, 3)),
+		0:(size(V, 4) - 1)
+	)
 
-# ╔═╡ 7fbce055-705c-4d58-8c1a-5fffbbe66037
-let
-	plotsection(V[:, :, :, t + 1], m; zdim = 2, title = "\$\\overline{V}\$", surf = true)
+	χitp = linear_interpolation(nodes, first.(policy); extrapolation_bc = Flat())
+	αitp = linear_interpolation(nodes, last.(policy); extrapolation_bc = Flat())
+end;
+
+# ╔═╡ ffa267c0-4932-4889-a555-a2d07b58344f
+md"## Policy"
+
+# ╔═╡ 31d32b62-4329-464e-8354-1c2875fe5801
+md"## Simulation"
+
+# ╔═╡ d62b65f5-220e-45c6-a434-ac392b72ab4a
+function F!(dx, x, p, t)	
+	T, m, y = x
+	
+	χ = χitp(T, m, y, t)
+	α = αitp(T, m, y, t)
+	
+	dx[1] = μ(T, m, hogg, albedo) / hogg.ϵ
+	dx[2] = γ(t, economy, calibration) - α
+	dx[3] = b(t, x, χ, α, model)
+
+	return
+end;
+
+# ╔═╡ 7823bda7-5ab8-42f7-bf1c-292dbfecf178
+function G!(dx, x, p, t)
+	dx[1] = hogg.σₜ / hogg.ϵ
+	dx[2] = 0.
+	dx[3] = economy.σₖ
+	
+	return
+end;
+
+# ╔═╡ c3c2cfc9-e7f4-495b-bcc6-51227be2c6b5
+begin
+	x₀ = [hogg.T₀, log(hogg.M₀), log(economy.Y₀)]
+	prob = SDEProblem(SDEFunction(F!, G!), G!, x₀, (0., 90.))
 end
 
-# ╔═╡ 285a3e22-e1cd-4c94-939f-6d011c8db8ca
-let
-	χfig, αfig = plotpolicy(policy[:, :, :, t + 1], m; zdim = 2, surf = true)
+# ╔═╡ 28c6fe28-bd42-4aba-b403-b2b0145a8e37
+begin
+	ensembleprob = EnsembleProblem(prob)
+	solution = solve(ensembleprob, EnsembleDistributed(); trajectories = 100)
+end;
 
-	plot(χfig, αfig)
+# ╔═╡ 1a19b769-68e2-411b-afe0-6bd2a7fb87a3
+begin
+	time = range(prob.tspan...; length = 101)
+	median = [Point(EnsembleAnalysis.timepoint_median(solution, t)) for t in time]
+
+	Tfig = plot(time, [x.T for x ∈ median], ylabel = "\$T\$", label = false, linewidth = 3, c = :black)
+	Yfig = plot(time, [exp(x.y) for x ∈ median], ylabel = "\$Y\$", xlabel = "\$t\$", label = false, c = :black, linewidth = 3)
+	
+	for sim in solution
+		data = Point.(sim.(time))
+		plot!(Tfig, time, [ x.T for x ∈ data ]; label = false, alpha = 0.05, c = :black)
+		plot!(Yfig, time, [ exp(x.y) for x ∈ data ]; label = false, alpha = 0.05, c = :black)
+	end
+
+	plot(Tfig, Yfig, sharex = true, layout = (2, 1), link = :x)
+end
+
+# ╔═╡ 43bc8d15-40d5-457c-84f9-57826cb4139f
+begin
+	αfig = plot(ylabel = "\$\\alpha\$")
+	χfig = plot(ylabel = "\$\\chi\$")
+	
+	for sim in solution
+		data = Point.(sim.(time))
+		plot!(αfig, time, [αitp(time[i], x...) for (i, x) ∈ enumerate(data)]; label = false, alpha = 0.1, c = :darkred)
+		plot!(χfig, time, [χitp(time[i], x...) for (i, x) ∈ enumerate(data)]; label = false, alpha = 0.1, c = :darkblue)
+	end
+	
+	plot(αfig, χfig, layout = (2, 1), link = :x)
+
 end
 
 # ╔═╡ Cell order:
@@ -222,19 +266,28 @@ end
 # ╠═9a954586-c41b-44bb-917e-2262c00b958a
 # ╠═b29e58b6-dda0-4da9-b85d-d8d7c6472155
 # ╠═e74335e3-a230-4d11-8aad-3323961801aa
-# ╠═4607f0c4-027b-4402-a8b1-f98750696b6f
-# ╠═d51a7ae6-aaac-4ea2-8b3c-dd261222c0f8
+# ╟─c25e9def-d474-4e97-8919-c066bb11338c
 # ╟─c9396e59-ed2f-4f73-bf48-e94ccf6e55bd
-# ╟─0df664cb-2652-486f-9b83-a3bbe6314b1e
-# ╟─45c6ee36-d1ca-464f-8e35-0b992cecb910
-# ╟─2dc66eff-a2e5-4da9-909f-f95fb5f2b6b9
-# ╠═15e1875d-0aa0-4f74-aa4a-6504b17d1feb
+# ╠═4607f0c4-027b-4402-a8b1-f98750696b6f
+# ╠═35f6e02d-70cb-4111-8e33-e43c8db5e7a8
 # ╠═4c5e5ac4-f15b-476d-b05f-e06e9b35eae4
 # ╟─c5f9e376-6ab9-4a4f-960d-7dcaf8d03fb6
-# ╟─7550e9af-e0e7-44f2-98d4-c431bdd47394
+# ╟─f321f780-ee30-49ee-8c76-d9dbe28ede2f
+# ╠═21777279-fbf0-4e33-87f3-58e866b39937
+# ╠═98749904-9225-4e92-913e-b084eeba4fd7
+# ╠═aaed5ea4-4d95-4f37-9c08-c245bb246380
+# ╟─44aab57b-ad89-4cd5-a122-b9b67156d2ba
 # ╟─6fe67c9b-fe20-42e4-b817-b31dad586e55
-# ╠═24b805aa-eedc-4433-b396-d70e04a917fd
+# ╠═a1f3534e-8c07-42b1-80ac-440bc016a652
+# ╠═d04d558a-c152-43a1-8668-ab3b040e6701
+# ╟─fc2c9720-3607-4ee2-a48c-f8e22d4404bd
 # ╠═9bcfa0d7-0442-40f0-b63f-7d39f38c1310
-# ╟─754dea44-74f4-471d-87b4-d991134b378f
-# ╠═7fbce055-705c-4d58-8c1a-5fffbbe66037
-# ╠═285a3e22-e1cd-4c94-939f-6d011c8db8ca
+# ╠═d2c83cdf-002a-47dc-81f9-22b76f183587
+# ╟─ffa267c0-4932-4889-a555-a2d07b58344f
+# ╟─31d32b62-4329-464e-8354-1c2875fe5801
+# ╠═d62b65f5-220e-45c6-a434-ac392b72ab4a
+# ╠═7823bda7-5ab8-42f7-bf1c-292dbfecf178
+# ╠═c3c2cfc9-e7f4-495b-bcc6-51227be2c6b5
+# ╠═28c6fe28-bd42-4aba-b403-b2b0145a8e37
+# ╠═1a19b769-68e2-411b-afe0-6bd2a7fb87a3
+# ╠═43bc8d15-40d5-457c-84f9-57826cb4139f
