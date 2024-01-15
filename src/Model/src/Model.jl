@@ -2,7 +2,7 @@ module Model
 
 # Models
 export Economy, Hogg, Albedo, Calibration, ModelInstance
-export μ, b, bterminal, γ, f
+export μ, b, bterminal, γ, f, mstable
 
 # Grid
 export Domain, RegularGrid, Point, Policy, Drift, I
@@ -28,7 +28,8 @@ using StaticArraysCore: StaticArray
 using StaticArrays: FieldVector
 
 using Optim: TwiceDifferentiableConstraints, TwiceDifferentiable, only_fgh!, optimize, IPNewton, minimizer, GoldenSection, Options
-using Interpolations: interpolate, BSpline, Linear, scale
+using Interpolations: interpolate, extrapolate, scale
+using Interpolations: BSpline, Linear, Line
 
 using JLD2: jldopen, Group
 

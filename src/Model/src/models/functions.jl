@@ -7,10 +7,12 @@ function ε′(t, M, model::ModelInstance)
 end
 
 "Drift of dy in the terminal state, t ≥ τ."
-function bterminal(Xᵢ::Point, χ, model::ModelInstance)
-    investment = ϕ(model.economy.τ, χ, model.economy)
-    depreciaton = model.economy.δₖᵖ
-    damage = d(Xᵢ.T, model.economy, model.hogg)
+bterminal(Xᵢ::Point, args...) = bterminal(Xᵢ.T, args...)
+bterminal(T::Float64, χ, model::ModelInstance) = bterminal(T, χ, model.economy, model.hogg) 
+function bterminal(T::Float64, χ, economy::Economy, hogg::Hogg)
+    investment = ϕ(economy.τ, χ, economy)
+    depreciaton = economy.δₖᵖ
+    damage = d(T, economy, hogg)
 
     investment - depreciaton - damage
 end

@@ -11,7 +11,7 @@ Base.@kwdef struct Economy
     
     # Damages
     δₖᵖ::Float64 = 1.5e-1 # Initial depreciation rate of capital
-    ξ::Float64 = 7.5e-5
+    ξ::Float64 = 0.00026
     υ::Float64 = 3.25
 
     # Output
@@ -25,15 +25,21 @@ Base.@kwdef struct Economy
     τ::Float64 = 120. # Steady state horizon
 end
 
-"Epstein-Zin aggregator"
-function f(χ, y, u, economy::Economy)
+"Epstein-Zin aggregator for  Δt step."
+function f(χ, Xᵢ::Point, v, Δt, economy::Economy)
     @unpack ρ, θ, ψ = economy
-    c = χ * exp(y) # Consumption
+    
+    c = χ * exp(Xᵢ.y)
 
-    v = (1 - θ) * u
+    value = ((1 - θ) * v)^((1 - 1/ψ) / (1 - θ))
+    consumption = c^(1 - 1/ψ)
 
-    ρ * (v / (1 - 1/ψ)) * ((c / v^inv(1 - θ))^(1 - 1/ψ) - 1)
+    u = exp(-ρ * Δt) * value + (1 - exp(-ρ * Δt)) * consumption
+
+    return (u^((1 - θ) / (1 - 1/ψ))) / (1 - θ)
 end
+
+
 function Y∂f(χ, y, u, economy::Economy)
     @unpack ρ, θ, ψ = economy
     δu = (1 - θ) * u

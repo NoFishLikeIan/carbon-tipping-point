@@ -24,6 +24,8 @@ struct Drift <: FieldVector{3, Float64}
     dy::Float64
 end
 
+Base.abs(d::Drift) = abs.(d)
+
 struct TerminalDrift <: FieldVector{2, Float64}
     dT::Float64
     dy::Float64
@@ -63,4 +65,14 @@ end
 Base.size(grid::RegularGrid) = size(grid.X)
 Base.size(grid::RegularGrid, axis::Int) = size(grid.X, axis)
 Base.CartesianIndices(grid::RegularGrid) = CartesianIndices(grid.X)
-Base.abs(d::Drift) = abs.(d)
+
+function Base.CartesianIndices(grid::RegularGrid, excludeboundary::Dict{Int, NTuple{2, Bool}})
+    L, R = extrema(CartesianIndices(grid))
+
+    for (dim, exclude) ∈ excludeboundary
+        if exclude[1] L += I[dim] end
+        if exclude[2] R -= I[dim] end
+    end
+
+    return L:R
+end

@@ -5,7 +5,10 @@ end
 function interpolateovergrid(grid::RegularGrid, V::AbstractArray{Float64, 3}, xs::AbstractArray{Point, M})::AbstractArray{Float64, M} where M
     N = size(grid, 1)
     knots = ntuple(i -> range(grid.domains[i][1], grid.domains[i][2], length = N), 3)
-    itp = scale(interpolate(V, BSpline(Linear())), knots)    
+    itp = extrapolate(
+        scale(interpolate(V, BSpline(Linear())), knots),
+        Line()
+    )
 
     [itp(x.T, x.m, x.y) for x ∈ xs]
 end
