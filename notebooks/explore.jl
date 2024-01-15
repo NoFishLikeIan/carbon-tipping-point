@@ -43,6 +43,9 @@ using DifferentialEquations
 # ╔═╡ d04d558a-c152-43a1-8668-ab3b040e6701
 using DifferentialEquations: EnsembleAnalysis, EnsembleDistributed
 
+# ╔═╡ 93709bdd-408f-4f87-b0c8-fda34b06af57
+include("../scripts/plotutils.jl")
+
 # ╔═╡ b29e58b6-dda0-4da9-b85d-d8d7c6472155
 TableOfContents()
 
@@ -53,8 +56,11 @@ default(size = 500 .* (√2, 1), dpi = 180, titlefontsize = 12)
 md"
 ## Parameters
 
-``\Delta\lambda =`` $(@bind Δλ Slider([1e-5, 0.01, 0.08], show_value = true, default = 0.08))
+``\Delta\lambda =`` $(@bind Δλ Slider([1e-5, 0.01, 0.08, 0.1], show_value = true, default = 0.08))
 "
+
+# ╔═╡ 94be80bf-ebc1-42ed-903d-071361249222
+N = 50;
 
 # ╔═╡ c9396e59-ed2f-4f73-bf48-e94ccf6e55bd
 md"""
@@ -65,7 +71,7 @@ md"""
 begin
 	env = DotEnv.config()
 	datapath = joinpath("..", get(env, "DATAPATH", "data/"))
-	termpath = joinpath(datapath, "terminal", "N=50_Δλ=$(Δλ).jld2")
+	termpath = joinpath(datapath, "terminal", "N=$(N)_Δλ=$(Δλ).jld2")
 
 	V̄ = load(termpath, "V̄")
 	model = load(termpath, "model")
@@ -77,75 +83,13 @@ end;
 # ╔═╡ 35f6e02d-70cb-4111-8e33-e43c8db5e7a8
 X₀ = Point(hogg.T₀, log(hogg.M₀), log(economy.Y₀));
 
-# ╔═╡ 4c5e5ac4-f15b-476d-b05f-e06e9b35eae4
-begin
-	plotsection(F, z; kwargs...) = plotsection!(plot(), F, z; kwargs...)
-	function plotsection!(fig, F, z; zdim = 3, surf = false, labels = ("\$T\$", "\$m\$", "\$y\$"), kwargs...)
-		Nᵢ = size(grid)
-	
-		Ω = [range(Δ...; length = Nᵢ[i]) for (i, Δ) in enumerate(grid.domains)]
-	
-		xdim, ydim = filter(!=(zdim), 1:3)
-	    jdx = findfirst(x -> x ≥ z, Ω[zdim])
-	
-	    aspect_ratio = grid.Δ[xdim] / grid.Δ[ydim]
-	
-		Z = selectdim(F, zdim, jdx)
-	
-		if surf
-			Plots.surface!(fig,
-				Ω[xdim], Ω[ydim], Z'; 
-				aspect_ratio, 
-				xlims = grid.domains[xdim], 
-				ylims = grid.domains[ydim], 
-		        xlabel = labels[xdim], ylabel = labels[ydim],
-				kwargs...
-			)
-
-		else
-			Plots.contourf!(fig, 
-				Ω[xdim], Ω[ydim], Z'; 
-				aspect_ratio, 
-				xlims = grid.domains[xdim], 
-				ylims = grid.domains[ydim], 
-		        xlabel = labels[xdim], ylabel = labels[ydim],
-				kwargs...
-			)
-	
-		end
-	end
-end
-
 # ╔═╡ c5f9e376-6ab9-4a4f-960d-7dcaf8d03fb6
 md"
-``y``: $(@bind yterm Slider(range(model.grid.domains[3]...; length = 101), show_value = true, default = X₀.y))
+``m``: $(@bind mtermfig Slider(range(model.grid.domains[2]...; length = 101), show_value = true, default = X₀.m))
 "
 
-# ╔═╡ f321f780-ee30-49ee-8c76-d9dbe28ede2f
-md"- H. camera: $(@bind hcamera Slider(0:90, default = 45, show_value = true))"
-
-# ╔═╡ 21777279-fbf0-4e33-87f3-58e866b39937
-
-
 # ╔═╡ 98749904-9225-4e92-913e-b084eeba4fd7
-begin
-	vfig = plotsection(V̄, yterm; title = "\$\\chi\$", surf = false, c = :viridis, camera = (hcamera, 39))
-
-	polfig = plotsection(termpolicy, yterm; title = "\$\\chi\$", surf = true, cmap = :Reds, zlims = (0, 1), clims = (0, 1), camera = (hcamera, 39))
-
-	Tspace = range(model.grid.domains[1]...; length = 101)
-	mnull = Model.mstable.(Tspace, Ref(hogg), Ref(albedo))
-	plot!(vfig, Tspace, mnull; c = :black, linewidth = 3)
-	
-
-	plot(vfig, polfig, size = 600 .* (2√2, 1))
-end
-
-# ╔═╡ aaed5ea4-4d95-4f37-9c08-c245bb246380
-[Model.mstable(T, hogg, albedo) for T ∈ range(model.grid.domains[1]...; length = 101)]
-
-# ╔═╡ 44aab57b-ad89-4cd5-a122-b9b67156d2ba
-V̄[:, :, 1]
+plotsection(V̄, mtermfig, model; zdim = 2, title = "\$\\overline{V}\$", surf = true, c = :viridis, zlims = (minimum(V̄), 0.), xflip = true)
 
 # ╔═╡ 6fe67c9b-fe20-42e4-b817-b31dad586e55
 md"# Backward Simulation"
@@ -154,6 +98,8 @@ md"# Backward Simulation"
 md"## Constructing interpolations"
 
 # ╔═╡ 9bcfa0d7-0442-40f0-b63f-7d39f38c1310
+# ╠═╡ disabled = true
+#=╠═╡
 begin
 	simpath = joinpath(datapath, "total", "N=50_Δλ=$(Δλ).jld2")
 	file = jldopen(simpath, "r")
@@ -168,8 +114,10 @@ begin
 	
 	close(file)
 end
+  ╠═╡ =#
 
 # ╔═╡ d2c83cdf-002a-47dc-81f9-22b76f183587
+#=╠═╡
 begin
 	ΔT, Δm, Δy = grid.domains
 
@@ -183,6 +131,7 @@ begin
 	χitp = linear_interpolation(nodes, first.(policy); extrapolation_bc = Flat())
 	αitp = linear_interpolation(nodes, last.(policy); extrapolation_bc = Flat())
 end;
+  ╠═╡ =#
 
 # ╔═╡ ffa267c0-4932-4889-a555-a2d07b58344f
 md"## Policy"
@@ -191,6 +140,7 @@ md"## Policy"
 md"## Simulation"
 
 # ╔═╡ d62b65f5-220e-45c6-a434-ac392b72ab4a
+#=╠═╡
 function F!(dx, x, p, t)	
 	T, m, y = x
 	
@@ -203,6 +153,7 @@ function F!(dx, x, p, t)
 
 	return
 end;
+  ╠═╡ =#
 
 # ╔═╡ 7823bda7-5ab8-42f7-bf1c-292dbfecf178
 function G!(dx, x, p, t)
@@ -214,18 +165,23 @@ function G!(dx, x, p, t)
 end;
 
 # ╔═╡ c3c2cfc9-e7f4-495b-bcc6-51227be2c6b5
+#=╠═╡
 begin
 	x₀ = [hogg.T₀, log(hogg.M₀), log(economy.Y₀)]
 	prob = SDEProblem(SDEFunction(F!, G!), G!, x₀, (0., 90.))
 end
+  ╠═╡ =#
 
 # ╔═╡ 28c6fe28-bd42-4aba-b403-b2b0145a8e37
+#=╠═╡
 begin
 	ensembleprob = EnsembleProblem(prob)
 	solution = solve(ensembleprob, EnsembleDistributed(); trajectories = 100)
 end;
+  ╠═╡ =#
 
 # ╔═╡ 1a19b769-68e2-411b-afe0-6bd2a7fb87a3
+#=╠═╡
 begin
 	time = range(prob.tspan...; length = 101)
 	median = [Point(EnsembleAnalysis.timepoint_median(solution, t)) for t in time]
@@ -241,8 +197,10 @@ begin
 
 	plot(Tfig, Yfig, sharex = true, layout = (2, 1), link = :x)
 end
+  ╠═╡ =#
 
 # ╔═╡ 43bc8d15-40d5-457c-84f9-57826cb4139f
+#=╠═╡
 begin
 	αfig = plot(ylabel = "\$\\alpha\$")
 	χfig = plot(ylabel = "\$\\chi\$")
@@ -256,6 +214,7 @@ begin
 	plot(αfig, χfig, layout = (2, 1), link = :x)
 
 end
+  ╠═╡ =#
 
 # ╔═╡ Cell order:
 # ╠═ed817ffc-f1f4-423c-8374-975e34d449eb
@@ -266,17 +225,14 @@ end
 # ╠═9a954586-c41b-44bb-917e-2262c00b958a
 # ╠═b29e58b6-dda0-4da9-b85d-d8d7c6472155
 # ╠═e74335e3-a230-4d11-8aad-3323961801aa
+# ╠═93709bdd-408f-4f87-b0c8-fda34b06af57
 # ╟─c25e9def-d474-4e97-8919-c066bb11338c
+# ╠═94be80bf-ebc1-42ed-903d-071361249222
 # ╟─c9396e59-ed2f-4f73-bf48-e94ccf6e55bd
 # ╠═4607f0c4-027b-4402-a8b1-f98750696b6f
 # ╠═35f6e02d-70cb-4111-8e33-e43c8db5e7a8
-# ╠═4c5e5ac4-f15b-476d-b05f-e06e9b35eae4
 # ╟─c5f9e376-6ab9-4a4f-960d-7dcaf8d03fb6
-# ╟─f321f780-ee30-49ee-8c76-d9dbe28ede2f
-# ╠═21777279-fbf0-4e33-87f3-58e866b39937
-# ╠═98749904-9225-4e92-913e-b084eeba4fd7
-# ╠═aaed5ea4-4d95-4f37-9c08-c245bb246380
-# ╟─44aab57b-ad89-4cd5-a122-b9b67156d2ba
+# ╟─98749904-9225-4e92-913e-b084eeba4fd7
 # ╟─6fe67c9b-fe20-42e4-b817-b31dad586e55
 # ╠═a1f3534e-8c07-42b1-80ac-440bc016a652
 # ╠═d04d558a-c152-43a1-8668-ab3b040e6701
