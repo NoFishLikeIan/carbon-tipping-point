@@ -2,9 +2,9 @@ function interpolateovergrid(fromgrid::RegularGrid, V::AbstractArray, togrid::Re
     interpolateovergrid(fromgrid, V, togrid.X)
 end
 
-function interpolateovergrid(grid::RegularGrid, V::AbstractArray, xs::AbstractArray{Point, M})::AbstractArray{M} where M
-    N = size(grid, 1)
-    knots = ntuple(i -> range(grid.domains[i][1], grid.domains[i][2], length = N), 3)
+function interpolateovergrid(fromgrid::RegularGrid, V::AbstractArray, xs::AbstractArray{Point, M})::Array{Float64, M} where M
+    N = size(fromgrid, 1)
+    knots = ntuple(i -> range(fromgrid.domains[i][1], fromgrid.domains[i][2], length = N), 3)
     itp = extrapolate(
         scale(interpolate(V, BSpline(Linear())), knots),
         Line()

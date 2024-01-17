@@ -31,7 +31,7 @@ function f(χ, Xᵢ::Point, v, Δt, economy::Economy)
     
     c = χ * exp(Xᵢ.y)
 
-    value = ((1 - θ) * v)^((1 - 1/ψ) / (1 - θ))
+    value = ((1 - θ) * min(v, 0.))^((1 - 1/ψ) / (1 - θ))
     consumption = c^(1 - 1/ψ)
 
     u = exp(-ρ * Δt) * value + (1 - exp(-ρ * Δt)) * consumption
