@@ -21,11 +21,3 @@ function interpolateovergrid(grid::RegularGrid, P::AbstractArray{Policy}, xs::Ab
 
     [Policy(itpχ(x.T, x.m, x.y), itpα(x.T, x.m, x.y)) for x ∈ xs]
 end
-
-function DiagonalRedBlackQueue(grid::RegularGrid)
-    dims = size(grid)
-    G = SimpleGraphs.grid(dims)
-    Q = PartialQueue(G, zeros(prod(dims)))
-
-    return Q
-end

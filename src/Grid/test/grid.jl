@@ -15,3 +15,5 @@ indices = Base.CartesianIndices(grid, Dict(1 => (true, false), 3 => (false, true
 V = rand(size(grid)...);
 densergrid = RegularGrid(domains, 2N);
 interpolateovergrid(grid, V, densergrid);
+
+Q = DiagonalRedBlackQueue(grid);
