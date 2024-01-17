@@ -1,3 +1,4 @@
+
 "Emissivity rate implied by abatement `α` at time `t` and carbon concentration `M`"
 function ε(t, M, α, model::ModelInstance)
     1. - M * (δₘ(M, model.hogg) + γ(t, model.economy, model.calibration) - α) / (Gtonoverppm * Eᵇ(t, model.economy, model.calibration))
@@ -29,24 +30,4 @@ function b(t, Xᵢ::Point, pᵢ::Policy, model::ModelInstance)
     abatement = Aₜ * β(t, εₜ, economy)
 
     economy.ϱ + ϕ(t, pᵢ.χ, economy) - economy.δₖᵖ - abatement - d(Xᵢ.T, economy, hogg)
-end
-
-"Largest drift on the unit cube."
-driftbounds(t, model::ModelInstance) = driftbounds!(similar(Array{Drift}, axes(model.grid)), t, model)
-function driftbounds(t, Xᵢ::Point, model::ModelInstance)
-    dT = μ(Xᵢ.T, Xᵢ.m, model.hogg, model.albedo) / (model.hogg.ϵ * model.grid.Δ.T)
-    dm = γ(t, model.economy, model.calibration) / model.grid.Δ.m
-
-    b₁ = b(t, Xᵢ, 1., 0., model)
-    b₀ = b(t, Xᵢ, 0., 0., model)
-    dy = ifelse(abs(b₁) > abs(b₀), b₁, b₀) / model.grid.Δ.y
-
-    return Drift(dT, dm, dy)
-end
-function driftbounds!(maxdrift::AbstractArray{Drift, 3}, t, model::ModelInstance)
-    @batch for idx in CartesianIndices(model.grid)
-        maxdrift[idx] = driftbounds(t, model.grid.X[idx], model)
-    end
-
-    return maxdrift
 end
