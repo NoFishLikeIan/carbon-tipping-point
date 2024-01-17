@@ -1,82 +1,117 @@
-using Model
-using JLD2, DotEnv
-using UnPack: @unpack
-using DataStructures: PriorityQueue, dequeue_pair!
-using Base: Order
+using Distributed: @everywhere, @distributed, @sync
+using SharedArrays: SharedArray
 
-const env = DotEnv.config()
-const DATAPATH = get(env, "DATAPATH", "data")
+@everywhere begin
+    using Model
+    using JLD2, DotEnv
+    using UnPack: @unpack
+    using ZigZagBoomerang: dequeue!
+    using Base: Order
+    using FastClosures: @closure
+    using BlackBoxOptim: bboptimize, best_candidate, best_fitness
+    
+    const env = DotEnv.config()
+    const DATAPATH = get(env, "DATAPATH", "data")
+end
+
 
 "Backward simulates from V̄ = V(τ) down to V(0). Stores nothing."
-function backwardsimulation!(V::AbstractArray{Float64, 3}, policy::AbstractArray{Policy, 3}, model::ModelInstance; verbose = false, cachepath = nothing, tmin = 0.)
+function backwardsimulation!(V::SharedArray{Float64, 3}, policy::SharedArray{Policy, 3}, model::ModelInstance; verbose = false, cachepath = nothing, tmin = 0., Δtcache = 0.25)
     @unpack grid, economy, hogg, albedo, calibration = model
+    
+    verbose && println("Starting backward simulation...")
+    cache = !isnothing(cachepath)
+    if cache
+        tcache = economy.τ
+        cachefile = jldopen(cachepath, "a+")
+
+        g = JLD2.Group(cachefile, "$(floor(Int, tcache))")
+        g["V"] = V
+        g["policy"] = policy
+        tcache = tcache - Δtcache
+    end
+
     σₜ² = (hogg.σₜ / (hogg.ϵ * grid.Δ.T))^2
     σₖ² = (economy.σₖ / grid.Δ.y)^2
 
     indices = CartesianIndices(grid)
     L, R = extrema(indices)
 
-    timequeue = PriorityQueue{typeof(L), Float64}(Order.Reverse, indices .=> economy.τ);
+    queue = DiagonalRedBlackQueue(grid)
 
-    verbose && println("Starting backward simulation...")
-    cache = !isnothing(cachepath)
+    while !all(isempty.(queue.minima))
+        tcluster = economy.τ - minimum(queue.vals)
+        verbose && println("\nCluster minimum time = $tcluster...")
+
+        cluster = first(dequeue!(queue))
+
+        @sync @distributed for (i, δt) in cluster
+            tᵢ = economy.τ - δt 
+            idx = indices[i]
+
+            Xᵢ = grid.X[idx]
+            dT = μ(Xᵢ.T, Xᵢ.m, hogg, albedo) / (hogg.ϵ * grid.Δ.T)
+
+            # Neighbouring nodes
+            # -- Temperature
+            VᵢT₊ = V[min(idx + I[1], R)]
+            VᵢT₋ = V[max(idx - I[1], L)]
+            # -- Carbon concentration
+            Vᵢm₊ = V[min(idx + I[2], R)]
+            # -- GDP
+            Vᵢy₊ = V[min(idx + I[3], R)]
+            Vᵢy₋ = V[max(idx - I[3], L)]
+
+            γₜ = γ(tᵢ, economy, calibration)
+
+            negvalue = @closure u -> begin
+                χ, α = u
+                dy = b(tᵢ, Xᵢ, χ, α, model) / grid.Δ.y
+                dm = (γₜ - α) / grid.Δ.m
+
+                Q = σₜ² + σₖ² + grid.h * (abs(dT) + abs(dy) + dm)
+
+                py₊ = (grid.h * max(dy, 0.) + σₖ² / 2) / Q
+                py₋ = (grid.h * max(-dy, 0.) + σₖ² / 2) / Q
+
+                pT₊ = (grid.h * max(dT, 0.) + σₜ² / 2) / Q
+                pT₋ = (grid.h * max(-dT, 0.) + σₜ² / 2) / Q
+
+                pm₊ = grid.h * dm / Q
+
+                EV̄ = py₊ * Vᵢy₊ + py₋ * Vᵢy₋ + pT₊ * VᵢT₊ + pT₋ * VᵢT₋ + pm₊ * Vᵢm₊
+
+                Δt = model.grid.h^2 / Q
+
+                return -f(χ, Xᵢ, EV̄, Δt, model.economy)
+            end
+            
+            bounds = [(0., 1.), (0., γₜ)]
+
+            leftres = bboptimize(negvalue, [0., 0.]; SearchRange = bounds, TraceMode = :silent)
+            rightres = bboptimize(negvalue, [1., γₜ]; SearchRange = bounds, TraceMode = :silent)
+
+            V[idx] = -min(best_fitness(leftres), best_fitness(rightres))
+            policy[idx] = ifelse(best_fitness(leftres) < best_fitness(rightres),best_candidate(leftres), best_candidate(rightres))
+
+            if tᵢ > tmin
+                χ, α = policy[idx]
+                dy = b(tᵢ, Xᵢ, χ, α, model) / grid.Δ.y
+                dm = (γₜ - α) / grid.Δ.m
     
-    if cache
-        tcache = economy.τ - 1.
-        cachefile = jldopen(cachepath, "a+")
-    end
-
-    while !isempty(timequeue)
-        idx, tᵢ = dequeue_pair!(timequeue)
-        Xᵢ = grid.X[idx]
-        d = driftbounds(tᵢ, Xᵢ, model)
-        verbose && print("Remaining values $(length(timequeue)), time $tᵢ\r")
-
-        Qᵢ = σₜ² + σₖ² + grid.h * sum(abs(d))
-        Δtᵢ = (grid.h)^2 / Qᵢ
-
-        # Neighbouring nodes
-        VᵢT₊, VᵢT₋ = V[min(idx + I[1], R)], V[max(idx - I[1], L)]
-        Vᵢm₊ = V[min(idx + I[2], R)]
-        Vᵢy₊, Vᵢy₋ = V[min(idx + I[3], R)], V[max(idx - I[3], L)]
-
-        # Optimal control
-        optpolicy = optimalpolicy(tᵢ, Xᵢ, V[idx], Vᵢy₊, Vᵢm₊, Vᵢy₋, model)
-
-        # -- Temperature
-        PT₊ = ((σₜ² / 2.) + grid.h * max(d.dT, 0.)) / Qᵢ
-        PT₋ = ((σₜ² / 2.) + grid.h * max(-d.dT, 0.)) / Qᵢ
-
-        # -- Carbon concentration
-        dm = d.dm - (optpolicy.α / grid.Δ.m)
-        Pm₊ = grid.h * dm / Qᵢ
-
-        # -- GDP
-        dy = b(tᵢ, Xᵢ, optpolicy, model) / grid.Δ.y
-        Py₊ = ((σₖ² / 2.) + grid.h * max(dy, 0.)) / Qᵢ
-        Py₋ = ((σₖ² / 2.) + grid.h * max(-dy, 0.)) / Qᵢ
-
-        # -- Residual
-        P = Py₊ + Py₋ + PT₊ + PT₋ + Pm₊
-
-        V[idx] = (
-            PT₊ * VᵢT₊ + PT₋ * VᵢT₋ +
-            Py₊ * Vᵢy₊ + Py₋ * Vᵢy₋ +
-            Pm₊ * Vᵢm₊ ) / P +
-            Δtᵢ * f(optpolicy.χ, Xᵢ.y, V[idx], economy)
-
-        policy[idx] = optpolicy
-
-        if tᵢ > tmin
-            push!(timequeue, idx => tᵢ - Δtᵢ)
-        end 
+                Q = σₜ² + σₖ² + grid.h * (abs(dT) + abs(dy) + dm)
+                Δt = model.grid.h^2 / Q
+    
+                queue[i] += Δt
+            end
+        end
         
-        if cache && tᵢ ≤ tcache 
+        if cache && tcluster ≤ tcache 
             verbose && println("\nSaving cache at $(floor(Int, tcache))...")
             g = JLD2.Group(cachefile, "$(floor(Int, tcache))")
             g["V"] = V
             g["policy"] = policy
-            tcache -= 1.      
+            tcache = tcache - Δtcache 
         end
     end
 
@@ -84,7 +119,7 @@ function backwardsimulation!(V::AbstractArray{Float64, 3}, policy::AbstractArray
         close(cachefile)
     end
 
-    return V, optpolicy
+    return V, policy
 end
 
 function computevalue(N::Int, Δλ = 0.08; cache = false, kwargs...)
@@ -99,12 +134,12 @@ function computevalue(N::Int, Δλ = 0.08; cache = false, kwargs...)
     cachepath = cache ? savepath : nothing
 
     termsim = load(termpath)
-    V̄ = termsim["V̄"]
-    terminalpolicy = termsim["policy"]
-    model = termsim["model"]
-
-    policy = [Policy(χ, 1e-5) for χ ∈ terminalpolicy]
-    V = copy(V̄)
+    V̄ = SharedArray(termsim["V̄"]);
+    terminalpolicy = termsim["policy"];
+    model = termsim["model"];
+    
+    policy = SharedArray([Policy(χ, 0.) for χ ∈ terminalpolicy]);
+    V = deepcopy(V̄);
 
     backwardsimulation!(V, policy, model; cachepath, kwargs...)
     
