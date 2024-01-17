@@ -39,33 +39,6 @@ function f(χ, Xᵢ::Point, v, Δt, economy::Economy)
     return (u^((1 - θ) / (1 - 1/ψ))) / (1 - θ)
 end
 
-
-function Y∂f(χ, y, u, economy::Economy)
-    @unpack ρ, θ, ψ = economy
-    δu = (1 - θ) * u
-
-    c = χ * exp(y)
-    R = (c / δu^inv(1 - θ))^(1 - 1 / ψ)
-
-    ρ * δu * R / χ
-end
-
-"Computes f, Y∂f, and Y²∂²f without recomputing factors"
-function epsteinzinsystem(χ, y, u, economy::Economy)
-    @unpack ρ, θ, ψ = economy
-
-    δu = (1 - θ) * u
-
-    c = χ * exp(y)
-    R = (c / δu^inv(1 - θ))^(1 - 1 / ψ)
-
-    f₀ = ρ * δu / (1 - 1 / ψ) * (R - 1)
-    Yf₁ = ρ * δu * R / χ
-    Y²f₂ = -ρ * δu * R / (χ^2 * ψ)
-
-    return f₀, Yf₁, Y²f₂
-end
-
 "Cost of abatement as a fraction of GDP"
 function β(t, e, economy::Economy)
     (e^2 / 2) * exp(-economy.ωᵣ * t)
