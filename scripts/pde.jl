@@ -2,7 +2,7 @@ using Distributed: @everywhere, @distributed, @sync
 using SharedArrays: SharedArray
 
 @everywhere begin
-    using Model
+    using Model, Grid
     using JLD2, DotEnv
     using UnPack: @unpack
     using ZigZagBoomerang: dequeue!
@@ -16,13 +16,11 @@ end
 
 
 "Backward simulates from V̄ = V(τ) down to V(0). Stores nothing."
-function backwardsimulation!(V::SharedArray{Float64, 3}, policy::SharedArray{Policy, 3}, model::ModelInstance; verbose = false, cachepath = nothing, tmin = 0., Δtcache = 0.25)
-    @unpack grid, economy, hogg, albedo, calibration = model
-    
+function backwardsimulation!(V::SharedArray{Float64, 3}, policy::SharedArray{Policy, 3}, model::ModelInstance, grid::RegularGrid; verbose = false, cachepath = nothing, tmin = 0., Δtcache = 0.25)    
     verbose && println("Starting backward simulation...")
     cache = !isnothing(cachepath)
     if cache
-        tcache = economy.τ
+        tcache = model.economy.τ
         cachefile = jldopen(cachepath, "a+")
 
         g = JLD2.Group(cachefile, "$(floor(Int, tcache))")
@@ -31,8 +29,8 @@ function backwardsimulation!(V::SharedArray{Float64, 3}, policy::SharedArray{Pol
         tcache = tcache - Δtcache
     end
 
-    σₜ² = (hogg.σₜ / (hogg.ϵ * grid.Δ.T))^2
-    σₖ² = (economy.σₖ / grid.Δ.y)^2
+    σₜ² = (model.hogg.σₜ / (model.hogg.ϵ * grid.Δ.T))^2
+    σₖ² = (model.economy.σₖ / grid.Δ.y)^2
 
     indices = CartesianIndices(grid)
     L, R = extrema(indices)
@@ -40,17 +38,17 @@ function backwardsimulation!(V::SharedArray{Float64, 3}, policy::SharedArray{Pol
     queue = DiagonalRedBlackQueue(grid)
 
     while !all(isempty.(queue.minima))
-        tcluster = economy.τ - minimum(queue.vals)
+        tcluster = model.economy.τ - minimum(queue.vals)
         verbose && println("\nCluster minimum time = $tcluster...")
 
         cluster = first(dequeue!(queue))
 
         @sync @distributed for (i, δt) in cluster
-            tᵢ = economy.τ - δt 
+            tᵢ = model.economy.τ - δt 
             idx = indices[i]
 
             Xᵢ = grid.X[idx]
-            dT = μ(Xᵢ.T, Xᵢ.m, hogg, albedo) / (hogg.ϵ * grid.Δ.T)
+            dT = μ(Xᵢ.T, Xᵢ.m, model.hogg, model.albedo) / (model.hogg.ϵ * grid.Δ.T)
 
             # Neighbouring nodes
             # -- Temperature
@@ -62,7 +60,7 @@ function backwardsimulation!(V::SharedArray{Float64, 3}, policy::SharedArray{Pol
             Vᵢy₊ = V[min(idx + I[3], R)]
             Vᵢy₋ = V[max(idx - I[3], L)]
 
-            γₜ = γ(tᵢ, economy, calibration)
+            γₜ = γ(tᵢ, model.economy, model.calibration)
 
             negvalue = @closure u -> begin
                 χ, α = u
@@ -81,7 +79,7 @@ function backwardsimulation!(V::SharedArray{Float64, 3}, policy::SharedArray{Pol
 
                 EV̄ = py₊ * Vᵢy₊ + py₋ * Vᵢy₋ + pT₊ * VᵢT₊ + pT₋ * VᵢT₋ + pm₊ * Vᵢm₊
 
-                Δt = model.grid.h^2 / Q
+                Δt = grid.h^2 / Q
 
                 return -f(χ, Xᵢ, EV̄, Δt, model.economy)
             end
@@ -137,6 +135,7 @@ function computevalue(N::Int, Δλ = 0.08; cache = false, kwargs...)
     V̄ = SharedArray(termsim["V̄"]);
     terminalpolicy = termsim["policy"];
     model = termsim["model"];
+    grid = termsim["grid"];
     
     policy = SharedArray([Policy(χ, 0.) for χ ∈ terminalpolicy]);
     V = deepcopy(V̄);
