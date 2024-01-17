@@ -2,7 +2,7 @@ using Revise
 using Test: @test
 using BenchmarkTools: @btime
 
-includet("../pde.jl")
+includet("../backward.jl")
 include("../plotutils.jl")
 
 N, Δλ = 11, 0.08
@@ -21,4 +21,4 @@ V = deepcopy(V̄);
 cachepath = joinpath(DATAPATH, "test.jld2");
 
 backwardsimulation!(V, policy, model, grid; tmin = model.economy.τ, verbose = true);
-@btime backwardsimulation!($V, $policy, $model; tmin = model.economy.τ);
+@btime backwardsimulation!($V, $policy, $model, $grid; tmin = model.economy.τ);

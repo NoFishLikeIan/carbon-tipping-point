@@ -140,13 +140,14 @@ function computevalue(N::Int, Δλ = 0.08; cache = false, kwargs...)
     policy = SharedArray([Policy(χ, 0.) for χ ∈ terminalpolicy]);
     V = deepcopy(V̄);
 
-    backwardsimulation!(V, policy, model; cachepath, kwargs...)
+    backwardsimulation!(V, policy, model, grid; cachepath, kwargs...)
     
     println("\nSaving solution into $savepath...")
     jldopen(savepath, "a+") do cachefile 
         g = JLD2.Group(cachefile, "endpoint")
         g["V"] = V
         g["policy"] = policy
+        g["grid"] = grid
     end
     
     return V, policy
