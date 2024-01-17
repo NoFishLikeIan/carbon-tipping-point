@@ -1,12 +1,10 @@
 using Plots: surface!, contourf!, wireframe!, plot
-using UnPack: @unpack
 
 using Model: ModelInstance
+using Grid: RegularGrid
 
-plotsection(F::AbstractArray{Float64, 3}, z, model::ModelInstance; kwargs...) = plotsection!(plot(), F, z, model; kwargs...)
-function plotsection!(fig, F::AbstractArray{Float64, 3}, z, model::ModelInstance; zdim = 3, surf = false, labels = ("\$T\$", "\$m\$", "\$y\$"), kwargs...)
-    @unpack grid = model
-
+plotsection(F::AbstractArray{Float64, 3}, z, grid::RegularGrid; kwargs...) = plotsection!(plot(), F, z, grid; kwargs...)
+function plotsection!(fig, F::AbstractArray{Float64, 3}, z, grid::RegularGrid; zdim = 3, surf = false, labels = ("\$T\$", "\$m\$", "\$y\$"), kwargs...)
     Nᵢ = size(grid)
 
     Ω = [range(Δ...; length = Nᵢ[i]) for (i, Δ) in enumerate(grid.domains)]

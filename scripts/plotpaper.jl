@@ -8,7 +8,7 @@ using DifferentialEquations, DifferentialEquations.EnsembleAnalysis
 using KernelDensity
 using Plots, Printf, PGFPlotsX, Colors
 
-using Model
+using Model, Grid
 
 begin # Global variables
     env = DotEnv.config()

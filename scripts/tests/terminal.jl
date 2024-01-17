@@ -7,11 +7,12 @@ includet("../terminalproblem.jl")
 includet("../plotutils.jl")
 
 begin
-	N = 50
+	N = 11
 	calibration = load_object(joinpath(DATAPATH, "calibration.jld2"))
 	hogg = Hogg()
 	economy = Economy()
 	albedo = Albedo()
+	model = ModelInstance(economy, hogg, albedo, calibration);
 end
 
 # -- Critical domain
@@ -27,14 +28,13 @@ criticalgrid = RegularGrid(criticaldomains, N);
 criticalindices = CartesianIndices(criticalgrid, Dict(3 => (true, false))); # Excludes the values y₀ in the iteration process
 
 Vᶜ₀ = -ones(size(criticalgrid)); criticalpolicy = similar(Vᶜ₀);
-criticalmodel = ModelInstance(economy, hogg, albedo, criticalgrid, calibration);
 
 begin
 	Vᶜ = copy(Vᶜ₀);
 	anim = @animate for iter in 1:150
-		sec = plotsection(Vᶜ, first(criticaldomains[2]), criticalmodel; zdim = 2, surf = true, c = :viridis, camera = (45, 45), yflip = true, xflip = false, title = "Iteration $iter")
+		sec = plotsection(Vᶜ, first(criticaldomains[2]), criticalgrid; zdim = 2, surf = true, c = :viridis, camera = (45, 45), yflip = true, xflip = false, title = "Iteration $iter")
 		
-		terminaljacobi!(Vᶜ, criticalpolicy, criticalmodel; indices = criticalindices)
+		terminaljacobi!(Vᶜ, criticalpolicy, model, criticalgrid; indices = criticalindices)
 		print("Iteration $iter \r")
 	end
 
@@ -48,14 +48,13 @@ domains = [
 	(log(economy.Y₀ / 10), log(2economy.Y₀)), 
 ]
 
-grid = RegularGrid(domains, N);
-model = ModelInstance(economy, hogg, albedo, grid, calibration);
+standardgrid = RegularGrid(domains, N);
 
-V₀ = min.(interpolateovergrid(criticalgrid, Vᶜ, grid), 0.)
-policy = clamp.(interpolateovergrid(criticalgrid, criticalpolicy, grid), 0, 1)
+V₀ = interpolateovergrid(criticalgrid, Vᶜ, standardgrid);
+policy = interpolateovergrid(criticalgrid, criticalpolicy, standardgrid);
 
 begin
-	lowerboundary = plotsection(Vᶜ, Tᶜ, criticalmodel; zdim = 1, c = :viridis, linewidth = 0, title = "\$V^{c}\$")
+	lowerboundary = plotsection(Vᶜ, Tᶜ, criticalgrid; zdim = 1, c = :viridis, linewidth = 0, title = "\$V^{c}\$")
 
 
 	sqr = Shape([
@@ -66,7 +65,7 @@ begin
 	])
 	plot!(lowerboundary, sqr, fillalpha = 0, linewidth = 3, c = :black, label = false)
 
-	upperboundary = plotsection(V₀, Tᶜ, model; zdim = 1, c = :viridis, linewidth = 0, title = "\$V_0\$")
+	upperboundary = plotsection(V₀, Tᶜ, standardgrid; zdim = 1, c = :viridis, linewidth = 0, title = "\$V_0\$")
 
 	lowerboundary
 end
@@ -80,8 +79,8 @@ indices = permutedims(
 begin
 	V̄ = copy(V₀);
 	anim = @animate for iter in 1:45
-		sec = plotsection(V̄, log(hogg.M₀), model; zdim = 2, surf = true, c = :viridis, camera = (45, 45), yflip = false, xflip = true, title = "Iteration $iter")
-		terminaljacobi!(V̄, policy, model; indices = indices)
+		sec = plotsection(V̄, log(hogg.M₀), standardgrid; zdim = 2, surf = true, c = :viridis, camera = (45, 45), yflip = false, xflip = true, title = "Iteration $iter")
+		terminaljacobi!(V̄, policy, model, standardgrid; indices = indices)
 		print("Iteration $iter \r")
 	end
 
