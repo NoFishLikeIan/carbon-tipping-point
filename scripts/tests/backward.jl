@@ -20,5 +20,4 @@ V = deepcopy(V̄);
 
 cachepath = joinpath(DATAPATH, "test.jld2");
 
-backwardsimulation!(V, policy, model, grid; tmin = model.economy.τ, verbose = true);
-@btime backwardsimulation!($V, $policy, $model, $grid; tmin = model.economy.τ);
+@btime backwardsimulation!($V, $policy, $model, $grid; t₀ = $model.economy.τ);

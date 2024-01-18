@@ -1,4 +1,4 @@
-using Distributed: @everywhere, @distributed, @sync
+using Distributed: @everywhere, @distributed, @sync, workers
 using SharedArrays: SharedArray
 
 @everywhere begin
@@ -8,25 +8,21 @@ using SharedArrays: SharedArray
     using ZigZagBoomerang: dequeue!
     using Base: Order
     using FastClosures: @closure
-    using BlackBoxOptim: bboptimize, best_candidate, best_fitness
-    
+    using BlackBoxOptim: bboptimize, best_candidate, best_fitness, adaptive_de_rand_1_bin_radiuslimited
+        
     const env = DotEnv.config()
     const DATAPATH = get(env, "DATAPATH", "data")
 end
 
 
 "Backward simulates from V̄ = V(τ) down to V(0). Stores nothing."
-function backwardsimulation!(V::SharedArray{Float64, 3}, policy::SharedArray{Policy, 3}, model::ModelInstance, grid::RegularGrid; verbose = false, cachepath = nothing, tmin = 0., Δtcache = 0.25)    
+function backwardsimulation!(V::SharedArray{Float64, 3}, policy::SharedArray{Policy, 3}, model::ModelInstance, grid::RegularGrid; verbose = false, cachepath = nothing, t₀ = 0., cachestep = 0.25)
     verbose && println("Starting backward simulation...")
+     
     cache = !isnothing(cachepath)
     if cache
-        tcache = model.economy.τ
-        cachefile = jldopen(cachepath, "a+")
-
-        g = JLD2.Group(cachefile, "$(floor(Int, tcache))")
-        g["V"] = V
-        g["policy"] = policy
-        tcache = tcache - Δtcache
+        tcache = model.economy.τ - cachestep
+        cachefile = jldopen(cachepath, "w+")
     end
 
     σₜ² = (model.hogg.σₜ / (model.hogg.ϵ * grid.Δ.T))^2
@@ -36,15 +32,16 @@ function backwardsimulation!(V::SharedArray{Float64, 3}, policy::SharedArray{Pol
     L, R = extrema(indices)
 
     queue = DiagonalRedBlackQueue(grid)
+    Δt = SharedArray(zeros(length(queue.vals)))
 
     while !all(isempty.(queue.minima))
-        tcluster = model.economy.τ - minimum(queue.vals)
-        verbose && println("\nCluster minimum time = $tcluster...")
+        tmin = model.economy.τ - minimum(queue.vals)
+        verbose && println("Cluster minimum time = $tmin...")
 
         cluster = first(dequeue!(queue))
 
         @sync @distributed for (i, δt) in cluster
-            tᵢ = model.economy.τ - δt 
+            tᵢ = model.economy.τ - δt
             idx = indices[i]
 
             Xᵢ = grid.X[idx]
@@ -79,37 +76,43 @@ function backwardsimulation!(V::SharedArray{Float64, 3}, policy::SharedArray{Pol
 
                 EV̄ = py₊ * Vᵢy₊ + py₋ * Vᵢy₋ + pT₊ * VᵢT₊ + pT₋ * VᵢT₋ + pm₊ * Vᵢm₊
 
-                Δt = grid.h^2 / Q
+                Δtᵢ = grid.h^2 / Q
 
-                return -f(χ, Xᵢ, EV̄, Δt, model.economy)
+                return -f(χ, Xᵢ, EV̄, Δtᵢ, model.economy)
             end
             
             bounds = [(0., 1.), (0., γₜ)]
 
-            leftres = bboptimize(negvalue, [0., 0.]; SearchRange = bounds, TraceMode = :silent)
-            rightres = bboptimize(negvalue, [1., γₜ]; SearchRange = bounds, TraceMode = :silent)
+            res = bboptimize(negvalue; SearchRange = bounds, TraceMode = :silent, Method = :adaptive_de_rand_1_bin_radiuslimited, MaxTime = 1e-4)
 
-            V[idx] = -min(best_fitness(leftres), best_fitness(rightres))
-            policy[idx] = ifelse(best_fitness(leftres) < best_fitness(rightres),best_candidate(leftres), best_candidate(rightres))
+            V[idx] = -best_fitness(res)
+            policy[idx] = best_candidate(res)
 
-            if tᵢ > tmin
-                χ, α = policy[idx]
-                dy = b(tᵢ, Xᵢ, χ, α, model) / grid.Δ.y
-                dm = (γₜ - α) / grid.Δ.m
+            if tᵢ > t₀
+                dy = b(tᵢ, Xᵢ, policy[idx], model) / grid.Δ.y
+                dm = (γₜ - policy[idx].α) / grid.Δ.m
     
                 Q = σₜ² + σₖ² + grid.h * (abs(dT) + abs(dy) + dm)
-                Δt = model.grid.h^2 / Q
+                Δtᵢ = grid.h^2 / Q
     
-                queue[i] += Δt
+                Δt[i] = Δtᵢ
+            else 
+                Δt[i] = 0.
+            end
+        end
+
+        for i in first.(cluster)
+            if Δt[i] > 0.
+                queue[i] += Δt[i]
             end
         end
         
-        if cache && tcluster ≤ tcache 
-            verbose && println("\nSaving cache at $(floor(Int, tcache))...")
-            g = JLD2.Group(cachefile, "$(floor(Int, tcache))")
+        if cache && tmin ≤ tcache 
+            verbose && println("\nSaving cache at $tcache...")
+            g = JLD2.Group(cachefile, "$tcache")
             g["V"] = V
             g["policy"] = policy
-            tcache = tcache - Δtcache 
+            tcache = tcache - cachestep 
         end
     end
 
@@ -120,30 +123,32 @@ function backwardsimulation!(V::SharedArray{Float64, 3}, policy::SharedArray{Pol
     return V, policy
 end
 
-function computevalue(N::Int, Δλ = 0.08; cache = false, kwargs...)
+function computevalue(N::Int, Δλ; cache = false, kwargs...)
     filename = "N=$(N)_Δλ=$(Δλ).jld2"
     termpath = joinpath(DATAPATH, "terminal", filename)
+    savepath = joinpath(DATAPATH, "total", filename)
+    cachepath = cache ? savepath : nothing
 
     if !isfile(termpath)
         throw("$termpath simulation not found!")
     end
-
-    savepath = joinpath(DATAPATH, "total", filename)
-    cachepath = cache ? savepath : nothing
-
-    termsim = load(termpath)
-    V̄ = SharedArray(termsim["V̄"]);
+    
+    termsim = load(termpath);
+    V = SharedArray(termsim["V̄"]);
     terminalpolicy = termsim["policy"];
     model = termsim["model"];
     grid = termsim["grid"];
     
     policy = SharedArray([Policy(χ, 0.) for χ ∈ terminalpolicy]);
-    V = deepcopy(V̄);
 
-    backwardsimulation!(V, policy, model, grid; cachepath, kwargs...)
+    if cache
+        println("Saving in $cachepath...")
+    end
+    
+    backwardsimulation!(V, policy, model, grid; cachepath = cachepath, kwargs...)
     
     println("\nSaving solution into $savepath...")
-    jldopen(savepath, "a+") do cachefile 
+    jldopen(savepath, "w+") do cachefile 
         g = JLD2.Group(cachefile, "endpoint")
         g["V"] = V
         g["policy"] = policy
