@@ -14,16 +14,16 @@ const DATAPATH = get(env, "DATAPATH", "data/")
 function terminaljacobi!(
     V::AbstractArray{Float64, 3}, 
     policy::AbstractArray{Float64, 3}, 
-    model::ModelInstance, grid::RegularGrid;
-    indices = CartesianIndices(grid)) # Can use internal indices to keep boundary constant
+    model::ModelInstance, G::RegularGrid;
+    indices = CartesianIndices(G)) # Can use internal indices to keep boundary constant
 
-    L, R = extrema(CartesianIndices(grid))
+    L, R = extrema(CartesianIndices(G))
     
     @batch for idx in indices
-        σₜ² = (model.hogg.σₜ / (model.hogg.ϵ * grid.Δ.T))^2
-        σₖ² = (model.economy.σₖ / grid.Δ.y)^2
-        Xᵢ = grid.X[idx]
-        dT = μ(Xᵢ.T, Xᵢ.m, model.hogg, model.albedo) / (model.hogg.ϵ * grid.Δ.T)
+        σₜ² = (model.hogg.σₜ / (model.hogg.ϵ * G.Δ.T))^2
+        σₖ² = (model.economy.σₖ / G.Δ.y)^2
+        Xᵢ = G.X[idx]
+        dT = μ(Xᵢ.T, Xᵢ.m, model.hogg, model.albedo) / (model.hogg.ϵ * G.Δ.T)
 
         # Neighbouring nodes
         # -- GDP
@@ -35,18 +35,18 @@ function terminaljacobi!(
         VᵢT₋ = V[max(idx - I[1], L)]
 
         value = @closure χ -> begin
-            dy = bterminal(Xᵢ, χ, model) / grid.Δ.y
-            Q = σₜ² + σₖ² + grid.h * (abs(dT) + abs(dy))
+            dy = bterminal(Xᵢ, χ, model) / G.Δ.y
+            Q = σₜ² + σₖ² + G.h * (abs(dT) + abs(dy))
 
-            py₊ = (grid.h * max(dy, 0.) + σₖ² / 2) / Q
-            py₋ = (grid.h * max(-dy, 0.) + σₖ² / 2) / Q
+            py₊ = (G.h * max(dy, 0.) + σₖ² / 2) / Q
+            py₋ = (G.h * max(-dy, 0.) + σₖ² / 2) / Q
 
-            pT₊ = (grid.h * max(dT, 0.) + σₜ² / 2) / Q
-            pT₋ = (grid.h * max(-dT, 0.) + σₜ² / 2) / Q
+            pT₊ = (G.h * max(dT, 0.) + σₜ² / 2) / Q
+            pT₋ = (G.h * max(-dT, 0.) + σₜ² / 2) / Q
 
             EV̄ = py₊ * Vᵢy₊ + py₋ * Vᵢy₋ + pT₊ * VᵢT₊ + pT₋ * VᵢT₋
 
-            Δt = grid.h^2 / Q
+            Δt = G.h^2 / Q
 
             return f(χ, Xᵢ, EV̄, Δt, model.economy)
         end
@@ -85,8 +85,8 @@ function terminaliteration(V₀::AbstractArray{Float64, 3}, model::ModelInstance
     return Vᵢ₊₁, policy
 end
 
-function computeterminal(N::Int, Δλ = 0.08; 
-    verbose = true, withsave = true, 
+function computeterminal(N::Int, Δλ; 
+    verbose = true, withsave = true, v₀ = -1.,
     iterkwargs...)
 
     calibration = load_object(joinpath(DATAPATH, "calibration.jld2"))
@@ -101,13 +101,13 @@ function computeterminal(N::Int, Δλ = 0.08;
     criticaldomains = [
         (Tᶜ, Tᶜ + 5.),
         (mstable(hogg.Tᵖ, hogg, albedo), mstable(Tᶜ + 5., hogg, albedo)),
-        (log(economy.Y₀ * 1e-3), log(3economy.Y₀)),
+        (log(economy.Y₀ / 2), log(3economy.Y₀)),
     ]
 
     criticalgrid = RegularGrid(criticaldomains, N);
     criticalindices = CartesianIndices(criticalgrid, Dict(3 => (true, false))); # Excludes the values y₀ in the iteration process
 
-    Vᶜ₀ = -ones(size(criticalgrid))
+    Vᶜ₀ = v₀ .* ones(size(criticalgrid))
     criticalpolicy = similar(Vᶜ₀);
 
     verbose && println("Solving critical region T > Tᶜ = $Tᶜ...")
@@ -117,7 +117,7 @@ function computeterminal(N::Int, Δλ = 0.08;
     domains = [
         (hogg.T₀, Tᶜ), 
         (mstable(hogg.T₀ - 0.5, hogg, albedo), mstable(Tᶜ + 0.5, hogg, albedo) + 1),
-        (log(economy.Y₀ / 10), log(2economy.Y₀)), 
+        (log(economy.Y₀ / 2), log(2economy.Y₀)), 
     ]
     
     grid = RegularGrid(domains, N);

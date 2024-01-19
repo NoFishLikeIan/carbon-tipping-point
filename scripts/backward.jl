@@ -22,7 +22,7 @@ function backwardsimulation!(V::SharedArray{Float64, 3}, policy::SharedArray{Pol
     cache = !isnothing(cachepath)
     if cache
         tcache = model.economy.τ - cachestep
-        cachefile = jldopen(cachepath, "w+")
+        cachefile = jldopen(cachepath, "a+")
     end
 
     σₜ² = (model.hogg.σₜ / (model.hogg.ϵ * grid.Δ.T))^2
@@ -36,7 +36,7 @@ function backwardsimulation!(V::SharedArray{Float64, 3}, policy::SharedArray{Pol
 
     while !all(isempty.(queue.minima))
         tmin = model.economy.τ - minimum(queue.vals)
-        verbose && println("Cluster minimum time = $tmin...")
+        verbose && print("Cluster minimum time = $tmin\r...")
 
         cluster = first(dequeue!(queue))
 
@@ -83,7 +83,7 @@ function backwardsimulation!(V::SharedArray{Float64, 3}, policy::SharedArray{Pol
             
             bounds = [(0., 1.), (0., γₜ)]
 
-            res = bboptimize(negvalue; SearchRange = bounds, TraceMode = :silent, Method = :adaptive_de_rand_1_bin_radiuslimited, MaxTime = 1e-4)
+            res = bboptimize(negvalue; SearchRange = bounds, TraceMode = :silent, Method = :adaptive_de_rand_1_bin_radiuslimited)
 
             V[idx] = -best_fitness(res)
             policy[idx] = best_candidate(res)
@@ -107,7 +107,7 @@ function backwardsimulation!(V::SharedArray{Float64, 3}, policy::SharedArray{Pol
             end
         end
         
-        if cache && tmin ≤ tcache 
+        if cache && tmin ≤ tcache
             verbose && println("\nSaving cache at $tcache...")
             g = JLD2.Group(cachefile, "$tcache")
             g["V"] = V
@@ -148,7 +148,7 @@ function computevalue(N::Int, Δλ; cache = false, kwargs...)
     backwardsimulation!(V, policy, model, grid; cachepath = cachepath, kwargs...)
     
     println("\nSaving solution into $savepath...")
-    jldopen(savepath, "w+") do cachefile 
+    jldopen(savepath, "a+") do cachefile 
         g = JLD2.Group(cachefile, "endpoint")
         g["V"] = V
         g["policy"] = policy

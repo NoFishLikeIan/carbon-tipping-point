@@ -21,18 +21,19 @@ Tᶜ = find_zero(T -> bterminal(T, 0., economy, hogg), (hogg.Tᵖ, hogg.Tᵖ + 1
 criticaldomains = [
 	(Tᶜ, Tᶜ + 5.),
 	(mstable(hogg.Tᵖ, hogg, albedo), mstable(Tᶜ + 5., hogg, albedo)),
-	(log(economy.Y₀ * 0.01), log(3economy.Y₀)),
+	(log(economy.Y₀ / 2), log(3economy.Y₀)),
 ]
 
 criticalgrid = RegularGrid(criticaldomains, N);
 criticalindices = CartesianIndices(criticalgrid, Dict(3 => (true, false))); # Excludes the values y₀ in the iteration process
 
-Vᶜ₀ = -ones(size(criticalgrid)); criticalpolicy = similar(Vᶜ₀);
+Vᶜ₀ = -100ones(size(criticalgrid)); 
+criticalpolicy = similar(Vᶜ₀);
 
 begin
 	Vᶜ = copy(Vᶜ₀);
 	anim = @animate for iter in 1:150
-		sec = plotsection(Vᶜ, first(criticaldomains[2]), criticalgrid; zdim = 2, surf = true, c = :viridis, camera = (45, 45), yflip = true, xflip = false, title = "Iteration $iter")
+		sec = plotsection(Vᶜ, log(hogg.M₀), criticalgrid; zdim = 2, surf = true, c = :viridis, camera = (45, 45), yflip = false, xflip = true, title = "Iteration $iter")
 		
 		terminaljacobi!(Vᶜ, criticalpolicy, model, criticalgrid; indices = criticalindices)
 		print("Iteration $iter \r")
@@ -45,12 +46,12 @@ end
 domains = [
 	(hogg.T₀, Tᶜ), 
 	(mstable(hogg.T₀ - 0.5, hogg, albedo), mstable(Tᶜ + 0.5, hogg, albedo) + 1),
-	(log(economy.Y₀ / 10), log(2economy.Y₀)), 
+	(log(economy.Y₀ / 2), log(2economy.Y₀)), 
 ]
 
 standardgrid = RegularGrid(domains, N);
 
-V₀ = interpolateovergrid(criticalgrid, Vᶜ, standardgrid);
+V₀ = min.(interpolateovergrid(criticalgrid, Vᶜ, standardgrid), 0.);
 policy = interpolateovergrid(criticalgrid, criticalpolicy, standardgrid);
 
 begin
@@ -79,7 +80,7 @@ indices = permutedims(
 begin
 	V̄ = copy(V₀);
 	anim = @animate for iter in 1:45
-		sec = plotsection(V̄, log(hogg.M₀), standardgrid; zdim = 2, surf = true, c = :viridis, camera = (45, 45), yflip = false, xflip = true, title = "Iteration $iter")
+		sec = plotsection(V̄, log(hogg.M₀) + 1., standardgrid; zdim = 2, surf = true, c = :viridis, camera = (45, 45), yflip = false, xflip = true, title = "Iteration $iter")
 		terminaljacobi!(V̄, policy, model, standardgrid; indices = indices)
 		print("Iteration $iter \r")
 	end
