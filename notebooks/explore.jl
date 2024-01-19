@@ -26,7 +26,7 @@ end
 using UnPack, JLD2, DotEnv
 
 # ╔═╡ f3d4f91d-ebac-43cb-9789-df38f9a87a8c
-using Model
+using Model, Grid
 
 # ╔═╡ bbc92008-2dfb-43e3-9e16-4c60d91a2ed1
 using Random; rng = MersenneTwister(123);
@@ -60,7 +60,7 @@ md"
 "
 
 # ╔═╡ 94be80bf-ebc1-42ed-903d-071361249222
-N = 50;
+N = 51;
 
 # ╔═╡ c9396e59-ed2f-4f73-bf48-e94ccf6e55bd
 md"""
@@ -76,8 +76,9 @@ begin
 	V̄ = load(termpath, "V̄")
 	model = load(termpath, "model")
 	termpolicy = load(termpath, "policy")
+	grid = load(termpath, "grid")
 
-	@unpack economy, hogg, albedo, grid, calibration = model
+	@unpack economy, hogg, albedo, calibration = model
 end;
 
 # ╔═╡ 35f6e02d-70cb-4111-8e33-e43c8db5e7a8
@@ -85,11 +86,14 @@ X₀ = Point(hogg.T₀, log(hogg.M₀), log(economy.Y₀));
 
 # ╔═╡ c5f9e376-6ab9-4a4f-960d-7dcaf8d03fb6
 md"
-``m``: $(@bind mtermfig Slider(range(model.grid.domains[2]...; length = 101), show_value = true, default = X₀.m))
+``m``: $(@bind mtermfig Slider(range(grid.domains[2]...; length = 101), show_value = true, default = X₀.m))
 "
 
+# ╔═╡ 77c2aaaf-dd90-4a22-a28b-dbe20a412668
+plotsection(termpolicy, mtermfig, grid; zdim = 2, title = "\$\\chi\$", surf = false, c = :viridis, zlims = (0, 1), clims = (0, 1), linewidth = 0., ylims = (grid.domains[1][1], grid.domains[1][2] - 1))
+
 # ╔═╡ 98749904-9225-4e92-913e-b084eeba4fd7
-plotsection(V̄, mtermfig, model; zdim = 2, title = "\$\\overline{V}\$", surf = true, c = :viridis, zlims = (minimum(V̄), 0.), xflip = true)
+plotsection(V̄, mtermfig, grid; zdim = 2, title = "\$\\overline{V}\$", surf = true, c = :viridis, zlims = (minimum(V̄), 0.), clims = (minimum(V̄), 0.), xflip = true)
 
 # ╔═╡ 6fe67c9b-fe20-42e4-b817-b31dad586e55
 md"# Backward Simulation"
@@ -101,15 +105,22 @@ md"## Constructing interpolations"
 # ╠═╡ disabled = true
 #=╠═╡
 begin
-	simpath = joinpath(datapath, "total", "N=50_Δλ=$(Δλ).jld2")
+	simpath = joinpath(datapath, "total", "N=$(N)_Δλ=$(Δλ).jld2")
 	file = jldopen(simpath, "r")
-	timesteps = keys(file)
-	V = Array{Float64}(undef, 50, 50, 50, length(timesteps))
-	policy = Array{Policy}(undef, 50, 50, 50, length(timesteps))
+	timesteps = filter(!=("endpoint"),  keys(file))
 
-	for t in timesteps
-		V[:, :, :, tryparse(Int, t) + 1] = file[t]["V"]
-		policy[:, :, :, tryparse(Int, t) + 1] = file[t]["policy"]
+	T = length(timesteps) + 1
+	V = Array{Float64}(undef, N, N, N, T)
+	policy = Array{Policy}(undef, N, N, N, T)
+	t = Vector{Float64}(undef, T)
+
+	V[:, :, :, end] = V̄
+	t[end] = model.economy.τ
+
+	for (j, tᵢ) in enumerate(timesteps)
+		V[:, :, :, T - j] = file[tᵢ]["V"]
+		policy[:, :, :, T - j] = file[tᵢ]["policy"]
+		t[T - j] = parse(Float64, tᵢ)
 	end
 	
 	close(file)
@@ -125,7 +136,7 @@ begin
 		range(ΔT[1], ΔT[2]; length = size(grid, 1)),
 		range(Δm[1], Δm[2]; length = size(grid, 2)),
 		range(Δy[1], Δy[2]; length = size(grid, 3)),
-		0:(size(V, 4) - 1)
+		t
 	)
 
 	χitp = linear_interpolation(nodes, first.(policy); extrapolation_bc = Flat())
@@ -167,8 +178,8 @@ end;
 # ╔═╡ c3c2cfc9-e7f4-495b-bcc6-51227be2c6b5
 #=╠═╡
 begin
-	x₀ = [hogg.T₀, log(hogg.M₀), log(economy.Y₀)]
-	prob = SDEProblem(SDEFunction(F!, G!), G!, x₀, (0., 90.))
+	x₀ = [X₀.T, X₀.m, X₀.y]
+	prob = SDEProblem(SDEFunction(F!, G!), x₀, (0., 90.))
 end
   ╠═╡ =#
 
@@ -183,16 +194,15 @@ end;
 # ╔═╡ 1a19b769-68e2-411b-afe0-6bd2a7fb87a3
 #=╠═╡
 begin
-	time = range(prob.tspan...; length = 101)
-	median = [Point(EnsembleAnalysis.timepoint_median(solution, t)) for t in time]
+	median = [Point(EnsembleAnalysis.timepoint_median(solution, tᵢ)) for tᵢ ∈ t]
 
-	Tfig = plot(time, [x.T for x ∈ median], ylabel = "\$T\$", label = false, linewidth = 3, c = :black)
-	Yfig = plot(time, [exp(x.y) for x ∈ median], ylabel = "\$Y\$", xlabel = "\$t\$", label = false, c = :black, linewidth = 3)
+	Tfig = plot(t, [x.T for x ∈ median], ylabel = "\$T\$", label = false, linewidth = 3, c = :black)
+	Yfig = plot(t, [exp(x.y) for x ∈ median], ylabel = "\$Y\$", xlabel = "\$t\$", label = false, c = :black, linewidth = 3)
 	
 	for sim in solution
-		data = Point.(sim.(time))
-		plot!(Tfig, time, [ x.T for x ∈ data ]; label = false, alpha = 0.05, c = :black)
-		plot!(Yfig, time, [ exp(x.y) for x ∈ data ]; label = false, alpha = 0.05, c = :black)
+		data = Point.(sim.(t))
+		plot!(Tfig, t, [ x.T for x ∈ data ]; label = false, alpha = 0.05, c = :black)
+		plot!(Yfig, t, [ exp(x.y) for x ∈ data ]; label = false, alpha = 0.05, c = :black)
 	end
 
 	plot(Tfig, Yfig, sharex = true, layout = (2, 1), link = :x)
@@ -206,9 +216,9 @@ begin
 	χfig = plot(ylabel = "\$\\chi\$")
 	
 	for sim in solution
-		data = Point.(sim.(time))
-		plot!(αfig, time, [αitp(time[i], x...) for (i, x) ∈ enumerate(data)]; label = false, alpha = 0.1, c = :darkred)
-		plot!(χfig, time, [χitp(time[i], x...) for (i, x) ∈ enumerate(data)]; label = false, alpha = 0.1, c = :darkblue)
+		data = Point.(sim.(t))
+		plot!(αfig, t, [αitp(t[i], x...) for (i, x) ∈ enumerate(data)]; label = false, alpha = 0.1, c = :darkred)
+		plot!(χfig, t, [χitp(t[i], x...) for (i, x) ∈ enumerate(data)]; label = false, alpha = 0.1, c = :darkblue)
 	end
 	
 	plot(αfig, χfig, layout = (2, 1), link = :x)
@@ -232,7 +242,8 @@ end
 # ╠═4607f0c4-027b-4402-a8b1-f98750696b6f
 # ╠═35f6e02d-70cb-4111-8e33-e43c8db5e7a8
 # ╟─c5f9e376-6ab9-4a4f-960d-7dcaf8d03fb6
-# ╟─98749904-9225-4e92-913e-b084eeba4fd7
+# ╟─77c2aaaf-dd90-4a22-a28b-dbe20a412668
+# ╠═98749904-9225-4e92-913e-b084eeba4fd7
 # ╟─6fe67c9b-fe20-42e4-b817-b31dad586e55
 # ╠═a1f3534e-8c07-42b1-80ac-440bc016a652
 # ╠═d04d558a-c152-43a1-8668-ab3b040e6701
