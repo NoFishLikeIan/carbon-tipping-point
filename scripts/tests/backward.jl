@@ -13,11 +13,11 @@ termsim = load(termpath);
 V̄ = SharedArray(termsim["V̄"]);
 terminalpolicy = termsim["policy"];
 model = termsim["model"];
-grid = termsim["grid"];
+G = termsim["grid"];
 
 policy = SharedArray([Policy(χ, 0.) for χ ∈ terminalpolicy]);
 V = deepcopy(V̄);
 
 cachepath = joinpath(DATAPATH, "test.jld2");
 
-@btime backwardsimulation!($V, $policy, $model, $grid; t₀ = $model.economy.τ);
+@btime backwardsimulation!($V, $policy, $model, $G; t₀ = $model.economy.τ);

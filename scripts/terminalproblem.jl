@@ -44,11 +44,12 @@ function terminaljacobi!(
             pT₊ = (G.h * max(dT, 0.) + σₜ² / 2) / Q
             pT₋ = (G.h * max(-dT, 0.) + σₜ² / 2) / Q
 
+            # Expected value
             EV̄ = py₊ * Vᵢy₊ + py₋ * Vᵢy₋ + pT₊ * VᵢT₊ + pT₋ * VᵢT₋
 
             Δt = G.h^2 / Q
 
-            return f(χ, Xᵢ, EV̄, Δt, model.economy)
+            return f(χ, Xᵢ, EV̄, Δt, model.preferences)
         end
 
         # Optimal control

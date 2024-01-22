@@ -12,7 +12,8 @@ begin
 	hogg = Hogg()
 	economy = Economy()
 	albedo = Albedo()
-	model = ModelInstance(economy, hogg, albedo, calibration);
+	preferences = CRRA()
+	model = ModelInstance(preferences, economy, hogg, albedo, calibration);
 end
 
 # -- Critical domain

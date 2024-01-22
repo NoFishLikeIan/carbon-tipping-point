@@ -16,7 +16,7 @@ end
 
 
 "Backward simulates from V̄ = V(τ) down to V(0). Stores nothing."
-function backwardsimulation!(V::SharedArray{Float64, 3}, policy::SharedArray{Policy, 3}, model::ModelInstance, grid::RegularGrid; verbose = false, cachepath = nothing, t₀ = 0., cachestep = 0.25)
+function backwardsimulation!(V::SharedArray{Float64, 3}, policy::SharedArray{Policy, 3}, model::ModelInstance, G::RegularGrid; verbose = false, cachepath = nothing, t₀ = 0., cachestep = 0.25)
     verbose && println("Starting backward simulation...")
      
     cache = !isnothing(cachepath)
@@ -25,13 +25,13 @@ function backwardsimulation!(V::SharedArray{Float64, 3}, policy::SharedArray{Pol
         cachefile = jldopen(cachepath, "a+")
     end
 
-    σₜ² = (model.hogg.σₜ / (model.hogg.ϵ * grid.Δ.T))^2
-    σₖ² = (model.economy.σₖ / grid.Δ.y)^2
+    σₜ² = (model.hogg.σₜ / (model.hogg.ϵ * G.Δ.T))^2
+    σₖ² = (model.economy.σₖ / G.Δ.y)^2
 
-    indices = CartesianIndices(grid)
+    indices = CartesianIndices(G)
     L, R = extrema(indices)
 
-    queue = DiagonalRedBlackQueue(grid)
+    queue = DiagonalRedBlackQueue(G)
     Δt = SharedArray(zeros(length(queue.vals)))
 
     while !all(isempty.(queue.minima))
@@ -44,8 +44,8 @@ function backwardsimulation!(V::SharedArray{Float64, 3}, policy::SharedArray{Pol
             tᵢ = model.economy.τ - δt
             idx = indices[i]
 
-            Xᵢ = grid.X[idx]
-            dT = μ(Xᵢ.T, Xᵢ.m, model.hogg, model.albedo) / (model.hogg.ϵ * grid.Δ.T)
+            Xᵢ = G.X[idx]
+            dT = μ(Xᵢ.T, Xᵢ.m, model.hogg, model.albedo) / (model.hogg.ϵ * G.Δ.T)
 
             # Neighbouring nodes
             # -- Temperature
@@ -59,46 +59,38 @@ function backwardsimulation!(V::SharedArray{Float64, 3}, policy::SharedArray{Pol
 
             γₜ = γ(tᵢ, model.economy, model.calibration)
 
+            Qᵢ = σₜ² + σₖ² + G.h * (abs(dT) + (γₜ / G.Δ.m) + boundb(tᵢ, Xᵢ, model) / G.Δ.y)
+
             negvalue = @closure u -> begin
                 χ, α = u
-                dy = b(tᵢ, Xᵢ, χ, α, model) / grid.Δ.y
-                dm = (γₜ - α) / grid.Δ.m
+                dy = b(tᵢ, Xᵢ, χ, α, model) / G.Δ.y
+                dm = (γₜ - α) / G.Δ.m
 
-                Q = σₜ² + σₖ² + grid.h * (abs(dT) + abs(dy) + dm)
+                py₊ = (G.h * max(dy, 0.) + σₖ² / 2) / Qᵢ
+                py₋ = (G.h * max(-dy, 0.) + σₖ² / 2) / Qᵢ
 
-                py₊ = (grid.h * max(dy, 0.) + σₖ² / 2) / Q
-                py₋ = (grid.h * max(-dy, 0.) + σₖ² / 2) / Q
+                pT₊ = (G.h * max(dT, 0.) + σₜ² / 2) / Qᵢ
+                pT₋ = (G.h * max(-dT, 0.) + σₜ² / 2) / Qᵢ
 
-                pT₊ = (grid.h * max(dT, 0.) + σₜ² / 2) / Q
-                pT₋ = (grid.h * max(-dT, 0.) + σₜ² / 2) / Q
+                pm₊ = G.h * dm / Qᵢ
 
-                pm₊ = grid.h * dm / Q
+                pᵢ = py₊ + py₋ + pT₊ + pT₋ + pm₊
 
-                EV̄ = py₊ * Vᵢy₊ + py₋ * Vᵢy₋ + pT₊ * VᵢT₊ + pT₋ * VᵢT₋ + pm₊ * Vᵢm₊
+                EV̄ = (py₊ * Vᵢy₊ + py₋ * Vᵢy₋ + pT₊ * VᵢT₊ + pT₋ * VᵢT₋ + pm₊ * Vᵢm₊) / pᵢ
 
-                Δtᵢ = grid.h^2 / Q
+                Δtᵢ = G.h^2 / Qᵢ
 
                 return -f(χ, Xᵢ, EV̄, Δtᵢ, model.economy)
             end
             
             bounds = [(0., 1.), (0., γₜ)]
 
-            res = bboptimize(negvalue; SearchRange = bounds, TraceMode = :silent, Method = :adaptive_de_rand_1_bin_radiuslimited)
+            res = bboptimize(negvalue; SearchRange = bounds, TraceMode = :silent, Method = :adaptive_de_rand_1_bin_radiuslimited, PopulationSize = 4)
 
             V[idx] = -best_fitness(res)
             policy[idx] = best_candidate(res)
 
-            if tᵢ > t₀
-                dy = b(tᵢ, Xᵢ, policy[idx], model) / grid.Δ.y
-                dm = (γₜ - policy[idx].α) / grid.Δ.m
-    
-                Q = σₜ² + σₖ² + grid.h * (abs(dT) + abs(dy) + dm)
-                Δtᵢ = grid.h^2 / Q
-    
-                Δt[i] = Δtᵢ
-            else 
-                Δt[i] = 0.
-            end
+            Δt[i] = ifelse(tᵢ > t₀, G.h^2 / Qᵢ, 0.)
         end
 
         for i in first.(cluster)
