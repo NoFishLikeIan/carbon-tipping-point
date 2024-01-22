@@ -1,9 +1,4 @@
 Base.@kwdef struct Economy
-    # Preferences
-    ρ::Float64 = 0.015 # Discount rate 
-    θ::Float64 = 10.0 # Relative risk aversion
-    ψ::Float64 = 1.5 # Elasticity of intertemporal complementarity 
-
     # Technology
     ωᵣ::Float64 = 2e-3 # Speed of abatement technology cost reduction
     ϱ::Float64 = 9e-3 # Growth of TFP
@@ -23,20 +18,6 @@ Base.@kwdef struct Economy
     t₀::Float64 = -15. # Initial time of IPCC report
     t₁::Float64 = 80. # Horizon of IPCC report
     τ::Float64 = 120. # Steady state horizon
-end
-
-"Epstein-Zin aggregator for  Δt step."
-function f(χ, Xᵢ::Point, v, Δt, economy::Economy)
-    @unpack ρ, θ, ψ = economy
-    
-    c = χ * exp(Xᵢ.y)
-
-    value = ((1 - θ) * v)^((1 - 1/ψ) / (1 - θ))
-    consumption = c^(1 - 1/ψ)
-
-    u = exp(-ρ * Δt) * value + (1 - exp(-ρ * Δt)) * consumption
-
-    return (u^((1 - θ) / (1 - 1/ψ))) / (1 - θ)
 end
 
 "Cost of abatement as a fraction of GDP"

@@ -31,3 +31,14 @@ function b(t, Xᵢ::Point, pᵢ::Policy, model::ModelInstance)
 
     economy.ϱ + ϕ(t, pᵢ.χ, economy) - economy.δₖᵖ - abatement - d(Xᵢ.T, economy, hogg)
 end
+
+"Computes maximum absolute value of the drift of y."
+function boundb(t, Xᵢ::Point, model::ModelInstance)
+    γₜ = γ(t, model.economy, model.calibration)
+    ll = b(t, Xᵢ, 0., 0., model)
+    lr = b(t, Xᵢ, 0., γₜ, model)
+    rl = b(t, Xᵢ, 1., 0., model)
+    rr = b(t, Xᵢ, 1., γₜ, model)
+
+    return max(abs(ll), abs(lr), abs(rl), abs(rr))
+end
