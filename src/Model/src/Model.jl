@@ -3,7 +3,7 @@ module Model
 # Models
 export Economy, Hogg, Albedo, Calibration
 export μ, b, bterminal, γ, mstable, boundb
-export Preferences, EpsteinZin, LogSeparable, CRRA, f
+export Preferences, EpsteinZin, LogSeparable, CRRA, LogUtility, f
 export ModelInstance
 
 # Packages

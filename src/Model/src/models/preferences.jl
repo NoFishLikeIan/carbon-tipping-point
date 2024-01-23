@@ -1,3 +1,8 @@
+Base.@kwdef struct LogUtility
+    ρ::Float64 = 0.015  # Discount rate 
+end
+
+
 Base.@kwdef struct CRRA
     ρ::Float64 = 0.015  # Discount rate 
     θ::Float64 = 10.    # Relative risk aversion
@@ -14,7 +19,7 @@ Base.@kwdef struct EpsteinZin
     ψ::Float64 = 1.5    # Elasticity of intertemporal complementarity 
 end
 
-Preferences = Union{CRRA, LogSeparable, EpsteinZin}
+Preferences = Union{CRRA, LogSeparable, EpsteinZin, LogUtility}
 
 function f(c, v, Δt, p::EpsteinZin)
     coeff = (1 - (1 / p.ψ)) / (1 - p.θ)
@@ -28,15 +33,21 @@ function f(c, v, Δt, p::EpsteinZin)
 end
 
 function f(c, v, Δt, p::CRRA)
-    δρ = exp(-p.ρ * Δt)
+    u = (c^(1 - p.θ)) / (1 - p.θ)
 
-    u = (c^(1 - p.θ)) / (1 - p.θ) 
+    βᵢ = exp(-p.ρ * Δt)
 
-    return δρ * v + Δt * u
+    return βᵢ * v + Δt * u
+end
+
+function f(c, v, Δt, p::LogUtility)
+    βᵢ = exp(-p.ρ * Δt)
+
+    return βᵢ * v + Δt * log(c)
 end
 
 function f(χ, Xᵢ::Point, v, Δt, p::Preferences)
-    c = χ * exp(Xᵢ.y)
-
+    Y = exp(Xᵢ.y)
+    c = χ * Y
     return f(c, v, Δt, p)
 end

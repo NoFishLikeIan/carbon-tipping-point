@@ -17,7 +17,7 @@ Base.@kwdef struct Economy
     # Domain 
     t₀::Float64 = -15. # Initial time of IPCC report
     t₁::Float64 = 80. # Horizon of IPCC report
-    τ::Float64 = 120. # Steady state horizon
+    τ::Float64 = 80. # Steady state horizon
 end
 
 "Cost of abatement as a fraction of GDP"
