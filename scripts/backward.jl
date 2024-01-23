@@ -1,6 +1,8 @@
 using Distributed: @everywhere, @distributed, @sync, workers
 using SharedArrays: SharedArray
 
+include("../scripts/utils/saving.jl")
+
 @everywhere begin
     using Model, Grid
     using JLD2, DotEnv
@@ -80,7 +82,7 @@ function backwardsimulation!(V::SharedArray{Float64, 3}, policy::SharedArray{Pol
 
                 Δtᵢ = G.h^2 / Qᵢ
 
-                return -f(χ, Xᵢ, EV̄, Δtᵢ, model.economy)
+                return -f(χ, Xᵢ, EV̄, Δtᵢ, model.preferences)
             end
             
             bounds = [(0., 1.), (0., γₜ)]
@@ -115,10 +117,10 @@ function backwardsimulation!(V::SharedArray{Float64, 3}, policy::SharedArray{Pol
     return V, policy
 end
 
-function computevalue(N::Int, Δλ; cache = false, kwargs...)
-    filename = "N=$(N)_Δλ=$(Δλ).jld2"
-    termpath = joinpath(DATAPATH, "terminal", filename)
-    savepath = joinpath(DATAPATH, "total", filename)
+function computevalue(N::Int, Δλ, p::Preferences; cache = false, kwargs...)
+    name = filename(N, Δλ, p)
+    termpath = joinpath(DATAPATH, "terminal", name)
+    savepath = joinpath(DATAPATH, "total", name)
     cachepath = cache ? savepath : nothing
 
     if !isfile(termpath)
@@ -129,7 +131,7 @@ function computevalue(N::Int, Δλ; cache = false, kwargs...)
     V = SharedArray(termsim["V̄"]);
     terminalpolicy = termsim["policy"];
     model = termsim["model"];
-    grid = termsim["grid"];
+    grid = termsim["G"];
     
     policy = SharedArray([Policy(χ, 0.) for χ ∈ terminalpolicy]);
 

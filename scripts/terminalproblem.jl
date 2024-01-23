@@ -9,10 +9,11 @@ using Roots: find_zero
 const env = DotEnv.config()
 const DATAPATH = get(env, "DATAPATH", "data/")
 
+include("utils/saving.jl")
 
 "Computes the Jacobi iteration for the terminal problem, V̄."
 function terminaljacobi!(
-    V::AbstractArray{Float64, 3}, 
+    V̄::AbstractArray{Float64, 3}, 
     policy::AbstractArray{Float64, 3}, 
     model::ModelInstance, G::RegularGrid;
     indices = CartesianIndices(G)) # Can use internal indices to keep boundary constant
@@ -27,12 +28,12 @@ function terminaljacobi!(
 
         # Neighbouring nodes
         # -- GDP
-        Vᵢy₊ = V[min(idx + I[3], R)]
-        Vᵢy₋ = V[max(idx - I[3], L)]
+        Vᵢy₊ = V̄[min(idx + I[3], R)]
+        Vᵢy₋ = V̄[max(idx - I[3], L)]
 
         # -- Temperature
-        VᵢT₊ = V[min(idx + I[1], R)]
-        VᵢT₋ = V[max(idx - I[1], L)]
+        VᵢT₊ = V̄[min(idx + I[1], R)]
+        VᵢT₋ = V̄[max(idx - I[1], L)]
 
         value = @closure χ -> begin
             dy = bterminal(Xᵢ, χ, model) / G.Δ.y
@@ -45,35 +46,37 @@ function terminaljacobi!(
             pT₋ = (G.h * max(-dT, 0.) + σₜ² / 2) / Q
 
             # Expected value
-            EV̄ = py₊ * Vᵢy₊ + py₋ * Vᵢy₋ + pT₊ * VᵢT₊ + pT₋ * VᵢT₋
+            EV = py₊ * Vᵢy₊ + py₋ * Vᵢy₋ + pT₊ * VᵢT₊ + pT₋ * VᵢT₋
 
             Δt = G.h^2 / Q
 
-            return f(χ, Xᵢ, EV̄, Δt, model.preferences)
+            f(χ, Xᵢ, EV, Δt, model.preferences)
         end
 
         # Optimal control
-        v, χ = gss(value, 0., 1.; tol = 1e-6)
+        v, χ = gss(value, 0., 1.; tol = 1e-10)
         
-        V[idx] = v
+        V̄[idx] = v
         policy[idx] = χ
     end
 
-    return V, policy
+    return V̄, policy
 end
 
-function terminaliteration(V₀::AbstractArray{Float64, 3}, model::ModelInstance, grid::RegularGrid; tol = 1e-3, maxiter = 100_000, verbose = false, indices = CartesianIndices(grid))
+function terminaliteration(V₀::AbstractArray{Float64, 3}, model::ModelInstance, grid::RegularGrid; tol = 1e-3, maxiter = 100_000, verbose = false, indices = CartesianIndices(grid), alternate = false)
     policy = similar(V₀);
 
     verbose && println("Starting iterations...")
 
     Vᵢ, Vᵢ₊₁ = copy(V₀), copy(V₀);
     for iter in 1:maxiter
-        terminaljacobi!(Vᵢ₊₁, policy, model, grid; indices = indices)
+        terminaljacobi!(Vᵢ₊₁, policy, model, grid; indices = (alternate && isodd(iter)) ? reverse(indices) : indices)
 
-        ε = maximum(abs.(Vᵢ₊₁ .- Vᵢ))
+        ε = sum(@. abs((Vᵢ₊₁ - Vᵢ) / Vᵢ))
 
-        verbose && print("Iteration $iter / $maxiter, ε = $ε...\r")
+        if verbose && isodd(iter)
+            print("Iteration $iter / $maxiter, ε = $ε...\r")
+        end
 
         if ε < tol
             return Vᵢ₊₁, policy
@@ -86,58 +89,32 @@ function terminaliteration(V₀::AbstractArray{Float64, 3}, model::ModelInstance
     return Vᵢ₊₁, policy
 end
 
-function computeterminal(N::Int, Δλ; 
-    verbose = true, withsave = true, v₀ = -1.,
-    iterkwargs...)
-
-    calibration = load_object(joinpath(DATAPATH, "calibration.jld2"))
-    hogg = Hogg()
+function computeterminal(N::Int, Δλ, preferences::Preferences; verbose = true, withsave = true, iterkwargs...)
     economy = Economy()
+    hogg = Hogg()
     albedo = Albedo(λ₂ = Albedo().λ₁ - Δλ)
-    model = ModelInstance(economy, hogg, albedo, calibration)
+    calibration = load_object(joinpath(DATAPATH, "calibration.jld2"))
 
-    # -- Critical domain
-    Tᶜ = find_zero(T -> bterminal(T, 0., economy, hogg), (hogg.Tᵖ, hogg.Tᵖ + 15.))
-    
-    criticaldomains = [
-        (Tᶜ, Tᶜ + 5.),
-        (mstable(hogg.Tᵖ, hogg, albedo), mstable(Tᶜ + 5., hogg, albedo)),
-        (log(economy.Y₀ / 2), log(3economy.Y₀)),
-    ]
+    model = ModelInstance(preferences, economy, hogg, albedo, calibration)
 
-    criticalgrid = RegularGrid(criticaldomains, N);
-    criticalindices = CartesianIndices(criticalgrid, Dict(3 => (true, false))); # Excludes the values y₀ in the iteration process
-
-    Vᶜ₀ = v₀ .* ones(size(criticalgrid))
-    criticalpolicy = similar(Vᶜ₀);
-
-    verbose && println("Solving critical region T > Tᶜ = $Tᶜ...")
-    Vᶜ, criticalpolicy = terminaliteration(Vᶜ₀, model, criticalgrid; indices = criticalindices, verbose, iterkwargs...)
-
-    # -- Regular domain
     domains = [
-        (hogg.T₀, Tᶜ), 
-        (mstable(hogg.T₀ - 0.5, hogg, albedo), mstable(Tᶜ + 0.5, hogg, albedo) + 1),
+        (hogg.T₀, hogg.T₀ + 4.), 
+        (mstable(hogg.T₀, hogg, albedo), mstable(hogg.T₀ + 4., hogg, albedo)),
         (log(economy.Y₀ / 2), log(2economy.Y₀)), 
     ]
     
-    grid = RegularGrid(domains, N);
+    G = RegularGrid(domains, N);
     
-    V₀ = min.(interpolateovergrid(criticalgrid, Vᶜ, grid), 0.)
-
-    indices = permutedims(
-        reverse(CartesianIndices(criticalgrid, Dict(1 => (false, true)))),
-        (3, 2, 1)
-    )
+    V₀ = [log(exp(Xᵢ.y)) / preferences.ρ for Xᵢ ∈ G.X];
 
     verbose && println("Solving inside region of interest...")
-    V̄, policy = terminaliteration(V₀, model, grid; indices, verbose, iterkwargs...)
+    V̄, policy = terminaliteration(V₀, model, G; verbose, iterkwargs...)
 
     if withsave
-        savepath = joinpath(DATAPATH, "terminal", "N=$(N)_Δλ=$(Δλ).jld2")
+        savepath = joinpath(DATAPATH, "terminal", filename(model, G))
         println("\nSaving solution into $savepath...")
 
-        jldsave(savepath; V̄, policy, model, grid)
+        jldsave(savepath; V̄, policy, model, G)
     end
 
     return V̄, policy, model
