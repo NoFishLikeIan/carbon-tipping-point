@@ -89,7 +89,7 @@ function backwardsimulation!(V::SharedArray{Float64, 3}, policy::SharedArray{Pol
             
             bounds = [(0., 1.), (0., γₜ)]
 
-            res = bboptimize(negvalue; SearchRange = bounds, TraceMode = :silent, Method = :adaptive_de_rand_1_bin_radiuslimited, PopulationSize = 4)
+            res = bboptimize(negvalue; SearchRange = bounds, TraceMode = :silent, Method = :adaptive_de_rand_1_bin_radiuslimited)
 
             V[idx] = -best_fitness(res)
             policy[idx] = best_candidate(res)

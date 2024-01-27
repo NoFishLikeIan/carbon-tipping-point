@@ -5,8 +5,8 @@ using BenchmarkTools: @btime
 includet("../backward.jl")
 include("../utils/plotting.jl")
 
-N, Δλ = 21, 0.
-name = filename(N, Δλ, LogUtility())
+N, Δλ = 31, 0.08
+name = filename(N, Δλ, CRRA())
 termpath = joinpath(DATAPATH, "terminal", name)
 
 termsim = load(termpath);
