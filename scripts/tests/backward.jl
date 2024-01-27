@@ -3,17 +3,17 @@ using Test: @test
 using BenchmarkTools: @btime
 
 includet("../backward.jl")
-include("../plotutils.jl")
+include("../utils/plotting.jl")
 
-N, Δλ = 11, 0.08
-filename = "N=$(N)_Δλ=$(Δλ).jld2"
-termpath = joinpath(DATAPATH, "terminal", filename)
+N, Δλ = 21, 0.
+name = filename(N, Δλ, LogUtility())
+termpath = joinpath(DATAPATH, "terminal", name)
 
 termsim = load(termpath);
 V̄ = SharedArray(termsim["V̄"]);
 terminalpolicy = termsim["policy"];
 model = termsim["model"];
-G = termsim["grid"];
+G = termsim["G"];
 
 policy = SharedArray([Policy(χ, 0.) for χ ∈ terminalpolicy]);
 V = deepcopy(V̄);

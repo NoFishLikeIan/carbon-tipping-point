@@ -16,3 +16,9 @@ function filename(N, Δλ, preferences::LogUtility)
 
     return "$(replace(filename, "." => ",")).jld2"
 end
+
+function filename(N, Δλ, preferences::EpsteinZin)
+    filename = "N=$(N)_Δλ=$(Δλ)_ρ=$(preferences.ρ)_θ=$(preferences.θ)_ψ=$(preferences.ψ)"
+
+    return "$(replace(filename, "." => ",")).jld2"
+end

@@ -7,12 +7,12 @@ includet("../terminalproblem.jl")
 includet("../utils/plotting.jl")
 
 begin
-	N = 21
+	N = 31
 	calibration = load_object(joinpath(DATAPATH, "calibration.jld2"))
 	hogg = Hogg()
 	economy = Economy()
 	albedo = Albedo(λ₂ = Albedo().λ₁)
-	preferences = LogUtility()
+	preferences = CRRA()
 	model = ModelInstance(preferences, economy, hogg, albedo, calibration);
 end
 
@@ -30,7 +30,7 @@ begin
 	indices = CartesianIndices(G)
 	anim = @animate for iter in 1:120
 		
-		sec = plotsection(V̄, log(economy.Y₀), G; zdim = 3, surf = true, c = :viridis, camera = (45, 45), yflip = false, xflip = true, title = "Iteration $iter")
+		sec = plotsection(policy, log(economy.Y₀), G; zdim = 3, surf = true, c = :viridis, camera = (45, 45), yflip = false, xflip = true, title = "Iteration $iter")
 
 		terminaljacobi!(V̄, policy, model, G; indices = isodd(iter) ? reverse(indices) : indices)
 		print("Iteration $iter \r")

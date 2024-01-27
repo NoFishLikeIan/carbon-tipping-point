@@ -72,7 +72,7 @@ function terminaliteration(V₀::AbstractArray{Float64, 3}, model::ModelInstance
     for iter in 1:maxiter
         terminaljacobi!(Vᵢ₊₁, policy, model, grid; indices = (alternate && isodd(iter)) ? reverse(indices) : indices)
 
-        ε = sum(@. abs((Vᵢ₊₁ - Vᵢ) / Vᵢ))
+        ε = maximum( abs.(Vᵢ₊₁ .- Vᵢ) )
 
         if verbose && isodd(iter)
             print("Iteration $iter / $maxiter, ε = $ε...\r")
@@ -105,7 +105,8 @@ function computeterminal(N::Int, Δλ, preferences::Preferences; verbose = true,
     
     G = RegularGrid(domains, N);
     
-    V₀ = [log(exp(Xᵢ.y)) / preferences.ρ for Xᵢ ∈ G.X];
+    V₀ = typeof(preferences) <: EpsteinZin ? 
+        -ones(size(G)) : [log(exp(Xᵢ.y)) / preferences.ρ for Xᵢ ∈ G.X];
 
     verbose && println("Solving inside region of interest...")
     V̄, policy = terminaliteration(V₀, model, G; verbose, iterkwargs...)

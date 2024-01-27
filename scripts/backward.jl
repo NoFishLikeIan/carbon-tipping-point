@@ -1,6 +1,8 @@
 using Distributed: @everywhere, @distributed, @sync, workers
 using SharedArrays: SharedArray
 
+using Model, Grid
+
 include("../scripts/utils/saving.jl")
 
 @everywhere begin
@@ -78,11 +80,11 @@ function backwardsimulation!(V::SharedArray{Float64, 3}, policy::SharedArray{Pol
 
                 pᵢ = py₊ + py₋ + pT₊ + pT₋ + pm₊
 
-                EV̄ = (py₊ * Vᵢy₊ + py₋ * Vᵢy₋ + pT₊ * VᵢT₊ + pT₋ * VᵢT₋ + pm₊ * Vᵢm₊) / pᵢ
+                EV = (py₊ * Vᵢy₊ + py₋ * Vᵢy₋ + pT₊ * VᵢT₊ + pT₋ * VᵢT₋ + pm₊ * Vᵢm₊) / pᵢ
 
                 Δtᵢ = G.h^2 / Qᵢ
 
-                return -f(χ, Xᵢ, EV̄, Δtᵢ, model.preferences)
+                return -f(χ, Xᵢ, EV, Δtᵢ, model.preferences)
             end
             
             bounds = [(0., 1.), (0., γₜ)]
