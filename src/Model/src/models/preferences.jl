@@ -23,11 +23,9 @@ Preferences = Union{CRRA, LogSeparable, EpsteinZin, LogUtility}
 
 function f(c, v, Δt, p::EpsteinZin)
     coeff = (1 - (1 / p.ψ)) / (1 - p.θ)
-    value = ((1 - Θ) * v)^coeff
+    value = ((1 - p.θ) * v)^coeff
 
-    δρ = exp(-p.ρ * Δt)
-
-    u = δρ * value + (1 - δρ) * c^(1 - 1 / p.ψ)
+    u = exp(-p.ρ * Δt) * value + Δt * c^(1 - 1 / p.ψ)
 
     return u^inv(coeff) / (1 - p.θ)
 end

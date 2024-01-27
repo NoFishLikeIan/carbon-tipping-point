@@ -4,16 +4,6 @@
 using Markdown
 using InteractiveUtils
 
-# This Pluto notebook uses @bind for interactivity. When running this notebook outside of Pluto, the following 'mock version' of @bind gives bound variables a default value (instead of an error).
-macro bind(def, element)
-    quote
-        local iv = try Base.loaded_modules[Base.PkgId(Base.UUID("6e696c72-6542-2067-7265-42206c756150"), "AbstractPlutoDingetjes")].Bonds.initial_value catch; b -> missing; end
-        local el = $(esc(element))
-        global $(esc(def)) = Core.applicable(Base.get, el) ? Base.get(el) : iv(el)
-        el
-    end
-end
-
 # ╔═╡ ed817ffc-f1f4-423c-8374-975e34d449eb
 # ╠═╡ show_logs = false
 begin
@@ -43,8 +33,17 @@ using DifferentialEquations
 # ╔═╡ d04d558a-c152-43a1-8668-ab3b040e6701
 using DifferentialEquations: EnsembleAnalysis, EnsembleDistributed
 
+# ╔═╡ 075e3c64-4dab-441c-88c4-51179121a6c9
+using Statistics: median, mean
+
 # ╔═╡ 93709bdd-408f-4f87-b0c8-fda34b06af57
-include("../scripts/plotutils.jl")
+begin
+	include("../scripts/utils/plotting.jl")
+	include("../scripts/utils/saving.jl")
+	
+	env = DotEnv.config()
+	datapath = joinpath("..", get(env, "DATAPATH", "data/"))
+end;
 
 # ╔═╡ b29e58b6-dda0-4da9-b85d-d8d7c6472155
 TableOfContents()
@@ -52,48 +51,60 @@ TableOfContents()
 # ╔═╡ e74335e3-a230-4d11-8aad-3323961801aa
 default(size = 500 .* (√2, 1), dpi = 180, titlefontsize = 12)
 
-# ╔═╡ c25e9def-d474-4e97-8919-c066bb11338c
-md"
-## Parameters
-
-``\Delta\lambda =`` $(@bind Δλ Slider([1e-5, 0.01, 0.08, 0.1], show_value = true, default = 0.08))
-"
-
-# ╔═╡ 94be80bf-ebc1-42ed-903d-071361249222
-N = 51;
-
-# ╔═╡ c9396e59-ed2f-4f73-bf48-e94ccf6e55bd
-md"""
-# Post-transition phase
-"""
-
-# ╔═╡ 4607f0c4-027b-4402-a8b1-f98750696b6f
+# ╔═╡ 0985734e-0c1e-4e4c-8ec5-191be880a72f
 begin
-	env = DotEnv.config()
-	datapath = joinpath("..", get(env, "DATAPATH", "data/"))
-	termpath = joinpath(datapath, "terminal", "N=$(N)_Δλ=$(Δλ).jld2")
-
-	V̄ = load(termpath, "V̄")
-	model = load(termpath, "model")
-	termpolicy = load(termpath, "policy")
-	grid = load(termpath, "grid")
-
-	@unpack economy, hogg, albedo, calibration = model
+	loaddata(N::Int64, Δλ::Real, p::Preferences) = loaddata(N, [Δλ], p)
+	function loaddata(N::Int64, ΔΛ::AbstractVector{<:Real}, p::Preferences)
+		termpath = joinpath(datapath, "terminal")
+		simpath = joinpath(datapath, "total")
+		
+		G = load(joinpath(termpath, filename(N, first(ΔΛ), p)), "G")
+		model = load(joinpath(termpath, filename(N, first(ΔΛ), p)), "model")
+		@unpack economy, calibration = model
+	
+		timesteps = range(0, economy.τ; step = 0.25)
+		V = Array{Float64}(undef, N, N, N, length(ΔΛ), length(timesteps))
+		policy = similar(V, Policy)
+	
+		ᾱ = γ(economy.τ, economy, calibration)
+	
+		for (k, Δλ) ∈ enumerate(ΔΛ)
+			name = filename(N, Δλ, p)
+			V[:, :, :, k, end] .= load(joinpath(termpath, name), "V̄")
+			policy[:, :, :, k, end] .= [Policy(χ, ᾱ) for χ ∈ load(joinpath(termpath, name), "policy")]
+	
+			file = jldopen(joinpath(simpath, name), "r")
+	
+			for (j, tᵢ) ∈ enumerate(timesteps[1:(end - 1)])
+				idx = size(V, 5) - j
+				V[:, :, :, k, idx] .= file[string(tᵢ)]["V"]
+				policy[:, :, :, k, idx] .= file[string(tᵢ)]["policy"]
+			end
+	
+			close(file)
+		end
+	
+		return timesteps, V, policy, model, G
+	end
 end;
 
-# ╔═╡ 35f6e02d-70cb-4111-8e33-e43c8db5e7a8
-X₀ = Point(hogg.T₀, log(hogg.M₀), log(economy.Y₀));
+# ╔═╡ cdc62513-a1e8-4c55-a270-761b6553d806
+begin
+	ΔΛ = [0., 0.08]
+	p = CRRA(θ = 1.45)
+	N = 31
+	
+	t, V, policy, model, G = loaddata(N, ΔΛ, p)
+end;
 
-# ╔═╡ c5f9e376-6ab9-4a4f-960d-7dcaf8d03fb6
-md"
-``m``: $(@bind mtermfig Slider(range(grid.domains[2]...; length = 101), show_value = true, default = X₀.m))
-"
+# ╔═╡ acc678b2-01bd-4504-ad88-f3f926cd9518
+begin
+	@unpack hogg, economy, calibration, albedo = model
+	X₀ = Point([hogg.T₀, log(hogg.M₀), log(economy.Y₀)])
+end;
 
-# ╔═╡ 77c2aaaf-dd90-4a22-a28b-dbe20a412668
-plotsection(termpolicy, mtermfig, grid; zdim = 2, title = "\$\\chi\$", surf = false, c = :viridis, zlims = (0, 1), clims = (0, 1), linewidth = 0., ylims = (grid.domains[1][1], grid.domains[1][2] - 1))
-
-# ╔═╡ 98749904-9225-4e92-913e-b084eeba4fd7
-plotsection(V̄, mtermfig, grid; zdim = 2, title = "\$\\overline{V}\$", surf = true, c = :viridis, zlims = (minimum(V̄), 0.), clims = (minimum(V̄), 0.), xflip = true)
+# ╔═╡ 5e7d4f3a-a7c2-4695-a211-448ed5909ad1
+plotsection(V[:, :, :, end, end - 1], log(economy.Y₀), G; zdim = 3, surf = true, xflip = true)
 
 # ╔═╡ 6fe67c9b-fe20-42e4-b817-b31dad586e55
 md"# Backward Simulation"
@@ -101,70 +112,45 @@ md"# Backward Simulation"
 # ╔═╡ fc2c9720-3607-4ee2-a48c-f8e22d4404bd
 md"## Constructing interpolations"
 
-# ╔═╡ 9bcfa0d7-0442-40f0-b63f-7d39f38c1310
-# ╠═╡ disabled = true
-#=╠═╡
-begin
-	simpath = joinpath(datapath, "total", "N=$(N)_Δλ=$(Δλ).jld2")
-	file = jldopen(simpath, "r")
-	timesteps = filter(!=("endpoint"),  keys(file))
-
-	T = length(timesteps) + 1
-	V = Array{Float64}(undef, N, N, N, T)
-	policy = Array{Policy}(undef, N, N, N, T)
-	t = Vector{Float64}(undef, T)
-
-	V[:, :, :, end] = V̄
-	t[end] = model.economy.τ
-
-	for (j, tᵢ) in enumerate(timesteps)
-		V[:, :, :, T - j] = file[tᵢ]["V"]
-		policy[:, :, :, T - j] = file[tᵢ]["policy"]
-		t[T - j] = parse(Float64, tᵢ)
-	end
-	
-	close(file)
-end
-  ╠═╡ =#
-
 # ╔═╡ d2c83cdf-002a-47dc-81f9-22b76f183587
-#=╠═╡
 begin
-	ΔT, Δm, Δy = grid.domains
+	ΔT, Δm, Δy = G.domains
 
 	nodes = (
-		range(ΔT[1], ΔT[2]; length = size(grid, 1)),
-		range(Δm[1], Δm[2]; length = size(grid, 2)),
-		range(Δy[1], Δy[2]; length = size(grid, 3)),
-		t
+		range(extrema(ΔT)...; length = N),
+		range(extrema(Δm)...; length = N),
+		range(extrema(Δy)...; length = N),
+		ΔΛ, t
 	)
+end;
 
+# ╔═╡ 08a3333b-bac8-426e-a888-9bf5269c1869
+begin
 	χitp = linear_interpolation(nodes, first.(policy); extrapolation_bc = Flat())
 	αitp = linear_interpolation(nodes, last.(policy); extrapolation_bc = Flat())
 end;
-  ╠═╡ =#
-
-# ╔═╡ ffa267c0-4932-4889-a555-a2d07b58344f
-md"## Policy"
 
 # ╔═╡ 31d32b62-4329-464e-8354-1c2875fe5801
 md"## Simulation"
 
+# ╔═╡ 5c553323-3611-4614-8de3-86ea5cf8eea0
+Eᵇ = linear_interpolation(calibration.years .- 2020, calibration.emissions, extrapolation_bc = Line());
+
 # ╔═╡ d62b65f5-220e-45c6-a434-ac392b72ab4a
-#=╠═╡
 function F!(dx, x, p, t)	
+	Δλ = first(p)
+	
 	T, m, y = x
 	
-	χ = χitp(T, m, y, t)
-	α = αitp(T, m, y, t)
+	χ = χitp(T, m, y, Δλ, t)
+	α = αitp(T, m, y, Δλ, t)
 	
-	dx[1] = μ(T, m, hogg, albedo) / hogg.ϵ
+	dx[1] = μ(T, m, hogg, Albedo(λ₂ = albedo.λ₁ - Δλ)) / hogg.ϵ
 	dx[2] = γ(t, economy, calibration) - α
-	dx[3] = b(t, x, χ, α, model)
+	dx[3] = b(t, Point(x), Policy(χ, α), model)
 
 	return
 end;
-  ╠═╡ =#
 
 # ╔═╡ 7823bda7-5ab8-42f7-bf1c-292dbfecf178
 function G!(dx, x, p, t)
@@ -176,55 +162,81 @@ function G!(dx, x, p, t)
 end;
 
 # ╔═╡ c3c2cfc9-e7f4-495b-bcc6-51227be2c6b5
-#=╠═╡
 begin
+	tspan = (0., 40.)
 	x₀ = [X₀.T, X₀.m, X₀.y]
-	prob = SDEProblem(SDEFunction(F!, G!), x₀, (0., 90.))
-end
-  ╠═╡ =#
+	problems = [SDEProblem(SDEFunction(F!, G!), x₀, tspan, (Δλ, )) for Δλ ∈ ΔΛ]
+end;
 
 # ╔═╡ 28c6fe28-bd42-4aba-b403-b2b0145a8e37
-#=╠═╡
 begin
-	ensembleprob = EnsembleProblem(prob)
-	solution = solve(ensembleprob, EnsembleDistributed(); trajectories = 100)
+	solutions = [solve(EnsembleProblem(prob), EnsembleDistributed(); trajectories = 100) for prob ∈ problems]
 end;
-  ╠═╡ =#
 
 # ╔═╡ 1a19b769-68e2-411b-afe0-6bd2a7fb87a3
-#=╠═╡
 begin
-	median = [Point(EnsembleAnalysis.timepoint_median(solution, tᵢ)) for tᵢ ∈ t]
+	colors = [:darkblue, :darkred, :darkgreen]
 
-	Tfig = plot(t, [x.T for x ∈ median], ylabel = "\$T\$", label = false, linewidth = 3, c = :black)
-	Yfig = plot(t, [exp(x.y) for x ∈ median], ylabel = "\$Y\$", xlabel = "\$t\$", label = false, c = :black, linewidth = 3)
+	yearticks = 2020 .+ (0:10:80)
+	xticks = (0:10:80, yearticks)
+		
+	Tticks = hogg.Tᵖ .+ (1:2.5)
+	yticks = (Tticks, 1:2.5)
 	
-	for sim in solution
-		data = Point.(sim.(t))
-		plot!(Tfig, t, [ x.T for x ∈ data ]; label = false, alpha = 0.05, c = :black)
-		plot!(Yfig, t, [ exp(x.y) for x ∈ data ]; label = false, alpha = 0.05, c = :black)
+	
+	Tfig = plot(; ylabel = "\$T - T^p\$", legendtitle = "\$\\Delta \\lambda\$", yticks, ylims = extrema(Tticks), xticks)
+	
+	Mfig = plot(; ylabel = "\$M\$", xlabel = "year", xticks)
+
+	timespan = range(tspan...; length = 101)
+
+	for (i, solution) ∈ enumerate(solutions)
+		median = [Point(EnsembleAnalysis.timepoint_median(solution, tᵢ)) for tᵢ ∈ timespan]
+
+		plot!(Tfig, timespan, [x.T for x ∈ median]; c = colors[i], label = ΔΛ[i], linewidth = 3)
+		plot!(Mfig, timespan, [exp(x.m) for x ∈ median]; c = colors[i], label = false, linewidth = 3)
+		
+		for sim in solution
+			data = Point.(sim.(timespan))
+			plot!(Tfig, timespan, [ x.T for x ∈ data ]; label = false, alpha = 0.05, c = colors[i])
+		end
 	end
 
-	plot(Tfig, Yfig, sharex = true, layout = (2, 1), link = :x)
+	plot(Tfig, Mfig, sharex = true, layout = (2, 1), link = :x, size = 500 .* (√2, 1.5), margins = 5Plots.mm)
 end
-  ╠═╡ =#
 
 # ╔═╡ 43bc8d15-40d5-457c-84f9-57826cb4139f
-#=╠═╡
 begin
-	αfig = plot(ylabel = "\$\\alpha\$")
-	χfig = plot(ylabel = "\$\\chi\$")
+	efig = plot(ylabel = "\$E\$")
 	
-	for sim in solution
-		data = Point.(sim.(t))
-		plot!(αfig, t, [αitp(t[i], x...) for (i, x) ∈ enumerate(data)]; label = false, alpha = 0.1, c = :darkred)
-		plot!(χfig, t, [χitp(t[i], x...) for (i, x) ∈ enumerate(data)]; label = false, alpha = 0.1, c = :darkblue)
+	for (i, solution) ∈ enumerate(solutions)
+		Δλ = ΔΛ[i]
+
+		T, M = length(t), length(solution)
+		emissions = Matrix{Float64}(undef, T, M)
+
+		for (i, tᵢ) ∈ enumerate(t)
+			data = Point.(solution(tᵢ))
+
+			for (j, x) ∈ enumerate(data)
+				M = exp(x.m)
+				E = (1 - Model.ε(tᵢ, exp(x.m), αitp(x..., Δλ, tᵢ), model)) * Eᵇ(tᵢ)
+				
+				emissions[i, j] = γ(tᵢ, economy, calibration) - αitp(x..., Δλ, tᵢ)
+			end
+		end
+
+
+		
+		plot!(efig, median(emissions, dims = 2); c = colors[i], linewidth = 2, label = Δλ)
 	end
 	
-	plot(αfig, χfig, layout = (2, 1), link = :x)
 
+	efig
 end
-  ╠═╡ =#
+
+# ╔═╡ aa6cdd38-8733-425f-ac39-29d031f7c269
+
 
 # ╔═╡ Cell order:
 # ╠═ed817ffc-f1f4-423c-8374-975e34d449eb
@@ -236,25 +248,23 @@ end
 # ╠═b29e58b6-dda0-4da9-b85d-d8d7c6472155
 # ╠═e74335e3-a230-4d11-8aad-3323961801aa
 # ╠═93709bdd-408f-4f87-b0c8-fda34b06af57
-# ╟─c25e9def-d474-4e97-8919-c066bb11338c
-# ╠═94be80bf-ebc1-42ed-903d-071361249222
-# ╟─c9396e59-ed2f-4f73-bf48-e94ccf6e55bd
-# ╠═4607f0c4-027b-4402-a8b1-f98750696b6f
-# ╠═35f6e02d-70cb-4111-8e33-e43c8db5e7a8
-# ╟─c5f9e376-6ab9-4a4f-960d-7dcaf8d03fb6
-# ╟─77c2aaaf-dd90-4a22-a28b-dbe20a412668
-# ╠═98749904-9225-4e92-913e-b084eeba4fd7
+# ╠═0985734e-0c1e-4e4c-8ec5-191be880a72f
+# ╠═cdc62513-a1e8-4c55-a270-761b6553d806
+# ╠═acc678b2-01bd-4504-ad88-f3f926cd9518
+# ╠═5e7d4f3a-a7c2-4695-a211-448ed5909ad1
 # ╟─6fe67c9b-fe20-42e4-b817-b31dad586e55
 # ╠═a1f3534e-8c07-42b1-80ac-440bc016a652
 # ╠═d04d558a-c152-43a1-8668-ab3b040e6701
+# ╠═075e3c64-4dab-441c-88c4-51179121a6c9
 # ╟─fc2c9720-3607-4ee2-a48c-f8e22d4404bd
-# ╠═9bcfa0d7-0442-40f0-b63f-7d39f38c1310
 # ╠═d2c83cdf-002a-47dc-81f9-22b76f183587
-# ╟─ffa267c0-4932-4889-a555-a2d07b58344f
+# ╠═08a3333b-bac8-426e-a888-9bf5269c1869
 # ╟─31d32b62-4329-464e-8354-1c2875fe5801
+# ╠═5c553323-3611-4614-8de3-86ea5cf8eea0
 # ╠═d62b65f5-220e-45c6-a434-ac392b72ab4a
 # ╠═7823bda7-5ab8-42f7-bf1c-292dbfecf178
 # ╠═c3c2cfc9-e7f4-495b-bcc6-51227be2c6b5
 # ╠═28c6fe28-bd42-4aba-b403-b2b0145a8e37
 # ╠═1a19b769-68e2-411b-afe0-6bd2a7fb87a3
 # ╠═43bc8d15-40d5-457c-84f9-57826cb4139f
+# ╠═aa6cdd38-8733-425f-ac39-29d031f7c269

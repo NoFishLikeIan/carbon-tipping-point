@@ -11,11 +11,7 @@ end
 bterminal(Xᵢ::Point, args...) = bterminal(Xᵢ.T, args...)
 bterminal(T::Float64, χ, model::ModelInstance) = bterminal(T, χ, model.economy, model.hogg) 
 function bterminal(T::Float64, χ, economy::Economy, hogg::Hogg)
-    investment = ϕ(economy.τ, χ, economy)
-    depreciaton = economy.δₖᵖ
-    damage = d(T, economy, hogg)
-
-    investment - depreciaton - damage
+    ϕ(economy.τ, χ, economy) - economy.δₖᵖ - d(T, economy, hogg)
 end
 
 "Drift of dy."

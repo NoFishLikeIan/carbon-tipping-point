@@ -15,18 +15,18 @@ Following Nordhaus [\textbf{cite}] we assume abatement expenditures to be propor
 
 \subsection{Evolution of Capital and Climate Change}
 
-In the last 50 years, productivity in the agricultural sector, net of technological growth, has declined due to temperature increases (\citeauthor{dell_temperature_2009} \citeyear{dell_temperature_2009}). Given the imperfect substitutability of food, resources have been diverted from other sectors towards agricolture which has increased the opportunity cost of capital investment in manufacturing and services. For a thorough treatment of this mechanic see \citein{dietz_growth_2019}. In this paper, I will abstract from the details of the mechanism but keep the role of temperatures in reducing capital growth rate and assume this to be the main damage deriving from climate change. In the model, capital depreciation is given by \begin{equation}
-    \delta_k(T) = \delta^{\mathrm{p}}_k +  d(T)
-\end{equation} where $\delta^{\mathrm{p}}_k$ is the depreciation rate of capital for pre-industrial temperature levels $T^p$ and $d(T)$ is the damage function. Following \citein{hambel_optimal_2021}, I assume the damage function to take the form \begin{equation}
+In the last 50 years, productivity in the agricultural sector, net of technological growth, has declined due to temperature increases (\citeauthor{dell_temperature_2009} \citeyear{dell_temperature_2009}). Given the imperfect substitutability of food, resources have been diverted from other sectors towards agricolture which has increased the opportunity cost of capital investment in manufacturing and services. For a thorough treatment of this mechanic see \citein{dietz_growth_2019}. In this paper, I will abstract from the details of the mechanism but keep the role of temperatures in reducing capital growth rate and assume this to be the main damage deriving from climate change. In the model, capital depreciates at a rate \begin{equation}
+    \delta_k +  d(T)
+\end{equation} where $\delta_k$ is the depreciation rate of capital for pre-industrial temperature levels $T^p$ and $d(T)$ is the damage function. Following \citein{hambel_optimal_2021}, I assume the damage function to take the form \begin{equation}
     d(T) = \xi (T - T^p)^{\upsilon}.
 \end{equation}
 
 Finally, in investing and abating the economy incurs in adjustment costs proportional to capital $\frac{\kappa}{2} \big(I + B \big)^2 \sqrt{K}$. Putting this all together we obtain the evolution of capital \begin{equation} \label{eq:capital-evolution}
-    \d{K} = \left( I - \delta_k(T) K - \frac{\kappa}{2} \Big(I + B\Big)^2 \sqrt{K} \right) \d{t} + K \sigma_K \; \d w_2.
+    \d{K} = \left( I - (\delta_k + d(T)) K - \frac{\kappa}{2} \Big(I + B\Big)^2 \sqrt{K} \right) \d{t} + K \sigma_K \; \d w_2.
 \end{equation} 
 
 As in the climate model, it is convenient to rewrite the dynamics in terms of growth rates. Let $k$ be the $\log K$, then equation (\ref{eq:capital-evolution}) can be rewritten as \begin{equation} \label{eq:capital-evolution:log:level}
-    \text{d}k = \left( \frac{I}{K} - \delta_k(T) - \frac{\kappa}{2} \left(\frac{I}{K} + \frac{B}{K}\right)^2 \right) + \sigma_K \; \d w_2.
+    \text{d}k = \left( \frac{I}{K} - \delta_k - d(T) - \frac{\kappa}{2} \left(\frac{I}{K} + \frac{B}{K}\right)^2 \right) + \sigma_K \; \d w_2.
 \end{equation}
 
 Using the abatement costs (\ref{eq:abatement-costs}), the abatement expenditure to capital ratio can be written as \begin{equation}
@@ -38,12 +38,12 @@ Using the abatement costs (\ref{eq:abatement-costs}), the abatement expenditure 
 \end{equation}
 
 These two equations allow us to rewrite the log-growth of capital $\d{k}$ (\ref{eq:capital-evolution:log:level}), in terms of the consumption decision $\control{\chi}$, the abatement decision $\control{\alpha}$, via the emission reduction rate $\varepsilon$, temperature $T$, and technological progress, in production $A$ and abatement $\omega$, \begin{equation} \label{eq:capital-evolution:log:growth}
-    \d{k} = \left( \overbrace{A (1 - \control{\chi}) - \frac{\kappa}{2} A^2 (1 - \control{\chi})^2}^{\text{Endogenous economic growth}} - \underbrace{A \beta(\varepsilon)}_{\text{Abatement}} - \overbrace{\delta_k(T)}^{\text{Climate damages}} \right) \; \d{t} + \sigma_K \; \d{w_2}
+    \d{k} = \left( \overbrace{A (1 - \control{\chi}) - \frac{\kappa}{2} A^2 (1 - \control{\chi})^2 - \delta_k}^{\text{Endogenous economic growth}} - \underbrace{A \beta(\varepsilon)}_{\text{Abatement}} - \overbrace{d(T)}^{\text{Climate damages}} \right) \; \d{t} + \sigma_K \; \d{w_2}
 \end{equation} 
 
 The last step is to link this back to log-output growth $\d{y}$. This is easily done by letting the productivity growth rate be defined as $\varrho \; \d{t} = \d \log A$ and, to simplify notation, grouping endogenous economic growth as \begin{equation}
     \phi(\control{\chi}) \coloneqq A (1 - \control{\chi}) - \frac{\kappa}{2} A^2 (1 - \control{\chi})^2.
 \end{equation} Then we can write \begin{equation} \label{eq:output-evolution:log}
-    \d{y} = \Big(\varrho + \phi(\chi) - A \beta(\varepsilon) - \delta_k(T) \Big) \; \d{t} + \sigma_K \; \d{w_2}.
+    \d{y} = \Big(\varrho + \phi(\chi) - \delta_k - A \beta(\varepsilon) - d(T) \Big) \; \d{t} + \sigma_K \; \d{w_2}.
 \end{equation}
 \end{document}

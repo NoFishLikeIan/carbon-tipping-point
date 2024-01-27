@@ -2,104 +2,17 @@
 \begin{document}
 
 To derive the optimal abatement path and the social cost of carbon, I solve the problem of a social planner who derives utility from consumption, is risk averse, and discounts the future. To disentangle the role of these two components I model the social planner as having Epstein-Zin preferences. Societal utility $U$ at time $t$, given an abatement strategy $\control{\alpha}$ and a consumption schedule $\control{\chi}$, is defined recursively by the integral equation as \begin{equation} \label{eq:utility}
-    U(t; \control{\alpha}(t), \control{\chi}(t)) = \E \int^{\infty} f\left(C(s), U(s; \control{\alpha}(s), \control{\chi}(s))\right) \; \d{s}
+    U(t; \control{\alpha}(t), \control{\chi}(t)) = \E_t \int^{\infty} f\left(C(s), U(s; \control{\alpha}(s), \control{\chi}(s))\right) \; \d{s}
 \end{equation} where $C(s) = \control{\chi}(s) Y(s)$ is the consumption path. Introducing the coefficient of relative risk aversion $\theta > 1$, elasticity of intertemporal substitution $\psi > 0$, and the discount rate $\rho$, the Epstein-Zin aggregator (\cite{duffie_asset_1992}) is defined as \begin{equation} \label{eq:aggregator}
-    f(C, U) = \frac{\rho}{1 - 1 / \psi} (1 - \theta) U  \left( \left(\frac{C}{((1 - \theta) U)^{\frac{1}{1 - \theta}}}\right)^{1 - 1 / \psi} - 1 \right)
-\end{equation}
-
-\subsection{Motivation behind the use of Epstein-Zin preferences}
-
-Utility preferences as specified by (\ref{eq:utility}) and (\ref{eq:aggregator}) were introduced by \citein{epstein_substitution_1989} (discrete time) and \citein{duffie_asset_1992} (continuous time) to circumvent two undesirable features of additive preferences (e.g. CRRA utility) in finance. First, under additive preferences the elasticity of intertemporal substitution is the inverse of the coefficient of relative risk aversion. Second, an agent having additive preferences is indifferent between earlier or later resolution of uncertainty. Translated to the integrated models, as the one discussed in this paper, these two features yield a counter-intuitive mechanism: the abatement path becomes less ambitious as agents become more risk averse (\cite{pindyck_economic_2013}). This is because, in a growing economy with rising consumption, future utility decreases in risk aversion, which yields, ceteris paribus, a higher optimal emission path. The use of Epstein-Zin preferences is a common way to overcome this issue (\cite{pindyck_economic_2013, crost_optimal_2013, ackerman_epsteinzin_2013, hambel_optimal_2021,  olijslagers_discounting_2019}).
-
-To make sense of this utility specification it is useful to consider two illustrative parameter cases. First, as the elasticity of intertemporal substitution converges to the inverse  coefficient of relative risk aversion, $\psi \to 1 / \theta$, the aggregator (\ref{eq:aggregator}) becomes separable \begin{equation}
-    \lim_{\psi \to 1 / \theta} f(C, U) = \rho \left(\frac{1}{1 - \theta} C^{1 - \theta} - U\right),
-\end{equation} and the utility (\ref{eq:utility}) simplifies to the usual time separable formulation \begin{equation}
-    U(\control{\alpha}, \control{\chi}) = \rho\E \int^{\infty} \exp\big(-\rho (s - t) \big) \; \frac{1}{1 - \theta} C(s)^{1 - \theta} \; \d{t}.
-\end{equation} Second, if we let the elasticity of intertemporal substitution converge to one, $\psi \to 1$, we obtain the log-separable aggregator \begin{equation} \label{eq:epstein-zin:log-separable}
-    f(C, U) = \rho (1 - \theta)U \left(\log(C) - \frac{1}{1 - \theta} \log\big( (1 - \theta) U \big) \right).
-\end{equation}
-
-\textbf{Talk more about these two cases or move to the appendix}
-
-\subsection{Simplifying Assumptions}
-
-For computational purposes, it is convenient to make some simplifying assumption to reduce the dimensionality of the state space.
-
-\subsubsection{Decay Rate of Carbon}
- 
-The calibrated carbon decay $\delta_m$, as a function of the carbon stored in sinks $N$, is illustrated in Figure (\ref{fig:decay}). The calibration assumes a functional form \begin{equation}
-    \delta_m(N) = a_{\delta} e^{-\left(\frac{N - c_{\delta}}{b_{\delta}}\right)^2},
-\end{equation} for parameters $a_{\delta}, b_{\delta}, c_{\delta}$.
-
-\begin{figure}[H]
-    \centering
-    \inputtikz{../../../plots/decay.tikz}
-    \caption{Estimated decay of carbon $\delta_m$ as a  function of the carbon stored in sinks $N$.}
-    \label{fig:decay}
-\end{figure}
-
-To simplify matters I will assume that the amount of carbon sinks present in the atmosphere is a constant fraction of the concentration in the atmosphere, $N = \frac{N_0}{M_0} M$. Using this setup, under a business-as-usual emission scenario, the decay of carbon follows the path in Figure \ref{fig:decaypath}.
-
-\begin{figure}[H]
-    \centering
-    \inputtikz{../../../plots/decaypathfig.tikz}
-    \caption{Estimated decay of carbon $\delta_m$ under the business as usual emission scenario $M^{\b}$. Each marker is the decay after every decade.}
-    \label{fig:decaypath}
-\end{figure}
-
-\subsection{Hamilton-Bellman-Jacobi Equation and the Social Cost of Carbon}
-
-The social planner problem depends on time $t$ and three state variables: temperature $T$, atmospheric log-concentration of CO$_2$ $m$, and output $y$. For convenience, let $X$ be the vector of state variables at time $t$, taking values in the domain $\mathcal{S}$. The value function is defined as \begin{equation}
-    V(t, X) = \sup_{(\control{\chi}, \control{\alpha})} U(\control{\chi}, \control{\alpha}; t, X),
-\end{equation} where the two controls $\control{\chi}, \control{\alpha}$ are functions $[0, \infty) \times \mathcal{S} \mapsto [0, 1]$. The state vector $X$ follows the drift \begin{equation}
-    w(t, X,  \control{\chi}, \control{\alpha}) = \begin{pmatrix}
-        \mu_T(T) + \mu_m(m) \\
-        \gamma^{\b} - \control{\alpha} \\
-        \varrho + \phi(t, \control{\chi}) - A(t) \beta(t, \control{\alpha}) - \delta_K(T)
-    \end{pmatrix}
-\end{equation}
-
-\begin{proposition}
-    The value function satisfies the Hamilton-Bellman-Jacobi equation \begin{equation}
-        0 = \sup_{\control{\alpha}, \control{\chi}} \; \Bigg\{ f(\control{\chi}, y, V ) + \nabla_X V \cdot w  \Bigg\} + \frac{\sigma_T^2}{2} \; \Big(\partial^2_T V \Big) + \partial_t V
-    \end{equation}
-\end{proposition}
-
-\subsection{First order conditions}
-
-We can expand the value HJB equation to     
-\begin{equation}
+    f(C, U) = \frac{\rho}{1 - 1 / \psi} (1 - \theta) U  \left( \left(\frac{C}{((1 - \theta) U)^{\frac{1}{1 - \theta}}}\right)^{1 - 1 / \psi} - 1 \right).
+\end{equation} Then, we can define the value function \begin{equation}
+    V_t(T, m, y) = \sup_{\control{\chi}, \control{\alpha}} \E_t \int^{\infty}_t f(C, V_s) \; \d{s},
+\end{equation} which satisfies the  Hamilton-Jacobi-Bellman (HJB) \begin{equation}
     \begin{split}
-        0 = \sup_{\control{\alpha}, \control{\chi}} \; \Bigg\{ &f(\control{\chi}, y, V ) + \;
-        \Big(\partial_{m} V \Big) \; \Big(\gamma^{\mathrm{p}} - \control{\alpha} \Big) + \Big(\partial_{y} V \Big) \;  \Big(\phi(\control{\chi}) - A \beta(\control{\alpha}) \Big) \Bigg\} \\
-        + \; &\Big(\partial_T V \Big) \; \Big(\mu_T(T) + \mu_{m}(m) \Big) + \;
-        \Big(\partial_{y} V \Big) \; \Big(\varrho - \delta_k(T) \Big) \\
-        + \; &\frac{\sigma_T^2}{2} \; \Big(\partial^2_T V \Big) + \Big(\partial_t V\Big)
+        -\partial_t V_t = \; &f(C, V_s) + \partial_T V_t \; \mu(T, m) + \partial_m V_t \; (\gamma_t - \alpha) \; + \\
+        &\partial_y V_t \; \Big(\varrho + \phi(\chi) - \delta_k - A \beta(\varepsilon) - d(T) \Big) \; + \\
+        &\frac{\sigma^2_k}{2} \partial^2_y V_t + \frac{\sigma^2_T}{2} \partial^2_T V
     \end{split}
 \end{equation}
-
-Using we can compute the first order conditions for $\alpha$ and $\chi$. 
-
-
-\subsubsection[Consumption]{Consumption, $\chi$}
-
-The first order condition with respect to consumption is given by \begin{equation}
-    0 = \frac{\partial f}{\partial \control{\chi}}(\control{\chi}, y, V) - A \; \partial_y V,
-\end{equation} which implies that the optimal consumption rate is given by \begin{equation}
-    \control{\chi} = \rho (1 - \theta) \frac{V}{A \; \partial_y V}.
-\end{equation}
-
-\subsubsection[Abatement]{Abatement, $\alpha$}
-
-Similarly, we can compute the first order condition for the abatement level, \begin{equation}
-    0 = \partial_m V + A \; \partial_y V \; \beta^\prime(\control{\alpha}). 
-\end{equation}
-
-Given that \begin{equation}
-    \beta(\control{\alpha}) = \frac{\omega}{2} \left(1 - \frac{M}{\xi  E^{\b}} \big( \delta_m(M) + \gamma^{\b} - \control{\alpha} \big) \right)^2,  
-\end{equation} the optimal abatement level is \begin{equation}
-    \control{\alpha} = 1 - \frac{M}{\xi  E^{\b}} \left( \delta_m(M) + \gamma^{\b} - A \; \omega \; \frac{\partial_m V}{\partial_y V} \right)
-\end{equation}
-
 
 \end{document}
