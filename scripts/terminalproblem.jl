@@ -6,9 +6,6 @@ using Polyester: @batch
 using FastClosures: @closure
 using Roots: find_zero
 
-const env = DotEnv.config()
-const DATAPATH = get(env, "DATAPATH", "data/")
-
 include("utils/saving.jl")
 
 "Computes the Jacobi iteration for the terminal problem, V̄."
@@ -54,7 +51,7 @@ function terminaljacobi!(
         end
 
         # Optimal control
-        v, χ = gss(value, 0., 1.; tol = 1e-10)
+        v, χ = gss(value, 0., 1.)
         
         V̄[idx] = v
         policy[idx] = χ
@@ -89,11 +86,11 @@ function terminaliteration(V₀::AbstractArray{Float64, 3}, model::ModelInstance
     return Vᵢ₊₁, policy
 end
 
-function computeterminal(N::Int, Δλ, preferences::Preferences; verbose = true, withsave = true, iterkwargs...)
+function computeterminal(N::Int, Δλ, preferences::Preferences; verbose = true, withsave = true, datapath = "data", iterkwargs...)
     economy = Economy()
     hogg = Hogg()
     albedo = Albedo(λ₂ = Albedo().λ₁ - Δλ)
-    calibration = load_object(joinpath(DATAPATH, "calibration.jld2"))
+    calibration = load_object(joinpath(datapath, "calibration.jld2"))
 
     model = ModelInstance(preferences, economy, hogg, albedo, calibration)
 
@@ -108,11 +105,10 @@ function computeterminal(N::Int, Δλ, preferences::Preferences; verbose = true,
     V₀ = typeof(preferences) <: EpsteinZin ? 
         -ones(size(G)) : [log(exp(Xᵢ.y)) / preferences.ρ for Xᵢ ∈ G.X];
 
-    verbose && println("Solving inside region of interest...")
     V̄, policy = terminaliteration(V₀, model, G; verbose, iterkwargs...)
 
     if withsave
-        savepath = joinpath(DATAPATH, "terminal", filename(model, G))
+        savepath = joinpath(datapath, "terminal", filename(model, G))
         println("\nSaving solution into $savepath...")
 
         jldsave(savepath; V̄, policy, model, G)

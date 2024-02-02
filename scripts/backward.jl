@@ -25,7 +25,7 @@ function backwardsimulation!(V::SharedArray{Float64, 3}, policy::SharedArray{Pol
      
     cache = !isnothing(cachepath)
     if cache
-        tcache = model.economy.τ - cachestep
+        tcache = model.economy.t₁ # Only cache in the range of the IPCC data forecast
         cachefile = jldopen(cachepath, "a+")
     end
 
@@ -89,7 +89,7 @@ function backwardsimulation!(V::SharedArray{Float64, 3}, policy::SharedArray{Pol
             
             bounds = [(0., 1.), (0., γₜ)]
 
-            res = bboptimize(negvalue; SearchRange = bounds, TraceMode = :silent, Method = :adaptive_de_rand_1_bin_radiuslimited)
+            res = bboptimize(negvalue; SearchRange = bounds, TraceMode = :silent, Method = :adaptive_de_rand_1_bin_radiuslimited, PopulationSize = 10)
 
             V[idx] = -best_fitness(res)
             policy[idx] = best_candidate(res)
