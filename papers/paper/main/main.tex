@@ -19,6 +19,7 @@
     \usepackage{subcaption}
     \usepackage{float}
     \usepackage{multirow} 
+    \usepackage{gensymb}
 
     % Refs
     \usepackage{hyperref}
@@ -28,30 +29,32 @@
         urlcolor = blue,
         linkcolor = blue, 
         citecolor = blue 
-      }      
-
-    \usepackage{subfiles} % Load last
-
+      }
+    
+      
     % Paths
-
+    
     % Formatting
     \setlength{\parindent}{0em}
     \setlength{\parskip}{0.5em}
     \setlength{\fboxsep}{1em}
     \newcommand\headercell[1]{\smash[b]{\begin{tabular}[t]{@{}c@{}} #1 \end{tabular}}}
-
+    
     \newcommand{\note}[1]{
       \ifdraft{
         {\color{blue} \textbf{#1}}
-      }{}
+        }{}
     }
-
+        
     % Graphs
     \usepackage{tikz} 
     \usepackage{tikzit}
     \usepackage{pgfplots}
     \usepackage{ifdraft}
     \usetikzlibrary{positioning,fit,calc,decorations.pathreplacing,calligraphy, arrows.meta, pgfplots.groupplots}
+
+    \usepgfplotslibrary{external}
+    \tikzexternalize
 
     \pgfplotsset{compat=1.18}
 
@@ -83,7 +86,7 @@
 
     \DeclareMathOperator{\E}{\mathbb{E}}
     \newcommand{\unit}[1]{\text{#1}}
-    \newcommand{\control}[1]{\bm{#1}}
+    \newcommand{\control}[1]{#1}
     \renewcommand{\b}{\mathrm{b}}
 
     \newtheorem{proposition}{Proposition}
@@ -91,9 +94,10 @@
 
 
     % Bibliography
-
-    \usepackage[bibencoding=utf8, style=apa, backend=biber, eprint=false]{biblatex}
+    \usepackage[bibencoding=utf8, style=apa, backend=biber, eprint=false, sorting=nyt]{biblatex}
     \addbibresource{../../scc-tipping-points.bib}
+
+    \usepackage{subfiles} % Load last
 
     \newcommand{\citein}[1]{\citeauthor{#1} (\citeyear{#1})}
     
@@ -101,18 +105,25 @@
 
     % Make title page
 
-    \author{Andrea Titton}
-    \title{Climate Tipping Points and\\ Optimal Emissions}
+    \author{Andrea Titton\thanks{
+      Faculty of Economics and Business, University of Amsterdam (a.titton@uva.nl). I thank my supervisors Florian Wagener and Cees Diks for the patient guidance on this paper. I also thank the CeNDEF group and the Quantitative Economics section at the University of Amsterdam for helpful comments throughout the many seminars. Finally, I thank the attendees of the SEEMS/ASF seminar series for their feedback.
+    }}
+    \title{The Perils of Abatement Procrastination in the Presence of Tipping Points}
     
 \begin{document}
 
 \maketitle
 
-As the world temperature rises, due to carbon dioxide (CO2) emissions from human economic activities, the risk of tipping points in the climate system becomes more concrete (\cite{ashwin_extreme_2020,sledd_cloudier_2021}). This risk affects the social cost of carbon, the marginal damage of increasing carbon emissions. In this paper, I study the relationship between the risk of tipping and the social cost of carbon. To do so, I solve a social-planner integrated model with a stylised ice-albedo feedback in the climate dynamics (\cite{hogg_glacial_2008,ashwin_tipping_2012}). I model a tipping point induced by the ice–albedo feedback and study how this affects optimal abatements. The tipping point affects temperature dynamics, and as a consequence optimal emissions, in three ways. First, it introduces a non-linear increase in temperature. Second, it makes positive temperature shocks more persistent than negative ones. Third, it introduces a jump in the abatement necessary to revert temperatures to the pre-tipping-point level. I show that, in this context, it is crucial not only to quickly reach net-zero emissions, but to also flatten the emission curve to reduce the risk of tipping.
+\begin{abstract}
+  This paper investigates the role of non-linear tipping points in determining optimal emissions. To do so, I model a stylised ice-albedo tipping point in the climate dynamics and study the consequences this has in determining optimal emissions in a dynamic stochastic general equilibrium model. In line with recent evidence, I assume that climate change hinders economic growth. I show that the presence of a tipping point prescribes ambitious abatement policies, not only in scope but, crucially, in timing. 
+\end{abstract}
 
-The importance of modelling precise climate dynamics and tipping points when determining optimal emission paths has been increasingly recognised in economics (\cite{van_den_bremer_risk-adjusted_2021,dietz_economic_2021,dietz_are_2020,taconet_social_2021,lontzek_stochastic_2015}). Previous approaches have mostly focused on the stochastic nature of tipping points, by modelling temperature dynamics or damages as jump processes, with arrival rates increasing in emissions. Yet, many tipping points in the climate system are caused by bifurcations (\cite{ashwin_extreme_2020,ashwin_tipping_2012}). In this paper, I show that introducing this class of tipping points in an integrated model yields similar prediction in terms of aggregate emissions, but prescribes much steeper reduction of emissions to keep the risk of tipping low.
+\newpage
+As the world temperature rises, due to carbon dioxide (CO2) emissions from human economic activities, the risk of tipping points in the climate system becomes more concrete (\cite{ashwin_extreme_2020,sledd_cloudier_2021}). This risk affects the trade-off between the economic gains from emissions and the damages such emissions impose on the economy. In this paper, I study the relationship between the presence of a tipping point and the optimal abatement of emissions. To do so, I solve a social-planner integrated assessment model with a stylised ice-albedo feedback in the climate dynamics (\cite{hogg_glacial_2008,ashwin_tipping_2012}) and study the effect this has on optimal abatement policies. The tipping point affects temperature dynamics, and as a consequence optimal emissions, in three ways. First, it introduces a non-linear increase in temperature. Second, it makes positive temperature shocks more persistent than negative ones. Third, it introduces a jump in the abatement necessary to revert temperatures to the pre-tipping-point level. I show that, when tipping points are present, optimal abatement is more ambitious in scope and timing
 
-To tease out this difference, I study an AK-model in which increases temperature beyond pre-industrial levels reduce economic growth (as in \cite{pindyck_economic_2013} and \cite{hambel_optimal_2021}). This modelling choice, as opposed to having temperatures wipe-out a fraction of the capital stock, as in Nordhaus (\citeyear{nordhaus_estimates_2014,nordhaus_question_2008,nordhaus_revisiting_2017}), is motivated by recent evidence on the role of temperature in reducing economic growth and productivity (\cite{burke_global_2015, dietz_growth_2019}). \note{Add punchline.}
+The importance of modelling precise climate dynamics and tipping points when determining optimal emission paths has been increasingly recognised in economics (\cite{van_den_bremer_risk-adjusted_2021,dietz_economic_2021,dietz_are_2020,taconet_social_2021,lontzek_stochastic_2015}). Previous approaches have mostly focused on the stochastic nature of tipping points, by modelling temperature dynamics (\cite{dietz_economic_2021}) or damages (\cite{lontzek_stochastic_2015}) as jump processes, with arrival rates increasing in emissions. Yet, many tipping points in the climate system are caused by bifurcations (\cite{ashwin_extreme_2020,ashwin_tipping_2012}). In this paper, I show that introducing this class of tipping points in an integrated assessment model yields similar predictions in terms of aggregate emissions, but prescribes much steeper reduction of emissions to keep the risk of tipping low.
+
+To tease out this difference, I study an AK-model in which increases in temperature, beyond pre-industrial levels, reduce economic growth (as in \cite{pindyck_economic_2013} and \cite{hambel_optimal_2021}). This modelling choice, as opposed to having temperatures wipe-out a fraction of the capital stock, as in Nordhaus (\citeyear{nordhaus_estimates_2014,nordhaus_question_2008,nordhaus_revisiting_2017}), is motivated by recent evidence on the role of temperature in reducing economic growth and productivity (\cite{burke_global_2015, dietz_growth_2019}).
 
 
 \section{Climate Model}
@@ -128,18 +139,20 @@ To tease out this difference, I study an AK-model in which increases temperature
 
 \subfile{sections/social-planner/social-planner.tex}
 
-\section{Optimal Emissions}
+\section{Main Results}
 
 \subfile{sections/optimal-emissions/optimal-emissions.tex}
 
+\section{Conclusion}
 
-\ifdraft{}{
-  \newpage
-  \printbibliography
-}
+This paper studies the role of tipping points in determining optimal emissions. Building on the calibration by \citein{hambel_optimal_2021}, I extend the climate dynamics to include a potential bifurcation induced by the loss in albedo due to the change in the area of ice caps, sea ice, and glaciers (\cite{ashwin_tipping_2012,ashwin_extreme_2020}). I show that, in the presence of tipping points, optimal abatement is more ambitious in scope and timing. In fact, early abatement is crucial to avoid long periods of exposure to tipping risk.
 
-\appendix
-\section{Numerical Solution}
+The model presented here represents an early and simplified analysis that can be extended in various directions. First, more work is needed to analytically link the risk of tipping and the optimal abatement strategy, in order to quantify precisely the role of higher order climate dynamics in determining the social cost of carbon. Second, the underlying assumption of the social planner's optimisation problem is that she knows the climate dynamics and the role of the ice-albedo feedback. Such an assumption calls for extending the analysis to a situation in which the magnitude of the albedo loss is not known and rather can be estimated using early warning signals. Yet, in the face of uncertainty, the optimal abatement policy derived in this paper serves as a good rule against the possible worst case scenario.
+
+\newpage
+\ifdraft{}{\printbibliography}
+
+\newpage\appendix
 \subfile{sections/numerical-solution/numerical-solution.tex}
 
 \end{document}

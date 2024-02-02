@@ -62,23 +62,19 @@ begin
 		model = load(joinpath(termpath, filename(N, first(ΔΛ), p)), "model")
 		@unpack economy, calibration = model
 	
-		timesteps = range(0, economy.τ; step = 0.25)
+		timesteps = range(0.25, economy.t₁; step = 0.25)
 		V = Array{Float64}(undef, N, N, N, length(ΔΛ), length(timesteps))
 		policy = similar(V, Policy)
 	
-		ᾱ = γ(economy.τ, economy, calibration)
+		ᾱ = γ(economy.t₁, economy, calibration)
 	
 		for (k, Δλ) ∈ enumerate(ΔΛ)
 			name = filename(N, Δλ, p)
-			V[:, :, :, k, end] .= load(joinpath(termpath, name), "V̄")
-			policy[:, :, :, k, end] .= [Policy(χ, ᾱ) for χ ∈ load(joinpath(termpath, name), "policy")]
-	
 			file = jldopen(joinpath(simpath, name), "r")
 	
-			for (j, tᵢ) ∈ enumerate(timesteps[1:(end - 1)])
-				idx = size(V, 5) - j
-				V[:, :, :, k, idx] .= file[string(tᵢ)]["V"]
-				policy[:, :, :, k, idx] .= file[string(tᵢ)]["policy"]
+			for (j, tᵢ) ∈ enumerate(timesteps)
+				V[:, :, :, k, j] .= file[string(tᵢ)]["V"]
+				policy[:, :, :, k, j] .= file[string(tᵢ)]["policy"]
 			end
 	
 			close(file)
@@ -90,9 +86,9 @@ end;
 
 # ╔═╡ cdc62513-a1e8-4c55-a270-761b6553d806
 begin
-	ΔΛ = [0., 0.08]
-	p = CRRA(θ = 1.45)
-	N = 31
+	ΔΛ = [0., 0.03, 0.08]
+	p = CRRA()
+	N = 21
 	
 	t, V, policy, model, G = loaddata(N, ΔΛ, p)
 end;
@@ -104,7 +100,7 @@ begin
 end;
 
 # ╔═╡ 5e7d4f3a-a7c2-4695-a211-448ed5909ad1
-plotsection(V[:, :, :, end, end - 1], log(economy.Y₀), G; zdim = 3, surf = true, xflip = true)
+plotsection(last.(policy[:, :, :, 1, 1]), hogg.T₀, G; zdim = 1, surf = false, xflip = false, linewidth = 0.)
 
 # ╔═╡ 6fe67c9b-fe20-42e4-b817-b31dad586e55
 md"# Backward Simulation"
@@ -163,8 +159,8 @@ end;
 
 # ╔═╡ c3c2cfc9-e7f4-495b-bcc6-51227be2c6b5
 begin
-	tspan = (0., 40.)
-	x₀ = [X₀.T, X₀.m, X₀.y]
+	tspan = (0., economy.t₁)
+	x₀ = [hogg.T₀, log(hogg.M₀) , X₀.y]
 	problems = [SDEProblem(SDEFunction(F!, G!), x₀, tspan, (Δλ, )) for Δλ ∈ ΔΛ]
 end;
 
@@ -180,8 +176,8 @@ begin
 	yearticks = 2020 .+ (0:10:80)
 	xticks = (0:10:80, yearticks)
 		
-	Tticks = hogg.Tᵖ .+ (1:2.5)
-	yticks = (Tticks, 1:2.5)
+	Tticks = hogg.Tᵖ .+ (1:3)
+	yticks = (Tticks, 1:3)
 	
 	
 	Tfig = plot(; ylabel = "\$T - T^p\$", legendtitle = "\$\\Delta \\lambda\$", yticks, ylims = extrema(Tticks), xticks)
@@ -220,9 +216,8 @@ begin
 
 			for (j, x) ∈ enumerate(data)
 				M = exp(x.m)
-				E = (1 - Model.ε(tᵢ, exp(x.m), αitp(x..., Δλ, tᵢ), model)) * Eᵇ(tᵢ)
 				
-				emissions[i, j] = γ(tᵢ, economy, calibration) - αitp(x..., Δλ, tᵢ)
+				emissions[i, j] = Model.ε(tᵢ, exp(x.m), αitp(x..., Δλ, tᵢ), model)
 			end
 		end
 

@@ -13,7 +13,7 @@ where the level of emissions $E$ is determined endogenously by economic activity
 
 The aim of the paper is to look at optimal abatement strategies. To make the relationship between the abatement strategy and the climate model more transparent, I rewrite the level of emissions $E$ in deviation from a business-as-usual scenario $E^{\b}$. Furthermore, I normalise these two quantities with respect to the corresponding level of CO$_2$ concentration, $M$ and $M^{\b}$. To do so, let $\gamma^{\b}$ be the expected observed growth rate of carbon concentration, in a business-as-usual scenario, such that $\d{M^{\b}} = M^{\b} \gamma^{\b} \; \d{t}$. Using the CO$_2$ concentration dynamics (\ref{eq:dynamics:m:emissions}) we obtain \begin{equation} \label{eq:growth-rate-bau}
     \gamma^{\b} = \frac{\xi E^{\b} - \delta_m(N^{\b}) M^{\b}}{M^{\b}},
-\end{equation} where $N^{\b}$ is the quantity of CO$_2$ sequestered in natural sinks, in a business-as-usual scenario. The quantities $E^{\b}$, $M^{\b}$, and $N^{\b}$ are all calibrated using the SSP5 scenarios \textbf{[cite]}, such that $\gamma^{\b}$ is an time-varying exogenous parameter. Using this, we can rewrite the societal abatement strategy as a deviation from the business-as-usual growth rate. Let $\control{\alpha}$ be such abatement strategy, then equation (\ref{eq:dynamics:m:emissions}) can be rewritten as \begin{equation} \label{eq:dynamics:m:abatement}
+\end{equation} where $N^{\b}$ is the quantity of CO$_2$ sequestered in natural sinks, in a business-as-usual scenario. The quantities $E^{\b}$, $M^{\b}$, and $N^{\b}$ are all calibrated using the SSP5 scenarios (\cite{intergovernmental_panel_on_climate_change_climate_2023}), such that $\gamma^{\b}$ is an time-varying exogenous parameter. Using this, we can rewrite the societal abatement strategy as a deviation from the business-as-usual growth rate. Let $\control{\alpha}$ be such abatement strategy, then equation (\ref{eq:dynamics:m:emissions}) can be rewritten as \begin{equation} \label{eq:dynamics:m:abatement}
     \d{m} \coloneqq \frac{\d{M}}{M} = \Big( \gamma^{\b} - \control{\alpha} \Big)\; \d{t},
 \end{equation} where $m$ denotes the logarithm of the CO$_2$ concentration, $\log M$. Rewriting the dynamics as in equation (\ref{eq:dynamics:m:emissions}) we rephrase the problem from optimal emissions to optimal abatement, vis-à-vis the business-as-usual scenario, which allows us to simplify exposition and to compare more effectively different policy scenarios. Yet, at time it is interesting to link a given abatement policy $\alpha$ back to emissions. To do so, I introduce the emission reduction rate $\varepsilon$, implicitly defined as \begin{equation} \label{eq:emission-reduction-rate}
     E = (1 - \varepsilon(\control{\alpha})) \; E^{\b},
@@ -23,10 +23,10 @@ The aim of the paper is to look at optimal abatement strategies. To make the rel
 
 Global mean surface temperature $T$ is modelled using a stylised Budyko–Ghil–Sellers energy balance model (\cite{hogg_glacial_2008, ashwin_extreme_2020}). Earth's radiating balance, in its simplest form, prescribes that an equilibrium temperature $\bar{T}$, in $\unit{K}$, is determined by equating incoming solar radiation $S$, in $\unit{W}\unit{m}^{-2}$, with outgoing longwave radiations $\eta \sigma \bar{T}^4$, where $\sigma = 5.7 \times 10^{-8} \; \unit{W} \unit{m}^{-2} \unit{K}^{-4}$ is the Stefan-Boltzmann constant and $\eta$ is an emissivity rate. Due to the presence of greenhouse gasses, certain wavelengths are scattered and, hence, not emitted, which introduces an additional radiative forcing $G$, in $\unit{W}\unit{m}^{-2}$, which yields the balance equation $S = \eta \sigma \bar{T}^4 - G$. In this paper, we focus on the role of increased CO$_2$ concentration $M$ compared to pre-industrial levels $M^{\mathrm{p}}$, as opposed to other greenhouse gases, hence we can decompose the greenhouse radiative forcing term $G$ into a constant component $G_0$ and a component which depends on the steady state level of CO$_2$ concentration in the atmosphere $\bar{M}$ with respect to the pre-industrial level $M^{\mathrm{p}}$, such that $G = G_0 + G_1 \log(\bar{M} / M^{\mathrm{p}})$.
 
-In addition to these forces, to study the role of tipping points, I introduce the effects of land ice albedo on the radiation balance (as done in \cite{ghil_topics_2011,dijkstra_sensitivity_2015}). In particular, as temperatures rise, the area of ice caps, glaciers, and sea ice shrinks, which in turn reduces the planetary albedo $\lambda(T)$, that is, the fraction of solar radiation reflected by earths' surface. Hence, I decompose the incoming solar radiation which contributes to the energy balance as $S = S_0 \big(1 - \lambda(T)\big)$. We model this effect by letting the planetary albedo transition from a high level $\lambda_1$ to a lower level $(\lambda_1 - \Delta \lambda)$ via a sigmoid transition function \begin{equation}
-    \sigma(x) = \frac{1}{1 + \exp(T_i - T)}
+In addition to these forces, to study the role of tipping points, I introduce the effects of land ice albedo on the radiation balance (as done in \cite{ghil_topics_2011,dijkstra_sensitivity_2015}). In particular, as temperatures rise, the area of ice caps, glaciers, and sea ice shrinks, which in turn reduces the planetary albedo $\lambda(T)$, that is, the fraction of solar radiation reflected by earths' surface. Hence, the solar radiation which contributed to warming is a fraction of the total incoming solar radiation $S = S_0 \big(1 - \lambda(T)\big)$. This effect is modelled by letting the planetary albedo transition from a high level $\lambda_1$ to a lower level $(\lambda_1 - \Delta \lambda)$ via a sigmoid transition function \begin{equation}
+    \sigma(T) = \frac{1}{1 + \exp(T_i - T)}
 \end{equation} where $T_i$ is a calibrated inflection point. Under this specification, the albedo coefficient can be written as a function of temperature (Figure \ref{fig:albedo_coefficient}) \begin{equation} \label{eq:assumption:albedo}
-    \lambda(T) = \lambda_1 - (1 - L(x)) \Delta \lambda.
+    \lambda(T) = \lambda_1 - (1 - \sigma(x)) \Delta \lambda.
 \end{equation} 
 
 \begin{figure}[H]
@@ -36,7 +36,7 @@ In addition to these forces, to study the role of tipping points, I introduce th
     \label{fig:albedo_coefficient}
 \end{figure}
 
-It is the important to stress that the function $\lambda$ (\ref{eq:assumption:albedo}) is a highly stylised average model for a complex and spatially heterogeneous process, which, in turn, puts a lot of uncertainty around the parameters $T_i$ and $\Delta \lambda$. In the robustness checks we explore the sensitivity of our results to these parameters.
+It is the important to stress that the function $\lambda$ (\ref{eq:assumption:albedo}) is a highly stylised average model for a complex and spatially heterogeneous process, which, in turn, puts a lot of uncertainty around the parameters $T_i$ and $\Delta \lambda$. \iffalse In the robustness checks we explore the sensitivity of our results to these parameters. \fi
 
 Equating incoming solar radiation, net of the albedo effect, and outgoing longwave radiation, net of the greenhouse gas effect, we obtain the energy balance condition \begin{equation} \label{eq:radiative-balance}
     S_0 \big(1 - \lambda(\bar{T})\big) = \eta \sigma \bar{T}^4 - G_0 - G_1 \log(\bar{M} / M^{\mathrm{p}}).
@@ -48,18 +48,16 @@ To study deviations from radiative balance (\ref{eq:radiative-balance}), we defi
     \mu_m(m) \coloneqq  G_0 + G_1  \big(m - m_p \big),
 \end{equation} and notice that we can rewrite radiative balance (\ref{eq:radiative-balance}) as $\mu_T(\bar{T}) + \mu_m(\bar{m}) = 0$. Then we assume that temperature dynamics are given by \begin{equation} \label{eq:dynamics:x}
     \epsilon \; \d T = \Big(\mu_T(T) + \mu_m(m)\Big) \; \d t + \sigma_x \; \d w^T
-\end{equation} where $\epsilon$, in $\unit{J} \unit{m}^{-2} \unit{K}^{-1}$, is the thermal inertia and $w^T$ is a Weiner process.
+\end{equation} where $\epsilon$, in $\unit{J} \unit{m}^{-2} \unit{K}^{-1}$, is the thermal inertia and $w^T$ is a Wiener process.
 
 \subsection{Ice-albedo Feedback and Tipping Points}
 
-The presence of the ice-albedo feedback effect $\lambda(T)$ can introduce tipping points in the temperature dynamics. For higher losses in albedo due to melting of ice sheets, $\Delta \lambda$, we obtain stronger feedbacks, which in turn can generate a regime in which, for a given carbon concentration level, there are two stable temperature regimes. This bifurcation can introduce jumps in the temperature process. 
-
-To illustrate this, Figure \ref{fig:nullclines} depicts the values of carbon concentration $\bar{T}$ and temperature $\bar m$, for which the system is in radiative balance, $\mu_T(\bar{T}) + \mu_m(\bar{m}) = 0$, for three different potential albedo losses $\Delta \lambda$. For low values of albedo loss ($\Delta \lambda = 0.02$), as the logarithm of carbon concentration increases, equilibrium temperatures rise linearly. As the albedo loss increases ($\Delta \lambda = 0.06$), an equivalent increase in carbon concentration, yields larger and non-linear increases in temperature. Passed a certain threshold ($\Delta \lambda = 0.08$), the system undergoes a bifurcation, and, for some levels of carbon concentration, one additional stable equilibrium arises. For example, consider the carbon concentration level $m = 600$ in Figure \ref{fig:nullclines}. For $\Delta \lambda = 0.06$, the only temperature that yields radiative balance, in deviation from pre-industrial level is $+3^\circ$. For $\Delta \lambda = 0.08$, at the same level of carbon concentration, radiative balance is achieved at both $+3^\circ$ and $+7^\circ$ degrees. 
+The presence of the ice-albedo feedback effect $\lambda(T)$ can introduce tipping points in the temperature dynamics.  To illustrate this, Figure \ref{fig:nullclines} depicts the values of temperature $\bar{T}$ and logarithmic carbon concentration $\bar m$, for which the system is in radiative balance, $\mu_T(\bar{T}) + \mu_m(\bar{m}) = 0$, with three different potential albedo losses $\Delta \lambda$. For no albedo loss ($\Delta \lambda = 0$), as the logarithm of carbon concentration increases, equilibrium temperatures rise linearly. As the albedo loss increases ($\Delta \lambda = 0.06$), an equivalent increase in carbon concentration, yields larger and non-linear increases in temperature. Past a certain threshold, the system undergoes a bifurcation,  and, for some levels of carbon concentration, one additional stable equilibrium arises ($\Delta \lambda = 0.08$). This new equilibrium represents a situation in which a significant fraction of the ice coverage has melted and cannot reform naturally, without large decreases in carbon concentration. For example, consider the carbon concentration level $M = 610$ in Figure \ref{fig:nullclines}. For $\Delta \lambda = 0.06$, the only temperature that yields radiative balance, in deviation from pre-industrial level is approximately $+3.5$\degree. For $\Delta \lambda = 0.08$, at the same level of carbon concentration, radiative balance is achieved at both $+4$\degree and $+7.5$\degree. 
 
 \begin{figure}[H]
     \centering
     \inputtikz{../../../plots/nullcline.tikz}
-    \caption{Nullclines of the dynamics $\{(T, m): \dot{T} = 0\}$ for different parametrisations of albedo loss $\Delta \lambda$.}
+    \caption{Nullclines of the dynamics $\{(T, M): \dot{T} = 0\}$ for different parametrisations of albedo loss $\Delta \lambda$.}
     \label{fig:nullclines}
 \end{figure}
 
@@ -68,27 +66,25 @@ To illustrate this, Figure \ref{fig:nullclines} depicts the values of carbon con
     \caption{}
     \label{fig:gplot}
 \end{wrapfigure}
-The presence of a bifurcation induced by the ice-albedo feedback has strong implications for the dynamics. To illustrate this, we can calibrate the model using the \textit{SSP5 - Baseline} scenario (\cite{kriegler_fossil-fueled_2017}) as a business-as-usual benchmark. This scenario describes an energy intensive future, in which fossil fuel usage develops rapidly and little to no abatement takes place. The growth rate of carbon concentration $\gamma^{\b}$ (\ref{eq:growth-rate-bau}) implied by the \textit{SSP5 - Baseline} is plotted in Figure \ref{fig:gplot}. The calibration technique follows closely that of \citein{hambel_optimal_2021}, see Appendix \textbf{[n]} for more detail on the calibration.
+The presence of a bifurcation induced by the ice-albedo feedback has strong implications for the dynamics. To illustrate this, we can calibrate the model using the \textit{SSP5 - Baseline} scenario (\cite{kriegler_fossil-fueled_2017}) as a business-as-usual benchmark. This scenario describes an energy intensive future, in which fossil fuel usage develops rapidly and little to no abatement takes place. The growth rate of carbon concentration $\gamma^{\b}$ (\ref{eq:growth-rate-bau}) implied by the \textit{SSP5 - Baseline} is plotted in Figure \ref{fig:gplot} (the calibrated parameters can be found in \ref{appendix:calibration}).
 
-Using the calibrated growth rate of carbon concentration $\gamma^{\b}$, I simulate the business-as-usual $\control{\alpha} = 0$ path of temperature and carbon concentration implied by the dynamics (\ref{eq:dynamics:m:abatement}) and (\ref{eq:dynamics:x}). With a small ice-albedo feedback (left panel of Figure \ref{fig:bau}), as expected, temperature grows with the logarithm of carbon concentration and the model, despite its simplicity, tracks well the \textit{SSP5 - Baseline} temperature projections. Under a larger albedo loss (right panel of Figure \ref{fig:bau}) keeping the same emissions, the temperature exhibits a very different path. After passing a critical threshold, the temperature converges rapidly to a second steady state.
-
+Using the calibrated growth rate of carbon concentration $\gamma^{\b}$, I simulate the business-as-usual $\control{\alpha} = 0$ path of temperature and carbon concentration implied by the dynamics (\ref{eq:dynamics:m:abatement}) and (\ref{eq:dynamics:x}). With no ice-albedo feedback (left panel of Figure \ref{fig:bau}), as expected, temperature grows with the logarithm of carbon concentration and the model, despite its simplicity, tracks well the \textit{SSP5 - Baseline} temperature projections. Under a larger albedo loss (right panel of Figure \ref{fig:bau}) keeping the same emissions, the temperature exhibits a very different path. After passing a critical threshold, the temperature converges rapidly to a second steady state. Crossing this tipping point represents a large threat to the economy. First, an acceleration of temperature growth causes large economic damages. Second, removing the emitted carbon that triggered the tipping point is not sufficient to revert back to the pre-tipping equilibrium. These two factors impose a discontinuity in the externality of emissions: the ton of carbon that triggers a transition is discontinuously more damaging than the previous one.
 
 \begin{figure}[H]
     \centering
     \inputtikz{../../../plots/baufig.tikz}
-    \caption{Business as usual path of temperature with small (left) and large (right) albedo drop. Each marker represents the temperature every 20 years, starting from 2020. In black, the \textit{SSP5 - Baseline} model.}
+    \caption{Business as usual path of temperature with small (left) and large (right) albedo loss. Each marker represents the temperature every 20 years, starting from 2020. In black, the \textit{SSP5 - Baseline} model.}
     \label{fig:bau}
 \end{figure}
 
-% TODO: Talk about the distribution and critical slowdown.
+\subsection{Critical Slowdown and Early Warning Signals}
 
-\iffalse
-    \begin{figure}[H]
-        \centering
-        \inputtikz{../../../plots/bau-x-dens.tikz}
-        \caption{Density of temperature in a business-as-usual scenario with $\Delta \lambda = 0.08$.}
-        \label{fig:bau:density}
-    \end{figure}
-\fi
+\begin{wrapfigure}{r}{0.5\textwidth}
+    \centering
+    \inputtikz{../../../plots/densfig.tikz}
+    \caption{Density of temperature shocks at $M = 600$.}
+    \label{fig:density}
+\end{wrapfigure}
+Another crucial difference between the climate dynamics in the presence of a tipping point, vis-à-vis those modelled with a jump process (e.g. \cite{dietz_economic_2021,hambel_optimal_2021}) is the presence of critical slowdown: as we approach the tipping point, large temperature deviation shocks persist for longer, as ice struggles to reform. To illustrate this effect, Figure \ref{fig:density} shows the density of temperature as carbon concentration approaches the tipping point (derived in Appendix \ref{appendix:density}). For larger levels of albedo loss, large deviations of temperature are more persistent, hence more time are spent in a high temperature regime. This has two relevant implications for optimal emissions. First, it can act as an early warning signal; if one is uncertain about the size of the albedo loss, long periods of high temperature can be used to infer that the loss is high and the system is approaching the tipping point. Second, such repeated and persistent periods of high temperatures generate large economic damages.
 
 \end{document}

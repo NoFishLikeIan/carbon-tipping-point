@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.30
+# v0.19.32
 
 using Markdown
 using InteractiveUtils
@@ -18,7 +18,7 @@ end
 using Roots
 
 # ╔═╡ 1471d3ee-6830-4955-9ba6-e5c004701794
-using Model, Utils
+using Model, Grid
 
 # ╔═╡ aef78453-73c2-43b9-ad59-979574471c4d
 using Plots, PlutoUI; default(size = 500 .* (√2, 1), dpi = 180, titlefontsize = 12)
@@ -28,17 +28,17 @@ TableOfContents()
 
 # ╔═╡ 1f4dd3bb-5350-43e8-a6e5-216f698fd4e7
 begin
-	hogg = Hogg(σ²ₜ = 0.01f0)
+	hogg = Hogg()
 	albedo = Albedo(λ₂ = Albedo().λ₁ - 0.09)
 
 	@unpack S₀, η = hogg
 
-	Tᵢ = (albedo.T₁ + albedo.T₂) / 2f0 
+	Tᵢ = (albedo.T₁ + albedo.T₂) / 2
 	c = Model.secondstoyears / hogg.ϵ
 end;
 
 # ╔═╡ b0c570e4-9c92-476c-b842-c81181f5598d
-Tstable(M, albedo) = find_zeros(T -> Model.Mstable(T, hogg, albedo) - M, 288f0, 297f0);
+Tstable(M, albedo) = find_zeros(T -> Model.Mstable(T, hogg, albedo) - M, 288, 297f0);
 
 # ╔═╡ 698fd792-b847-49e2-871d-bcb558461b5e
 begin
@@ -62,16 +62,13 @@ end;
 let
 	M = hogg.M₀
 		
-	plot(Tspace, T -> V(T, log(1.2M), Albedo(λ₂ = 0.20)); c = :darkred, linewidth = 2, label = "\$V(t)\$")
+	plot(Tspace, T -> V(T, log(M), Albedo(λ₂ = 0.08)); c = :darkred, linewidth = 2, label = "\$V(t)\$")
 	vline!([hogg.T₀]; c = :black, linestyle = :dashdot, label = "\$T_0\$")
 end
 
-# ╔═╡ 6ecc6397-8a26-4a7c-8145-4415ba6bf94d
-hogg.Tᵖ + 1.4
-
 # ╔═╡ 3be104fd-a0ae-4eb5-88f8-04aa8b9a48b1
-function p(T, m, albedo; Vz = 10f-4)
-	exp(-2(V(T, m, albedo) * Vz) / (hogg.σ²ₜ / c^2))
+function p(T, m, albedo; Vz = 1e-5)
+	exp(-V(T, m, albedo) / 90945)
 end;
 
 # ╔═╡ aeda50d8-02e1-49af-b814-adc59a3d7a8a
@@ -80,18 +77,8 @@ begin
 	p̂ = p̂ ./ sum(p̂, dims = 1)
 end;
 
-# ╔═╡ 762208c8-9027-4eb2-bbd5-f62493d1b19d
-let
-	nullcline = [Model.Mstable(T, hogg, albedo) for T ∈ Tspace]
-
-	heatmap(Mspace, Tspace, p̂, linewidth = 0, c = :Blues, cbar = false)
-	plot!(nullcline, Tspace; xlims = extrema(Mspace), ylims = extrema(Tspace), linewidth = 3, linestyle = :dash, c = :white, label = false)
-
-
-end
-
 # ╔═╡ 29c82a92-1423-4ca1-aca1-50cd15d864ee
-plot(p̂[:, 200])
+plot(p̂[:, 50])
 
 # ╔═╡ 768d2952-598d-48a4-ab02-39075f1fdd21
 sum(p̂[:, 200])
@@ -107,9 +94,7 @@ sum(p̂[:, 200])
 # ╠═698fd792-b847-49e2-871d-bcb558461b5e
 # ╠═517a32a7-098d-4c89-b428-eed70c41e1d4
 # ╠═a0a13647-a2af-4ad9-8eb6-c20c1d18d7bb
-# ╠═6ecc6397-8a26-4a7c-8145-4415ba6bf94d
 # ╠═3be104fd-a0ae-4eb5-88f8-04aa8b9a48b1
 # ╠═aeda50d8-02e1-49af-b814-adc59a3d7a8a
-# ╠═762208c8-9027-4eb2-bbd5-f62493d1b19d
 # ╠═29c82a92-1423-4ca1-aca1-50cd15d864ee
 # ╠═768d2952-598d-48a4-ab02-39075f1fdd21
