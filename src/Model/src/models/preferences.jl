@@ -19,7 +19,7 @@ Base.@kwdef struct EpsteinZin
     ψ::Float64 = 1.5    # Elasticity of intertemporal complementarity 
 end
 
-Preferences = Union{CRRA, LogSeparable, EpsteinZin, LogUtility}
+Preferences = Union{CRRA, EpsteinZin, LogUtility}
 
 function f(c, v, Δt, p::EpsteinZin)
     coeff = (1 - (1 / p.ψ)) / (1 - p.θ)

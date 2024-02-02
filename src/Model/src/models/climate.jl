@@ -12,7 +12,7 @@ end
 
 Base.@kwdef struct Hogg
     # Current and pre-industrial data temperature and carbon concentration
-    T₀::Float64 = 288.56 # [K]
+    T₀::Float64 = 288.29 # [K]
     Tᵖ::Float64 = 287.15 # [K]
     M₀::Float64 = 410 # [p.p.m.]
     Mᵖ::Float64 = 280 # [p.p.m.]
@@ -87,3 +87,16 @@ function mstable(T, hogg::Hogg, albedo::Albedo)
 end
 
 Mstable(T, hogg::Hogg, albedo::Albedo) = exp(mstable(T, hogg, albedo))
+
+
+function potential(T, m, hogg::Hogg, albedo::Albedo)
+	@unpack λ₁, λ₂ = albedo
+    Tᵢ = (albedo.T₁ + albedo.T₂) / 2
+	G = Model.fₘ(m, hogg)
+
+	(hogg.η / 5) * T^5 - G * T - (1 - λ₁) * hogg.S₀ * T - hogg.S₀ * (λ₁ - λ₂) * log(1 + exp(T - Tᵢ))
+end
+
+function density(T, m, hogg::Hogg, albedo::Albedo; normalisation = 1e-5)
+    exp(-normalisation * potential(T, m, hogg, albedo))
+end

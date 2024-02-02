@@ -1,8 +1,8 @@
 Base.@kwdef struct Economy
     # Technology
     ωᵣ::Float64 = 2e-3 # Speed of abatement technology cost reduction
-    ϱ::Float64 = 9e-3 # Growth of TFP
-    κ::Float64 = 6.9 # Adjustment costs of abatement technology
+    ϱ::Float64 = 9e-4 # Growth of TFP
+    κ::Float64 = 0.0632 # Adjustment costs of abatement technology
     
     # Damages
     δₖᵖ::Float64 = 0.0116 # Initial depreciation rate of capital
@@ -17,7 +17,7 @@ Base.@kwdef struct Economy
     # Domain 
     t₀::Float64 = -15. # Initial time of IPCC report
     t₁::Float64 = 80. # Horizon of IPCC report
-    τ::Float64 = 80. # Steady state horizon
+    τ::Float64 = 500. # Steady state horizon
 end
 
 "Cost of abatement as a fraction of GDP"
@@ -49,14 +49,7 @@ function δₖ(T, economy::Economy, hogg::Hogg)
 end
 
 function ϕ(t, χ, economy::Economy)
-    (1 - χ) * A(t, economy) - (economy.κ / 2) * (1 - χ)^2 * A(t, economy)^2 
-end
-function ϕ′(t, χ, economy::Economy)
-    economy.κ * A(t, economy)^2 * (1 - χ) - A(t, economy)
-end
-
-function ϕ′′(t, economy::Economy)
-    -economy.κ * A(t, economy)^2 
+    (1 - χ) * A(t, economy) - (economy.κ / 2) * (1 - χ)^2
 end
 
 function A(t, economy::Economy)
@@ -66,7 +59,7 @@ end
 "Parametric form of γ: (t₀, ∞) → [0, 1]"
 γ(t, economy::Economy, calibration::Calibration) = γ(t, calibration.γparameters, economy.t₀)
 function γ(t, p, t₀)
-    p[1] + p[2] * (t - t₀) + p[3] * (t - t₀)^2
+    max(p[1] + p[2] * (t - t₀) + p[3] * (t - t₀)^2, 0.)
 end
 
 "Linear interpolation of emissions in `calibration`"
