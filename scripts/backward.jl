@@ -12,7 +12,7 @@ include("../scripts/utils/saving.jl")
     using ZigZagBoomerang: dequeue!
     using Base: Order
     using FastClosures: @closure
-    using BlackBoxOptim: bboptimize, best_candidate, best_fitness, adaptive_de_rand_1_bin_radiuslimited
+    using NLopt: Opt, lower_bounds!, upper_bounds!, min_objective!, optimize
         
     const env = DotEnv.config()
     const DATAPATH = get(env, "DATAPATH", "data")
@@ -45,11 +45,24 @@ function backwardsimulation!(V::SharedArray{Float64, 3}, policy::SharedArray{Pol
         cluster = first(dequeue!(queue))
 
         @sync @distributed for (i, δt) in cluster
+            # Constants
             tᵢ = model.economy.τ - δt
             idx = indices[i]
-
+            γₜ = γ(tᵢ, model.economy, model.calibration)
             Xᵢ = G.X[idx]
-            dT = μ(Xᵢ.T, Xᵢ.m, model.hogg, model.albedo) / (model.hogg.ϵ * G.Δ.T)
+            Vᵢ = V[idx]
+
+            dT = μ(Xᵢ.T, Xᵢ.m, model.hogg, model.albedo) / model.hogg.ϵ
+            δₘᵢ = δₘ(exp(Xᵢ.m), model.hogg)
+
+            supdT = abs(dT)
+            supdm = max(γₜ, δₘᵢ)
+            supdy = boundb(tᵢ, Xᵢ, model)
+            
+            supdrift = (supdT / G.Δ.T) + (supdm / G.Δ.m) + (supdy / G.Δ.y)
+
+            Qᵢ = σₜ² + σₖ² + G.h * supdrift
+            Δtᵢ = G.h^2 / Qᵢ
 
             # Neighbouring nodes
             # -- Temperature
@@ -57,42 +70,52 @@ function backwardsimulation!(V::SharedArray{Float64, 3}, policy::SharedArray{Pol
             VᵢT₋ = V[max(idx - I[1], L)]
             # -- Carbon concentration
             Vᵢm₊ = V[min(idx + I[2], R)]
+            Vᵢm₋ = V[max(idx - I[2], L)]
             # -- GDP
             Vᵢy₊ = V[min(idx + I[3], R)]
             Vᵢy₋ = V[max(idx - I[3], L)]
 
-            γₜ = γ(tᵢ, model.economy, model.calibration)
+            ∂²T = σₜ² * (VᵢT₊ + VᵢT₋) / 2
+            ∂²y = σₖ² * (Vᵢy₊ + Vᵢy₋) / 2
 
-            Qᵢ = σₜ² + σₖ² + G.h * (abs(dT) + (γₜ / G.Δ.m) + boundb(tᵢ, Xᵢ, model) / G.Δ.y)
-
-            negvalue = @closure u -> begin
-                χ, α = u
-                dy = b(tᵢ, Xᵢ, χ, α, model) / G.Δ.y
-                dm = (γₜ - α) / G.Δ.m
-
-                py₊ = (G.h * max(dy, 0.) + σₖ² / 2) / Qᵢ
-                py₋ = (G.h * max(-dy, 0.) + σₖ² / 2) / Qᵢ
-
-                pT₊ = (G.h * max(dT, 0.) + σₜ² / 2) / Qᵢ
-                pT₋ = (G.h * max(-dT, 0.) + σₜ² / 2) / Qᵢ
-
-                pm₊ = G.h * dm / Qᵢ
-
-                pᵢ = py₊ + py₋ + pT₊ + pT₋ + pm₊
-
-                EV = (py₊ * Vᵢy₊ + py₋ * Vᵢy₋ + pT₊ * VᵢT₊ + pT₋ * VᵢT₋ + pm₊ * Vᵢm₊) / pᵢ
-
-                Δtᵢ = G.h^2 / Qᵢ
-
-                return -f(χ, Xᵢ, EV, Δtᵢ, model.preferences)
-            end
+            dVT = (G.h / G.Δ.T) * abs(dT) * ifelse(dT > 0, VᵢT₊, VᵢT₋)
             
-            bounds = [(0., 1.), (0., γₜ)]
+            negvalue = @closure (x, _) -> begin
+                u = Policy(x[1], x[2])
 
-            res = bboptimize(negvalue; SearchRange = bounds, TraceMode = :silent, Method = :adaptive_de_rand_1_bin_radiuslimited, PopulationSize = 10)
+                dy = b(tᵢ, Xᵢ, u, model)
+                dVy = (G.h / G.Δ.y) * abs(dy) * ifelse(dy > 0, Vᵢy₊, Vᵢy₋)
 
-            V[idx] = -best_fitness(res)
-            policy[idx] = best_candidate(res)
+                dm = γₜ - u.α
+                dVm = (G.h / G.Δ.m) * abs(dm) * ifelse(dm > 0, Vᵢm₊, Vᵢm₋)
+
+                dVᵢ = G.h * ((supdy - abs(dy)) / G.Δ.y + (supdm - abs(dm)) / G.Δ.m) * Vᵢ
+            
+                EV = (∂²T + dVT + ∂²y + dVy + dVm + dVᵢ) / Qᵢ
+
+                c = u.χ * exp(Xᵢ.y)
+
+                -f(c, EV, Δtᵢ, model.preferences)
+            end
+
+            optimiser = Opt(:LN_SBPLX, 2)
+            lower_bounds!(optimiser, [0., 0.])
+            upper_bounds!(optimiser, [1., γₜ + δₘᵢ])
+
+            min_objective!(optimiser, negvalue)
+
+            candidate = policy[idx]
+            alternative = [candidate.χ, ifelse(2candidate.α < γₜ + δₘᵢ, 0.9 * (γₜ + δₘᵢ), 0.1 * γₜ + δₘᵢ)]
+            
+            obj, pol, _ = optimize(optimiser, candidate)
+            objalt, polalt, _ = optimize(optimiser, alternative)
+            
+            V[idx] = max(-obj, -objalt)
+            policy[idx] = ifelse(
+                obj < objalt, 
+                Policy(pol[1], pol[2]), 
+                Policy(polalt[1], polalt[2])
+            )
 
             Δt[i] = ifelse(tᵢ > t₀, G.h^2 / Qᵢ, 0.)
         end

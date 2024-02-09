@@ -55,7 +55,7 @@ function F!(du, u, parameters, t)
 
 	du[1] = Model.μ(u[1], u[2], model.hogg, model.albedo) / model.hogg.ϵ
 	du[2] = Model.γ(t, model.economy, model.calibration) - abatement
-    du[3] = Model.b(t, u, consumption, abatement, model)
+    du[3] = Model.b(t, u, Policy(consumption, abatement), model)
 end
 function G!(du, u, parameters, t)
 	model = first(parameters)

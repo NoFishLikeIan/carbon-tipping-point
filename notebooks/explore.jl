@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.32
+# v0.19.38
 
 using Markdown
 using InteractiveUtils
@@ -85,6 +85,8 @@ begin
 end;
 
 # ╔═╡ cdc62513-a1e8-4c55-a270-761b6553d806
+# ╠═╡ disabled = true
+#=╠═╡
 begin
 	ΔΛ = [0., 0.03, 0.08]
 	p = CRRA()
@@ -92,15 +94,20 @@ begin
 	
 	t, V, policy, model, G = loaddata(N, ΔΛ, p)
 end;
+  ╠═╡ =#
 
 # ╔═╡ acc678b2-01bd-4504-ad88-f3f926cd9518
+#=╠═╡
 begin
 	@unpack hogg, economy, calibration, albedo = model
 	X₀ = Point([hogg.T₀, log(hogg.M₀), log(economy.Y₀)])
 end;
+  ╠═╡ =#
 
 # ╔═╡ 5e7d4f3a-a7c2-4695-a211-448ed5909ad1
+#=╠═╡
 plotsection(last.(policy[:, :, :, 1, 1]), hogg.T₀, G; zdim = 1, surf = false, xflip = false, linewidth = 0.)
+  ╠═╡ =#
 
 # ╔═╡ 6fe67c9b-fe20-42e4-b817-b31dad586e55
 md"# Backward Simulation"
@@ -109,6 +116,7 @@ md"# Backward Simulation"
 md"## Constructing interpolations"
 
 # ╔═╡ d2c83cdf-002a-47dc-81f9-22b76f183587
+#=╠═╡
 begin
 	ΔT, Δm, Δy = G.domains
 
@@ -119,20 +127,26 @@ begin
 		ΔΛ, t
 	)
 end;
+  ╠═╡ =#
 
 # ╔═╡ 08a3333b-bac8-426e-a888-9bf5269c1869
+#=╠═╡
 begin
 	χitp = linear_interpolation(nodes, first.(policy); extrapolation_bc = Flat())
 	αitp = linear_interpolation(nodes, last.(policy); extrapolation_bc = Flat())
 end;
+  ╠═╡ =#
 
 # ╔═╡ 31d32b62-4329-464e-8354-1c2875fe5801
 md"## Simulation"
 
 # ╔═╡ 5c553323-3611-4614-8de3-86ea5cf8eea0
+#=╠═╡
 Eᵇ = linear_interpolation(calibration.years .- 2020, calibration.emissions, extrapolation_bc = Line());
+  ╠═╡ =#
 
 # ╔═╡ d62b65f5-220e-45c6-a434-ac392b72ab4a
+#=╠═╡
 function F!(dx, x, p, t)	
 	Δλ = first(p)
 	
@@ -147,8 +161,10 @@ function F!(dx, x, p, t)
 
 	return
 end;
+  ╠═╡ =#
 
 # ╔═╡ 7823bda7-5ab8-42f7-bf1c-292dbfecf178
+#=╠═╡
 function G!(dx, x, p, t)
 	dx[1] = hogg.σₜ / hogg.ϵ
 	dx[2] = 0.
@@ -156,20 +172,26 @@ function G!(dx, x, p, t)
 	
 	return
 end;
+  ╠═╡ =#
 
 # ╔═╡ c3c2cfc9-e7f4-495b-bcc6-51227be2c6b5
+#=╠═╡
 begin
 	tspan = (0., economy.t₁)
 	x₀ = [hogg.T₀, log(hogg.M₀) , X₀.y]
 	problems = [SDEProblem(SDEFunction(F!, G!), x₀, tspan, (Δλ, )) for Δλ ∈ ΔΛ]
 end;
+  ╠═╡ =#
 
 # ╔═╡ 28c6fe28-bd42-4aba-b403-b2b0145a8e37
+#=╠═╡
 begin
 	solutions = [solve(EnsembleProblem(prob), EnsembleDistributed(); trajectories = 100) for prob ∈ problems]
 end;
+  ╠═╡ =#
 
 # ╔═╡ 1a19b769-68e2-411b-afe0-6bd2a7fb87a3
+#=╠═╡
 begin
 	colors = [:darkblue, :darkred, :darkgreen]
 
@@ -200,8 +222,10 @@ begin
 
 	plot(Tfig, Mfig, sharex = true, layout = (2, 1), link = :x, size = 500 .* (√2, 1.5), margins = 5Plots.mm)
 end
+  ╠═╡ =#
 
 # ╔═╡ 43bc8d15-40d5-457c-84f9-57826cb4139f
+#=╠═╡
 begin
 	efig = plot(ylabel = "\$E\$")
 	
@@ -229,6 +253,7 @@ begin
 
 	efig
 end
+  ╠═╡ =#
 
 # ╔═╡ aa6cdd38-8733-425f-ac39-29d031f7c269
 
