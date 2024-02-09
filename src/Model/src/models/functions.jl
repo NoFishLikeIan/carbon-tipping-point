@@ -15,26 +15,38 @@ function bterminal(T::Float64, χ, economy::Economy, hogg::Hogg)
 end
 
 "Drift of dy."
-b(t, Xᵢ::AbstractVector{Float64}, χ::Float64, α::Float64, model::ModelInstance) = b(t, Point(Xᵢ[1], Xᵢ[2], Xᵢ[3]), χ, α, model);
-b(t, Xᵢ::Point, χ::Float64, α::Float64, model::ModelInstance) = b(t, Xᵢ, Policy(χ, α), model) 
-function b(t, Xᵢ::Point, pᵢ::Policy, model::ModelInstance)
-    @unpack economy, hogg = model
+function b(t, Xᵢ::Point, u::Policy, model::ModelInstance)
+    εₜ = ε(t, exp(Xᵢ.m), u.α, model)
+    Aₜ = A(t, model.economy)
 
-    εₜ = ε(t, exp(Xᵢ.m), pᵢ.α, model)
-    Aₜ = A(t, economy)
+    abatement = Aₜ * β(t, εₜ, model.economy)
 
-    abatement = Aₜ * β(t, εₜ, economy)
+    growth = model.economy.ϱ + ϕ(t, u.χ, model.economy) - model.economy.δₖᵖ
+    damage = d(Xᵢ.T, model.economy, model.hogg)
 
-    economy.ϱ + ϕ(t, pᵢ.χ, economy) - economy.δₖᵖ - abatement - d(Xᵢ.T, economy, hogg)
+    return growth - abatement - damage
+end
+
+function ∇ᵤb(t, Xᵢ::Point, u::Policy, model::ModelInstance)
+    M = exp(Xᵢ.m)
+
+    εₜ = ε(t, M, u.α, model)
+
+    ∇α = -A(t, economy) * β′(t, εₜ, model.economy) * ε′(t, M, model)
+    ∇χ = ϕ′(t, u.χ, model.economy)
+
+    return ∇χ, ∇α
 end
 
 "Computes maximum absolute value of the drift of y."
 function boundb(t, Xᵢ::Point, model::ModelInstance)
     γₜ = γ(t, model.economy, model.calibration)
-    ll = b(t, Xᵢ, 0., 0., model)
-    lr = b(t, Xᵢ, 0., γₜ, model)
-    rl = b(t, Xᵢ, 1., 0., model)
-    rr = b(t, Xᵢ, 1., γₜ, model)
+    δₘᵢ = δₘ(exp(Xᵢ.m), model.hogg)
+
+    ll = b(t, Xᵢ, Policy(0., 0.), model)
+    lr = b(t, Xᵢ, Policy(0., γₜ + δₘᵢ), model)
+    rl = b(t, Xᵢ, Policy(1., 0.), model)
+    rr = b(t, Xᵢ, Policy(1., γₜ + δₘᵢ), model)
 
     return max(abs(ll), abs(lr), abs(rl), abs(rr))
 end
