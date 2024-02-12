@@ -5,6 +5,7 @@ using UnPack: @unpack
 using Polyester: @batch
 using FastClosures: @closure
 using Roots: find_zero
+using Printf: @printf
 
 include("utils/saving.jl")
 
@@ -18,33 +19,30 @@ function terminaljacobi!(V̄::AbstractArray{Float64, 3}, policy::AbstractArray{F
         σₖ² = (model.economy.σₖ / G.Δ.y)^2
         Xᵢ = G.X[idx]
         dT = μ(Xᵢ.T, Xᵢ.m, model.hogg, model.albedo) / (model.hogg.ϵ * G.Δ.T)
-
+    
         # Neighbouring nodes
         # -- GDP
         Vᵢy₊ = V̄[min(idx + I[3], R)]
         Vᵢy₋ = V̄[max(idx - I[3], L)]
-
+    
         # -- Temperature
         VᵢT₊ = V̄[min(idx + I[1], R)]
         VᵢT₋ = V̄[max(idx - I[1], L)]
-
-        noisey = σₖ² * (Vᵢy₊ + Vᵢy₋) / 2
-        noiseT = σₜ² * (VᵢT₊ + VᵢT₋) / 2
-
-        dVT = G.h * abs(dT) * ifelse(dT > 0, VᵢT₊, VᵢT₋) + noiseT
+    
+        dVT = G.h * abs(dT) * ifelse(dT > 0, VᵢT₊, VᵢT₋) + σₜ² * (VᵢT₊ + VᵢT₋) / 2
         
         value = @closure χ -> begin
             dy = bterminal(Xᵢ, χ, model) / G.Δ.y
-            dVy = G.h * abs(dy) * ifelse(dy > 0, Vᵢy₊, Vᵢy₋) + noisey
+            dVy = G.h * abs(dy) * ifelse(dy > 0, Vᵢy₊, Vᵢy₋) + σₖ² * (Vᵢy₊ + Vᵢy₋) / 2
             
             # Expected value
             Q = σₜ² + σₖ² + G.h * (abs(dT) + abs(dy))
-            EV = (dVy + dVT) / Q
+            v = (dVy + dVT) / Q
             Δt = G.h^2 / Q
 
             c = χ * exp(Xᵢ.y)
 
-            f(c, EV, Δt, model.preferences)
+            f(c, v, Δt, model.preferences)
         end
 
         # Optimal control
@@ -66,20 +64,17 @@ function vfi(V₀::AbstractArray{Float64, 3}, model::ModelInstance, G::RegularGr
     
     verbose && println("Starting iterations...")
     for iter in 1:maxiter
-        terminaljacobi!(
-            Vᵢ₊₁, pᵢ₊₁, model, G; 
-            indices = (alternate && isodd(iter)) ? indices : reverse(indices) 
-        )
+        iterindices = (alternate && isodd(iter)) ? indices : reverse(indices)
+
+        terminaljacobi!(Vᵢ₊₁, pᵢ₊₁, model, G; indices = iterindices)
 
         ε = maximum(abs.((Vᵢ₊₁ .- Vᵢ) ./ Vᵢ))
         α = maximum(abs.(pᵢ₊₁ .- pᵢ) ./ pᵢ)
 
-        if verbose
-            print("Iteration $iter / $maxiter, ε = $ε and α = $α...\r")
-        end
+        verbose && @printf("Iteration %i / %i, ε = %.5f and α = %.5f...\r", iter, maxiter, ε, α)
 
         if ε < tol
-            verbose && println("\nDone with convergence, ε = $ε and α = $α.")
+            verbose && @printf("Converged in %i iterations, ε = %.5f and α = %.5f.\n", iter, ε, α)
             return Vᵢ₊₁, pᵢ₊₁
         end
         
@@ -87,11 +82,11 @@ function vfi(V₀::AbstractArray{Float64, 3}, model::ModelInstance, G::RegularGr
         pᵢ .= pᵢ₊₁
     end
 
-    verbose && println("\nDone without convergence, , ε = $ε and α = $α..")
+    verbose && @printf("Convergence failed, ε = %.5f and α = %.5f...\r", ε, α)
     return Vᵢ₊₁, pᵢ₊₁
 end
 
-function computeterminal(N::Int, Δλ, preferences::Preferences; verbose = true, withsave = true, datapath = "data", normalise = false, iterkwargs...)
+function computeterminal(N::Int, Δλ, preferences::Preferences; verbose = true, withsave = true, datapath = "data", iterkwargs...)
     economy = Economy()
     hogg = Hogg()
     albedo = Albedo(λ₂ = Albedo().λ₁ - Δλ)
@@ -100,8 +95,8 @@ function computeterminal(N::Int, Δλ, preferences::Preferences; verbose = true,
     model = ModelInstance(preferences, economy, hogg, albedo, calibration)
 
     domains = [
-        (hogg.T₀, hogg.T₀ + 4.), 
-        (mstable(hogg.T₀, hogg, albedo), mstable(hogg.T₀ + 4., hogg, albedo)),
+        (hogg.T₀, hogg.T₀ + 8.5), 
+        (mstable(hogg.T₀, hogg, albedo), mstable(hogg.T₀ + 8.5, hogg, albedo)),
         (log(economy.Y₀ / 2), log(2economy.Y₀)), 
     ]
     
@@ -113,12 +108,10 @@ function computeterminal(N::Int, Δλ, preferences::Preferences; verbose = true,
         Vcurve .- 2maximum(Vcurve) : Vcurve
 
     V̄, policy = vfi(V₀, model, G; verbose, iterkwargs...)
-
-    V̄ = normalise ? V̄ ./ minimum(abs.(V̄)) : V̄
-
+    
     if withsave
-        savepath = joinpath(datapath, "terminal", filename(model, G))
-        println("\nSaving $(normalise ? "normalised" : "") solution into $savepath...")
+        savepath = joinpath(datapath, "terminal", makefilename(model, G))
+        println("\nSaving solution into $savepath...")
 
         jldsave(savepath; V̄, policy, model, G)
     end
