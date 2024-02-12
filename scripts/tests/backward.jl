@@ -2,24 +2,24 @@ using Revise
 using Test: @test
 using BenchmarkTools: @btime
 using JLD2
+using Plots
 
 includet("../backward.jl")
-include("../utils/plotting.jl")
-include("../utils/saving.jl")
+includet("../utils/plotting.jl")
+includet("../utils/saving.jl")
 
-N, Δλ = 21, 0.
-preferences = EpsteinZin()
-name = filename(N, Δλ, preferences)
-termpath = joinpath("data", "terminal", name)
+N = 21;
+ΔΛ = [0., 0.08];
+Θ = [3., 10.];
+p = EpsteinZin(θ = last(Θ));
 
-termsim = load(termpath);
-V̄ = termsim["V̄"];
-terminalpolicy = termsim["policy"];
-model = termsim["model"];
-G = termsim["G"];
+V̄, terminalpolicy, model, G = loadterminal(N, ΔΛ, p);
+vspace = extrema(V̄)
 
-policy = SharedArray([Policy(χ, 0.) for χ ∈ terminalpolicy]);
-V = SharedArray(deepcopy(V̄));
+policy = SharedArray([Policy(χ, 0.) for χ ∈ terminalpolicy[:, :, :, 1]]);
+V = SharedArray(deepcopy(V̄[:, :, :, 1]));
 
-# cachepath = joinpath(DATAPATH, "test.jld2");
-# @btime backwardsimulation!($V, $policy, $model, $G; t₀ = $model.economy.τ);
+for λ ∈ ΔΛ, θ ∈ Θ
+    println("Computing with λ = $λ, θ = $θ")
+    computevalue(N, λ, EpsteinZin(θ = θ, ψ = 0.8); verbose = true, cache = true)
+end

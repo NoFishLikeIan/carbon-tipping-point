@@ -12,7 +12,7 @@ include("../scripts/utils/saving.jl")
     using ZigZagBoomerang: dequeue!
     using Base: Order
     using FastClosures: @closure
-    using NLopt: Opt, lower_bounds!, upper_bounds!, min_objective!, optimize
+    using NLopt: Opt, lower_bounds!, upper_bounds!, min_objective!, optimize, xtol_rel!
         
     const env = DotEnv.config()
     const DATAPATH = get(env, "DATAPATH", "data")
@@ -42,85 +42,85 @@ function backwardsimulation!(V::SharedArray{Float64, 3}, policy::SharedArray{Pol
         tmin = model.economy.τ - minimum(queue.vals)
         verbose && print("Cluster minimum time = $tmin\r...")
 
-        cluster = first(dequeue!(queue))
+        clusters = dequeue!(queue)
 
-        @sync @distributed for (i, δt) in cluster
-            # Constants
-            tᵢ = model.economy.τ - δt
-            idx = indices[i]
-            γₜ = γ(tᵢ, model.economy, model.calibration)
-            Xᵢ = G.X[idx]
-            Vᵢ = V[idx]
+        @inbounds for cluster in clusters
+            @sync @distributed for (i, δt) ∈ cluster
+                idx = indices[i]
 
-            dT = μ(Xᵢ.T, Xᵢ.m, model.hogg, model.albedo) / model.hogg.ϵ
-            δₘᵢ = δₘ(exp(Xᵢ.m), model.hogg)
+                tᵢ = model.economy.τ - δt
+                γₜ = γ(tᵢ, model.economy, model.calibration)
+                Xᵢ = G.X[idx]
 
-            supdT = abs(dT)
-            supdm = max(γₜ, δₘᵢ)
-            supdy = boundb(tᵢ, Xᵢ, model)
-            
-            supdrift = (supdT / G.Δ.T) + (supdm / G.Δ.m) + (supdy / G.Δ.y)
+                dT = μ(Xᵢ.T, Xᵢ.m, model.hogg, model.albedo) / (model.hogg.ϵ * G.Δ.T)
+                δₜ = δₘ(exp(Xᵢ.m), model.hogg)
 
-            Qᵢ = σₜ² + σₖ² + G.h * supdrift
-            Δtᵢ = G.h^2 / Qᵢ
+                supdT = abs(dT)
+                supdm = max(γₜ, δₜ) / G.Δ.m
+                supdy = boundb(tᵢ, Xᵢ, model) / G.Δ.y
+                
+                # Time speed
+                Qᵢ = σₜ² + σₖ² + G.h * (supdT + supdm + supdy)
+                Δtᵢ = G.h^2 / Qᵢ
 
-            # Neighbouring nodes
-            # -- Temperature
-            VᵢT₊ = V[min(idx + I[1], R)]
-            VᵢT₋ = V[max(idx - I[1], L)]
-            # -- Carbon concentration
-            Vᵢm₊ = V[min(idx + I[2], R)]
-            Vᵢm₋ = V[max(idx - I[2], L)]
-            # -- GDP
-            Vᵢy₊ = V[min(idx + I[3], R)]
-            Vᵢy₋ = V[max(idx - I[3], L)]
+                # Neighbouring nodes
+                Vᵢ = V[idx]
+                # -- Temperature
+                VᵢT₊ = V[min(idx + I[1], R)]
+                VᵢT₋ = V[max(idx - I[1], L)]
+                # -- Carbon concentration
+                Vᵢm₊ = V[min(idx + I[2], R)]
+                Vᵢm₋ = V[max(idx - I[2], L)]
+                # -- GDP
+                Vᵢy₊ = V[min(idx + I[3], R)]
+                Vᵢy₋ = V[max(idx - I[3], L)]
 
-            ∂²T = σₜ² * (VᵢT₊ + VᵢT₋) / 2
-            ∂²y = σₖ² * (Vᵢy₊ + Vᵢy₋) / 2
+                ∂²T = σₜ² * (VᵢT₊ + VᵢT₋) / 2
+                ∂²y = σₖ² * (Vᵢy₊ + Vᵢy₋) / 2
 
-            dVT = (G.h / G.Δ.T) * abs(dT) * ifelse(dT > 0, VᵢT₊, VᵢT₋)
-            
-            negvalue = @closure (x, _) -> begin
-                u = Policy(x[1], x[2])
+                dVT = G.h * abs(dT) * ifelse(dT > 0, VᵢT₊, VᵢT₋)
+                
+                negvalue = @closure (x, _) -> begin
+                    u = Policy(x[1], x[2])
 
-                dy = b(tᵢ, Xᵢ, u, model)
-                dVy = (G.h / G.Δ.y) * abs(dy) * ifelse(dy > 0, Vᵢy₊, Vᵢy₋)
+                    dy = b(tᵢ, Xᵢ, u, model) / G.Δ.y
+                    dVy = G.h * abs(dy) * ifelse(dy > 0, Vᵢy₊, Vᵢy₋)
 
-                dm = γₜ - u.α
-                dVm = (G.h / G.Δ.m) * abs(dm) * ifelse(dm > 0, Vᵢm₊, Vᵢm₋)
+                    dm = (γₜ - u.α) / G.Δ.m
+                    dVm = G.h * abs(dm) * ifelse(dm > 0, Vᵢm₊, Vᵢm₋)
 
-                dVᵢ = G.h * ((supdy - abs(dy)) / G.Δ.y + (supdm - abs(dm)) / G.Δ.m) * Vᵢ
-            
-                EV = (∂²T + dVT + ∂²y + dVy + dVm + dVᵢ) / Qᵢ
+                    dVᵢ = G.h * (supdy - abs(dy) + supdm - abs(dm)) * Vᵢ
+                
+                    v = (∂²T + dVT + ∂²y + dVy + dVm + dVᵢ) / Qᵢ
 
-                c = u.χ * exp(Xᵢ.y)
+                    c = u.χ * exp(Xᵢ.y)
 
-                -f(c, EV, Δtᵢ, model.preferences)
+                    -f(c, v, Δtᵢ, model.preferences)
+                end
+
+                ᾱ = γₜ + δₜ
+
+                optimiser = Opt(:LN_SBPLX, 2)
+                lower_bounds!(optimiser, [0., 0.])
+                upper_bounds!(optimiser, [1., ᾱ])
+                xtol_rel!(optimiser, 1e-3)
+
+                min_objective!(optimiser, negvalue)
+
+                candidate = clamp.(policy[idx], [0., 0.], [1., ᾱ])
+                alternative = [candidate[1], ifelse(candidate[2] < (ᾱ / 2), 0.9 * ᾱ, 0.1 * ᾱ)]
+                
+                obj, pol, _ = optimize(optimiser, candidate)            
+                objalt, polalt, _ = optimize(optimiser, alternative)
+                
+                V[idx] = max(-obj, -objalt)
+                policy[idx] = ifelse(-obj > -objalt, Policy(pol[1], pol[2]), Policy(polalt[1], polalt[2]))
+
+                Δt[i] = ifelse(tᵢ > t₀, Δtᵢ, 0.)
             end
-
-            optimiser = Opt(:LN_SBPLX, 2)
-            lower_bounds!(optimiser, [0., 0.])
-            upper_bounds!(optimiser, [1., γₜ + δₘᵢ])
-
-            min_objective!(optimiser, negvalue)
-
-            candidate = policy[idx]
-            alternative = [candidate.χ, ifelse(2candidate.α < γₜ + δₘᵢ, 0.9 * (γₜ + δₘᵢ), 0.1 * γₜ + δₘᵢ)]
-            
-            obj, pol, _ = optimize(optimiser, candidate)
-            objalt, polalt, _ = optimize(optimiser, alternative)
-            
-            V[idx] = max(-obj, -objalt)
-            policy[idx] = ifelse(
-                obj < objalt, 
-                Policy(pol[1], pol[2]), 
-                Policy(polalt[1], polalt[2])
-            )
-
-            Δt[i] = ifelse(tᵢ > t₀, G.h^2 / Qᵢ, 0.)
         end
 
-        for i in first.(cluster)
+        for cluster in clusters, (i, _) in cluster
             if Δt[i] > 0.
                 queue[i] += Δt[i]
             end
@@ -143,7 +143,7 @@ function backwardsimulation!(V::SharedArray{Float64, 3}, policy::SharedArray{Pol
 end
 
 function computevalue(N::Int, Δλ, p::Preferences; cache = false, kwargs...)
-    name = filename(N, Δλ, p)
+    name = makefilename(N, Δλ, p)
     termpath = joinpath(DATAPATH, "terminal", name)
     savepath = joinpath(DATAPATH, "total", name)
     cachepath = cache ? savepath : nothing
@@ -156,7 +156,7 @@ function computevalue(N::Int, Δλ, p::Preferences; cache = false, kwargs...)
     V = SharedArray(termsim["V̄"]);
     terminalpolicy = termsim["policy"];
     model = termsim["model"];
-    grid = termsim["G"];
+    G = termsim["G"];
     
     policy = SharedArray([Policy(χ, 0.) for χ ∈ terminalpolicy]);
 
@@ -164,14 +164,14 @@ function computevalue(N::Int, Δλ, p::Preferences; cache = false, kwargs...)
         println("Saving in $cachepath...")
     end
     
-    backwardsimulation!(V, policy, model, grid; cachepath = cachepath, kwargs...)
+    backwardsimulation!(V, policy, model, G; cachepath = cachepath, kwargs...)
     
     println("\nSaving solution into $savepath...")
     jldopen(savepath, "a+") do cachefile 
         g = JLD2.Group(cachefile, "endpoint")
         g["V"] = V
         g["policy"] = policy
-        g["grid"] = grid
+        g["G"] = G
     end
     
     return V, policy
