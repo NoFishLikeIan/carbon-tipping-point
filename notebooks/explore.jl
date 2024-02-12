@@ -51,63 +51,33 @@ TableOfContents()
 # ╔═╡ e74335e3-a230-4d11-8aad-3323961801aa
 default(size = 500 .* (√2, 1), dpi = 180, titlefontsize = 12)
 
-# ╔═╡ 0985734e-0c1e-4e4c-8ec5-191be880a72f
-begin
-	loaddata(N::Int64, Δλ::Real, p::Preferences) = loaddata(N, [Δλ], p)
-	function loaddata(N::Int64, ΔΛ::AbstractVector{<:Real}, p::Preferences)
-		termpath = joinpath(datapath, "terminal")
-		simpath = joinpath(datapath, "total")
-		
-		G = load(joinpath(termpath, filename(N, first(ΔΛ), p)), "G")
-		model = load(joinpath(termpath, filename(N, first(ΔΛ), p)), "model")
-		@unpack economy, calibration = model
-	
-		timesteps = range(0.25, economy.t₁; step = 0.25)
-		V = Array{Float64}(undef, N, N, N, length(ΔΛ), length(timesteps))
-		policy = similar(V, Policy)
-	
-		ᾱ = γ(economy.t₁, economy, calibration)
-	
-		for (k, Δλ) ∈ enumerate(ΔΛ)
-			name = filename(N, Δλ, p)
-			file = jldopen(joinpath(simpath, name), "r")
-	
-			for (j, tᵢ) ∈ enumerate(timesteps)
-				V[:, :, :, k, j] .= file[string(tᵢ)]["V"]
-				policy[:, :, :, k, j] .= file[string(tᵢ)]["policy"]
-			end
-	
-			close(file)
-		end
-	
-		return timesteps, V, policy, model, G
-	end
-end;
-
 # ╔═╡ cdc62513-a1e8-4c55-a270-761b6553d806
-# ╠═╡ disabled = true
-#=╠═╡
 begin
-	ΔΛ = [0., 0.03, 0.08]
-	p = CRRA()
+	ΔΛ = [0., 0.08]
+	p = EpsteinZin()
 	N = 21
 	
 	t, V, policy, model, G = loaddata(N, ΔΛ, p)
 end;
-  ╠═╡ =#
+
+# ╔═╡ 8c08ba61-253e-42f0-9f66-3cdecb4d9e42
+G.domains
 
 # ╔═╡ acc678b2-01bd-4504-ad88-f3f926cd9518
-#=╠═╡
 begin
 	@unpack hogg, economy, calibration, albedo = model
 	X₀ = Point([hogg.T₀, log(hogg.M₀), log(economy.Y₀)])
 end;
-  ╠═╡ =#
 
 # ╔═╡ 5e7d4f3a-a7c2-4695-a211-448ed5909ad1
-#=╠═╡
-plotsection(last.(policy[:, :, :, 1, 1]), hogg.T₀, G; zdim = 1, surf = false, xflip = false, linewidth = 0.)
-  ╠═╡ =#
+let
+	fig = plotsection(V[:, :, :, 2, end], log(economy.Y₀), G; zdim = 3, surf = false, xflip = false, alpha = 0.5, c = :viridis)
+
+	Tspace = range(G.domains[1]...; length = 101)
+	nullcline = [Model.mstable(T, model.hogg, Albedo(λ₂ = model.albedo.λ₁ - 0.08)) for T ∈ Tspace]
+
+	plot!(fig, nullcline, Tspace; c = :black, linewidth = 3)
+end
 
 # ╔═╡ 6fe67c9b-fe20-42e4-b817-b31dad586e55
 md"# Backward Simulation"
@@ -116,7 +86,6 @@ md"# Backward Simulation"
 md"## Constructing interpolations"
 
 # ╔═╡ d2c83cdf-002a-47dc-81f9-22b76f183587
-#=╠═╡
 begin
 	ΔT, Δm, Δy = G.domains
 
@@ -127,26 +96,20 @@ begin
 		ΔΛ, t
 	)
 end;
-  ╠═╡ =#
 
 # ╔═╡ 08a3333b-bac8-426e-a888-9bf5269c1869
-#=╠═╡
 begin
 	χitp = linear_interpolation(nodes, first.(policy); extrapolation_bc = Flat())
 	αitp = linear_interpolation(nodes, last.(policy); extrapolation_bc = Flat())
 end;
-  ╠═╡ =#
 
 # ╔═╡ 31d32b62-4329-464e-8354-1c2875fe5801
 md"## Simulation"
 
 # ╔═╡ 5c553323-3611-4614-8de3-86ea5cf8eea0
-#=╠═╡
 Eᵇ = linear_interpolation(calibration.years .- 2020, calibration.emissions, extrapolation_bc = Line());
-  ╠═╡ =#
 
 # ╔═╡ d62b65f5-220e-45c6-a434-ac392b72ab4a
-#=╠═╡
 function F!(dx, x, p, t)	
 	Δλ = first(p)
 	
@@ -161,10 +124,8 @@ function F!(dx, x, p, t)
 
 	return
 end;
-  ╠═╡ =#
 
 # ╔═╡ 7823bda7-5ab8-42f7-bf1c-292dbfecf178
-#=╠═╡
 function G!(dx, x, p, t)
 	dx[1] = hogg.σₜ / hogg.ϵ
 	dx[2] = 0.
@@ -172,34 +133,28 @@ function G!(dx, x, p, t)
 	
 	return
 end;
-  ╠═╡ =#
 
 # ╔═╡ c3c2cfc9-e7f4-495b-bcc6-51227be2c6b5
-#=╠═╡
 begin
 	tspan = (0., economy.t₁)
 	x₀ = [hogg.T₀, log(hogg.M₀) , X₀.y]
 	problems = [SDEProblem(SDEFunction(F!, G!), x₀, tspan, (Δλ, )) for Δλ ∈ ΔΛ]
 end;
-  ╠═╡ =#
 
 # ╔═╡ 28c6fe28-bd42-4aba-b403-b2b0145a8e37
-#=╠═╡
 begin
 	solutions = [solve(EnsembleProblem(prob), EnsembleDistributed(); trajectories = 100) for prob ∈ problems]
 end;
-  ╠═╡ =#
 
 # ╔═╡ 1a19b769-68e2-411b-afe0-6bd2a7fb87a3
-#=╠═╡
 begin
 	colors = [:darkblue, :darkred, :darkgreen]
 
 	yearticks = 2020 .+ (0:10:80)
 	xticks = (0:10:80, yearticks)
 		
-	Tticks = hogg.Tᵖ .+ (1:3)
-	yticks = (Tticks, 1:3)
+	Tticks = hogg.Tᵖ .+ (1:5)
+	yticks = (Tticks, 1:5)
 	
 	
 	Tfig = plot(; ylabel = "\$T - T^p\$", legendtitle = "\$\\Delta \\lambda\$", yticks, ylims = extrema(Tticks), xticks)
@@ -222,12 +177,12 @@ begin
 
 	plot(Tfig, Mfig, sharex = true, layout = (2, 1), link = :x, size = 500 .* (√2, 1.5), margins = 5Plots.mm)
 end
-  ╠═╡ =#
 
 # ╔═╡ 43bc8d15-40d5-457c-84f9-57826cb4139f
-#=╠═╡
 begin
 	efig = plot(ylabel = "\$E\$")
+
+	plot!(efig, t, t -> γ(t, model.economy, model.calibration))
 	
 	for (i, solution) ∈ enumerate(solutions)
 		Δλ = ΔΛ[i]
@@ -241,19 +196,18 @@ begin
 			for (j, x) ∈ enumerate(data)
 				M = exp(x.m)
 				
-				emissions[i, j] = Model.ε(tᵢ, exp(x.m), αitp(x..., Δλ, tᵢ), model)
+				emissions[i, j] = αitp(x..., Δλ, tᵢ) # Model.ε(tᵢ, exp(x.m), αitp(x..., Δλ, tᵢ), model)
 			end
 		end
 
 
 		
-		plot!(efig, median(emissions, dims = 2); c = colors[i], linewidth = 2, label = Δλ)
+		plot!(efig, t, median(emissions, dims = 2); c = colors[i], linewidth = 2, label = Δλ)
 	end
 	
 
 	efig
 end
-  ╠═╡ =#
 
 # ╔═╡ aa6cdd38-8733-425f-ac39-29d031f7c269
 
@@ -268,8 +222,8 @@ end
 # ╠═b29e58b6-dda0-4da9-b85d-d8d7c6472155
 # ╠═e74335e3-a230-4d11-8aad-3323961801aa
 # ╠═93709bdd-408f-4f87-b0c8-fda34b06af57
-# ╠═0985734e-0c1e-4e4c-8ec5-191be880a72f
 # ╠═cdc62513-a1e8-4c55-a270-761b6553d806
+# ╠═8c08ba61-253e-42f0-9f66-3cdecb4d9e42
 # ╠═acc678b2-01bd-4504-ad88-f3f926cd9518
 # ╠═5e7d4f3a-a7c2-4695-a211-448ed5909ad1
 # ╟─6fe67c9b-fe20-42e4-b817-b31dad586e55

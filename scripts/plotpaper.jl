@@ -38,8 +38,8 @@ function loaddata(N::Int64, ΔΛ::AbstractVector{<:Real}, p::Preferences)
     termpath = joinpath(DATAPATH, "terminal")
     simpath = joinpath(DATAPATH, "total")
     
-    G = load(joinpath(termpath, filename(N, first(ΔΛ), p)), "G")
-    model = load(joinpath(termpath, filename(N, first(ΔΛ), p)), "model")
+    G = load(joinpath(termpath, makefilename(N, first(ΔΛ), p)), "G")
+    model = load(joinpath(termpath, makefilename(N, first(ΔΛ), p)), "model")
     @unpack economy, calibration = model
 
     timesteps = range(0.25, economy.t₁; step = 0.25)
@@ -49,7 +49,7 @@ function loaddata(N::Int64, ΔΛ::AbstractVector{<:Real}, p::Preferences)
     ᾱ = γ(economy.τ, economy, calibration)
 
     for (k, Δλ) ∈ enumerate(ΔΛ)
-        name = filename(N, Δλ, p)
+        name = makefilename(N, Δλ, p)
         V[:, :, :, k, end] .= load(joinpath(termpath, name), "V̄")
         policy[:, :, :, k, end] .= [Policy(χ, ᾱ) for χ ∈ load(joinpath(termpath, name), "policy")]
 

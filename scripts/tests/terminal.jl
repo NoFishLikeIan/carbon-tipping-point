@@ -12,7 +12,7 @@ begin
 	calibration = load_object(joinpath(DATAPATH, "calibration.jld2"))
 	hogg = Hogg()
 	economy = Economy()
-	albedo = Albedo()
+	albedo = Albedo(λ₂ = Albedo().λ₁)
 	preferences = EpsteinZin()
 	model = ModelInstance(preferences, economy, hogg, albedo, calibration);
 end
