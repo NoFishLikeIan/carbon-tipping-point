@@ -1,8 +1,18 @@
 ### A Pluto.jl notebook ###
-# v0.19.32
+# v0.19.38
 
 using Markdown
 using InteractiveUtils
+
+# This Pluto notebook uses @bind for interactivity. When running this notebook outside of Pluto, the following 'mock version' of @bind gives bound variables a default value (instead of an error).
+macro bind(def, element)
+    quote
+        local iv = try Base.loaded_modules[Base.PkgId(Base.UUID("6e696c72-6542-2067-7265-42206c756150"), "AbstractPlutoDingetjes")].Bonds.initial_value catch; b -> missing; end
+        local el = $(esc(element))
+        global $(esc(def)) = Core.applicable(Base.get, el) ? Base.get(el) : iv(el)
+        el
+    end
+end
 
 # ╔═╡ b9cc9ff6-7fc8-11ee-3f84-d90577b8ac4a
 # ╠═╡ show_logs = false
@@ -10,9 +20,13 @@ begin
     import Pkg
     Pkg.activate(Base.current_project())
     Pkg.instantiate()
-
-	using UnPack, JLD2, DotEnv
 end
+
+# ╔═╡ ad627a95-169a-4c57-9ed4-d132fae5152f
+using UnPack, JLD2, DotEnv
+
+# ╔═╡ d6f96488-a12a-4461-9339-33314c49056a
+using CSV, DataFrames
 
 # ╔═╡ 70b25c8f-b704-4eb3-af84-16bdf7119c90
 using Roots
@@ -21,80 +35,172 @@ using Roots
 using Model, Grid
 
 # ╔═╡ aef78453-73c2-43b9-ad59-979574471c4d
-using Plots, PlutoUI; default(size = 500 .* (√2, 1), dpi = 180, titlefontsize = 12)
+using Plots, PlutoUI; default(size = 500 .* (√2, 1), dpi = 180, titlefontsize = 12, linewidth = 2)
+
+# ╔═╡ 2a7f2675-34c0-4b4d-9d33-f46a97a5d3d7
+using DifferentialEquations, DifferentialEquations.EnsembleAnalysis
+
+# ╔═╡ cec96807-c5a6-43ff-acdb-025104edce93
+using Interpolations
+
+# ╔═╡ bdf4a3ab-d52a-4dc8-8c4a-3e009ec7e5cd
+md"# Climate dynamics"
+
+# ╔═╡ e76801ef-ef69-45cf-9477-d9c48c1b942f
+md"## Imports"
 
 # ╔═╡ 24c016a9-1628-46f4-9a6f-0a6c34de2d7e
 TableOfContents()
 
-# ╔═╡ 1f4dd3bb-5350-43e8-a6e5-216f698fd4e7
+# ╔═╡ 48b9fd38-0ac8-4efc-9e9f-8e83c9ea3199
 begin
-	hogg = Hogg()
-	albedo = Albedo(λ₂ = Albedo().λ₁ - 0.09)
-
-	@unpack S₀, η = hogg
-
-	Tᵢ = (albedo.T₁ + albedo.T₂) / 2
-	c = Model.secondstoyears / hogg.ϵ
+	const DATAPATH = "../data"
+	const IPCCDATAPATH = joinpath(DATAPATH, "climate-data", "proj-median.csv")
+	
+	const economy = Economy()
+	const calibration = load_object(joinpath(DATAPATH, "calibration.jld2"))
+	const ipccproj = CSV.read(IPCCDATAPATH, DataFrame)
 end;
 
-# ╔═╡ b0c570e4-9c92-476c-b842-c81181f5598d
-Tstable(M, albedo) = find_zeros(T -> Model.Mstable(T, hogg, albedo) - M, 288, 297f0);
-
-# ╔═╡ 698fd792-b847-49e2-871d-bcb558461b5e
+# ╔═╡ d0693c70-c6f1-4b78-b50f-0de2c4e096f5
 begin
-	n = 101
-	Tspace = range(hogg.Tᵖ, hogg.Tᵖ + 10f0; length = n)
-	Tspaceext = range(200f0, 400f0; length = 3n)
-
-	Mspace = range(hogg.Mᵖ, 4hogg.Mᵖ; length = 2n)
-	mspace = log.(Mspace)
+	const baseline = filter(:Scenario => isequal("SSP5 - Baseline"), ipccproj)
+	const Mᵇ = linear_interpolation(calibration.years .- 2020, baseline[:, "CO2 concentration"]; extrapolation_bc = Line())
+	const Tᵇ = linear_interpolation(calibration.years .- 2020, baseline[:, "Temperature"]; extrapolation_bc = Line())
 end;
 
-# ╔═╡ 517a32a7-098d-4c89-b428-eed70c41e1d4
-function V(T, m, albedo::Albedo)
-	@unpack λ₁, λ₂ = albedo
-	G = Model.fₘ(m, hogg)
+# ╔═╡ 544d662d-8a48-47cf-9fd3-bada252ee18d
+md"
+## Tipping point
+"
 
-	(η / 5f0) * T^5 - G * T - (1 - λ₁) * S₀ * T - S₀ * (λ₁ - λ₂) * log(1 + exp(T - Tᵢ))
+# ╔═╡ 19280ece-4e94-4d21-958c-aab0c5229f14
+function F!(du, u, p, t)
+	hogg, albedo = p
+	T, m = u
+
+	du[1] = μ(T, m, hogg, albedo) / hogg.ϵ
+	du[2] = γ(t, economy, calibration)
 end;
 
-# ╔═╡ a0a13647-a2af-4ad9-8eb6-c20c1d18d7bb
-let
-	M = hogg.M₀
-		
-	plot(Tspace, T -> V(T, log(M), Albedo(λ₂ = 0.08)); c = :darkred, linewidth = 2, label = "\$V(t)\$")
-	vline!([hogg.T₀]; c = :black, linestyle = :dashdot, label = "\$T_0\$")
+# ╔═╡ 60592af4-38a3-446e-b08e-47967364aec3
+function G!(Σ, u, p, t)
+	hogg, albedo = p
+
+	Σ[1] = hogg.σₜ / hogg.ϵ
+	Σ[2] = 0.
+end;
+
+# ╔═╡ 8a38caf4-c79d-4dfb-aef6-c723495b483d
+md"``\Delta\lambda:`` $(@bind Δλ Slider(0:0.01:0.1, default = 0., show_value = true))
+"
+
+# ╔═╡ d837589f-25a6-4500-b1ac-b20db496b485
+begin
+	hogg = Hogg(S₀ = 340.5)
+	albedo = Albedo(λ₂ = 0.31 - Δλ, T₁ = 290.5, T₂ = 292.5)
+
+	Tspace = range(hogg.Tᵖ, hogg.Tᵖ + 13.; length = 101)
+	nullcline = [Model.mstable(T, hogg, albedo) for T ∈ Tspace]
+	
+	u₀ = [ hogg.T₀, log(hogg.M₀) ]
+	
+	prob = SDEProblem(SDEFunction(F!, G!), u₀, (0., economy.t₁), (hogg, albedo))
 end
 
-# ╔═╡ 3be104fd-a0ae-4eb5-88f8-04aa8b9a48b1
-function p(T, m, albedo; Vz = 1e-5)
-	exp(-V(T, m, albedo) / 90945)
-end;
+# ╔═╡ 7e67776d-ac49-4a29-a601-d9418ce91e2e
+solution = solve(EnsembleProblem(prob); trajectories = 6);
 
-# ╔═╡ aeda50d8-02e1-49af-b814-adc59a3d7a8a
+# ╔═╡ 1507326b-eab2-43c0-b981-ca0ca5aad997
 begin
-	p̂ = [p(T, log(M), albedo) for T ∈ Tspace, M ∈ Mspace]
-	p̂ = p̂ ./ sum(p̂, dims = 1)
+	timespan = range(0., economy.t₁; length = 101)
+	path = timeseries_point_median(solution, timespan)
+	
+	simfig = plot(xlabel = "\$m\$", ylabel = "\$T\$", ylims = extrema(Tspace), xlims = (5.5, 7.5), yticks = (hogg.Tᵖ:(hogg.Tᵖ + 13.), 0:13))
+
+	plot!(simfig, nullcline, Tspace; c = :black, linestyle = :dash, label = false)
+	plot!(simfig, path[2, :], path[1, :]; c = :darkred, label = "Albedo")
+	plot!(simfig, log.(Mᵇ.(timespan)), Tᵇ.(timespan) .+ hogg.Tᵖ; c = :black, linewidth = 3, label = "BaU")
+
+	for simulation in solution
+		path = simulation(timespan)
+
+		plot!(simfig, path[2, :], path[1, :]; c = :darkred, label = false, alpha = 0.2)
+	end
+
+	simfig
+	
+end
+
+# ╔═╡ ce260e73-94dc-41ea-834f-fac1ebe8433c
+log(2.5hogg.M₀)
+
+# ╔═╡ 31c8af20-05e0-4355-937e-f0a0b3fc72d7
+md"## Equivalent jump process"
+
+# ╔═╡ b6795842-7e9f-44eb-8768-b6065f6cbda1
+function jump(T)
+	−0.0029 * (T - hogg.Tᵖ)^2 + 0.0568 * (T - hogg.Tᵖ) − 0.0577
 end;
 
-# ╔═╡ 29c82a92-1423-4ca1-aca1-50cd15d864ee
-plot(p̂[:, 50])
+# ╔═╡ 3b427901-b74b-4c64-a97e-f82711aa01cc
+affect!(integrator) = integrator.u[1] += 2.;
 
-# ╔═╡ 768d2952-598d-48a4-ab02-39075f1fdd21
-sum(p̂[:, 200])
+# ╔═╡ c3ba9f6f-c240-43cb-a2a7-ef80423bfa1d
+function intensity(u, p, t)
+	-0.25 + 0.95 / (1 + 2.8exp(-0.3325(u[1] - hogg.Tᵖ)))
+end;
+
+# ╔═╡ b1dff2b6-766a-4751-a4c5-ef2e84ec2bae
+begin
+	jumprate = VariableRateJump(intensity, affect!)
+	jumpprob = JumpProblem(
+		ODEProblem(F!, u₀, (0., economy.t₁), (hogg, Albedo(λ₂ = albedo.λ₁))),
+		Direct(), jumprate
+	)
+
+	jumpsolution = solve(jumpprob, Tsit5())
+end;
+
+# ╔═╡ b2267725-c605-4100-bc31-29e04b8dc393
+begin
+	jumpfig = deepcopy(simfig)
+
+
+	for simulation in jumpsolution
+		path = simulation(timespan)
+
+		plot!(jumpfig, path[2, :], path[1, :]; c = :darkblue, label = false, alpha = 0.2)
+	end
+ 
+	jumpfig
+end
 
 # ╔═╡ Cell order:
+# ╟─bdf4a3ab-d52a-4dc8-8c4a-3e009ec7e5cd
+# ╟─e76801ef-ef69-45cf-9477-d9c48c1b942f
 # ╠═b9cc9ff6-7fc8-11ee-3f84-d90577b8ac4a
+# ╠═ad627a95-169a-4c57-9ed4-d132fae5152f
+# ╠═d6f96488-a12a-4461-9339-33314c49056a
 # ╠═70b25c8f-b704-4eb3-af84-16bdf7119c90
 # ╠═1471d3ee-6830-4955-9ba6-e5c004701794
 # ╠═aef78453-73c2-43b9-ad59-979574471c4d
 # ╠═24c016a9-1628-46f4-9a6f-0a6c34de2d7e
-# ╠═1f4dd3bb-5350-43e8-a6e5-216f698fd4e7
-# ╠═b0c570e4-9c92-476c-b842-c81181f5598d
-# ╠═698fd792-b847-49e2-871d-bcb558461b5e
-# ╠═517a32a7-098d-4c89-b428-eed70c41e1d4
-# ╠═a0a13647-a2af-4ad9-8eb6-c20c1d18d7bb
-# ╠═3be104fd-a0ae-4eb5-88f8-04aa8b9a48b1
-# ╠═aeda50d8-02e1-49af-b814-adc59a3d7a8a
-# ╠═29c82a92-1423-4ca1-aca1-50cd15d864ee
-# ╠═768d2952-598d-48a4-ab02-39075f1fdd21
+# ╠═2a7f2675-34c0-4b4d-9d33-f46a97a5d3d7
+# ╠═cec96807-c5a6-43ff-acdb-025104edce93
+# ╠═48b9fd38-0ac8-4efc-9e9f-8e83c9ea3199
+# ╠═d0693c70-c6f1-4b78-b50f-0de2c4e096f5
+# ╟─544d662d-8a48-47cf-9fd3-bada252ee18d
+# ╠═19280ece-4e94-4d21-958c-aab0c5229f14
+# ╠═60592af4-38a3-446e-b08e-47967364aec3
+# ╟─8a38caf4-c79d-4dfb-aef6-c723495b483d
+# ╠═d837589f-25a6-4500-b1ac-b20db496b485
+# ╠═7e67776d-ac49-4a29-a601-d9418ce91e2e
+# ╟─1507326b-eab2-43c0-b981-ca0ca5aad997
+# ╠═ce260e73-94dc-41ea-834f-fac1ebe8433c
+# ╟─31c8af20-05e0-4355-937e-f0a0b3fc72d7
+# ╠═b6795842-7e9f-44eb-8768-b6065f6cbda1
+# ╠═3b427901-b74b-4c64-a97e-f82711aa01cc
+# ╠═c3ba9f6f-c240-43cb-a2a7-ef80423bfa1d
+# ╠═b1dff2b6-766a-4751-a4c5-ef2e84ec2bae
+# ╠═b2267725-c605-4100-bc31-29e04b8dc393
