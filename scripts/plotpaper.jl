@@ -33,39 +33,6 @@ begin # Global variables
     kelvintocelsius = 273.15
 end;
 
-loaddata(N::Int64, Δλ::Real, p::Preferences) = loaddata(N, [Δλ], p)
-function loaddata(N::Int64, ΔΛ::AbstractVector{<:Real}, p::Preferences)
-    termpath = joinpath(DATAPATH, "terminal")
-    simpath = joinpath(DATAPATH, "total")
-    
-    G = load(joinpath(termpath, makefilename(N, first(ΔΛ), p)), "G")
-    model = load(joinpath(termpath, makefilename(N, first(ΔΛ), p)), "model")
-    @unpack economy, calibration = model
-
-    timesteps = range(0.25, economy.t₁; step = 0.25)
-    V = Array{Float64}(undef, N, N, N, length(ΔΛ), length(timesteps))
-    policy = similar(V, Policy)
-
-    ᾱ = γ(economy.τ, economy, calibration)
-
-    for (k, Δλ) ∈ enumerate(ΔΛ)
-        name = makefilename(N, Δλ, p)
-        V[:, :, :, k, end] .= load(joinpath(termpath, name), "V̄")
-        policy[:, :, :, k, end] .= [Policy(χ, ᾱ) for χ ∈ load(joinpath(termpath, name), "policy")]
-
-        file = jldopen(joinpath(simpath, name), "r")
-
-        for (j, tᵢ) ∈ enumerate(timesteps)
-            V[:, :, :, k, j] .= file[string(tᵢ)]["V"]
-            policy[:, :, :, k, j] .= file[string(tᵢ)]["policy"]
-        end
-
-        close(file)
-    end
-
-    return timesteps, V, policy, model, G
-end
-
 begin # Import
     ΔΛ = [0., 0.03, 0.08]
     p = CRRA()

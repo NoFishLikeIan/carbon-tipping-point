@@ -1,69 +1,73 @@
+using Printf: @sprintf
+using UnPack: @unpack
+
 function makefilename(model::ModelInstance, G::RegularGrid)
+    if !(typeof(model.preferences) <: EpsteinZin)
+        throw("Not implemented file saving for non Epstein Zin utilities.")
+    end
+
+    @unpack ρ, θ, ψ = model.preferences
+    @unpack ωᵣ = model.economy
+    @unpack σₜ = model.hogg
+    @unpack λ₁, λ₂ = model.albedo
+
     N = size(G, 1)
-    Δλ = round(model.albedo.λ₁ - model.albedo.λ₂; digits = 2)
+    Δλ = λ₁ - λ₂
 
-    return makefilename(N, Δλ, model.preferences)
-end
-
-function makefilename(N, Δλ, preferences::CRRA)
-    filename = "N=$(N)_Δλ=$(Δλ)_ρ=$(preferences.ρ)_θ=$(preferences.θ)"
+    filename = @sprintf("N=%i_Δλ=%.2f_ρ=%.5f_θ=%.2f_ψ=%.2f_σ=%.2f_ω=%.5f", N, Δλ, ρ, θ, ψ, σₜ, ωᵣ)
 
     return "$(replace(filename, "." => ",")).jld2"
 end
 
-function makefilename(N, Δλ, preferences::LogUtility)
-    filename = "N=$(N)_Δλ=$(Δλ)_ρ=$(preferences.ρ)"
-
-    return "$(replace(filename, "." => ",")).jld2"
+function loadterminal(model::ModelInstance, G::RegularGrid; kwargs...)
+    dropdims.(loadterminal([model], G; kwargs...); dims = 4)
 end
 
-function makefilename(N, Δλ, preferences::EpsteinZin)
-    filename = "N=$(N)_Δλ=$(Δλ)_ρ=$(preferences.ρ)_θ=$(preferences.θ)_ψ=$(preferences.ψ)"
-
-    return "$(replace(filename, "." => ",")).jld2"
-end
-
-loadterminal(N::Int64, Δλ::Real, p::Preferences; kwargs...) = loadterminal(N, [Δλ], p; kwargs...)
-function loadterminal(N::Int64, ΔΛ::AbstractVector{<:Real}, p::Preferences; datapath = "data")
+function loadterminal(models::AbstractVector{ModelInstance}, G::RegularGrid; datapath = "data")
     path = joinpath(datapath, "terminal")
 
-    V̄ = Array{Float64}(undef, N, N, N, length(ΔΛ))
+    V̄ = Array{Float64}(undef, N, N, N, length(models))
     policy = similar(V̄)
 
-    for (k, Δλ) ∈ enumerate(ΔΛ)
-        filename = joinpath(path, makefilename(N, Δλ, p))
+    for (k, model) ∈ enumerate(models)
+        filename = joinpath(path, makefilename(model, G))
         V̄[:, :, :, k] .= load(filename, "V̄")
         policy[:, :, :, k] .= load(filename, "policy")
     end
 
-    filename = joinpath(path, makefilename(N, first(ΔΛ), p))
-    G = load(filename, "G")
-    model = load(filename, "model")
-
-    return V̄, policy, model, G
+    return V̄, policy
 end
 
-loadtotal(N::Int64, Δλ::Real, p::Preferences; kwargs...) = loadtotal(N, [Δλ], p; kwargs...)
-function loadtotal(N::Int64, ΔΛ::AbstractVector{<:Real}, p::Preferences; datapath = "data")
-    _, _, model, G = loadterminal(N, ΔΛ, p; datapath)
-
+function loadtotal(model::ModelInstance, G::RegularGrid; kwargs...)     
+    first(loadtotal([model], G; kwargs...))
+end
+function loadtotal(models::AbstractVector{ModelInstance}, G::RegularGrid; datapath = "data")
     simpath = joinpath(datapath, "total")
+    N = size(G, 1)
 
-    timesteps = range(0., model.economy.t₁; step = 0.25)
-    V = Array{Float64}(undef, N, N, N, length(ΔΛ), length(timesteps))
-    policy = similar(V, Policy)
+    output = Tuple{Vector{Float64}, Array{Float64, 4}, Array{Policy, 4}}[]
     
-    for (k, Δλ) ∈ enumerate(ΔΛ)
-        filename = joinpath(makefilename(N, Δλ, p))
+    for (k, model) ∈ enumerate(models)
+        filename = makefilename(model, G)
         file = jldopen(joinpath(simpath, filename), "r")
 
-        for (j, tᵢ) ∈ enumerate(timesteps)
-            V[:, :, :, k, j] .= file[string(tᵢ)]["V"]
-            policy[:, :, :, k, j] .= file[string(tᵢ)]["policy"]
+        timesteps = sort(parse.(Float64, keys(file)))
+
+        T = length(timesteps)
+        V = Array{Float64, 4}(undef, N, N, N, T)
+        policy = Array{Policy, 4}(undef, N, N, N, T)
+
+        for (k, tᵢ) ∈ enumerate(timesteps)
+            timekey = string(tᵢ)
+
+            V[:, :, :, k] .= file[timekey]["V"]
+            policy[:, :, :, k] .= file[timekey]["policy"]
         end
+
+        push!(output, (timesteps, V, policy))
 
         close(file)
     end
 
-    return timesteps, V, policy, model, G
+    return output
 end

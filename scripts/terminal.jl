@@ -5,7 +5,7 @@ using UnPack: @unpack
 using Polyester: @batch
 using FastClosures: @closure
 using Roots: find_zero
-using Printf: @printf
+using Printf: @printf, @sprintf
 
 include("utils/saving.jl")
 
@@ -55,13 +55,13 @@ function terminaljacobi!(V̄::AbstractArray{Float64, 3}, policy::AbstractArray{F
     return V̄, policy
 end
 
-function vfi(V₀::AbstractArray{Float64, 3}, model::ModelInstance, G::RegularGrid; tol = 1e-3, maxiter = 100_000, verbose = false, indices = CartesianIndices(G), alternate = false)
+function vfi(V₀::AbstractArray{Float64, 3}, model::ModelInstance, G::RegularGrid; tol = 1e-3, maxiter = 10_000, verbose = false, indices = CartesianIndices(G), alternate = false)
     pᵢ = 0.5 .* ones(size(G))
     pᵢ₊₁ = copy(pᵢ)
 
     Vᵢ = copy(V₀)
     Vᵢ₊₁ = copy(V₀)
-    
+
     verbose && println("Starting iterations...")
     for iter in 1:maxiter
         iterindices = (alternate && isodd(iter)) ? indices : reverse(indices)
@@ -82,39 +82,23 @@ function vfi(V₀::AbstractArray{Float64, 3}, model::ModelInstance, G::RegularGr
         pᵢ .= pᵢ₊₁
     end
 
-    verbose && @printf("Convergence failed, ε = %.5f and α = %.5f...\r", ε, α)
+    @warn "Convergence failed."
     return Vᵢ₊₁, pᵢ₊₁
 end
 
-function computeterminal(N::Int, Δλ, preferences::Preferences; verbose = true, withsave = true, datapath = "data", iterkwargs...)
-    economy = Economy()
-    hogg = Hogg()
-    albedo = Albedo(λ₂ = Albedo().λ₁ - Δλ)
-    calibration = load_object(joinpath(datapath, "calibration.jld2"))
-
-    model = ModelInstance(preferences, economy, hogg, albedo, calibration)
-
-    domains = [
-        (hogg.T₀, hogg.T₀ + 8.5), 
-        (mstable(hogg.T₀, hogg, albedo), mstable(hogg.T₀ + 8.5, hogg, albedo)),
-        (log(economy.Y₀ / 2), log(2economy.Y₀)), 
-    ]
-    
-    G = RegularGrid(domains, N);
-    
+function computeterminal(model::ModelInstance, G::RegularGrid; verbose = true, withsave = true, datapath = "data", iterkwargs...)    
     Vcurve = [log(exp(Xᵢ.y)) / preferences.ρ for Xᵢ ∈ G.X]
 
     V₀ = typeof(preferences) <: EpsteinZin ? 
-        Vcurve .- 2maximum(Vcurve) : Vcurve
+        Vcurve .- 2maximum(Vcurve) : Vcurve # Ensures V₀ < 0, for Epstein-Zin utilities
 
     V̄, policy = vfi(V₀, model, G; verbose, iterkwargs...)
     
     if withsave
         savepath = joinpath(datapath, "terminal", makefilename(model, G))
-        println("\nSaving solution into $savepath...")
-
-        jldsave(savepath; V̄, policy, model, G)
+        println("Saving solution into $savepath...")
+        jldsave(savepath; V̄, policy)
     end
 
-    return V̄, policy, model, G
+    return V̄, policy, G
 end

@@ -26,7 +26,8 @@ function backwardsimulation!(V::SharedArray{Float64, 3}, policy::SharedArray{Pol
     cache = !isnothing(cachepath)
     if cache
         tcache = model.economy.t₁ # Only cache in the range of the IPCC data forecast
-        cachefile = jldopen(cachepath, "a+")
+        isfile(cachepath) && throw("File $cachefile already exists.")
+        cachefile = jldopen(cachepath, "w+")
     end
 
     σₜ² = (model.hogg.σₜ / (model.hogg.ϵ * G.Δ.T))^2
@@ -98,7 +99,7 @@ function backwardsimulation!(V::SharedArray{Float64, 3}, policy::SharedArray{Pol
                     -f(c, v, Δtᵢ, model.preferences)
                 end
 
-                ᾱ = γₜ + δₜ
+                ᾱ = γₜ
 
                 optimiser = Opt(:LN_SBPLX, 2)
                 lower_bounds!(optimiser, [0., 0.])
@@ -142,37 +143,18 @@ function backwardsimulation!(V::SharedArray{Float64, 3}, policy::SharedArray{Pol
     return V, policy
 end
 
-function computevalue(N::Int, Δλ, p::Preferences; cache = false, kwargs...)
-    name = makefilename(N, Δλ, p)
-    termpath = joinpath(DATAPATH, "terminal", name)
-    savepath = joinpath(DATAPATH, "total", name)
+function computevalue(model::ModelInstance, G::RegularGrid; cache = false, kwargs...)
+    savepath = joinpath(DATAPATH, "total", makefilename(model, G))
     cachepath = cache ? savepath : nothing
-
-    if !isfile(termpath)
-        throw("$termpath simulation not found!")
-    end
     
-    termsim = load(termpath);
-    V = SharedArray(termsim["V̄"]);
-    terminalpolicy = termsim["policy"];
-    model = termsim["model"];
-    G = termsim["G"];
-    
+    V̄, terminalpolicy = loadterminal(model, G; datapath = DATAPATH)
     policy = SharedArray([Policy(χ, 0.) for χ ∈ terminalpolicy]);
 
-    if cache
-        println("Saving in $cachepath...")
-    end
+    V = SharedArray(V̄)
+
+    cache && println("Saving in $cachepath...")
     
     backwardsimulation!(V, policy, model, G; cachepath = cachepath, kwargs...)
-    
-    println("\nSaving solution into $savepath...")
-    jldopen(savepath, "a+") do cachefile 
-        g = JLD2.Group(cachefile, "endpoint")
-        g["V"] = V
-        g["policy"] = policy
-        g["G"] = G
-    end
     
     return V, policy
 end
