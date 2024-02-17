@@ -31,7 +31,7 @@ end
 
 function d(T, economy::Economy, hogg::Hogg)
     @unpack υ, ξ = economy
-    ξ * (T - hogg.Tᵖ)^υ
+    ξ * max(T - hogg.Tᵖ, 0.)^υ
 end
 
 function d′(T, economy::Economy, hogg::Hogg)

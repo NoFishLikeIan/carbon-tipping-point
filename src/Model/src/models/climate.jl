@@ -4,7 +4,7 @@ const Gtonoverppm = 1 / 7.821
 Base.@kwdef struct Albedo
     Tₐ::Float64 = 3 # Transition rate
 	T₁::Float64 = 290.5 # Pre-transition temperature
-    T₂::Float64 = 295 # Post-transition temeprature 
+    T₂::Float64 = 292.5 # Post-transition temeprature 
      
     λ₁::Float64 = 0.31 # Pre-transition albedo
     λ₂::Float64 = 0.23 # Post-transition albedo
@@ -19,10 +19,10 @@ Base.@kwdef struct Hogg
 
     N₀::Float64 = 286.65543 # [p.p.m.]
     
-    σₜ::Float64 = 1.5844043907014476 # Volatility of temperature
+    σₜ::Float64 = 1.585 # Volatility of temperature
 
     # Climate sensitwivity
-    S₀::Float64 = 342 # [W / m²] Mean solar radiation
+    S₀::Float64 = 340.5 # [W / m²] Mean solar radiation
 
     ϵ::Float64 = 5e8 / secondstoyears # years * [J / m² K] / s Heat capacity of the ocean
     η::Float64 = 5.67e-8 # Stefan-Boltzmann constant 
