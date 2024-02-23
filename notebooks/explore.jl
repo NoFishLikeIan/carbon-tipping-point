@@ -78,7 +78,7 @@ end;
 
 # ╔═╡ 6cbb7191-eb1e-4abe-8ef6-c12e07b026d5
 begin
-	preferences = EpsteinZin(ψ = 1.5, θ = 5.)
+	preferences = EpsteinZin()
 	hogg = Hogg()
 	calibration = load_object(joinpath(datapath, "calibration.jld2"))
 
@@ -191,7 +191,7 @@ md"``\omega:`` $(@bind ωᵣ Slider(Ω, show_value = true))"
 
 # ╔═╡ c3c2cfc9-e7f4-495b-bcc6-51227be2c6b5
 begin
-	x₀ = [Hogg().T₀, log(Hogg().M₀), log(Economy().Y₀)]
+	x₀ = [Hogg().T₀ + 0.3, log(Hogg().M₀), log(Economy().Y₀)]
 	X₀ = Point(x₀)
 	tspan = (0., Economy().t₁)
 
@@ -255,7 +255,7 @@ begin
 
 	coarsetimespan = range(first(timespan), last(timespan), step = 10)
 
-	trajfig = plot(xlims = extrema(mspace), ylims = extrema(Tdomain))
+	trajfig = plot(xlims = (minimum(mspace) - 0.1, maximum(mspace) + 0.1), ylims = hogg.Tᵖ .+ (0., 7.))
 
 	for (k, Δλ) ∈ enumerate(ΔΛ)
 			

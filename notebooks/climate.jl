@@ -98,7 +98,7 @@ md"``\Delta\lambda:`` $(@bind Δλ Slider(0:0.01:0.1, default = 0., show_value =
 # ╔═╡ d837589f-25a6-4500-b1ac-b20db496b485
 begin
 	hogg = Hogg(S₀ = 340.5)
-	albedo = Albedo(λ₂ = 0.31 - Δλ, T₁ = 290.5, T₂ = 292.5)
+	albedo = Albedo(λ₂ = 0.31 - Δλ, T₁ = 290.5, T₂ = 292)
 
 	Tspace = range(hogg.Tᵖ, hogg.Tᵖ + 13.; length = 101)
 	nullcline = [Model.mstable(T, hogg, albedo) for T ∈ Tspace]
@@ -131,9 +131,6 @@ begin
 	simfig
 	
 end
-
-# ╔═╡ ce260e73-94dc-41ea-834f-fac1ebe8433c
-log(2.5hogg.M₀)
 
 # ╔═╡ 31c8af20-05e0-4355-937e-f0a0b3fc72d7
 md"## Equivalent jump process"
@@ -197,7 +194,6 @@ end
 # ╠═d837589f-25a6-4500-b1ac-b20db496b485
 # ╠═7e67776d-ac49-4a29-a601-d9418ce91e2e
 # ╟─1507326b-eab2-43c0-b981-ca0ca5aad997
-# ╠═ce260e73-94dc-41ea-834f-fac1ebe8433c
 # ╟─31c8af20-05e0-4355-937e-f0a0b3fc72d7
 # ╠═b6795842-7e9f-44eb-8768-b6065f6cbda1
 # ╠═3b427901-b74b-4c64-a97e-f82711aa01cc

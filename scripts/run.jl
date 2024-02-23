@@ -4,7 +4,7 @@ include("backward.jl")
 const ΔΛ = [0., 0.06, 0.08];
 const Ω = 2 .* 10 .^(-4:1/3:-1);
 
-const preferences = EpsteinZin(θ = 3., ψ = 0.5);
+const preferences = EpsteinZin();
 const hogg = Hogg();
 const calibration = load_object(joinpath(DATAPATH, "calibration.jld2"));
 
@@ -21,6 +21,6 @@ for Δλ ∈ ΔΛ, ωᵣ ∈ Ω
     albedo = Albedo(λ₂ = 0.31 - Δλ)
     model = ModelInstance(preferences, economy, hogg, albedo, calibration)
     
-    computeterminal(model, G; verbose = true, withsave = true, datapath = DATAPATH, alternate = false, tol = 1e-3, maxiter = 4_000)
+    computeterminal(model, G; verbose = true, withsave = true, datapath = DATAPATH, alternate = false, tol = 1e-2, maxiter = 2_000)
     computevalue(model, G; verbose = true, cache = true)
 end
