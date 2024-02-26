@@ -4,10 +4,22 @@ const Gtonoverppm = 1 / 7.821
 Base.@kwdef struct Albedo
     Tₐ::Float64 = 3 # Transition rate
 	T₁::Float64 = 290.5 # Pre-transition temperature
-    T₂::Float64 = 292.5 # Post-transition temeprature 
+    T₂::Float64 = 291. # Post-transition temeprature 
      
     λ₁::Float64 = 0.31 # Pre-transition albedo
     λ₂::Float64 = 0.23 # Post-transition albedo
+end
+
+Base.@kwdef struct Jump
+    j₂::Float64 = -0.0029
+    j₁::Float64 = 0.0568
+    j₀::Float64 = -0.0577
+
+    i₀::Float64 = -1/4
+    i₁::Float64 = 0.95
+    
+    e₁::Float64 = 2.8
+    e₂::Float64 = -0.3325
 end
 
 Base.@kwdef struct Hogg
@@ -34,6 +46,15 @@ Base.@kwdef struct Hogg
     aδ::Float64 = 0.0176
     bδ::Float64 = -27.36
     cδ::Float64 = 314.8
+end
+
+function calibrateHogg(albedo::Albedo; b = (330., 380.))::Hogg
+    d = Hogg()
+    eq = @closure S₀ ->  Model.Mstable(d.T₀, Hogg(S₀ = S₀), albedo) - d.M₀
+
+    S₀ = find_zero(eq, b)
+
+    return Hogg(S₀ = S₀)
 end
 
 "Decay of carbon"
@@ -99,4 +120,16 @@ end
 
 function density(T, m, hogg::Hogg, albedo::Albedo; normalisation = 1e-5)
     exp(-normalisation * potential(T, m, hogg, albedo))
+end
+
+function jump(T, hogg::Hogg, jump::Jump)
+    ΔT = T - hogg.Tᵖ
+
+    jump.j₀ + jump.j₁ * ΔT + jump.j₂ * ΔT^2
+end
+
+function intensity(T, hogg::Hogg, jump::Jump)
+    ΔT = T - hogg.Tᵖ
+    
+    jump.i₀ + jump.i₁ / (1 + jump.e₁ * exp(jump.e₂ * ΔT))
 end

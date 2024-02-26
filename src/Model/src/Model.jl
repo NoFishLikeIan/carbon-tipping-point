@@ -2,6 +2,7 @@ module Model
 
 # Models
 export Economy, Hogg, Albedo, Calibration
+export calibrateHogg
 export μ, b, bterminal, γ, mstable, boundb, δₘ
 export potential, density
 export Preferences, EpsteinZin, LogSeparable, CRRA, LogUtility, f
@@ -10,6 +11,8 @@ export ModelInstance
 # Packages
 using Grid: Point, Policy, Drift
 using UnPack: @unpack
+using Roots: find_zero
+using FastClosures: @closure
 
 include("models/calibration.jl")
 include("models/climate.jl")

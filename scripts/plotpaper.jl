@@ -34,14 +34,32 @@ begin # Global variables
 end;
 
 begin # Import
-    ΔΛ = [0., 0.03, 0.08]
-    p = CRRA()
-	N = 21
-	
-    t, V, policy, model, G = loaddata(N, ΔΛ, p)
+    ΔΛ = [0., 0.06, 0.08]
+    Ω = 2 * 10. .^(-4:1:-1);
+	N = 21;
+	domains = [
+		Hogg().T₀ .+ (0., 9.),
+		log.(Hogg().M₀ .* (1., 2.)),
+		log.(Economy().Y₀ .* (0.5, 2.))
+	]
 
-    @unpack hogg, economy, calibration, albedo = model
+	preferences = EpsteinZin()
+	calibration = load_object(joinpath(DATAPATH, "calibration.jld2"))
+
+	models = ModelInstance[]
+	
+
+	for Δλ ∈ ΔΛ, ωᵣ ∈ Ω
+		economy = Economy(ωᵣ = ωᵣ)
+	    albedo = Albedo(λ₂ = 0.31 - Δλ)
+		hogg = calibrateHogg(albedo)
+	    model = ModelInstance(preferences, economy, hogg, albedo, calibration)
+
+		push!(models, model)
+	end
 end;
+
+G = RegularGrid(domains, N);
 
 function stringtempdev(x::Real; digits = 2)
     fsign = x > 0 ? "+" : ""
@@ -75,10 +93,10 @@ end
 begin # labels and axis
     TEMPLABEL = raw"Temperature deviations $T - T^{\mathrm{p}}$"
     Tspacedev = range(0., 10.; length = 51)
-    Tspace = Tspacedev .+ model.hogg.Tᵖ
-    yearlytime = collect(0:model.economy.t₁) 
+    Tspace = Tspacedev .+ Hogg().Tᵖ
+    yearlytime = collect(0:Economy().t₁) 
     ΔTᵤ = last(Tspace) - first(Tspace)
-    temperatureticks = makedevxlabels(0., ΔTᵤ, model; step = 1, digits = 0)
+    temperatureticks = makedevxlabels(0., ΔTᵤ, first(models); step = 1, digits = 0)
 end
 
 begin # Load IPCC data
@@ -93,7 +111,7 @@ end
 
 begin # Albedo plot
     ΔΛfig = [0, 0.06, 0.08]
-    albedovariation = [(T -> Model.λ(T, Albedo(λ₂ = model.albedo.λ₁ - Δλ))).(Tspace) for Δλ ∈ ΔΛfig]
+    albedovariation = [(T -> Model.λ(T, Albedo(λ₂ = Albedo().λ₁ - Δλ))).(Tspace) for Δλ ∈ ΔΛfig]
 
 
     albedofig = @pgf Axis(
@@ -132,8 +150,15 @@ begin # Albedo plot
 end
 
 begin # Nullcline plot
-    nullclinevariation = [(T -> Model.Mstable(T, model.hogg, Albedo(λ₂ = model.albedo.λ₁ - Δλ))).(Tspace) for Δλ ∈ ΔΛfig]
+    nullclinevariation = Vector{Float64}[]
 
+    for Δλ ∈ ΔΛfig
+        albedo = Albedo(λ₂ = Albedo().λ₁ - Δλ)
+        hogg = calibrateHogg(albedo)
+        null = [Model.Mstable(T, hogg, albedo) for T ∈ Tspace]
+
+        push!(nullclinevariation, null)
+    end
 
     nullclinefig = @pgf Axis(
         {
@@ -142,7 +167,7 @@ begin # Nullcline plot
             grid = "both",
             ylabel = TEMPLABEL,
             xlabel = raw"Carbon concentration $M$",
-            xmin = model.hogg.Mᵖ, xmax = 1200,
+            xmin = Hogg().Mᵖ, xmax = 1200,
             xtick = 200:200:1200,
             yticklabels = temperatureticks[2],
             ytick = 0:1:ΔTᵤ,
@@ -188,7 +213,7 @@ begin # Growth of carbon concentration
         }
     )   
     
-    gdata = [γ(t, model.economy, model.calibration) for t ∈ yearlytime]
+    gdata = [γ(t, first(models).economy, first(models).calibration) for t ∈ yearlytime]
     coords = Coordinates(zip(yearlytime, gdata))
 
     markers = @pgf Plot({ only_marks, mark_options = {fill = gcolor, scale = 1.5, draw_opacity = 0}, mark_repeat = 10}, coords) 
@@ -205,28 +230,30 @@ begin # Growth of carbon concentration
 end
 
 # --- Business-as-usual dynamics
-function Fbau!(du, u, params, t)
-	Δλ = first(params)
+function Fbau!(du, u, model, t)
 
-	du[1] = μ(u[1], u[2], hogg, Albedo(λ₂ = albedo.λ₁ - Δλ)) / hogg.ϵ
-	du[2] = γ(t, economy, calibration)
+	du[1] = μ(u[1], u[2], model.hogg, model.albedo) / model.hogg.ϵ
+	du[2] = γ(t, model.economy, model.calibration)
 end
-function Gbau!(du, u, params, t)
-	du[1] = hogg.σₜ / hogg.ϵ
+function Gbau!(du, u, model, t)
+    
+
+	du[1] = model.hogg.σₜ / model.hogg.ϵ
 	du[2] = 0.
 end
 
-const X₀ = [hogg.T₀, log(hogg.M₀), log(economy.Y₀)];
+const X₀ = [Hogg().T₀, log(Hogg().M₀), log(Economy().Y₀)];
 
 function simulatebau(Δλ; trajectories = 1000) # Business as Usual, ensemble simulation   
-    albedo = Albedo(λ₂ = model.albedo.λ₁ - Δλ)
+    k = findfirst(m -> m.albedo.λ₁ - m.albedo.λ₂ ≈ Δλ, models)
+    model = models[k]
     
-    prob = SDEProblem(SDEFunction(Fbau!, Gbau!), X₀[1:2], (0., 260.), (Δλ, ))
+    prob = SDEProblem(SDEFunction(Fbau!, Gbau!), X₀[1:2], (0., 260.), model)
     
     ensemble = EnsembleProblem(prob)
     
     bausim = solve(ensemble; trajectories)
-    baunullcline = (x -> Model.mstable(x, model.hogg, albedo)).(Tspace)
+    baunullcline = (x -> Model.mstable(x, model.hogg, model.albedo)).(Tspace)
     
     return bausim, baunullcline
 end
@@ -248,7 +275,10 @@ begin # Density plots
     })
 
     for (i, Δλ) ∈ enumerate(ΔΛ)
-        d = [Model.density(T, log(1.2hogg.M₀), hogg, Albedo(λ₂ = albedo.λ₁ - Δλ)) for T in Tspace ]
+        k = findfirst(m -> m.albedo.λ₁ - m.albedo.λ₂ ≈ Δλ, models)
+        model = models[k]
+
+        d = [Model.density(T, log(1.2model.hogg.M₀), model.hogg, model.albedo) for T in Tspace ]
 
         @pgf push!(densfig,
             Plot({
@@ -281,7 +311,7 @@ begin # Business as usual plots
             yticklabels = temperatureticks[2],
             ytick = 0:1:ΔTᵤ,
             ymin = 0, ymax = ΔTᵤ,
-            xmin = model.hogg.Mᵖ, xmax = 1200,
+            xmin = Hogg().Mᵖ, xmax = 1200,
             xtick = 200:100:1100,
             grid = "both"
         }
@@ -314,7 +344,7 @@ begin # Business as usual plots
         bausim, baunullcline = simulatebau(Δλ; trajectories = 20)
         baumedian = [timepoint_median(bausim, t) for t in yearlytime]
         baumedianM = @. exp([u[2] for u in baumedian])
-        baumedianT = @. first(baumedian) - model.hogg.Tᵖ
+        baumedianT = @. first(baumedian) - Hogg().Tᵖ
 
 
         # Nullcline
@@ -343,7 +373,7 @@ begin # Business as usual plots
             path = sim.(yearlytime)
 
             mpath = @. exp([u[2] for u in path])
-            xpath = @. first(path) - model.hogg.Tᵖ
+            xpath = @. first(path) - Hogg().Tᵖ
 
             push!(
                 Δλplots, 
@@ -385,7 +415,7 @@ begin # Density
             yticklabels = temperatureticks[2],
             ytick = 0:1:ΔTᵤ,
             ymin = 0, ymax = ΔTᵤ,
-            xmin = model.hogg.Mᵖ, xmax = 1200,
+            xmin = Hogg().Mᵖ, xmax = 1200,
             xtick = 200:100:1100,
             grid = "both"
         }
@@ -419,7 +449,7 @@ begin # Density
         bausim, baunullcline = simulatebau(Δλ; trajectories = 20)
         baumedian = [timepoint_median(bausim, t) for t in yearlytime]
         baumedianM = @. exp([u[2] for u in baumedian])
-        baumedianT = @. first(baumedian) - model.hogg.Tᵖ
+        baumedianT = @. first(baumedian) - Hogg().Tᵖ
 
 
         # Nullcline
@@ -446,8 +476,8 @@ begin # Density
             path = sim.(yearlytime)
 
             mpath = @. exp([u[2] for u in path])
-            xpath = @. first(path) - model.hogg.Tᵖ
-
+            xpath = @. first(path) - Hogg().Tᵖ
+            
             push!(
                 Δλplots, 
                 Plot({forget_plot, color = timeseriescolor, opacity = 0.2},
@@ -476,8 +506,8 @@ begin # Density
 end
 
 begin # Carbon decay calibration
-    sinkspace = range(model.hogg.N₀, 1.2 * model.hogg.N₀; length = 101)
-    decay = (n -> Model.δₘ(n, model.hogg)).(sinkspace)
+    sinkspace = range(Hogg().N₀, 1.2 * Hogg().N₀; length = 101)
+    decay = (n -> Model.δₘ(n, Hogg())).(sinkspace)
 
     decayfig = @pgf Axis(
         {
@@ -512,10 +542,10 @@ end
 begin # Carbon decay path
     bausim, baunullcline = simulatebau(0.; trajectories = 1)
     M = exp.([u[2] for u in bausim[1].u])
-    decaysim = Model.δₘ.(M, Ref(model.hogg))
+    decaysim = Model.δₘ.(M, Ref(Hogg()))
     
-    Msparse = exp.([Float32(bausim(y)[1][2]) for y in 0:10:horizon])
-    decaysimsparse = Model.δₘ.(Msparse, Ref(model.hogg))
+    Msparse = exp.([bausim(y)[1][2] for y in 0:10:horizon])
+    decaysimsparse = Model.δₘ.(Msparse, Ref(Hogg()))
 
     decaypathfig = @pgf Axis(
         {
@@ -526,7 +556,7 @@ begin # Carbon decay path
             ylabel = raw"Decay of CO$_2$ in the atmosphere $\delta_m$",
             no_markers,
             ultra_thick,
-            xmin = model.hogg.M₀, xmax = maximum(M),
+            xmin = Hogg().M₀, xmax = maximum(M),
             ymin = -1e-3
         }
     )
@@ -570,7 +600,7 @@ begin # Damage fig
     )
 
     @pgf damagecurve = Plot({color = "black", line_width = "0.1cm"},
-        Coordinates(Tspacedev, [Model.d(T, model.economy, model.hogg) for T in Tspace])
+        Coordinates(Tspacedev, [Model.d(T, Economy(), Hogg()) for T in Tspace])
     )
 
     push!(damagefig, damagecurve)
@@ -582,67 +612,65 @@ begin # Damage fig
     damagefig
 end
 
-# --- Optimal emissions
-begin
-    ΔT, Δm, Δy = G.domains
+# --- Optimal emissions 
+#FIXME: The script below is out of date
+results = loadtotal(models, G; datapath = DATAPATH);
 
-	nodes = (
-		range(extrema(ΔT)...; length = N),
-		range(extrema(Δm)...; length = N),
-		range(extrema(Δy)...; length = N),
-		ΔΛ, t
-	)
-    
-    χitp = linear_interpolation(nodes, first.(policy); extrapolation_bc = Flat())
-    αitp = linear_interpolation(nodes, last.(policy); extrapolation_bc = Flat())
-    Vitp = linear_interpolation(nodes, V, extrapolation_bc = Flat())
-    Eᵇ = linear_interpolation(calibration.years .- 2020, calibration.emissions, extrapolation_bc = Line());
+begin
+	ΔT, Δm, Δy = G.domains
+	spacenodes = ntuple(i -> range(G.domains[i]...; length = N), 3)
+
+	interpolations = []
+
+	for (k, res) in enumerate(results)
+		ts, V, policy = res
+			
+		nodes = (spacenodes..., ts)
+		χitp = linear_interpolation(nodes, first.(policy); extrapolation_bc = Flat())
+		αitp = linear_interpolation(nodes, last.(policy); extrapolation_bc = Flat())
+		Vitp = linear_interpolation(nodes, V; extrapolation_bc = Flat())
+
+		push!(interpolations, (χitp, αitp, Vitp))
+	end
 end;
 
-scc(x::AbstractVector, Δλ, tᵢ) = scc(Point(x[1], x[2], x[3]), Δλ, tᵢ)
-function scc(x::Point, Δλ, tᵢ)
-    VE = E -> Vitp(x.T, log(exp(x.m) + E / Model.Gtonoverppm), x.y, Δλ, tᵢ)
-    VY = Y -> Vitp(x.T, x.m, log(Y), Δλ, tᵢ)
+function F!(dx, x, parameters, t)
+    model, interpolation = parameters
+    χitp, αitp, _ = interpolation
 
-    E = (1 - Model.ε(tᵢ, exp(x.m), αitp(x..., Δλ, tᵢ), model)) * Eᵇ(tᵢ)
-    
-    - FiniteDiff.finite_difference_derivative(VE, E) / 
-        FiniteDiff.finite_difference_derivative(VY, exp(x.y))    
-end
-
-
-function F!(dx, x, p, t)	
-	Δλ = first(p)
-	
 	T, m, y = x
 	
-	χ = χitp(T, m, y, Δλ, t)
-	α = αitp(T, m, y, Δλ, t)
+	χ = χitp(T, m, y, t)
+	α = αitp(T, m, y, t)
 	
-	dx[1] = μ(T, m, hogg, Albedo(λ₂ = albedo.λ₁ - Δλ)) / hogg.ϵ
-	dx[2] = γ(t, economy, calibration) - α
-	dx[3] = b(t, Point(x), Policy(χ, α), model)
+	dx[1] = μ(T, m, model.hogg, model.albedo) / model.hogg.ϵ
+	dx[2] = γ(t, model.economy, model.calibration) - α
+	dx[3] = b(t, Point(T, m, y), Policy(χ, α), model)
 
-	return
+    return
 end;
 
-function G!(dx, x, p, t)
-	dx[1] = hogg.σₜ / hogg.ϵ
+function G!(dx, x, parameters, t)
+    model = first(parameters)
+
+	dx[1] = model.hogg.σₜ / model.hogg.ϵ
 	dx[2] = 0.
-	dx[3] = economy.σₖ
+	dx[3] = model.economy.σₖ
 	
 	return
 end;
 
 begin
-	tspan = (0., economy.t₁)
+	tspan = (0., Economy().t₁)
 
-    x₀ = [288.6, log(401), log(economy.Y₀)]
+    fn = SDEFunction(F!, G!)
 
-	problems = [SDEProblem(SDEFunction(F!, G!), x₀, tspan, (Δλ, )) for Δλ ∈ [0., 0.08]]
+	problems = [
+        SDEProblem(fn, X₀, tspan, params) 
+        for params in zip(models, interpolations)
+    ]
     
     solutions = [solve(EnsembleProblem(prob), EnsembleDistributed(); trajectories = 20) for prob ∈ problems]
-
 end;
 
 begin # Temperature simulation
@@ -664,7 +692,6 @@ begin # Temperature simulation
         }
     )
 
-    Tfig = []
     Mfig = []
     εfig = []
 

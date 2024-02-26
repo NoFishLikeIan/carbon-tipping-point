@@ -97,8 +97,8 @@ md"``\Delta\lambda:`` $(@bind Δλ Slider(0:0.01:0.1, default = 0., show_value =
 
 # ╔═╡ d837589f-25a6-4500-b1ac-b20db496b485
 begin
-	hogg = Hogg(S₀ = 340.5)
-	albedo = Albedo(λ₂ = 0.31 - Δλ, T₁ = 290.5, T₂ = 292)
+	albedo = Albedo(λ₂ = 0.31 - Δλ, T₂ = 291)
+	hogg = calibrateHogg(albedo)
 
 	Tspace = range(hogg.Tᵖ, hogg.Tᵖ + 13.; length = 101)
 	nullcline = [Model.mstable(T, hogg, albedo) for T ∈ Tspace]
@@ -140,13 +140,24 @@ function jump(T)
 	−0.0029 * (T - hogg.Tᵖ)^2 + 0.0568 * (T - hogg.Tᵖ) − 0.0577
 end;
 
+# ╔═╡ 6ec0461e-a901-4bc6-8f0e-a4b1e7f89f67
+function intensity(T)
+	-0.25 + 0.95 / (1 + 2.8exp(-0.3325(T - hogg.Tᵖ)))
+end;
+
 # ╔═╡ 3b427901-b74b-4c64-a97e-f82711aa01cc
-affect!(integrator) = integrator.u[1] += 2.;
+function affect!(integrator)
+	integrator.u[1] += jump(integrator.u[1])
+end;
 
 # ╔═╡ c3ba9f6f-c240-43cb-a2a7-ef80423bfa1d
-function intensity(u, p, t)
-	-0.25 + 0.95 / (1 + 2.8exp(-0.3325(u[1] - hogg.Tᵖ)))
-end;
+intensity(u, p, t) = intensity(u[1]);
+
+# ╔═╡ 2ab85406-9736-43a2-b562-4e1c76f32feb
+let
+	plot(Tspace, jump; xlims = extrema(Tspace), ylabel = "Jump", yguidefontcolor = :darkred, c = :darkred, label = false, ylims = (0., 0.4));
+	plot!(twinx(), Tspace, intensity; xlims = extrema(Tspace), ylabel = "Intensity", yguidefontcolor = :darkblue, c = :darkblue, label = false, ylims = (0, 0.7))
+end
 
 # ╔═╡ b1dff2b6-766a-4751-a4c5-ef2e84ec2bae
 begin
@@ -196,6 +207,8 @@ end
 # ╟─1507326b-eab2-43c0-b981-ca0ca5aad997
 # ╟─31c8af20-05e0-4355-937e-f0a0b3fc72d7
 # ╠═b6795842-7e9f-44eb-8768-b6065f6cbda1
+# ╠═6ec0461e-a901-4bc6-8f0e-a4b1e7f89f67
+# ╠═2ab85406-9736-43a2-b562-4e1c76f32feb
 # ╠═3b427901-b74b-4c64-a97e-f82711aa01cc
 # ╠═c3ba9f6f-c240-43cb-a2a7-ef80423bfa1d
 # ╠═b1dff2b6-766a-4751-a4c5-ef2e84ec2bae

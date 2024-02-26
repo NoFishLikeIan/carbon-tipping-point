@@ -4,5 +4,7 @@ authors = ["NoFishLikeIan <andreatitton96@gmail.com>"]
 version = "0.1.0"
 
 [deps]
+FastClosures = "9aa1b823-49e4-5ca5-8b0f-3971ec8bab6a"
 Grid = "10b7b9de-b9da-4441-8fc4-f1f11170349d"
+Roots = "f2b01f46-fcfa-551c-844a-d8ac1e96c665"
 UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"

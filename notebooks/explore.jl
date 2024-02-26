@@ -79,7 +79,6 @@ end;
 # ╔═╡ 6cbb7191-eb1e-4abe-8ef6-c12e07b026d5
 begin
 	preferences = EpsteinZin()
-	hogg = Hogg()
 	calibration = load_object(joinpath(datapath, "calibration.jld2"))
 
 	models = ModelInstance[]
@@ -88,6 +87,7 @@ begin
 	for Δλ ∈ ΔΛ, ωᵣ ∈ Ω
 		economy = Economy(ωᵣ = ωᵣ)
 	    albedo = Albedo(λ₂ = 0.31 - Δλ)
+		hogg = calibrateHogg(albedo)
 	    model = ModelInstance(preferences, economy, hogg, albedo, calibration)
 
 		push!(models, model)
@@ -186,13 +186,17 @@ function G!(dx, x, p, t)
 	return
 end;
 
+# ╔═╡ f6cb362d-240c-42fe-bbf7-7a26fdb189ae
+begin
+	x₀ = [Hogg().T₀, log(Hogg().M₀), log(Economy().Y₀)]
+	X₀ = Point(x₀)
+end;
+
 # ╔═╡ 9ecd7282-3394-4b4f-8af3-cb1a01032873
 md"``\omega:`` $(@bind ωᵣ Slider(Ω, show_value = true))"
 
 # ╔═╡ c3c2cfc9-e7f4-495b-bcc6-51227be2c6b5
 begin
-	x₀ = [Hogg().T₀ + 0.3, log(Hogg().M₀), log(Economy().Y₀)]
-	X₀ = Point(x₀)
 	tspan = (0., Economy().t₁)
 
 	problems = SDEProblem[]
@@ -219,7 +223,7 @@ begin
 	yearticks = 2020 .+ (0:10:80)
 	xticks = (0:10:80, yearticks)
 		
-	Tticks = hogg.Tᵖ .+ (1:3)
+	Tticks = Hogg().Tᵖ .+ (1:3)
 	yticks = (Tticks, 1:3)
 	
 	
@@ -255,11 +259,13 @@ begin
 
 	coarsetimespan = range(first(timespan), last(timespan), step = 10)
 
-	trajfig = plot(xlims = (minimum(mspace) - 0.1, maximum(mspace) + 0.1), ylims = hogg.Tᵖ .+ (0., 7.))
+	trajfig = plot(xlims = (minimum(mspace) - 0.05, maximum(mspace) + 0.1), ylims = Hogg().Tᵖ .+ (1., 7.))
 
 	for (k, Δλ) ∈ enumerate(ΔΛ)
-			
-		nullcline = [Model.mstable(T, Hogg(), Albedo(λ₂ = Albedo().λ₁ - ΔΛ[k])) for T ∈ Tspace]
+		j = findfirst(m -> ωᵣ ≈ m.economy.ωᵣ && Δλ ≈ m.albedo.λ₁ - m.albedo.λ₂, models)
+		model = models[j]
+		
+		nullcline = [Model.mstable(T, model.hogg, model.albedo) for T ∈ Tspace]
 	
 		trajectory = [Point(EnsembleAnalysis.timepoint_median(solutions[k], tᵢ)) for tᵢ ∈ coarsetimespan]
 		mtraj = [x.m for x ∈ trajectory]
@@ -289,7 +295,7 @@ end
 # ╠═cdc62513-a1e8-4c55-a270-761b6553d806
 # ╟─f72b0a1a-d525-4d4b-955a-66e14d0cd764
 # ╟─9bac7222-2e53-4ba6-b65e-6d1887e43f25
-# ╠═5e7d4f3a-a7c2-4695-a211-448ed5909ad1
+# ╟─5e7d4f3a-a7c2-4695-a211-448ed5909ad1
 # ╟─6fe67c9b-fe20-42e4-b817-b31dad586e55
 # ╠═a1f3534e-8c07-42b1-80ac-440bc016a652
 # ╠═d04d558a-c152-43a1-8668-ab3b040e6701
@@ -300,6 +306,7 @@ end
 # ╟─31d32b62-4329-464e-8354-1c2875fe5801
 # ╠═d62b65f5-220e-45c6-a434-ac392b72ab4a
 # ╠═7823bda7-5ab8-42f7-bf1c-292dbfecf178
+# ╠═f6cb362d-240c-42fe-bbf7-7a26fdb189ae
 # ╠═c3c2cfc9-e7f4-495b-bcc6-51227be2c6b5
 # ╠═28c6fe28-bd42-4aba-b403-b2b0145a8e37
 # ╟─9ecd7282-3394-4b4f-8af3-cb1a01032873
