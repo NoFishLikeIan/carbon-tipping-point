@@ -28,7 +28,7 @@ function b(t, Xᵢ::Point, u::Policy, model::ModelGeneric)
     return growth - abatement - damage
 end
 
-function ∇ᵤb(t, Xᵢ::Point, u::Policy, model::ModelInstance)
+function ∇ᵤb(t, Xᵢ::Point, u::Policy, model::ModelGeneric)
     M = exp(Xᵢ.m)
 
     εₜ = ε(t, M, u.α, model)
@@ -40,7 +40,7 @@ function ∇ᵤb(t, Xᵢ::Point, u::Policy, model::ModelInstance)
 end
 
 "Computes maximum absolute value of the drift of y."
-function boundb(t, Xᵢ::Point, model::ModelInstance)
+function boundb(t, Xᵢ::Point, model::ModelGeneric)
     γₜ = γ(t, model.economy, model.calibration)
     δₘᵢ = δₘ(exp(Xᵢ.m), model.hogg)
 

@@ -8,13 +8,37 @@ includet("../backward.jl")
 includet("../utils/plotting.jl")
 includet("../utils/saving.jl")
 
-N = 21;
-ΔΛ = [0., 0.08];
-Θ = [3., 10.];
-p = EpsteinZin(θ = last(Θ));
 
-V̄, terminalpolicy, model, G = loadterminal(N, ΔΛ, p);
-vspace = extrema(V̄)
+begin
+	calibration = load_object(joinpath(DATAPATH, "calibration.jld2"))
+	hogg = Hogg()
+	economy = Economy()
+	preferences = EpsteinZin()
+end
 
-policy = SharedArray([Policy(χ, 0.) for χ ∈ terminalpolicy[:, :, :, 1]]);
-V = SharedArray(deepcopy(V̄[:, :, :, 1]));
+begin
+	N = 21
+
+	Tdomain = hogg.T₀ .+ (0., 7.)
+	mdomain = mstable.(Tdomain, Ref(hogg), Ref(Albedo()))
+	ydomain = log.(economy.Y₀ .* (0.5, 2.))
+	
+	domains = [Tdomain, mdomain, ydomain]
+
+	G = RegularGrid(domains, N);
+end
+
+# --- Albedo
+model = ModelInstance(preferences, economy, hogg, Albedo(), calibration);
+
+V̄, terminalpolicy = loadterminal(model, G);
+
+
+# --- Jump
+model = ModelBenchmark(preferences, economy, hogg, Jump(), calibration);
+V̄, terminalpolicy = loadterminal(model, G);
+
+policy = [Policy(χ, 0.) for χ ∈ terminalpolicy[:, :, :, 1]];
+V = deepcopy(V̄[:, :, :, 1]);
+
+computevalue(model, G; cache = false, verbose = true)

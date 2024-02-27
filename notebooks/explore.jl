@@ -50,7 +50,7 @@ using Statistics: median, mean
 begin
 	include("../scripts/utils/plotting.jl")
 	include("../scripts/utils/saving.jl")
-	
+
 	env = DotEnv.config()
 	datapath = joinpath("..", get(env, "DATAPATH", "data/"))
 end;
@@ -98,7 +98,7 @@ end
 results = loadtotal(models, G; datapath = "../data");
 
 # ╔═╡ f72b0a1a-d525-4d4b-955a-66e14d0cd764
-md"## Initial exploration of results"
+md"# Policies"
 
 # ╔═╡ 9bac7222-2e53-4ba6-b65e-6d1887e43f25
 md"
@@ -311,4 +311,4 @@ end
 # ╠═28c6fe28-bd42-4aba-b403-b2b0145a8e37
 # ╟─9ecd7282-3394-4b4f-8af3-cb1a01032873
 # ╟─1a19b769-68e2-411b-afe0-6bd2a7fb87a3
-# ╠═468d5245-ff79-44df-938f-72ad656fe385
+# ╟─468d5245-ff79-44df-938f-72ad656fe385

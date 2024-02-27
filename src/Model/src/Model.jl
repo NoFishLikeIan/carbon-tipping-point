@@ -36,8 +36,6 @@ end
     calibration::Calibration
 end
 
-
-
 include("models/functions.jl")
 
 end # module Model

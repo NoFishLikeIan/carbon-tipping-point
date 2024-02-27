@@ -40,15 +40,15 @@ function loadterminal(model, G::RegularGrid; kwargs...)
 end
 
 function loadterminal(models::AbstractVector, G::RegularGrid; datapath = "data")
-    path = joinpath(datapath, "terminal")
-
     V̄ = Array{Float64}(undef, N, N, N, length(models))
     policy = similar(V̄)
 
     for (k, model) ∈ enumerate(models)
-        filename = joinpath(path, makefilename(model, G))
-        V̄[:, :, :, k] .= load(filename, "V̄")
-        policy[:, :, :, k] .= load(filename, "policy")
+        folder = typeof(model) <: ModelInstance ? "albedo" : "jump"
+        filename = makefilename(model, G)
+        savepath = joinpath(datapath, folder, "terminal", filename)
+        V̄[:, :, :, k] .= load(savepath, "V̄")
+        policy[:, :, :, k] .= load(savepath, "policy")
     end
 
     return V̄, policy
@@ -58,14 +58,14 @@ function loadtotal(model, G::RegularGrid; kwargs...)
     first(loadtotal([model], G; kwargs...))
 end
 function loadtotal(models::AbstractVector, G::RegularGrid; datapath = "data")
-    simpath = joinpath(datapath, "total")
     N = size(G, 1)
 
     output = Tuple{Vector{Float64}, Array{Float64, 4}, Array{Policy, 4}}[]
     
     for (k, model) ∈ enumerate(models)
+        folder = typeof(model) <: ModelInstance ? "albedo" : "jump"
         filename = makefilename(model, G)
-        file = jldopen(joinpath(simpath, filename), "r")
+        file = jldopen(joinpath(datapath, folder, "total", filename), "r")
 
         timesteps = sort(parse.(Float64, keys(file)))
 
