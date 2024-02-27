@@ -48,6 +48,7 @@ Base.@kwdef struct Hogg
     cδ::Float64 = 314.8
 end
 
+"Obtain an Hogg calibration consistent with the Albedo calibration"
 function calibrateHogg(albedo::Albedo; b = (330., 380.))::Hogg
     d = Hogg()
     eq = @closure S₀ ->  Model.Mstable(d.T₀, Hogg(S₀ = S₀), albedo) - d.M₀
@@ -84,30 +85,22 @@ end
 λ(T, albedo::Albedo) = albedo.λ₁ - (albedo.λ₁ - albedo.λ₂) * L(T, albedo)
 
 "Radiation dynamics"
-function fₜ(T, hogg::Hogg, albedo::Albedo)
-    hogg.S₀ * (1 - λ(T, albedo)) - hogg.η * T^4
-end
+fₜ(T, hogg::Hogg, albedo::Albedo) = hogg.S₀ * (1 - λ(T, albedo)) - hogg.η * T^4
+fₜ(T, hogg::Hogg) = hogg.S₀ * 0.69 - hogg.η * T^4
 
 "CO2 forcing given log of CO2 concentration"
-function fₘ(m, hogg::Hogg)
-    hogg.G₀ + hogg.G₁ * (m - log(hogg.Mᵖ))
-end
-
-function fₘ⁻¹(r, hogg::Hogg)
-    log(hogg.Mᵖ) + (r - hogg.G₀) / hogg.G₁
-end
+fₘ(m, hogg::Hogg) = hogg.G₀ + hogg.G₁ * (m - log(hogg.Mᵖ))
+fₘ⁻¹(r, hogg::Hogg) = log(hogg.Mᵖ) + (r - hogg.G₀) / hogg.G₁
 
 
 "Drift temperature dynamics"
-function μ(T, m, hogg::Hogg, albedo::Albedo)
-    fₜ(T, hogg, albedo) + fₘ(m, hogg)
-end
-"Compute CO₂ concentration consistent with temperature T"
-function mstable(T, hogg::Hogg, albedo::Albedo)
-    fₘ⁻¹(-fₜ(T, hogg, albedo), hogg)
-end
+μ(T, m, hogg::Hogg, albedo::Albedo) = fₜ(T, hogg, albedo) + fₘ(m, hogg)
+μ(T, m, hogg::Hogg) = fₜ(T, hogg) + fₘ(m, hogg)
 
-Mstable(T, hogg::Hogg, albedo::Albedo) = exp(mstable(T, hogg, albedo))
+"Compute CO₂ concentration consistent with temperature T"
+mstable(T, hogg::Hogg, albedo::Albedo) = fₘ⁻¹(-fₜ(T, hogg, albedo), hogg)
+mstable(T, hogg::Hogg) = fₘ⁻¹(-fₜ(T, hogg), hogg)
+Mstable(T, args...) = exp(mstable(T, args...))
 
 
 function potential(T, m, hogg::Hogg, albedo::Albedo)
@@ -122,12 +115,15 @@ function density(T, m, hogg::Hogg, albedo::Albedo; normalisation = 1e-5)
     exp(-normalisation * potential(T, m, hogg, albedo))
 end
 
-function jump(T, hogg::Hogg, jump::Jump)
+"Size of jump"
+function increase(T, hogg::Hogg, jump::Jump)
     ΔT = T - hogg.Tᵖ
 
     jump.j₀ + jump.j₁ * ΔT + jump.j₂ * ΔT^2
 end
 
+
+"Arrival rate of jump"
 function intensity(T, hogg::Hogg, jump::Jump)
     ΔT = T - hogg.Tᵖ
     

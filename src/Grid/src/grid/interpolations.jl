@@ -2,6 +2,7 @@ function interpolateovergrid(fromgrid::RegularGrid, V::AbstractArray, togrid::Re
     interpolateovergrid(fromgrid, V, togrid.X)
 end
 
+interpolateovergrid(fromgrid::RegularGrid, V::AbstractArray, x::Point)::Float64 = first(interpolateovergrid(fromgrid, V, [x]))
 function interpolateovergrid(fromgrid::RegularGrid, V::AbstractArray, xs::AbstractArray{Point, M})::Array{Float64, M} where M
     N = size(fromgrid, 1)
     knots = ntuple(i -> range(fromgrid.domains[i][1], fromgrid.domains[i][2], length = N), 3)

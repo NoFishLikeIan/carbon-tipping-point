@@ -155,8 +155,8 @@ intensity(u, p, t) = intensity(u[1]);
 
 # ╔═╡ 2ab85406-9736-43a2-b562-4e1c76f32feb
 let
-	plot(Tspace, jump; xlims = extrema(Tspace), ylabel = "Jump", yguidefontcolor = :darkred, c = :darkred, label = false, ylims = (0., 0.4));
-	plot!(twinx(), Tspace, intensity; xlims = extrema(Tspace), ylabel = "Intensity", yguidefontcolor = :darkblue, c = :darkblue, label = false, ylims = (0, 0.7))
+	plot(Tspace, jump; xlims = extrema(Tspace), ylabel = "Jump", yguidefontcolor = :darkred, c = :darkred, label = false, ylims = (0., 0.4), linewidth = 5);
+	plot!(twinx(), Tspace, intensity; xlims = extrema(Tspace), ylabel = "Intensity", yguidefontcolor = :darkblue, c = :darkblue, label = false, ylims = (0, 0.7), linewidth = 5)
 end
 
 # ╔═╡ b1dff2b6-766a-4751-a4c5-ef2e84ec2bae

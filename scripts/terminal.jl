@@ -54,8 +54,64 @@ function terminaljacobi!(V̄::AbstractArray{Float64, 3}, policy::AbstractArray{F
 
     return V̄, policy
 end
+function terminaljacobi!(V̄::AbstractArray{Float64, 3}, policy::AbstractArray{Float64, 3}, model::ModelBenchmark, G::RegularGrid; indices = CartesianIndices(G))
 
-function vfi(V₀::AbstractArray{Float64, 3}, model::ModelInstance, G::RegularGrid; tol = 1e-3, maxiter = 10_000, verbose = false, indices = CartesianIndices(G), alternate = false)
+    L, R = extrema(CartesianIndices(G))
+    
+    @batch for idx in indices
+        σₜ² = (model.hogg.σₜ / (model.hogg.ϵ * G.Δ.T))^2
+        σₖ² = (model.economy.σₖ / G.Δ.y)^2
+        Xᵢ = G.X[idx]
+        dT = μ(Xᵢ.T, Xᵢ.m, model.hogg) / (model.hogg.ϵ * G.Δ.T)
+    
+        # Jump
+        πᵢ = intensity(Xᵢ.T, model.hogg, model.jump)
+        qᵢ = increase(Xᵢ.T, model.hogg, model.jump)
+
+        steps = floor(Int, div(qᵢ, G.Δ.T * G.h))
+        weight = qᵢ / (G.Δ.T * G.h)
+
+        Vʲ = V̄[min(idx + steps * I[1], R)] * (1 - weight) +
+                V̄[min(idx + (steps + 1) * I[1], R)] * weight
+
+        # Neighbouring nodes
+        # -- GDP
+        Vᵢy₊ = V̄[min(idx + I[3], R)]
+        Vᵢy₋ = V̄[max(idx - I[3], L)]
+    
+        # -- Temperature
+        VᵢT₊ = V̄[min(idx + I[1], R)]
+        VᵢT₋ = V̄[max(idx - I[1], L)]
+    
+        dVT = G.h * abs(dT) * ifelse(dT > 0, VᵢT₊, VᵢT₋) + σₜ² * (VᵢT₊ + VᵢT₋) / 2
+        
+        value = @closure χ -> begin
+            dy = bterminal(Xᵢ, χ, model) / G.Δ.y
+            dVy = G.h * abs(dy) * ifelse(dy > 0, Vᵢy₊, Vᵢy₋) + σₖ² * (Vᵢy₊ + Vᵢy₋) / 2
+            
+            # Expected value
+            Q = σₜ² + σₖ² + G.h * (abs(dT) + abs(dy))
+            Vᵈ = (dVy + dVT) / Q 
+            Δt = G.h^2 / Q
+            
+            v = Vᵈ + πᵢ * Δt * (Vʲ - Vᵈ)
+
+            c = χ * exp(Xᵢ.y)
+
+            f(c, v, Δt, model.preferences)
+        end
+
+        # Optimal control
+        v, χ = gss(value, 0., 1.)
+        
+        policy[idx] = χ
+        V̄[idx] = v
+    end
+
+    return V̄, policy
+end
+
+function vfi(V₀::AbstractArray{Float64, 3}, model, G::RegularGrid; tol = 1e-3, maxiter = 10_000, verbose = false, indices = CartesianIndices(G), alternate = false)
     pᵢ = 0.5 .* ones(size(G))
     pᵢ₊₁ = copy(pᵢ)
 
@@ -86,7 +142,7 @@ function vfi(V₀::AbstractArray{Float64, 3}, model::ModelInstance, G::RegularGr
     return Vᵢ₊₁, pᵢ₊₁
 end
 
-function computeterminal(model::ModelInstance, G::RegularGrid; verbose = true, withsave = true, datapath = "data", iterkwargs...)    
+function computeterminal(model, G::RegularGrid; verbose = true, withsave = true, datapath = "data", iterkwargs...)    
     Vcurve = [log(exp(Xᵢ.y)) / preferences.ρ for Xᵢ ∈ G.X]
 
     V₀ = typeof(preferences) <: EpsteinZin ? 

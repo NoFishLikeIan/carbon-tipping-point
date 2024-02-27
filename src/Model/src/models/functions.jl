@@ -1,21 +1,22 @@
+ModelGeneric = Union{ModelInstance, ModelBenchmark}
 
 "Emissivity rate implied by abatement `α` at time `t` and carbon concentration `M`"
-function ε(t, M, α, model::ModelInstance)
+function ε(t, M, α, model::ModelGeneric)
     1. - M * (δₘ(M, model.hogg) + γ(t, model.economy, model.calibration) - α) / (Gtonoverppm * Eᵇ(t, model.economy, model.calibration))
 end
-function ε′(t, M, model::ModelInstance)
+function ε′(t, M, model::ModelGeneric)
     M / (Gtonoverppm * Eᵇ(t, model.economy, model.calibration))
 end
 
 "Drift of dy in the terminal state, t ≥ τ."
 bterminal(Xᵢ::Point, args...) = bterminal(Xᵢ.T, args...)
-bterminal(T::Float64, χ, model::ModelInstance) = bterminal(T, χ, model.economy, model.hogg) 
+bterminal(T::Float64, χ, model::ModelGeneric) = bterminal(T, χ, model.economy, model.hogg) 
 function bterminal(T::Float64, χ, economy::Economy, hogg::Hogg)
     ϕ(economy.τ, χ, economy) - economy.δₖᵖ - d(T, economy, hogg)
 end
 
 "Drift of dy."
-function b(t, Xᵢ::Point, u::Policy, model::ModelInstance)
+function b(t, Xᵢ::Point, u::Policy, model::ModelGeneric)
     εₜ = ε(t, exp(Xᵢ.m), u.α, model)
     Aₜ = A(t, model.economy)
 

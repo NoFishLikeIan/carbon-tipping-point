@@ -18,8 +18,3 @@ vspace = extrema(V̄)
 
 policy = SharedArray([Policy(χ, 0.) for χ ∈ terminalpolicy[:, :, :, 1]]);
 V = SharedArray(deepcopy(V̄[:, :, :, 1]));
-
-for λ ∈ ΔΛ, θ ∈ Θ
-    println("Computing with λ = $λ, θ = $θ")
-    computevalue(N, λ, EpsteinZin(θ = θ, ψ = 0.8); verbose = true, cache = true)
-end

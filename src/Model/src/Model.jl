@@ -1,12 +1,13 @@
 module Model
 
 # Models
-export Economy, Hogg, Albedo, Calibration
+export Economy, Hogg, Albedo, Calibration, Jump
 export calibrateHogg
+export intensity, increase
 export μ, b, bterminal, γ, mstable, boundb, δₘ
 export potential, density
 export Preferences, EpsteinZin, LogSeparable, CRRA, LogUtility, f
-export ModelInstance
+export ModelInstance, ModelBenchmark
 
 # Packages
 using Grid: Point, Policy, Drift
@@ -26,6 +27,16 @@ include("models/preferences.jl")
     albedo::Albedo = Albedo()
     calibration::Calibration
 end
+
+@kwdef struct ModelBenchmark
+    preferences::Preferences = EpsteinZin()
+    economy::Economy = Economy()
+    hogg::Hogg = Hogg()
+    jump::Jump = Jump()
+    calibration::Calibration
+end
+
+
 
 include("models/functions.jl")
 
