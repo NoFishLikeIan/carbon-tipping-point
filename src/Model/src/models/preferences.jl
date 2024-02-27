@@ -22,6 +22,10 @@ end
 Preferences = Union{CRRA, EpsteinZin, LogUtility}
 
 function f(c, v, Δt, p::EpsteinZin)
+    if v > 0.
+        return 0.
+    end
+
     ψ⁻¹ = 1 / p.ψ
     coeff = (1 - p.θ) / (1 - ψ⁻¹)
 

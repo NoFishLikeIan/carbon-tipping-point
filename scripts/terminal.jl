@@ -143,15 +143,17 @@ function vfi(V₀::AbstractArray{Float64, 3}, model, G::RegularGrid; tol = 1e-3,
 end
 
 function computeterminal(model, G::RegularGrid; verbose = true, withsave = true, datapath = "data", iterkwargs...)    
-    Vcurve = [log(exp(Xᵢ.y)) / preferences.ρ for Xᵢ ∈ G.X]
 
-    V₀ = typeof(preferences) <: EpsteinZin ? 
-        Vcurve .- 2maximum(Vcurve) : Vcurve # Ensures V₀ < 0, for Epstein-Zin utilities
+    V₀ = [log(exp(Xᵢ.y)) / preferences.ρ for Xᵢ ∈ G.X];
+    V₀ = (V₀ .- 2maximum(V₀)) / 2maximum(V₀); # Ensurate that V₀ < 0
 
     V̄, policy = vfi(V₀, model, G; verbose, iterkwargs...)
+
     
     if withsave
-        savepath = joinpath(datapath, "terminal", makefilename(model, G))
+        folder = typeof(model) <: ModelInstance ? "albedo" : "jump"
+        filename = makefilename(model, G)
+        savepath = joinpath(datapath, folder, "terminal", filename)
         println("Saving solution into $savepath...")
         jldsave(savepath; V̄, policy)
     end

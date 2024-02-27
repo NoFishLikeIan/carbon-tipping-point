@@ -19,11 +19,27 @@ function makefilename(model::ModelInstance, G::RegularGrid)
     return "$(replace(filename, "." => ",")).jld2"
 end
 
-function loadterminal(model::ModelInstance, G::RegularGrid; kwargs...)
+function makefilename(model::ModelBenchmark, G::RegularGrid)
+    if !(typeof(model.preferences) <: EpsteinZin)
+        throw("Not implemented file saving for non Epstein Zin utilities.")
+    end
+
+    @unpack ρ, θ, ψ = model.preferences
+    @unpack ωᵣ = model.economy
+    @unpack σₜ = model.hogg
+
+    N = size(G, 1)
+
+    filename = @sprintf("N=%i_ρ=%.5f_θ=%.2f_ψ=%.2f_σ=%.2f_ω=%.5f", N, ρ, θ, ψ, σₜ, ωᵣ)
+
+    return "$(replace(filename, "." => ",")).jld2"
+end
+
+function loadterminal(model, G::RegularGrid; kwargs...)
     dropdims.(loadterminal([model], G; kwargs...); dims = 4)
 end
 
-function loadterminal(models::AbstractVector{ModelInstance}, G::RegularGrid; datapath = "data")
+function loadterminal(models::AbstractVector, G::RegularGrid; datapath = "data")
     path = joinpath(datapath, "terminal")
 
     V̄ = Array{Float64}(undef, N, N, N, length(models))
@@ -38,10 +54,10 @@ function loadterminal(models::AbstractVector{ModelInstance}, G::RegularGrid; dat
     return V̄, policy
 end
 
-function loadtotal(model::ModelInstance, G::RegularGrid; kwargs...)     
+function loadtotal(model, G::RegularGrid; kwargs...)     
     first(loadtotal([model], G; kwargs...))
 end
-function loadtotal(models::AbstractVector{ModelInstance}, G::RegularGrid; datapath = "data")
+function loadtotal(models::AbstractVector, G::RegularGrid; datapath = "data")
     simpath = joinpath(datapath, "total")
     N = size(G, 1)
 

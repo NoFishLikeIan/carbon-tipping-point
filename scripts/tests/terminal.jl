@@ -48,16 +48,15 @@ begin
 end
 
 # --- Jump
-jump = Jump()
-modeljump = ModelBenchmark(preferences, economy, hogg, jump, calibration);
+model = ModelBenchmark(preferences, economy, hogg, Jump(), calibration);
 
 begin
 	V̄ = copy(V₀);
 	policy = zeros(size(G));
 	
-	anim = @animate for iter in 1:120
+	anim = @animate for iter in 1:24
 		print("Plotting iteration $iter\r")
-		terminaljacobi!(V̄, policy, modeljump, G)
+		terminaljacobi!(V̄, policy, model, G)
 		sec = plotsection(policy, log(economy.Y₀), G; zdim = 3, surf = true, c = :viridis, camera = (45, 45), yflip = false, xflip = true, title = "Iteration $iter")
 
 	end
