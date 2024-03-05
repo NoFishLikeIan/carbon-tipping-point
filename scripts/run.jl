@@ -1,13 +1,13 @@
 include("terminal.jl")
 include("backward.jl")
 
-const ΔΛ = [0., 0.06, 0.08];
-const Ω = 2 .* 10 .^(-4:1/2:-1);
+const ΔΛ = [0.06, 0.08];
+const Ω = [0.01, 0.02]# 2 .* 10 .^(-4:1/2:-1);
 
 const preferences = EpsteinZin();
 const jump = Jump()
 const calibration = load_object(joinpath(DATAPATH, "calibration.jld2"));
-const N = 21;
+const N = 51;
 
 # Grid construction
 for ωᵣ ∈ Ω

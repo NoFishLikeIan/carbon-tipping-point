@@ -2,6 +2,7 @@ using Revise
 using UnPack
 using JLD2, DotEnv, CSV
 using DataFrames
+using DataStructures
 
 using FiniteDiff
 using DifferentialEquations, DifferentialEquations.EnsembleAnalysis
@@ -9,6 +10,7 @@ using DifferentialEquations, DifferentialEquations.EnsembleAnalysis
 using KernelDensity
 using Interpolations
 using Plots, Printf, PGFPlotsX, Colors
+using Statistics
 
 using Model, Grid
 
@@ -36,6 +38,7 @@ end;
 begin # Import
     ΔΛ = [0., 0.06, 0.08]
     Ω = 2 * 10. .^(-4:1:-1);
+    ω = Ω[3]
 	N = 21;
 	domains = [
 		Hogg().T₀ .+ (0., 9.),
@@ -47,15 +50,19 @@ begin # Import
 	calibration = load_object(joinpath(DATAPATH, "calibration.jld2"))
 
 	models = ModelInstance[]
+    jumpmodels = ModelBenchmark[]
 	
 
 	for Δλ ∈ ΔΛ, ωᵣ ∈ Ω
 		economy = Economy(ωᵣ = ωᵣ)
 	    albedo = Albedo(λ₂ = 0.31 - Δλ)
 		hogg = calibrateHogg(albedo)
+
 	    model = ModelInstance(preferences, economy, hogg, albedo, calibration)
+        jumpmodel = ModelBenchmark(preferences, economy, Hogg(), Jump(), calibration)
 
 		push!(models, model)
+        push!(jumpmodels, jumpmodel)
 	end
 end;
 
@@ -85,11 +92,6 @@ function makedevxlabels(from, to, model::ModelInstance; step = 0.5, withcurrent 
     return (xticks[idxs], xlabels[idxs])
 end
 
-function generateframes(total, frames)
-	step = total ÷ frames
-	return [range(1, total - 2step; step = step)..., total]
-end
-
 begin # labels and axis
     TEMPLABEL = raw"Temperature deviations $T - T^{\mathrm{p}}$"
     Tspacedev = range(0., 10.; length = 51)
@@ -106,7 +108,7 @@ begin # Load IPCC data
     getscenario(s::Int64) = filter(:Scenario => isequal("SSP$(s) - Baseline"), ipccproj)
 
     bauscenario = getscenario(5)
-    seqpaletteΔλ = generateseqpalette(length(ΔΛ))
+    seqpaletteΔλ = Dict(ΔΛ .=> generateseqpalette(length(ΔΛ)))
 end
 
 begin # Albedo plot
@@ -124,19 +126,25 @@ begin # Albedo plot
             xticklabels = temperatureticks[2],
             xtick = 0:1:ΔTᵤ,
             no_markers, ultra_thick,
-            xmin = 0, xmax = (ΔTᵤ)
+            xmin = 0, xmax = (ΔTᵤ),
+            ymin = 0.2, ymax = 0.32
         }
     )
 
-    @pgf for (i, albedodata) in enumerate(albedovariation)
+    if SAVEFIG
+        PGFPlotsX.save(joinpath(PLOTPATH, "skeleton-albedo.tikz"), albedofig; include_preamble = true) 
+    end
+
+    @pgf for (Δλ, albedodata) in zip(ΔΛfig, albedovariation)
         curve = Plot(
-            {color=seqpaletteΔλ[i], line_width="0.1cm",}, 
+            {color=seqpaletteΔλ[Δλ], line_width="0.1cm",}, 
             Coordinates(
                 collect(zip(Tspacedev, albedodata))
             )
         ) 
 
-        legend = LegendEntry("$(ΔΛfig[i])")
+        label = @sprintf("%.0f \\%%", 100 * Δλ)
+        legend = LegendEntry(label)
 
         push!(albedofig, curve, legend)
     end
@@ -150,12 +158,13 @@ begin # Albedo plot
 end
 
 begin # Nullcline plot
+    nullclineTspace = range(Hogg().Tᵖ .+ (0., 7.)...; length = length(Tspace))
     nullclinevariation = Vector{Float64}[]
 
     for Δλ ∈ ΔΛfig
         albedo = Albedo(λ₂ = Albedo().λ₁ - Δλ)
         hogg = calibrateHogg(albedo)
-        null = [Model.Mstable(T, hogg, albedo) for T ∈ Tspace]
+        null = [Model.Mstable(T, hogg, albedo) for T ∈ nullclineTspace]
 
         push!(nullclinevariation, null)
     end
@@ -167,8 +176,8 @@ begin # Nullcline plot
             grid = "both",
             ylabel = TEMPLABEL,
             xlabel = raw"Carbon concentration $M$",
-            xmin = Hogg().Mᵖ, xmax = 1200,
-            xtick = 200:200:1200,
+            xmin = Hogg().Mᵖ, xmax = 900,
+            xtick = 200:100:900,
             yticklabels = temperatureticks[2],
             ytick = 0:1:ΔTᵤ,
             ymin = 0, ymax = ΔTᵤ,
@@ -176,12 +185,17 @@ begin # Nullcline plot
         }
     )
 
-    @pgf for (i, nullclinedata) in enumerate(nullclinevariation)
+    if SAVEFIG
+        PGFPlotsX.save(joinpath(PLOTPATH, "skeleton-nullcline.tikz"), nullclinefig; include_preamble = true) 
+    end
+
+    @pgf for (Δλ, nullclinedata) in zip(ΔΛfig, nullclinevariation)
         coords = Coordinates(collect(zip(nullclinedata, Tspacedev)))
 
-        curve = Plot({color = seqpaletteΔλ[i], line_width="0.1cm"}, coords) 
+        curve = Plot({color = seqpaletteΔλ[Δλ], line_width="0.1cm"}, coords) 
 
-        legend = LegendEntry("$(ΔΛfig[i])")
+        label = @sprintf("%.0f \\%%", 100 * Δλ)
+        legend = LegendEntry(label)
 
         push!(nullclinefig, curve, legend)
     end
@@ -230,14 +244,56 @@ begin # Growth of carbon concentration
 end
 
 # --- Business-as-usual dynamics
-function Fbau!(du, u, model, t)
+begin # Density plots
+    ytick = range(2.505674517612567, 2.509962798461946; length = 10) # A bit ugly but I do not know how to remove the ticks
 
+    densfig = @pgf Axis({
+        width = raw"0.4\textwidth",
+        height = raw"0.4\textwidth",
+        grid = "both",
+        ylabel = "Density",
+        ytick = ytick, yticklabels = ["" for y ∈ ytick],
+        xlabel = TEMPLABEL,
+        xmin = minimum(Tspace), xmax = maximum(Tspace),
+        xtick = temperatureticks[1],
+        xticklabels = temperatureticks[2],
+        ultra_thick, xticklabel_style = {rotate = 45}
+    })
+
+    for Δλ ∈ ΔΛfig
+        k = findfirst(m -> m.albedo.λ₁ - m.albedo.λ₂ ≈ Δλ, models)
+        model = models[k]
+
+        d = [Model.density(T, log(1.2model.hogg.M₀), model.hogg, model.albedo) for T in Tspace ]
+        
+        l, u = extrema(d)
+        d = @. (d - l) / (u - l)
+
+        label = @sprintf("%.0f \\%%", 100 * Δλ)
+        legend = LegendEntry(label)
+        @pgf push!(densfig,
+            Plot({
+                color = seqpaletteΔλ[Δλ],
+                line_width="0.1cm", 
+            }, Coordinates(zip(Tspace, d))),
+            legend
+        )
+    end
+
+    @pgf densfig["legend style"] = raw"at = {(0.5, 0.4)}"
+
+    if SAVEFIG
+        PGFPlotsX.save(joinpath(PLOTPATH, "densfig.tikz"), densfig; include_preamble = true)
+    end
+    
+    densfig
+end
+
+function Fbau!(du, u, model, t)
 	du[1] = μ(u[1], u[2], model.hogg, model.albedo) / model.hogg.ϵ
 	du[2] = γ(t, model.economy, model.calibration)
 end
-function Gbau!(du, u, model, t)
-    
-
+function Gbau!(du, u, model, t)    
 	du[1] = model.hogg.σₜ / model.hogg.ϵ
 	du[2] = 0.
 end
@@ -258,47 +314,7 @@ function simulatebau(Δλ; trajectories = 1000) # Business as Usual, ensemble si
     return bausim, baunullcline
 end
 
-begin # Density plots
-    ytick = range(2.505674517612567, 2.509962798461946; length = 10) # A bit ugly but I do not know how to remove the ticks
-
-    densfig = @pgf Axis({
-        width = raw"0.4\textwidth",
-        height = raw"0.4\textwidth",
-        grid = "both",
-        ylabel = "Density",
-        ytick = ytick, yticklabels = ["" for y ∈ ytick],
-        xlabel = TEMPLABEL,
-        xmin = minimum(Tspace), xmax = maximum(Tspace),
-        xtick = temperatureticks[1],
-        xticklabels = temperatureticks[2],
-        ultra_thick, xticklabel_style = {rotate = 45}
-    })
-
-    for (i, Δλ) ∈ enumerate(ΔΛ)
-        k = findfirst(m -> m.albedo.λ₁ - m.albedo.λ₂ ≈ Δλ, models)
-        model = models[k]
-
-        d = [Model.density(T, log(1.2model.hogg.M₀), model.hogg, model.albedo) for T in Tspace ]
-
-        @pgf push!(densfig,
-            Plot({
-                color = seqpaletteΔλ[i],
-                line_width="0.1cm", 
-            }, Coordinates(zip(Tspace, d))),
-            LegendEntry("\$$(Δλ)\$")
-        )
-    end
-
-    @pgf densfig["legend style"] = raw"at = {(0.5, 0.4)}"
-
-    if SAVEFIG
-        PGFPlotsX.save(joinpath(PLOTPATH, "densfig.tikz"), densfig; include_preamble = true)
-    end
-    
-    densfig
-end
-
-begin # Business as usual plots
+begin # Side by side BAU plots
     baufig = @pgf GroupPlot(
         {
             group_style = { 
@@ -317,10 +333,14 @@ begin # Business as usual plots
         }
     )
 
+    if SAVEFIG
+        PGFPlotsX.save(joinpath(PLOTPATH, "baufig.tikz"), baufig; include_preamble = true) 
+    end    
+
     @pgf for (i, Δλ) ∈ enumerate([0., 0.08])
-        isfirst = i == 1
+        isfirst = Δλ ≈ 0.
         Δλplots = []
-        timeseriescolor = isfirst ? seqpaletteΔλ[1] : seqpaletteΔλ[end]
+        timeseriescolor = seqpaletteΔλ[Δλ]
     
         # IPCC benchmark line
         ipccbau = @pgf Plot(
@@ -358,7 +378,7 @@ begin # Business as usual plots
 
         mediancoords = Coordinates(zip(baumedianM, baumedianT))
 
-        label = isfirst ? raw"$\Delta\lambda = 0$" : raw"$\Delta\lambda = 0.08$"
+        label = @sprintf("\$\\Delta\\lambda = %.0f \\%%\$", 100 * Δλ)
 
         @pgf begin
             push!(
@@ -395,115 +415,91 @@ begin # Business as usual plots
 
     @pgf baufig["legend style"] = raw"at = {(0.45, 0.95)}"
 
-    if SAVEFIG
-        PGFPlotsX.save(joinpath(PLOTPATH, "baufig.tikz"), baufig; include_preamble = true) 
-    end
-
     baufig
 end
 
-begin # Density
-    baufig = @pgf GroupPlot(
+begin # Individual BAU plots
+    Δλ = 0.08
+    baufig = @pgf Axis(
         {
-            group_style = { 
-                group_size = "2 by 1", 
-                horizontal_sep="0pt",
-                yticklabels_at="edge left"
-            }, 
-            width = raw"0.6\textwidth",
-            height = raw"0.6\textwidth",
+            width = raw"\linewidth",
+            height = raw"0.8\linewidth",
+            ylabel = TEMPLABEL,
+            xlabel = raw"Carbon concentration $M$",
             yticklabels = temperatureticks[2],
             ytick = 0:1:ΔTᵤ,
             ymin = 0, ymax = ΔTᵤ,
             xmin = Hogg().Mᵖ, xmax = 1200,
-            xtick = 200:100:1100,
+            xtick = 200:100:1300,
             grid = "both"
         }
     )
-
-    @pgf for (i, Δλ) ∈ enumerate([0., 0.08])
-        isfirst = i == 1
-        Δλplots = []
-        timeseriescolor = isfirst ? seqpaletteΔλ[1] : seqpaletteΔλ[end]
     
-        # IPCC benchmark line
-        ipccbau = @pgf Plot(
-            {
-                very_thick, 
-                color = "black", 
-                mark = "*", 
-                mark_options = {scale = 1.5, draw_opacity = 0}, 
-                mark_repeat = 2
-            }, 
-            Coordinates(zip(
-                bauscenario[3:end, "CO2 concentration"], 
-                bauscenario[3:end, "Temperature"]
-            )))
+    # IPCC benchmark line
+    ipcccoords = Coordinates(zip(bauscenario[3:end, "CO2 concentration"], bauscenario[3:end, "Temperature"]))
 
-        push!(Δλplots, ipccbau)
-        
-        push!(Δλplots, LegendEntry("SSP5 - Baseline"))
+    ipccbau = @pgf Plot({
+        very_thick, 
+        color = "black", 
+        mark = "*", 
+        mark_options = {scale = 1.5, draw_opacity = 0}, 
+        mark_repeat = 2
+    }, ipcccoords)
 
+    push!(baufig, LegendEntry("SSP5 - Baseline"), ipccbau)
 
-        # Data simulation
-        bausim, baunullcline = simulatebau(Δλ; trajectories = 20)
-        baumedian = [timepoint_median(bausim, t) for t in yearlytime]
-        baumedianM = @. exp([u[2] for u in baumedian])
-        baumedianT = @. first(baumedian) - Hogg().Tᵖ
-
-
-        # Nullcline
-        push!(Δλplots,
-            @pgf Plot({dashed, color = "black", ultra_thick, forget_plot},
-                Coordinates(collect(zip(exp.(baunullcline), Tspacedev)))
-            )
-        )
-
-        mediancoords = Coordinates(zip(baumedianM, baumedianT))
-
-        label = isfirst ? raw"$\Delta \lambda = 0$" : raw"$\Delta \lambda = 0.08$"
-
-        @pgf begin
-            push!(
-                Δλplots,
-                Plot({line_width="0.1cm", color = timeseriescolor, opacity = 0.8},mediancoords),
-                LegendEntry(label),
-                Plot({only_marks, mark_options = {fill = timeseriescolor, scale = 1.5, draw_opacity = 0, fill_opacity = 0.8}, mark_repeat = 20, forget_plot, mark = "*"}, mediancoords)
-            )
-        end
-
-        @pgf for sim in bausim
-            path = sim.(yearlytime)
-
-            mpath = @. exp([u[2] for u in path])
-            xpath = @. first(path) - Hogg().Tᵖ
-            
-            push!(
-                Δλplots, 
-                Plot({forget_plot, color = timeseriescolor, opacity = 0.2},
-                    Coordinates(zip(mpath, xpath)),
-                )
-            )
-        end
-        
-        nextgroup = isfirst ? {
-            xlabel = raw"Carbon concentration $M$", 
-            ylabel = TEMPLABEL
-        } : {
-            xlabel = raw"Carbon concentration $M$"
-        }
-
-        push!(baufig, nextgroup, Δλplots...)
-    end
-
-    @pgf baufig["legend style"] = raw"at = {(0.6, 0.95)}"
+    # Data simulation
+    bausim, baunullcline = simulatebau(Δλ; trajectories = 30);
+    baumedian = timeseries_point_median(bausim, yearlytime)
+    baumedianM = @. exp(last(baumedian.u))
+    baumedianT = @. first(baumedian.u) - Hogg().Tᵖ
 
     if SAVEFIG
-        PGFPlotsX.save(joinpath(PLOTPATH, "baufig.tikz"), baufig; include_preamble = true) 
+        PGFPlotsX.save(joinpath(PLOTPATH, "skeleton-baufig.tikz"), baufig; include_preamble = true) 
+    end
+
+    # Nullcline
+    push!(baufig, LegendEntry(raw"$\mu_{\lambda}(T, M) = 0$"),
+        @pgf Plot({dashed, color = "black", ultra_thick},
+            Coordinates(collect(zip(exp.(baunullcline), Tspacedev))))
+    )
+
+    mediancoords = Coordinates(zip(baumedianM, baumedianT))
+
+    label = @sprintf("\$\\Delta\\lambda = %.0f \\%%\$", 100 * Δλ)
+
+    @pgf push!(
+        baufig,
+        Plot({ line_width="0.1cm", color = seqpaletteΔλ[Δλ] }, mediancoords),
+        LegendEntry(label),
+        Plot({ only_marks, mark_options = { fill = seqpaletteΔλ[Δλ], scale = 1.5, draw_opacity = 0 }, mark_repeat = 20, forget_plot, mark = "*"}, mediancoords)
+    )
+
+    @pgf for sim in bausim
+        path = sim.(yearlytime)
+
+        mpath = @. exp([u[2] for u in path])
+        xpath = @. first(path) - Hogg().Tᵖ
+
+        push!(
+            baufig, 
+            Plot({forget_plot, color = seqpaletteΔλ[Δλ], opacity = 0.2},
+                Coordinates(zip(mpath, xpath)),
+            )
+        )
+    end
+
+    @pgf baufig["legend style"] = raw"at = {(0.4, 0.975)}"
+
+
+    if SAVEFIG
+        filelabel = @sprintf("%.0f", 100 * Δλ)
+        PGFPlotsX.save(joinpath(PLOTPATH, "baufig_$filelabel.tikz"), baufig; include_preamble = true) 
     end
 
     baufig
-end
+end;
+
 
 begin # Carbon decay calibration
     sinkspace = range(Hogg().N₀, 1.2 * Hogg().N₀; length = 101)
@@ -583,6 +579,7 @@ begin # Carbon decay path
 end
 
 begin # Damage fig
+    
     damagefig = @pgf Axis(
         {
             width = raw"0.5\textwidth",
@@ -613,16 +610,22 @@ begin # Damage fig
 end
 
 # --- Optimal emissions 
-#FIXME: The script below is out of date
-results = loadtotal(models, G; datapath = DATAPATH);
+begin # Load simulation
+    results = loadtotal(models, G; datapath = DATAPATH)
+	jumpresults = loadtotal(jumpmodels, G; datapath = DATAPATH)
+end;
 
-begin
+begin # Construct interpolations
 	ΔT, Δm, Δy = G.domains
 	spacenodes = ntuple(i -> range(G.domains[i]...; length = N), 3)
 
-	interpolations = []
+	resultsmap = OrderedDict()
+	jumpresultsmap = OrderedDict()
 
-	for (k, res) in enumerate(results)
+	for ωᵣ ∈ Ω
+		j = findfirst(m -> ωᵣ ≈ m.economy.ωᵣ, jumpmodels)
+
+		res = jumpresults[j]	
 		ts, V, policy = res
 			
 		nodes = (spacenodes..., ts)
@@ -630,14 +633,33 @@ begin
 		αitp = linear_interpolation(nodes, last.(policy); extrapolation_bc = Flat())
 		Vitp = linear_interpolation(nodes, V; extrapolation_bc = Flat())
 
-		push!(interpolations, (χitp, αitp, Vitp))
+		
+		jumpresultsmap[ωᵣ] = (χitp, αitp, Vitp, jumpmodels[j])
+		
+		for Δλ ∈ ΔΛ
+			k = findfirst(m -> ωᵣ ≈ m.economy.ωᵣ && Δλ ≈ m.albedo.λ₁ - m.albedo.λ₂, models)
+
+			res = results[k]
+			model = models[k]
+					
+			ts, V, policy = res
+				
+			nodes = (spacenodes..., ts)
+			χitp = linear_interpolation(nodes, first.(policy); extrapolation_bc = Flat())
+			αitp = linear_interpolation(nodes, last.(policy); extrapolation_bc = Flat())
+			Vitp = linear_interpolation(nodes, V; extrapolation_bc = Flat())
+
+			
+			resultsmap[(ωᵣ, Δλ)] = (χitp, αitp, Vitp, model)
+		end
 	end
+
+    Eᵇ = linear_interpolation(calibration.years .- 2020, calibration.emissions, extrapolation_bc = Line());
 end;
 
-function F!(dx, x, parameters, t)
-    model, interpolation = parameters
-    χitp, αitp, _ = interpolation
-
+function F!(dx, x, p::Tuple{ModelInstance, Any, Any}, t)	
+	model, χitp, αitp = p
+	
 	T, m, y = x
 	
 	χ = χitp(T, m, y, t)
@@ -647,12 +669,26 @@ function F!(dx, x, parameters, t)
 	dx[2] = γ(t, model.economy, model.calibration) - α
 	dx[3] = b(t, Point(T, m, y), Policy(χ, α), model)
 
-    return
+	return
+end;
+function F!(dx, x, p::Tuple{ModelBenchmark, Any, Any}, t)	
+	model, χitp, αitp = p
+	
+	T, m, y = x
+	
+	χ = χitp(T, m, y, t)
+	α = αitp(T, m, y, t)
+	
+	dx[1] = μ(T, m, model.hogg) / model.hogg.ϵ
+	dx[2] = γ(t, model.economy, model.calibration) - α
+	dx[3] = b(t, Point(T, m, y), Policy(χ, α), model)
+
+	return
 end;
 
-function G!(dx, x, parameters, t)
-    model = first(parameters)
-
+function G!(dx, x, p, t)
+	model = first(p)
+	
 	dx[1] = model.hogg.σₜ / model.hogg.ϵ
 	dx[2] = 0.
 	dx[3] = model.economy.σₖ
@@ -660,152 +696,250 @@ function G!(dx, x, parameters, t)
 	return
 end;
 
-begin
+begin # Solver
 	tspan = (0., Economy().t₁)
 
-    fn = SDEFunction(F!, G!)
+	problems = OrderedDict{Float64, SDEProblem}()
+	fn = SDEFunction(F!, G!)
 
-	problems = [
-        SDEProblem(fn, X₀, tspan, params) 
-        for params in zip(models, interpolations)
-    ]
-    
-    solutions = [solve(EnsembleProblem(prob), EnsembleDistributed(); trajectories = 20) for prob ∈ problems]
+	for Δλ ∈ ΔΛ
+		χitp, αitp, _, model = resultsmap[(ω, Δλ)]
+		parameters = (model, χitp, αitp)
+		
+		problems[Δλ] = SDEProblem(fn, X₀, tspan, parameters)
+	end	
+
+    solutions = OrderedDict(key => solve(EnsembleProblem(prob), EnsembleDistributed(); trajectories = 30) for (key, prob) ∈ problems);
 end;
 
-begin # Temperature simulation
-    simspan = 2020 .+ tspan
-    simtime = range(simspan...; step = 5)
+begin # Solver for benchmark
+	χitp, αitp, _, model = jumpresultsmap[ω]
+	parameters = (model, χitp, αitp)
+			
+	jumpproblem = SDEProblem(fn, X₀, tspan, parameters)
+	jumpsolution = solve(EnsembleProblem(jumpproblem), EnsembleDistributed(), trajectories = 30)
+end;
+
+begin # Data extraction
+    timespan = range(0, 80; step = 0.5)
+    function emissionpath(solution, model, αitp)
+        E = Matrix{Float64}(undef, length(timespan), length(solution))
     
-    simfig = @pgf GroupPlot(
-        {
-            group_style = { 
-                group_size = "1 by 3", 
-                vertical_sep="0pt",
-                xticklabels_at="edge bottom"
-            }, 
-            width = raw"\textwidth",
-            height = raw"0.45\textwidth",
-            xmin = 2030, xmax = simspan[2],
-            xtick = range(simspan...; step = 10),
-            grid = "both"
-        }
-    )
-
-    Mfig = []
-    εfig = []
-
-    @pgf for (i, Δλ) ∈ enumerate([0., 0.08])
-        solution = solutions[i]
-        zerotime = simtime .- simspan[1]
-
-        timeseriescolor = i > 1 ? seqpaletteΔλ[end] : seqpaletteΔλ[1]
-    
-        # Data simulation
-        median = [timepoint_median(solution, t) for t in zerotime]
-        M = @. exp([u[2] for u in median])
-        ΔT = @. first(median) - model.hogg.Tᵖ
-
-        epath = [Model.ε(tᵢ, exp(u[2]), αitp(u..., Δλ, tᵢ), model) for (tᵢ, u) in zip(zerotime, median)]
-
-        label = "\$\\Delta \\lambda = $Δλ\$"
-
-        @pgf begin
-            push!(Tfig,
-                Plot({ ultra_thick, color = timeseriescolor, opacity = 0.8, line_width="0.1cm" },
-                    Coordinates(zip(simtime, ΔT))
-                ), LegendEntry(label))
+        for (j, sim) ∈ enumerate(solution), (i, tᵢ) ∈ enumerate(timespan)
+            T, m, y = sim(tᵢ)
+            αₜ = αitp(T, m, y, tᵢ)
             
-            push!(Mfig,
-                Plot(
-                    { ultra_thick, color = timeseriescolor, opacity = 0.8, line_width="0.1cm" },
-                    Coordinates(zip(simtime, M))))
-
-            push!(εfig,
-                Plot({ ultra_thick, color = timeseriescolor, opacity = 0.8, line_width="0.1cm" }, 
-                Coordinates(zip(simtime, epath)))
-            )
+            M = exp(m)
+            Eₜ = (M / Model.Gtonoverppm) * (γ(tᵢ, model.economy, model.calibration) - αₜ)
+    
+            
+            E[i, j] = Eₜ
         end
-
-        @pgf for sim in solution
-            path = sim.(zerotime)
-
-            Mᵢ = @. exp([u[2] for u in path])
-            ΔTᵢ = @. first(path) - model.hogg.Tᵖ
-
-            epathᵢ = [Model.ε(tᵢ, exp(u[2]), αitp(u..., Δλ, tᵢ), model) for (tᵢ, u) in zip(zerotime, median)]
-
-            push!(
-                Tfig, 
-                Plot({forget_plot, color = timeseriescolor, opacity = 0.1},
-                    Coordinates(zip(simtime, ΔTᵢ)),
-                )
-            )
-            push!(
-                Mfig, 
-                Plot({forget_plot, color = timeseriescolor, opacity = 0.1},
-                    Coordinates(zip(simtime, Mᵢ)),
-                )
-            )
-            push!(
-                εfig, 
-                Plot({forget_plot, color = timeseriescolor, opacity = 0.1},
-                    Coordinates(zip(simtime, epathᵢ)),
-                )
-            )
+    
+        return E
+    end;
+    function consumptionpath(solution, model, χitp)
+        C = Matrix{Float64}(undef, length(timespan), length(solution))
+    
+        for (j, sim) ∈ enumerate(solution), (i, tᵢ) ∈ enumerate(timespan)
+            T, m, y = sim(tᵢ)
+            χᵢ = χitp(T, m, y, tᵢ)
+            
+            C[i, j] = exp(y) * χᵢ
         end
+    
+        return C
+    end;
+    function variablepath(solution, model)
+        X = Matrix{Point}(undef, length(timespan), length(solution))
+    
+        for (j, sim) ∈ enumerate(solution), (i, tᵢ) ∈ enumerate(timespan)
+            T, m, y = sim(tᵢ)
+            X[i, j] = Point(T, m, y)
         end
-
-    @pgf push!(simfig,
-        { ylabel = TEMPLABEL }, Tfig..., 
-        { ylabel = "Carbon Concentration \$M\$" }, Mfig...,
-        { ylabel = "Fraction of abated emissions \$\\varepsilon \$", xlabel = "Year" }, εfig...
-    )
-
-    @pgf simfig["legend style"] = raw"at = {(0.24, 0.95)}"
-
-    if SAVEFIG
-        PGFPlotsX.save(joinpath(PLOTPATH, "simfig.tikz"), simfig; include_preamble = true) 
-    end
-
-    simfig
+    
+        return X
+    end;
 end
 
-begin # SCC simulation
-    simspan = 2020 .+ (0., 100.)
-    simtime = range(simspan...; step = 1)
-    
-    sccfig = @pgf Axis(
-        { 
-            width = raw"\textwidth",
-            height = raw"0.6\textwidth",
-            xmin = simspan[1], xmax = simspan[2],
-            xtick = range(simspan...; step = 10),
-            grid = "both"
+begin # Emission comparison figure
+    decadeticks = 0:10:80
+
+    emissionfig = @pgf Axis(
+        {
+            width = raw"\linewidth",
+            height = raw"0.7\linewidth",
+            grid = "both",
+            xlabel = raw"Year",
+            ylabel = raw"Net Emissions",
+            xmin = minimum(timespan), xmax = maximum(timespan),
+            xtick = decadeticks, xticklabels = decadeticks .+ 2020,
+            ymin = -1., ymax = 25.,
+        }
+    )
+    if SAVEFIG
+        PGFPlotsX.save(joinpath(PLOTPATH, "skeleton-optemissions.tikz"), emissionfig; include_preamble = true) 
+    end
+
+        
+    # Albedo
+    for Δλ ∈ [0.06, 0.08]
+        _, αitp, _, model = resultsmap[(ω, Δλ)];
+        solution = solutions[Δλ];
+        emissions = emissionpath(solution, model, αitp);
+
+        label = @sprintf("\$\\Delta\\lambda = %.0f \\%%\$", 100 * Δλ)
+
+        for E ∈ eachcol(emissions)
+            @pgf push!(
+                emissionfig, 
+                Plot({forget_plot, color = seqpaletteΔλ[Δλ], opacity = 0.2}, Coordinates(zip(timespan, E))
+                )
+            )
+        end
+
+        @pgf push!(
+            emissionfig, 
+            Plot({ color = seqpaletteΔλ[Δλ], line_width = "3pt" },
+                Coordinates(zip(timespan, emissions))
+            ), LegendEntry(label)
+        )
+    end
+
+    # Jump
+    jumpcolor = RGB(0, 77 / 255, 64 / 255)
+	_, αitp, _, jumpmodel = jumpresultsmap[ω]
+	emissions = emissionpath(jumpsolution, jumpmodel, αitp)
+
+    for E ∈ eachcol(emissions)
+        @pgf push!(
+            emissionfig, 
+            Plot({forget_plot, color = jumpcolor, opacity = 0.2}, Coordinates(zip(timespan, E))
+            )
+        )
+    end
+
+    @pgf push!(
+        emissionfig, 
+        Plot({ color = jumpcolor, line_width = "3pt" },
+            Coordinates(zip(timespan, median(emissions, dims = 2)))
+        ), LegendEntry("Stochastic")
+    )
+
+    if SAVEFIG
+        PGFPlotsX.save(joinpath(PLOTPATH, "optemissions.tikz"), emissionfig; include_preamble = true) 
+    end
+
+
+    emissionfig
+end
+
+begin # Consumption
+    consumptionfig = @pgf Axis(
+        {
+            width = raw"\linewidth",
+            height = raw"0.7\linewidth",
+            grid = "both",
+            xlabel = raw"Year",
+            ylabel = raw"GDP / Consumption [Trillions US \$]",
+            no_markers,
+            ultra_thick,
+            xmin = minimum(timespan), xmax = maximum(timespan),
+            xtick = decadeticks, xticklabels = decadeticks .+ 2020,
+            ymin = 0., ymax = 200.,
         }
     )
 
-    @pgf for (i, Δλ) ∈ enumerate([0., 0.08])
-        solution = solutions[i]
+    for Δλ ∈ [0.06, 0.08]
+        χitp, _, _, model = resultsmap[(ω, Δλ)];
+        solution = solutions[Δλ];
 
-        timeseriescolor = i > 1 ? seqpaletteΔλ[end] : seqpaletteΔλ[1]
-    
-        # Data simulation
-        sccpath = [scc(timepoint_median(solution, tᵢ), Δλ, tᵢ) for tᵢ in (simtime .- simspan[1])]
-        label = "\$\\Delta \\lambda = $Δλ\$"
+        X = variablepath(solution, model)
+        Y = [exp(x.y) for x ∈ X]
 
-        @pgf push!(sccfig,
-            Plot(
-                { ultra_thick, color = timeseriescolor, opacity = 0.8 },
-                Coordinates(zip(simtime, sccpath))
-            ), LegendEntry(label))
+        label = @sprintf("\$\\Delta\\lambda = %.0f \\%%\$", 100 * Δλ)
+
+        @pgf push!(
+            consumptionfig, 
+            Plot({ color = seqpaletteΔλ[Δλ], line_width = "3pt" },
+                Coordinates(zip(timespan, median(Y, dims = 2)))
+            ), LegendEntry(label)
+        )
     end
+    
+    # Jump
+	jumpχitp, _, _, jumpmodel = jumpresultsmap[ω]
+	X = variablepath(jumpsolution, jumpmodel)
+	Y = [exp(x.y) for x ∈ X]
+    
 
-    @pgf sccfig["legend style"] = raw"at = {(0.24, 0.95)}"
+    @pgf push!(
+        consumptionfig, 
+        Plot({ color = jumpcolor, line_width = "3pt" },
+            Coordinates(zip(timespan, median(Y, dims = 2)))
+        ), LegendEntry("Stochastic")
+    )
+
+    @pgf consumptionfig["legend style"] = raw"at = {(0.9, 0.3)}"
 
     if SAVEFIG
-        PGFPlotsX.save(joinpath(PLOTPATH, "sccfig.tikz"), sccfig; include_preamble = true) 
+        PGFPlotsX.save(joinpath(PLOTPATH, "optgdp.tikz"), consumptionfig; include_preamble = true) 
     end
 
-    sccfig
+    consumptionfig
+end
+
+begin # Temperature
+    ytick, yticklabels = makedevxlabels(1, 2, first(models); step = 0.25, digits = 2)
+
+    tempfig = @pgf Axis(
+        {
+            width = raw"\linewidth",
+            height = raw"0.7\linewidth",
+            grid = "both",
+            xlabel = raw"Year",
+            ylabel = TEMPLABEL,
+            xmin = minimum(timespan), xmax = maximum(timespan),
+            xtick = decadeticks, xticklabels = decadeticks .+ 2020, 
+            ytick = ytick, yticklabels = yticklabels
+        }
+    )
+
+    for Δλ ∈ [0.06, 0.08]
+        χitp, _, _, model = resultsmap[(ω, Δλ)];
+        solution = solutions[Δλ];
+
+        X = variablepath(solution, model)
+        temps = [x.T for x ∈ X]
+
+        label = @sprintf("\$\\Delta\\lambda = %.0f \\%%\$", 100 * Δλ)
+
+        @pgf push!(
+            tempfig, 
+            Plot({ color = seqpaletteΔλ[Δλ], line_width = "3pt" },
+                Coordinates(zip(timespan, median(temps, dims = 2)))
+            ), LegendEntry(label)
+        )
+
+    end
+    
+    # Jump
+	jumpχitp, _, _, jumpmodel = jumpresultsmap[ω]
+	X = variablepath(jumpsolution, jumpmodel)
+	temps = [x.T for x ∈ X]
+
+    @pgf push!(
+        tempfig, 
+        Plot({ color = jumpcolor, line_width = "3pt" },
+            Coordinates(zip(timespan, median(temps, dims = 2)))
+        ), LegendEntry("Stochastic")
+    )
+
+    @pgf tempfig["legend style"] = raw"at = {(0.9, 0.3)}"
+
+    if SAVEFIG
+        PGFPlotsX.save(joinpath(PLOTPATH, "opttemp.tikz"), tempfig; include_preamble = true) 
+    end
+
+    tempfig
 end

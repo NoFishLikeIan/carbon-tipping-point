@@ -1,0 +1,336 @@
+\documentclass[pdf]{beamer}
+
+\usetheme{Berlin}
+\beamertemplatenavigationsymbolsempty
+\setbeamerfont{frametitle}{size=\small}
+
+\usepackage[utf8]{inputenc}
+\usepackage{hyperref}
+
+% Math
+\usepackage{amsmath, amssymb, mathtools, bbm, bm}
+\usepackage[makeroom]{cancel}
+\definecolor{cbred}{RGB}{216, 27, 96}
+\definecolor{cbblue}{RGB}{30, 137, 229}
+\definecolor{cbyellow}{RGB}{255, 193, 7}
+\definecolor{cbgreen}{RGB}{0, 77, 64}
+\definecolor{cbdarkblue}{RGB}{0, 73, 255}
+
+
+\let\d\relax
+\newcommand{\d}[1]{\mathrm{d}#1}
+\newcommand{\control}[1]{\bm{#1}}
+\newcommand{\T}{{\color{cbred} T}}
+\newcommand{\M}{{\color{cbblue} M}}
+\newcommand{\Y}{{\color{cbgreen} Y}}
+
+% Diagrams
+\usepackage{tikz} 
+\usepackage{tikzit}
+\usepackage{tikzscale}
+\usepackage{pgfplots}
+\usepackage{graphicx}
+\usepackage{wrapfig}
+\usepackage{relsize}
+
+
+% Graphs
+\usepackage{tikz} 
+\usepackage{tikzit}
+\usepackage{pgfplots}
+\usepackage{ifdraft}
+\usetikzlibrary{positioning,fit,calc,decorations.pathreplacing,calligraphy, arrows.meta, pgfplots.groupplots}
+
+\pgfplotsset{compat=1.18}
+
+\newcommand{\X}{{\color{violet} X}}
+\newcommand{\inputtikz}[1]{%  
+
+    \ifdraft{
+    \includegraphics[width=0.5\textwidth]{example-image-a}
+    }{
+    \IfFileExists{#1}{
+        \input{#1}
+        }{
+        \includegraphics[width=0.5\textwidth]{example-image-a}
+    }
+    }
+}
+
+\usepackage[bibencoding=utf8, style=apa, backend=biber, eprint=false]{biblatex}
+\addbibresource{../../scc-tipping-points.bib}
+
+
+\author{Andrea Titton}
+\title{The Dangers of Abatement Procrastination\\in a Tipping Climate}
+\institute{CeNDEF, University of Amsterdam}
+\date{EPOC PhD Conference, March 2024}
+
+\begin{document}
+
+\frame[plain]{\titlepage}
+
+\section{Motivation}
+\begin{frame}{Climate Science - Economics gap}
+    Importance of getting climate dynamics right (\cite{dietz_are_2020})
+    \vspace{20pt}
+    \begin{enumerate} \setlength{\itemsep}{10pt}
+        \pause \item \textbf{Climate Science:} Bifurcation tipping
+        \pause \item \textbf{Economics:} Stochastic tipping 
+    \end{enumerate}
+\end{frame}
+
+\begin{frame}{Starting to bridge the gap...}
+    Introduce an \textbf{ice-albedo feedback} in a standard IAM (\cite{hambel_optimal_2021})
+
+    \begin{figure}
+        \includegraphics[width = 0.5\linewidth]{../../../plots/Ice_albedo_feedback.jpg}
+        \caption{Source: Tovarg, Wikipedia}
+    \end{figure}
+\end{frame}
+
+\section{Climate Model}
+
+\begin{frame} \frametitle{Balance model}
+    \begin{columns}
+        \column{0.3\linewidth}
+        \begin{itemize}
+            \visible<1-2>{
+                \item ${\color{cbyellow} S}$ solar radiation
+            }
+            \visible<3->{
+                \item ${\color{cbyellow} S_0} \; (1 - \lambda(\T))$ solar radiation
+            }
+            \visible<1->{
+                \item $\T$ temperature
+            }
+            \visible<2->{
+                \item $\M$ carbon concentration
+            }
+        \end{itemize}
+        \column{0.7\linewidth}
+        \begin{equation*}
+            \visible<3->{{\color{cbyellow} S_0} \; (1 - \lambda(\T))}
+            \visible<1-2>{{\color{cbyellow} S}}
+            =
+            \visible<1->{\eta \sigma \T^4} \visible<2->{- (G_0 + G_1 \log \M / M^{\mathrm{p}})}
+        \end{equation*}
+    \end{columns}
+\end{frame}
+
+\begin{frame}{Temperature dynamics}
+    \begin{equation*}
+        \epsilon \; \d{\T} = \overbrace{\mu_{\lambda}(\T, \M)}^{\text{LHS} - \text{RHS}} \; \d{t} + \sigma \; \d{w}
+    \end{equation*}
+
+    \vspace{10pt}
+
+    Temperature $\T$ will tend to make $ \mu_{\lambda}(\T, \M) \to 0$.
+\end{frame}
+
+\begin{frame} \frametitle{Albedo loss}
+    \begin{equation*}
+        \lambda(\T) = \lambda_1 - L(\T) \Delta \lambda
+    \end{equation*}
+    \only<1>{
+        \begin{figure}
+            \resizebox{!}{0.4\linewidth}{
+                \inputtikz{../../../plots/skeleton-albedo.tikz}
+            }
+        \end{figure}   
+    }
+    \only<2>{
+        \begin{figure}
+            \resizebox{!}{0.4\linewidth}{
+                \inputtikz{../../../plots/albedo.tikz}
+            }
+        \end{figure}   
+    }
+\end{frame}
+
+\begin{frame} \frametitle[Temperature tendency]{Temperature tendency $\mu_{\lambda}(T, M) \to 0$}
+    \only<1>{
+        \begin{figure}
+            \resizebox{0.6\linewidth}{!}{
+                \inputtikz{../../../plots/skeleton-nullcline.tikz}
+            }
+        \end{figure}   
+    }
+    \only<2>{
+        \begin{figure}
+            \resizebox{0.6\linewidth}{!}{
+                \inputtikz{../../../plots/nullcline.tikz}
+            }
+        \end{figure}   
+    }
+\end{frame}
+
+
+\begin{frame} \frametitle{Carbon Concentration}
+    \begin{columns}
+        \column{0.35\linewidth}
+        \begin{equation*}
+            \frac{\d{\M}}{\M} = \left( \gamma^\mathrm{b} - \control{\alpha} \right) \d t
+        \end{equation*}
+        \column{0.6\linewidth}
+        \begin{figure}[H]
+            \centering
+            \inputtikz{../../../plots/growthmfig.tikz}
+        \end{figure}
+    \end{columns}
+\end{frame}
+
+\begin{frame}
+    \only<1>{
+        \begin{figure}
+            \resizebox{0.9\linewidth}{!}{
+                \inputtikz{../../../plots/skeleton-baufig.tikz}
+            }
+        \end{figure}   
+    }
+    \only<2>{
+        \begin{figure}
+            \resizebox{0.9\linewidth}{!}{
+                \inputtikz{../../../plots/baufig_0.tikz}
+            }
+        \end{figure}   
+    }
+    \only<3>{
+        \begin{figure}
+            \resizebox{0.9\linewidth}{!}{
+                \inputtikz{../../../plots/baufig_8.tikz}
+            }
+        \end{figure}   
+    }
+\end{frame}
+
+\section{Economy}
+
+\begin{frame}{Economy \only<1>{with}\only<2>{without} climate change}
+    \begin{columns}
+        \column{0.3\linewidth}
+        \begin{itemize}
+            \visible<1->{
+                \item $\Y$ GDP
+                \item $\control{\chi}$ consumption rate
+            }
+            \visible<2->{
+                \item $\control{\alpha}$ abatement rate
+            }
+        \end{itemize}
+        \column{0.7\linewidth}
+        \begin{equation*}
+            \visible<1->{\frac{\d{\Y}}{\Y}} = \varrho - \delta + \phi(1 - \control{\chi})
+            \visible<2->{-d(\T) - \frac{\omega}{2} c(\control{\alpha})}
+        \end{equation*}
+    \end{columns}
+\end{frame}
+
+\begin{frame}{Damage function}
+    \begin{figure}
+        \inputtikz{../../../plots/damagefig.tikz}
+    \end{figure}
+\end{frame}
+
+\section{Social Planner Solution}
+\begin{frame}{Social Planner Problem}
+    \begin{columns}
+        \column{0.4\linewidth}
+        \visible<1->{
+            \textbf{State variables}
+            \begin{enumerate}
+                \item Temperature $\T$
+                \item CO$_2$ conc. $\M$
+                \item GDP $\Y$
+            \end{enumerate}
+        }
+        \visible<2->{
+            \textbf{Control variables}
+            \begin{enumerate}
+                \item Consumption r. $\control{\chi}$
+                \item Abatement r. $\control{\alpha}$
+            \end{enumerate}
+        }
+        \column{0.6\linewidth}
+        \visible<3->{
+            \textbf{Objective}
+            \begin{equation*}
+                v(\T, \M, \Y) = \sup_{\control{\chi, \alpha}} \int^\infty_0 \only<3>{f(\control{\chi} Y, v)}\only<4>{e^{-\rho t} \log(\control{\chi} \Y)}\; \d{t} 
+            \end{equation*}
+        }
+    \end{columns}
+\end{frame}
+
+\begin{frame}{Numerical Solution}
+    \begin{columns}
+        \column{0.5\linewidth}
+            \begin{enumerate}
+                \item Viscosity based solution are not robust
+                \pause \item First Markov Chain approximation for Epstein-Zin specification (to the best of my knowledge)
+                \pause \item Ask me for the code, hopefully package soon
+            \end{enumerate}
+        \column{0.5\linewidth}
+        \begin{figure}
+            \includegraphics[width = 0.75 \linewidth]{../../../plots/cover-book.jpg}
+        \end{figure}
+    \end{columns}
+\end{frame}
+
+\begin{frame}{Benchmark Model: Stochastic Tipping}
+    \visible<1->{\begin{equation*}
+        \mu_{\lambda}(\T, \M) = {\color{cbyellow} S_0} \; (1 - \cancelto{\bar{\lambda}}{\lambda(\T)})
+        - \eta \sigma \T^4 + (G_0 + G_1 \log \M / M^{\mathrm{p}})
+    \end{equation*}}
+    \visible<2->{\begin{equation*}
+        \epsilon \; \d{\T} = \mu_{\lambda}(\T, \M) + \sigma \d{w} + \Theta(\T) \; \d{N} \text{ with arrival } \pi(\T)
+    \end{equation*}}
+\end{frame}
+
+\section{Results}
+\begin{frame}\frametitle{Emissions}
+    \only<1>{
+        \begin{figure}
+            \resizebox{0.9\linewidth}{!}{
+                \inputtikz{../../../plots/skeleton-optemissions.tikz}
+            }
+        \end{figure}   
+    }
+    \only<2>{
+        \begin{figure}
+            \resizebox{0.9\linewidth}{!}{
+                \inputtikz{../../../plots/optemissions.tikz}
+            }
+        \end{figure}   
+    }
+\end{frame}
+
+\begin{frame}{Conclusions}
+    \begin{itemize} \setlength{\itemsep}{10pt}
+        \item Bifurcation and stochastic tipping are \textbf{qualitatively} different
+        \pause \item Prescribe \textbf{different emission}
+        \pause \item Embrace complexity!
+    \end{itemize}
+\end{frame}
+
+\begin{frame}
+    \LARGE \textbf{Thank you and ask me anything!}
+\end{frame}
+
+\appendix
+\section{Additional Slides}
+\begin{frame}
+    \begin{figure}
+        \resizebox{0.9\linewidth}{!}{
+            \inputtikz{../../../plots/optgdp.tikz}
+        }
+    \end{figure}   
+\end{frame}
+\begin{frame}
+    \begin{figure}
+        \resizebox{0.9\linewidth}{!}{
+            \inputtikz{../../../plots/opttemp.tikz}
+        }
+    \end{figure}   
+\end{frame}
+
+\end{document}

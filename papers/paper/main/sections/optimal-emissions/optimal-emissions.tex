@@ -1,37 +1,29 @@
 \documentclass[../../main.tex]{subfiles}
 \begin{document}
 
-Figure \ref{fig:simfig}, shows the optimal path of temperature deviations from pre-industrial levels $T - T^{\mathrm{p}}$, carbon concentration $M$, and the emissivity control rate $\varepsilon$, under different parametrisation of the albedo loss.
+Figure (\ref{fig:optimal:emissions}) and (\ref{fig:optimal:carbon concentration}) display the optimal path of net emissions $E$ and carbon concentration $M$ respectively in three scenario: an albedo loss $\Delta\lambda = 6\%$, in which there is no tipping point; a loss of $\Delta\lambda = 8\%$ in which there is a tipping point; the benchmark stochastic model. The optimal emissions fall rapidly in all three parametrisation, highlighting the importance of rapid abatement. Yet, optimal emission path in the benchmark Stochastic Tipping model resembles closely that of $6\%$ the albedo loss. On the contrary, in the presence of a tipping point, that is, the $8\%$ albedo loss, emissions fall more rapidly and abatement policies are more ambitious. This leads to much lower optimal long run carbon concentration, if there is a tipping point induced by the albedo effect. Using the Stochastic Tipping model as an approximation of a tipping point can lead to insufficiently ambitious abatement policies, both in scope and in timing.
 
-First, in both scenarios, optimal long run temperature remains below 2\degree. As expected, in the high albedo loss scenario, optimal long run temperature stabilises at lower levels than in the low albedo loss scenario. To achieve this, the social planner employs ambitious abatement policies, not only in magnitude, but also in timing. This can can be seen by comparing the emissivity rate $\varepsilon$, that is, the fraction of emissions that are abated compared to the business-as-usual, in the two scenario. On the one hand, if albedo loss is low, emission abatement can be postponed and less ambitious. If, on the other hand, albedo loss is large, abatement needs to be highly ambitious and occur quickly. This result is due to the presence of the tipping point. First, the more time spent closer to the tipping region, the higher the likelihood that a temperature shock can push the system into a low albedo world. Second, closer to the tipping region, high temperature shocks revert to the mean much more slowly, which implies longer periods of low economic growth.
-
-\begin{table}[H]
+\begin{figure}[H]
     \centering
-    \begin{tabular}{ |p{3cm}||p{4cm}||p{1.5cm}|p{1.5cm}|p{1.5cm}|  }
-        \hline
-        Model & Variable & 2035 & 2055 & 2075 \\
-        \hline \hline
-        Hambel et al.
-        & Temperature rise & 1.2 & 1.5 & 1.7 \\
-        & Emission control rate & 0.35 & 0.57 & 0.76 \\
-        \hline 
-        $\Delta \lambda = 0.08$
-        & Temperature rise & 1.67 & 1.64 & 1.64 \\
-        & Emission control rate & 0.64 & 0.76 & 0.82 \\
-        \hline\hline
-    \end{tabular}
-    \caption{Comparison of temperature rise $T - T^{\mathrm{P}}$ and emission control rate $\varepsilon$ between the two models and the benchmark growth impact model developed by \citein{hambel_optimal_2021}.}
-    \label{table:hambel-comparison}
-\end{table}
+    \includegraphics[width = \linewidth]{../../../plots/optemissions.png}
+    \caption{Optimal path of net emissions under the three model specifications, for 500 simulations.}
+    \label{fig:optimal:emissions}
+\end{figure}
 
-To put these results in perspective, in Table \ref{table:hambel-comparison}, optimal temperature deviations from pre-industrial levels $T - T^{\mathrm{p}}$ and the emissivity control rate $\varepsilon$ in the high albedo loss scenario, are compared to those in \citein{hambel_optimal_2021}\footnote{It is important to notice that the model presented in this paper is calibrated on 2020 data, while that in \citein{hambel_optimal_2021} on 2015 data. Furthermore, the model by \citein{hambel_optimal_2021} assumes constant productivity.} Despite similar long run levels of abatement, the tipping point forces the social planner to increase the emission control rate much sooner and stabilise the temperature as early as 2035, instead of waiting to the end of the century to do so. The presence of an ice-albedo feedback introduces urgency in optimal abatement.
-
-
-\begin{figure}
+\begin{figure}[H]
     \centering
-    \inputtikz{../../../plots/simfig.tikz}
-    \caption{Simulation of optimal temperature deviations from pre-industrial levels $T - T^{\mathrm{p}}$, carbon concentration $M$, and the emissivity control rate $\varepsilon$ and under the two specifications $\Delta\lambda \in \{0., 0.08\}$. The thicker line represents the median.}
-    \label{fig:simfig}
+    \includegraphics[width = \linewidth]{../../../plots/optcarbon.png}
+    \caption{Optimal path of carbon concentration under the three model specifications, for 500 simulations.}
+    \label{fig:optimal:carbon concentration}
+\end{figure}
+
+Figure \ref{fig:optimal:gdp}, shows the resulting optimal median path of GDP (solid line) and consumption (dashed line). GDP follows similar trajectories under all three specifications of climate dynamics, which suggests that the additional abatement expenditure in the case of $8\%$ albedo loss, is fully compensated by reduced temperature damages. Yet, the amount of GDP consumed in the latter specification is lower than in the cases of $6\%$ albedo loss and stochastic tipping, as more GDP is devoted to abatement.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width = \linewidth]{../../../plots/optgdp.png}
+    \caption{Optimal median path of GDP (solid) and consumption (dashed) under the three model specifications, for 500 simulations.}
+    \label{fig:optimal:gdp}
 \end{figure}
 
 \end{document}
