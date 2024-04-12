@@ -36,10 +36,9 @@ begin # Global variables
 end;
 
 begin # Import
-    ΔΛ = [0., 0.06, 0.08]
-    Ω = 2 * 10. .^(-4:1:-1);
-    ω = Ω[3]
-	N = 21;
+    ΔΛ = [0.06, 0.08];
+    ω = 0.002
+	N = 31;
 	domains = [
 		Hogg().T₀ .+ (0., 9.),
 		log.(Hogg().M₀ .* (1., 2.)),
@@ -419,7 +418,7 @@ begin # Side by side BAU plots
 end
 
 begin # Individual BAU plots
-    Δλ = 0.08
+    Δλ = 0.06
     baufig = @pgf Axis(
         {
             width = raw"\linewidth",
@@ -459,7 +458,7 @@ begin # Individual BAU plots
     end
 
     # Nullcline
-    push!(baufig, LegendEntry(raw"$\mu_{\lambda}(T, M) = 0$"),
+    push!(baufig, LegendEntry(raw"$\mu(T, M) = 0$"),
         @pgf Plot({dashed, color = "black", ultra_thick},
             Coordinates(collect(zip(exp.(baunullcline), Tspacedev))))
     )
@@ -498,7 +497,7 @@ begin # Individual BAU plots
     end
 
     baufig
-end;
+end
 
 
 begin # Carbon decay calibration
@@ -689,9 +688,9 @@ end;
 function G!(dx, x, p, t)
 	model = first(p)
 	
-	dx[1] = model.hogg.σₜ / model.hogg.ϵ
+	dx[1] = 0. # model.hogg.σₜ / model.hogg.ϵ
 	dx[2] = 0.
-	dx[3] = model.economy.σₖ
+	dx[3] = 0. # model.economy.σₖ
 	
 	return
 end;
