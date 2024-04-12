@@ -44,7 +44,7 @@ struct RegularGrid{N}
 
         if N > maxN @warn "h < ϵ: ensure N ≤ $maxN" end
 
-        h = Float64(1 / N)
+        h = 1 / (N - 1)
         Ω = (range(d[1], d[2]; length = N) for d in domains) 
         Δ = (;
             :T => domains[1][2] - domains[1][1],
@@ -57,7 +57,7 @@ struct RegularGrid{N}
         new{N}(X, h, Δ, domains)
     end
     function RegularGrid(domains::AbstractVector{Domain}, h::Float64)
-        N = floor(Int, 1 / h)
+        N = floor(Int, 1 / h) + 1
         RegularGrid(domains, N)
     end
 end

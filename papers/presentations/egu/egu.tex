@@ -1,0 +1,173 @@
+\documentclass[pdf]{beamer}
+
+\usetheme{Berlin}
+\beamertemplatenavigationsymbolsempty
+\setbeamerfont{frametitle}{size=\small}
+
+\usepackage[utf8]{inputenc}
+\usepackage{hyperref}
+
+% Math
+\usepackage{amsmath, amssymb, mathtools, bbm, bm}
+\usepackage[makeroom]{cancel}
+\definecolor{cbred}{RGB}{216, 27, 96}
+\definecolor{cbblue}{RGB}{30, 137, 229}
+\definecolor{cbyellow}{RGB}{255, 193, 7}
+\definecolor{cbgreen}{RGB}{0, 77, 64}
+\definecolor{cbdarkblue}{RGB}{0, 73, 255}
+
+
+\let\d\relax
+\newcommand{\d}[1]{\mathrm{d}#1}
+\newcommand{\control}[1]{\bm{#1}}
+\newcommand{\T}{{\color{cbred} T}}
+\newcommand{\M}{{\color{cbblue} M}}
+\newcommand{\Y}{{\color{cbgreen} Y}}
+
+% Diagrams
+\usepackage{tikz} 
+\usepackage{tikzit}
+\usepackage{tikzscale}
+\usepackage{pgfplots}
+\usepackage{graphicx}
+\usepackage{wrapfig}
+\usepackage{relsize}
+
+
+% Graphs
+\usepackage{tikz} 
+\usepackage{tikzit}
+\usepackage{pgfplots}
+\usepackage{ifdraft}
+\usetikzlibrary{positioning,fit,calc,decorations.pathreplacing,calligraphy, arrows.meta, pgfplots.groupplots}
+
+\pgfplotsset{compat=1.18}
+
+\newcommand{\X}{{\color{violet} X}}
+\newcommand{\inputtikz}[1]{%  
+
+    \ifdraft{
+    \includegraphics[width=0.5\textwidth]{example-image-a}
+    }{
+    \IfFileExists{#1}{
+        \input{#1}
+        }{
+        \includegraphics[width=0.5\textwidth]{example-image-a}
+    }
+    }
+}
+
+\usepackage[bibencoding=utf8, style=apa, backend=biber, eprint=false]{biblatex}
+\addbibresource{../../scc-tipping-points.bib}
+
+
+\author{Andrea Titton}
+\title{The Dangers of Abatement Procrastination\\in a Tipping Climate}
+\institute{CeNDEF, University of Amsterdam}
+\date{EGU General Assembly 2024}
+
+\begin{document}
+
+\frame[plain]{\titlepage}
+
+
+\section{Motivation}
+\begin{frame}
+    Importance of getting climate dynamics right (\cite{dietz_are_2020,dietz_economic_2021})
+    
+    \vspace{20pt}
+
+    \pause Economics: approximate \textbf{tipping points} with \textbf{jump processes} (\cite{lin_social_2023,van_den_bremer_risk-adjusted_2021})
+    \begin{enumerate}
+        \pause \item Numerical methods from Finance
+        \pause \item Perturbation methods go a long way
+    \end{enumerate}
+\end{frame}
+
+\begin{frame}
+    \textbf{Problem}: relevant tipping points (e.g. ice-albedo feedback, AMOC) are bifurcation induced 
+
+    \vspace{20pt}
+
+    \pause \textbf{Does it matter?} \pause Spoiler: yes.
+\end{frame}
+
+\section{Model}
+\begin{frame}
+    Textbook energy balance model for temperature $\T$ and CO$_2$ concentration $\M$ dynamics \vspace{5pt}
+    \only<1>{\begin{equation}
+        \epsilon \; \text{d} \T = \mu(\T, \M) \; \d{t} + \sigma \; \d{W} + \epsilon(\T) \; \d{N}
+    \end{equation} \vspace{2pt}
+    \begin{equation}
+        \mu(\T, \M) = S + G_0 + G_1 \log(\M / M^p) - \eta \sigma \T^4
+    \end{equation}}
+    \only<2>{
+        \begin{equation}
+            \epsilon \; \text{d} \T = \mu(\T, \M) \; \d{t} + \sigma \; \d{W} + {\color{red} \cancel{{\color{black} \epsilon(\T) \; \d{N}}}}
+        \end{equation} \vspace{2pt}
+        \begin{equation}
+            \mu(\T, \M) = S \underbrace{(1 - \lambda(\T))}_{\text{Ice-albedo}} + G_0 + G_1 \log(\M / M^p) - \eta \sigma \T^4
+        \end{equation}
+    }
+\end{frame}
+
+
+\begin{frame}
+    \only<1>{
+        \begin{figure}
+            \resizebox{0.9\linewidth}{!}{
+                \inputtikz{../../../plots/skeleton-baufig.tikz}
+            }
+        \end{figure}   
+    }
+    \only<2>{
+        \begin{figure}
+            \resizebox{0.9\linewidth}{!}{
+                \inputtikz{../../../plots/baufig_6.tikz}
+            }
+        \end{figure}   
+    }
+    \only<3>{
+        \begin{figure}
+            \resizebox{0.9\linewidth}{!}{
+                \inputtikz{../../../plots/baufig_8.tikz}
+            }
+        \end{figure}   
+    }
+\end{frame}
+
+
+\section{Results}
+\begin{frame}\frametitle{Emissions}
+    \only<1>{
+        \begin{figure}
+            \resizebox{0.9\linewidth}{!}{
+                \inputtikz{../../../plots/skeleton-optemissions.tikz}
+            }
+        \end{figure}   
+    }
+    \only<2>{
+        \begin{figure}
+            \resizebox{0.9\linewidth}{!}{
+                \inputtikz{../../../plots/optemissions.tikz}
+            }
+        \end{figure}   
+    }
+\end{frame}
+
+\begin{frame}
+    \begin{itemize} \setlength{\itemsep}{10pt}
+        \item $\text{emissions}^*(\text{jumps}) \not\approx \text{emissions}^*(\text{bifurcation})$
+        \pause \item Embrace complexity!
+    \end{itemize}
+\end{frame}
+
+\begin{frame}
+    \textbf{Thank you and AMA!}
+    \begin{figure}
+        \centering
+        \includegraphics[width = 0.6\textwidth]{qr.png}
+    \end{figure}
+\end{frame}
+
+\end{document}

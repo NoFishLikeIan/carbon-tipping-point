@@ -1,13 +1,13 @@
 include("terminal.jl")
 include("backward.jl")
 
-const ΔΛ = [0.06, 0.08];
-const Ω = [0.01, 0.02]# 2 .* 10 .^(-4:1/2:-1);
+const ΔΛ = [0., 0.06, 0.08];
+const Ω = 2 .* 10 .^(-4:1.:-1);
+const N = 29;
 
 const preferences = EpsteinZin();
 const jump = Jump()
 const calibration = load_object(joinpath(DATAPATH, "calibration.jld2"));
-const N = 51;
 
 # Grid construction
 for ωᵣ ∈ Ω
@@ -24,7 +24,7 @@ for ωᵣ ∈ Ω
     # Jump process
     @printf("Jump simulation with ωᵣ = %.5f\n", ωᵣ)
     jumpmodel = ModelBenchmark(preferences, economy, defhogg, jump, calibration)
-    computeterminal(jumpmodel, G; verbose = true, withsave = true, datapath = DATAPATH, alternate = false, tol = 1e-2, maxiter = 2_000)
+    computeterminal(jumpmodel, G; verbose = true, withsave = true, datapath = DATAPATH, alternate = false, tol = 1e-2, maxiter = 1_000)
     computevalue(jumpmodel, G; cache = true, verbose = true)
 
     for Δλ ∈ ΔΛ
