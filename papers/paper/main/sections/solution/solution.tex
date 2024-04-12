@@ -1,7 +1,7 @@
 \documentclass[../../main.tex]{subfiles}
 \begin{document}
 
-We solve the Hamilton-Bellman-Jacobi equation (\ref{eq:hbj}) using the method proposed by \citein{grass_small-noise_2015}. In particularly, rewriting the noise term in the temperature dynamics as $\sigma_x^2 = \varepsilon \sigma^2$, we compute a small $\varepsilon$ approximation of the value function $v$. We assume that there exist an asymptotic expansion of the value function as a power series of the noise scale $\varepsilon$, \begin{equation}
+We solve the Hamilton-Bellman-Jacobi equation (\ref{eq:hbj}) using the method proposed by \citep{grass_small-noise_2015}. In particularly, rewriting the noise term in the temperature dynamics as $\sigma_x^2 = \varepsilon \sigma^2$, we compute a small $\varepsilon$ approximation of the value function $v$. We assume that there exist an asymptotic expansion of the value function as a power series of the noise scale $\varepsilon$, \begin{equation}
     v(x, c, \varepsilon) = v_0(x, c) + \varepsilon v_1(x, c) + \varepsilon^2 v_2(x, c) + \ldots
 \end{equation} with $v_j$ being twice continuously differentiable functions. We then compute a second order approximation of $v$ by computing $v_0$, $v_1$, and $v_2$. These basis functions will then satisfy a system of ordinary differential equations, as opposed to the original partial differential Hamilton-Bellman-Jacobi equation. Particularly, we have that the deterministic value function $v_0$ and the first order correction term $v_1$ satisfy,
 

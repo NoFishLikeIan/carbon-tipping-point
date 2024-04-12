@@ -137,7 +137,7 @@ md"## Equivalent jump process"
 
 # ╔═╡ b6795842-7e9f-44eb-8768-b6065f6cbda1
 function jump(T)
-	−0.0029 * (T - hogg.Tᵖ)^2 + 0.0568 * (T - hogg.Tᵖ) − 0.0577
+	0.0568 * (T - hogg.Tᵖ) − 0.0577 - 0.0029 * (T - hogg.Tᵖ)^2
 end;
 
 # ╔═╡ 6ec0461e-a901-4bc6-8f0e-a4b1e7f89f67

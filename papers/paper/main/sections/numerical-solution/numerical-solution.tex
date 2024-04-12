@@ -62,7 +62,7 @@ The Fokker-Planck equation for the density of temperature $p$ is \begin{equation
 
 \section{Motivation behind the use of Epstein-Zin preferences} \label{appendix:epstein-zin}
 
-Utility preferences as specified by (\ref{eq:utility}) and (\ref{eq:aggregator}) were introduced by \citein{epstein_substitution_1989} (discrete time) and \citein{duffie_asset_1992} (continuous time) to circumvent two undesirable features of additive preferences (e.g. CRRA utility) in finance. First, under additive preferences the elasticity of intertemporal substitution is the inverse of the coefficient of relative risk aversion. Second, an agent having additive preferences is indifferent between earlier or later resolution of uncertainty. Translated to the integrated models, as the one discussed in this paper, these two features yield a counter-intuitive mechanism: the abatement path becomes less ambitious as agents become more risk averse (\cite{pindyck_economic_2013}). This is because, in a growing economy with rising consumption, future utility decreases in risk aversion, which yields, ceteris paribus, a higher optimal emission path. The use of Epstein-Zin preferences is a common way to overcome this issue (\cite{pindyck_economic_2013, crost_optimal_2013, ackerman_epsteinzin_2013, hambel_optimal_2021,  olijslagers_discounting_2019}).
+Utility preferences as specified by (\ref{eq:utility}) and (\ref{eq:aggregator}) were introduced by \citep{epstein_substitution_1989} (discrete time) and \citep{duffie_asset_1992} (continuous time) to circumvent two undesirable features of additive preferences (e.g. CRRA utility) in finance. First, under additive preferences the elasticity of intertemporal substitution is the inverse of the coefficient of relative risk aversion. Second, an agent having additive preferences is indifferent between earlier or later resolution of uncertainty. Translated to the integrated models, as the one discussed in this paper, these two features yield a counter-intuitive mechanism: the abatement path becomes less ambitious as agents become more risk averse \citep{pindyck_economic_2013}. This is because, in a growing economy with rising consumption, future utility decreases in risk aversion, which yields, ceteris paribus, a higher optimal emission path. The use of Epstein-Zin preferences is a common way to overcome this issue \citep{pindyck_economic_2013, crost_optimal_2013, ackerman_epsteinzin_2013, hambel_optimal_2021,  olijslagers_discounting_2019}.
 
 To make sense of this utility specification it is useful to consider two illustrative parameter cases. First, as the elasticity of intertemporal substitution converges to the inverse  coefficient of relative risk aversion, $\psi \to 1 / \theta$, the aggregator (\ref{eq:aggregator}) becomes separable \begin{equation}
     \lim_{\psi \to 1 / \theta} f(C, U) = \rho \left(\frac{1}{1 - \theta} C^{1 - \theta} - U\right),
@@ -120,7 +120,7 @@ The social planner problem depends on time $t$ and three state variables: temper
 
 \section{Approximating Markov Chain} \label{appendix:approximating-markov-chain}
 
-Th numerical method employed here adapts that presented in \citein{kushner_numerical_2001}. First, we define a suitably large domain for the state variables $\mathcal{X} \subseteq \mathbb{R}^3$ and let $x = (T, m, y) \in \mathcal{X}$ be the state vector. Then, let $u = (\chi, \alpha) \in \mathcal{U} \coloneqq [0, 1] \times [0, \gamma^\b]$ be the vector of controls. Then we can define the operator \begin{equation}
+Th numerical method employed here adapts that presented in \citep{kushner_numerical_2001}. First, we define a suitably large domain for the state variables $\mathcal{X} \subseteq \mathbb{R}^3$ and let $x = (T, m, y) \in \mathcal{X}$ be the state vector. Then, let $u = (\chi, \alpha) \in \mathcal{U} \coloneqq [0, 1] \times [0, \gamma^\b]$ be the vector of controls. Then we can define the operator \begin{equation}
     \begin{split}
         \mathcal{L}_t^u = \; &\frac{\mu(T, m)}{\epsilon} \frac{\partial}{\partial T} + \big(\varrho + \phi(\chi) - \delta_k - d(T) - A \beta(\alpha) \big) \frac{\partial}{\partial y} + \\ 
         &(\gamma^\b - \alpha)\frac{\partial}{\partial m} + \frac{(\sigma_T / \epsilon)^2}{2} \frac{\partial^2}{\partial T^2} + \frac{\sigma^2_k}{2} \frac{\partial^2}{\partial y^2} 
@@ -155,7 +155,7 @@ For a given state $X_i$ we can now define the transition probabilities. Let \beg
 
 Finally, let \begin{equation}
     V^h(t, X) = \sum_{\tilde{X}} p(X, \tilde{X}) V^h(\tilde{X}) + \frac{1}{1 - \theta} \left(e^{-\rho \Delta t} ((1 - \theta) V^h(t, X))^{\frac{1 - 1 / \psi}{1 - \theta}} + \Delta t C^{1 - \frac{1}{\psi}} \right)^{\frac{1 - \theta}{1 - 1 / \psi}}.
-\end{equation} \citein{kushner_numerical_2001} have shown that the transitional probabilities $p$ form a consistent Markov chain and that $V^h \to V$ as $h \to 0$.
+\end{equation} \citep{kushner_numerical_2001} have shown that the transitional probabilities $p$ form a consistent Markov chain and that $V^h \to V$ as $h \to 0$.
 
 \section{Post-transition phase}
 

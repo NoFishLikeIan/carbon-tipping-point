@@ -3,7 +3,7 @@
 
 In the model, the economy interacts with the climate in two ways. First, the economy alters climate dynamics by emitting carbon dioxide $E$ as a by-product of output production $Y$. Second, as the climate changes and temperatures $T$ rise, the rate of capital depreciation increases, thereby lowering economic growth. This is in line with recent empirical evidence on the role of temperature variations in lowering output growth (\citeauthor{dell_temperature_2009}, \citeyear{dell_temperature_2009, dell_temperature_2012}) 
 
-Following \citein{pindyck_economic_2013} and \citein{hambel_optimal_2021}, I assume output $Y$ to be a linear function of capital $K$, \begin{equation}
+As in \cite{pindyck_economic_2013} and \cite{hambel_optimal_2021}, I assume output $Y$ to be a linear function of capital $K$, \begin{equation}
 Y =  A K,
 \end{equation} where $A$ denotes total factor productivity. Output can be used for investment $I$, abatement expenditures $B$, or consumption $C$\begin{equation} \label{eq:nominal-budget}
     Y = I + B + C.
@@ -21,7 +21,7 @@ As in \citeauthor{nordhaus_question_2008} (\citeyear{nordhaus_optimal_1992,nordh
     \inputtikz{../../../plots/damagefig.tikz}
     \caption{Calibrated damage function $d(T)$}
     \label{fig:damage}
-\end{wrapfigure}In the last 50 years, productivity in the agricultural sector, net of technological growth, has declined due to temperature increases (\citeauthor{dell_temperature_2009} \citeyear{dell_temperature_2009}). Given the imperfect substitutability of food, resources have been diverted from other sectors towards agriculture which has increased the opportunity cost of capital investment in manufacturing and services. For a thorough treatment of this mechanic see \citein{dietz_growth_2019}. In this paper, I will abstract from the details of the mechanism but keep the role of temperatures in reducing capital growth rate and assume this to be the main damage deriving from climate change. In the model, capital depreciates at a rate $\delta_k +  d(T) $ where $\delta_k$ is the depreciation rate of capital at pre-industrial temperature levels $T^p$ and $d(T)$ is the damage function. Following \citein{weitzman_ghg_2012}, I assume the damage function to take the form \begin{equation}
+\end{wrapfigure}In the last 50 years, productivity in the agricultural sector, net of technological growth, has declined due to temperature increases (\citeauthor{dell_temperature_2009} \citeyear{dell_temperature_2009}). Given the imperfect substitutability of food, resources have been diverted from other sectors towards agriculture which has increased the opportunity cost of capital investment in manufacturing and services. For a thorough treatment of this mechanic see \cite{dietz_growth_2019}. In this paper, I will abstract from the details of the mechanism but keep the role of temperatures in reducing capital growth rate and assume this to be the main damage deriving from climate change. In the model, capital depreciates at a rate $\delta_k +  d(T) $ where $\delta_k$ is the depreciation rate of capital at pre-industrial temperature levels $T^p$ and $d(T)$ is the damage function. Following \cite{weitzman_ghg_2012}, I assume the damage function to take the form \begin{equation}
     d(T) = \xi (T - T^p)^{\upsilon}.
 \end{equation} 
 
