@@ -41,6 +41,9 @@
 \usepackage{ifdraft}
 \usetikzlibrary{positioning,fit,calc,decorations.pathreplacing,calligraphy, arrows.meta, pgfplots.groupplots}
 
+\usepgfplotslibrary{external} 
+\tikzexternalize
+
 \pgfplotsset{compat=1.18}
 
 \newcommand{\X}{{\color{violet} X}}
@@ -62,7 +65,7 @@
 
 
 \author{Andrea Titton}
-\title{The Dangers of Abatement Procrastination\\in a Tipping Climate}
+\title{Optimal Emissions and\\Climate Tipping Points}
 \institute{CeNDEF, University of Amsterdam}
 \date{EGU General Assembly 2024}
 
@@ -77,8 +80,8 @@
     
     \vspace{20pt}
 
-    \pause Economics: approximate \textbf{tipping points} with \textbf{jump processes} (\cite{lin_social_2023,van_den_bremer_risk-adjusted_2021})
-    \begin{enumerate}
+    \pause Economics: approximate \textbf{tipping points} with \textbf{jump processes} (\cite{lin_social_2023,van_den_bremer_risk-adjusted_2021}) \vspace{5pt}
+    \begin{enumerate} \setlength\itemsep{1em}
         \pause \item Numerical methods from Finance
         \pause \item Perturbation methods go a long way
     \end{enumerate}
@@ -92,9 +95,9 @@
     \pause \textbf{Does it matter?} \pause Spoiler: yes.
 \end{frame}
 
-\section{Model}
+\section{Climate Model}
 \begin{frame}
-    Textbook energy balance model for temperature $\T$ and CO$_2$ concentration $\M$ dynamics \vspace{5pt}
+    Textbook energy balance \citeauthor{ashwin_tipping_2012} (\citeyear{ashwin_tipping_2012}) model for temperature $\T$ and CO$_2$ concentration $\M$ dynamics \vspace{5pt}
     \only<1>{\begin{equation}
         \epsilon \; \text{d} \T = \mu(\T, \M) \; \d{t} + \sigma \; \d{W} + \epsilon(\T) \; \d{N}
     \end{equation} \vspace{2pt}
@@ -110,7 +113,6 @@
         \end{equation}
     }
 \end{frame}
-
 
 \begin{frame}
     \only<1>{
@@ -134,8 +136,25 @@
             }
         \end{figure}   
     }
+    \only<4>{
+        \begin{figure}
+            \resizebox{0.9\linewidth}{!}{
+                \inputtikz{../../../plots/baufig_jump.tikz}
+            }
+        \end{figure}   
+    }
 \end{frame}
 
+\section{Economy}
+\begin{frame}
+    Maximise NPV of consumption subject to\vspace{2em}
+    \begin{equation*}
+        \frac{\d{\Y}}{\Y} = \Big(\text{tech. growth} - \text{abatement} - \text{damages}(\T)\Big)\; \d{t} + \sigma \d{W}
+    \end{equation*} \vspace{2em}
+    \begin{equation*}
+        \frac{\d{\M}}{\M} = \Big(\text{BAU} - \text{abatement}\Big)\; \d{t}
+    \end{equation*}
+\end{frame}
 
 \section{Results}
 \begin{frame}\frametitle{Emissions}
@@ -163,7 +182,7 @@
 \end{frame}
 
 \begin{frame}
-    \textbf{Thank you and AMA!}
+    \textbf{Thank you!}
     \begin{figure}
         \centering
         \includegraphics[width = 0.6\textwidth]{qr.png}

@@ -37,7 +37,7 @@ end;
 
 begin # Import
     ΔΛ = [0.06, 0.08];
-    ω = 0.002
+    Ω = [0.002]
 	N = 31;
 	domains = [
 		Hogg().T₀ .+ (0., 9.),
@@ -288,13 +288,25 @@ begin # Density plots
     densfig
 end
 
-function Fbau!(du, u, model, t)
+function Fbau!(du, u, model::ModelInstance, t)
 	du[1] = μ(u[1], u[2], model.hogg, model.albedo) / model.hogg.ϵ
+	du[2] = γ(t, model.economy, model.calibration)
+end
+function Fbau!(du, u, model::ModelBenchmark, t)
+    du[1] = μ(u[1], u[2], model.hogg) / model.hogg.ϵ
 	du[2] = γ(t, model.economy, model.calibration)
 end
 function Gbau!(du, u, model, t)    
 	du[1] = model.hogg.σₜ / model.hogg.ϵ
 	du[2] = 0.
+end
+
+function rate(u, model, t)
+    intensity(u[1], model.hogg, model.jump)
+end
+function affect!(integrator)
+    model = integrator.p
+    integrator.u[1] += 0.5 # increase(integrator.u[1], model.hogg, model.jump)
 end
 
 const X₀ = [Hogg().T₀, log(Hogg().M₀), log(Economy().Y₀)];
@@ -311,6 +323,22 @@ function simulatebau(Δλ; trajectories = 1000) # Business as Usual, ensemble si
     baunullcline = (x -> Model.mstable(x, model.hogg, model.albedo)).(Tspace)
     
     return bausim, baunullcline
+end
+
+function simulatebaujump(; trajectories = 1000)
+    model = first(jumpmodels)
+
+    diffprob = SDEProblem(SDEFunction(Fbau!, Gbau!), X₀[1:2], (0., 260.), model)
+    varjump = VariableRateJump(rate, affect!)
+    prob = JumpProblem(diffprob, Direct(), varjump)
+
+    ensemble = EnsembleProblem(prob)
+    
+    bausim = solve(ensemble, SRIW1(); trajectories)
+    baunullcline = [Model.mstable(T, model.hogg) for T ∈ Tspace]
+    
+    return bausim, baunullcline
+
 end
 
 begin # Side by side BAU plots
@@ -494,6 +522,86 @@ begin # Individual BAU plots
     if SAVEFIG
         filelabel = @sprintf("%.0f", 100 * Δλ)
         PGFPlotsX.save(joinpath(PLOTPATH, "baufig_$filelabel.tikz"), baufig; include_preamble = true) 
+    end
+
+    baufig
+end
+
+begin # Jump process
+    baufig = @pgf Axis({
+            width = raw"\linewidth",
+            height = raw"0.8\linewidth",
+            ylabel = TEMPLABEL,
+            xlabel = raw"Carbon concentration $M$",
+            yticklabels = temperatureticks[2],
+            ytick = 0:1:ΔTᵤ,
+            ymin = 0, ymax = ΔTᵤ,
+            xmin = Hogg().Mᵖ, xmax = 1200,
+            xtick = 200:100:1300,
+            grid = "both"
+        })
+    
+    # IPCC benchmark line
+    ipcccoords = Coordinates(zip(bauscenario[3:end, "CO2 concentration"], bauscenario[3:end, "Temperature"]))
+
+    ipccbau = @pgf Plot({
+        very_thick, 
+        color = "black", 
+        mark = "*", 
+        mark_options = {scale = 1.5, draw_opacity = 0}, 
+        mark_repeat = 2
+    }, ipcccoords)
+
+    push!(baufig, LegendEntry("SSP5 - Baseline"), ipccbau)
+
+    # Data simulation
+    bausim, baunullcline = simulatebaujump(trajectories = 30);
+    baumedian = timeseries_point_median(bausim, yearlytime)
+    baumedianM = @. exp(last(baumedian.u))
+    baumedianT = @. first(baumedian.u) - Hogg().Tᵖ
+
+    if SAVEFIG
+        PGFPlotsX.save(joinpath(PLOTPATH, "skeleton-baufig.tikz"), baufig; include_preamble = true) 
+    end
+
+    # Nullcline
+    push!(baufig, LegendEntry(raw"$\mu(T, M) = 0$"),
+        @pgf Plot({dashed, color = "black", ultra_thick},
+            Coordinates(collect(zip(exp.(baunullcline), Tspacedev))))
+    )
+
+    mediancoords = Coordinates(zip(baumedianM, baumedianT))
+
+    label = "Stochastic"
+
+    jumpcolor = RGB(0, 77 / 255, 64 / 255)
+
+    @pgf push!(
+        baufig,
+        Plot({ line_width="0.1cm", color = jumpcolor }, mediancoords),
+        LegendEntry(label),
+        Plot({ only_marks, mark_options = { fill = jumpcolor, scale = 1.5, draw_opacity = 0 }, mark_repeat = 20, forget_plot, mark = "*"}, mediancoords)
+    )
+
+    @pgf for sim in bausim
+        path = sim.(yearlytime)
+
+        mpath = @. exp([u[2] for u in path])
+        xpath = @. first(path) - Hogg().Tᵖ
+
+        push!(
+            baufig, 
+            Plot({forget_plot, color = jumpcolor, opacity = 0.2},
+                Coordinates(zip(mpath, xpath)),
+            )
+        )
+    end
+
+    @pgf baufig["legend style"] = raw"at = {(0.4, 0.975)}"
+
+
+    if SAVEFIG
+j
     end
 
     baufig

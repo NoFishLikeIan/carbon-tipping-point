@@ -116,7 +116,7 @@ function density(T, m, hogg::Hogg, albedo::Albedo; normalisation = 1e-5)
 end
 
 "Size of jump"
- function increase(T, hogg::Hogg, jump::Jump)
+function increase(T, hogg::Hogg, jump::Jump)
     ΔT = T - hogg.Tᵖ
 
     jump.j₀ + jump.j₁ * ΔT + jump.j₂ * ΔT^2
