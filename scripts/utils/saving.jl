@@ -10,11 +10,12 @@ function makefilename(model::ModelInstance, G::RegularGrid)
     @unpack ωᵣ = model.economy
     @unpack σₜ = model.hogg
     @unpack λ₁, λ₂ = model.albedo
+    @unpack ξ, υ = model.damages
 
     N = size(G, 1)
     Δλ = λ₁ - λ₂
 
-    filename = @sprintf("N=%i_Δλ=%.2f_ρ=%.5f_θ=%.2f_ψ=%.2f_σ=%.2f_ω=%.5f", N, Δλ, ρ, θ, ψ, σₜ, ωᵣ)
+    filename = @sprintf("N=%i_Δλ=%.2f_ρ=%.5f_θ=%.2f_ψ=%.2f_σ=%.2f_ω=%.5f_ξ=%.6f_υ=%.3f", N, Δλ, ρ, θ, ψ, σₜ, ωᵣ, ξ, υ)
 
     return "$(replace(filename, "." => ",")).jld2"
 end
@@ -27,10 +28,11 @@ function makefilename(model::ModelBenchmark, G::RegularGrid)
     @unpack ρ, θ, ψ = model.preferences
     @unpack ωᵣ = model.economy
     @unpack σₜ = model.hogg
+    @unpack ξ, υ = model.damages
 
     N = size(G, 1)
 
-    filename = @sprintf("N=%i_ρ=%.5f_θ=%.2f_ψ=%.2f_σ=%.2f_ω=%.5f", N, ρ, θ, ψ, σₜ, ωᵣ)
+    filename = @sprintf("N=%i_ρ=%.5f_θ=%.2f_ψ=%.2f_σ=%.2f_ω=%.5f_ξ=%.6f_υ=%.3f", N, ρ, θ, ψ, σₜ, ωᵣ, ξ, υ)
 
     return "$(replace(filename, "." => ",")).jld2"
 end

@@ -19,7 +19,7 @@ end
 begin
 	N = 21
 
-	Tdomain = hogg.T₀ .+ (0., 7.)
+	Tdomain = hogg.T₀ .+ (0., 9.)
 	mdomain = mstable.(Tdomain, Ref(hogg), Ref(Albedo()))
 	ydomain = log.(economy.Y₀ .* (0.5, 2.))
 	
@@ -29,16 +29,13 @@ begin
 end
 
 # --- Albedo
-model = ModelInstance(preferences, economy, hogg, Albedo(), calibration);
+model = ModelInstance(preferences, economy, damages, hogg, Albedo(), calibration);
 
 V̄, terminalpolicy = loadterminal(model, G);
 
-
 # --- Jump
-model = ModelBenchmark(preferences, economy, hogg, Jump(), calibration);
+model = ModelBenchmark(preferences, economy, damages, hogg, Jump(), calibration);
 V̄, terminalpolicy = loadterminal(model, G);
 
 policy = [Policy(χ, 0.) for χ ∈ terminalpolicy[:, :, :, 1]];
 V = deepcopy(V̄[:, :, :, 1]);
-
-computevalue(model, G; cache = false, verbose = true)

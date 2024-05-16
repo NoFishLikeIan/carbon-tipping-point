@@ -15,7 +15,7 @@ end
 
 Base.@kwdef struct EpsteinZin
     ρ::Float64 = 0.015  # Discount rate 
-    θ::Float64 = 10.    # Relative risk aversion
+    θ::Float64 = 2.    # Relative risk aversion
     ψ::Float64 = 1.5   # Elasticity of intertemporal complementarity 
 end
 

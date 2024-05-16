@@ -38,7 +38,7 @@ end;
 begin # Import
     ΔΛ = [0.06, 0.08];
     Ω = [0.002]
-	N = 31;
+	N = 23;
 	domains = [
 		Hogg().T₀ .+ (0., 9.),
 		log.(Hogg().M₀ .* (1., 2.)),
@@ -47,6 +47,7 @@ begin # Import
 
 	preferences = EpsteinZin()
 	calibration = load_object(joinpath(DATAPATH, "calibration.jld2"))
+    damages = GrowthDamages(ξ = 0.000266, υ = 3.25)
 
 	models = ModelInstance[]
     jumpmodels = ModelBenchmark[]
@@ -57,8 +58,8 @@ begin # Import
 	    albedo = Albedo(λ₂ = 0.31 - Δλ)
 		hogg = calibrateHogg(albedo)
 
-	    model = ModelInstance(preferences, economy, hogg, albedo, calibration)
-        jumpmodel = ModelBenchmark(preferences, economy, Hogg(), Jump(), calibration)
+	    model = ModelInstance(preferences, economy, damages, hogg, albedo, calibration)
+        jumpmodel = ModelBenchmark(preferences, economy, damages, Hogg(), Jump(), calibration)
 
 		push!(models, model)
         push!(jumpmodels, jumpmodel)
@@ -601,12 +602,10 @@ begin # Jump process
 
 
     if SAVEFIG
-j
     end
 
     baufig
 end
-
 
 begin # Carbon decay calibration
     sinkspace = range(Hogg().N₀, 1.2 * Hogg().N₀; length = 101)
@@ -699,12 +698,14 @@ begin # Damage fig
             no_markers,
             ultra_thick,
             xmin = 0, xmax = ΔTᵤ,
-            ytick = 0:0.1:1, xticklabel_style = {rotate = 45}
+            xticklabel_style = {rotate = 45}
         }
     )
 
+    ds = [Model.d(T, damages, Hogg()) for T in Tspace]
+
     @pgf damagecurve = Plot({color = "black", line_width = "0.1cm"},
-        Coordinates(Tspacedev, [Model.d(T, Economy(), Hogg()) for T in Tspace])
+        Coordinates(Tspacedev, ds)
     )
 
     push!(damagefig, damagecurve)
@@ -804,6 +805,7 @@ function G!(dx, x, p, t)
 end;
 
 begin # Solver
+    ω = first(keys(resultsmap))[1]
 	tspan = (0., Economy().t₁)
 
 	problems = OrderedDict{Float64, SDEProblem}()
@@ -1049,4 +1051,62 @@ begin # Temperature
     end
 
     tempfig
+end
+
+begin # Markov Chain
+    model = last(resultsmap[(0.002, 0.08)]);
+
+    y = log(model.economy.Y₀)
+
+    Tdomain = extrema(temperatureticks[1])
+
+    denseG = RegularGrid([Tdomain, domains[2], domains[3]], 101)
+    Tdense = range(denseG.domains[1]..., length = size(denseG, 1))
+    mdense = range(denseG.domains[2]..., length = size(denseG, 2))
+    
+    ar = (denseG.domains[2][2] - denseG.domains[2][1]) / (denseG.domains[1][2] - denseG.domains[1][1])
+
+    mnullcline = [mstable(T, model.hogg, model.albedo) for T in Tdense]
+    
+    tplot = contourf(
+        mdense, Tdense, (m, T) -> 1 / (abs(μ(T, m, model.hogg, model.albedo)) + model.hogg.σₜ^2); 
+        linewidth = 0, c = :Reds, 
+        xlims = denseG.domains[2], ylims = denseG.domains[1],
+        title = "Timestep, \$h \\; \\Delta t\$",
+        yticks = temperatureticks,
+        xlabel = "Log Carbon Concentration, \$m\$",
+        ylabel = TEMPLABEL,
+        margins = 5Plots.mm, aspect_ratio = ar, dpi = 180
+    )
+
+    # plot!(tplot, mnullcline, Tdense; c = :white, label = false, linewidth = 2, linestyle = :dash)
+
+    SAVEFIG && savefig(tplot, joinpath(PLOTPATH, "timestep.png"))
+
+    tplot
+end
+
+begin # Abatement policy
+    _, αitp, _, model = resultsmap[(0.002, 0.08)];
+
+    mnullcline = [mstable(T, model.hogg, model.albedo) for T in Tdense]
+
+    
+    αplot = contourf(
+        mdense, Tdense, (m, T) -> αitp(T, m, y, 0.); 
+        linewidth = 0, c = :BuGn_3, 
+        xlims = denseG.domains[2], ylims = denseG.domains[1],
+        title = "Abatement, \$ \\alpha(m, T, Y) \$",
+        yticks = temperatureticks,
+        xlabel = "Log Carbon Concentration, \$m\$",
+        ylabel = TEMPLABEL,
+        margins = 5Plots.mm, aspect_ratio = ar, dpi = 180,
+        levels = 100
+    )
+
+    plot!(αplot, mnullcline, Tdense; c = :black, label = false, linewidth = 2)
+
+    SAVEFIG && savefig(αplot, joinpath(PLOTPATH, "abatement.png"))
+   
+    αplot
 end

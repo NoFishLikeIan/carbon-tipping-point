@@ -43,6 +43,9 @@
 
 \pgfplotsset{compat=1.18}
 
+\usepgfplotslibrary{external} 
+\tikzexternalize
+
 \newcommand{\X}{{\color{violet} X}}
 \newcommand{\inputtikz}[1]{%  
 
@@ -62,31 +65,26 @@
 
 
 \author{Andrea Titton}
-\title{The Dangers of Abatement Procrastination\\in a Tipping Climate}
+\title{Optimal Emissions in a Tipping Climate}
 \institute{CeNDEF, University of Amsterdam}
-\date{EPOC PhD Conference, March 2024}
+\date{T2M, Amsterdam, May 2024}
 
 \begin{document}
 
 \frame[plain]{\titlepage}
 
 \section{Motivation}
-\begin{frame}{Climate Science - Economics gap}
-    Importance of getting climate dynamics right (\cite{dietz_are_2020})
-    \vspace{20pt}
+\begin{frame}
+    Importance of getting climate dynamics right (\cite{dietz_are_2020}). \textbf{Tipping points:}
+    \vspace{10pt}
     \begin{enumerate} \setlength{\itemsep}{10pt}
+        \pause \item \textbf{Economics:} Stochastic tipping (e.g. \cite{lontzek_stochastic_2015,taconet_social_2021})
         \pause \item \textbf{Climate Science:} Bifurcation tipping
-        \pause \item \textbf{Economics:} Stochastic tipping 
     \end{enumerate}
 \end{frame}
 
-\begin{frame}{Starting to bridge the gap...}
-    Introduce an \textbf{ice-albedo feedback} in a standard IAM (\cite{hambel_optimal_2021})
-
-    \begin{figure}
-        \includegraphics[width = 0.5\linewidth]{../../../plots/Ice_albedo_feedback.jpg}
-        \caption{Source: Tovarg, Wikipedia}
-    \end{figure}
+\begin{frame}
+    \textbf{This paper:} Introduce an \textbf{ice-albedo feedback} in an IAM \citeauthor{hambel_optimal_2021} (\citeyear{hambel_optimal_2021}) and study optimal emissions.
 \end{frame}
 
 \section{Climate Model}
@@ -191,7 +189,7 @@
     \only<2>{
         \begin{figure}
             \resizebox{0.9\linewidth}{!}{
-                \inputtikz{../../../plots/baufig_0.tikz}
+                \inputtikz{../../../plots/baufig_6.tikz}
             }
         \end{figure}   
     }
@@ -221,12 +219,14 @@
         \column{0.7\linewidth}
         \begin{equation*}
             \visible<1->{\frac{\d{\Y}}{\Y}} = \varrho - \delta + \phi(1 - \control{\chi})
-            \visible<2->{-d(\T) - \frac{\omega}{2} c(\control{\alpha})}
+            \visible<2->{-d(\T) - \omega c(\control{\alpha})}
         \end{equation*}
     \end{columns}
 \end{frame}
 
 \begin{frame}{Damage function}
+    \cite{weitzman_ghg_2012}
+
     \begin{figure}
         \inputtikz{../../../plots/damagefig.tikz}
     \end{figure}
@@ -255,35 +255,47 @@
         \visible<3->{
             \textbf{Objective}
             \begin{equation*}
-                v(\T, \M, \Y) = \sup_{\control{\chi, \alpha}} \int^\infty_0 \only<3>{f(\control{\chi} Y, v)}\only<4>{e^{-\rho t} \log(\control{\chi} \Y)}\; \d{t} 
+                v_t(\T, \M, \Y) = \sup_{\control{\chi, \alpha}} \mathbb{E}_t \int^\infty_t f(\control{\chi}_s Y_s, v_s) \; \d{s} 
             \end{equation*}
+            \begin{itemize}
+                \item Discount rate $\rho = 1.5 \%$
+                \item RRA $\theta = 2$
+                \item EIS $\psi = 1.5$
+            \end{itemize}
         }
     \end{columns}
 \end{frame}
 
 \begin{frame}{Numerical Solution}
-    \begin{columns}
-        \column{0.5\linewidth}
-            \begin{enumerate}
-                \item Viscosity based solution are not robust
-                \pause \item First Markov Chain approximation for Epstein-Zin specification (to the best of my knowledge)
-                \pause \item Ask me for the code, hopefully package soon
-            \end{enumerate}
-        \column{0.5\linewidth}
-        \begin{figure}
-            \includegraphics[width = 0.75 \linewidth]{../../../plots/cover-book.jpg}
-        \end{figure}
-    \end{columns}
+    \begin{enumerate}
+        \item Finite Difference scheme not robust: monotonicity of scheme
+        \item Develop a Markov Chain approximation for Epstein-Zin specification based on \cite{kushner_numerical_2001}
+    \end{enumerate}
+\end{frame}
+
+\begin{frame}
+    \begin{figure}
+        \centering
+        \includegraphics[width = \linewidth]{../../../plots/timestep.png}
+    \end{figure}
+\end{frame}
+
+\begin{frame}{Optimal Abatement with Tipping point}
+    \begin{figure}
+        \centering
+        \includegraphics[width = \linewidth]{../../../plots/abatement.png}
+    \end{figure}
 \end{frame}
 
 \begin{frame}{Benchmark Model: Stochastic Tipping}
-    \visible<1->{\begin{equation*}
+    \begin{equation*}
         \mu_{\lambda}(\T, \M) = {\color{cbyellow} S_0} \; (1 - \cancelto{\bar{\lambda}}{\lambda(\T)})
         - \eta \sigma \T^4 + (G_0 + G_1 \log \M / M^{\mathrm{p}})
-    \end{equation*}}
-    \visible<2->{\begin{equation*}
+    \end{equation*}
+    \begin{equation*}
         \epsilon \; \d{\T} = \mu_{\lambda}(\T, \M) + \sigma \d{w} + \Theta(\T) \; \d{N} \text{ with arrival } \pi(\T)
-    \end{equation*}}
+    \end{equation*}
+    Calibrated as in \cite{hambel_optimal_2021}
 \end{frame}
 
 \section{Results}
@@ -307,13 +319,17 @@
 \begin{frame}{Conclusions}
     \begin{itemize} \setlength{\itemsep}{10pt}
         \item Bifurcation and stochastic tipping are \textbf{qualitatively} different
-        \pause \item Prescribe \textbf{different emission}
-        \pause \item Embrace complexity!
+        \item Prescribe \textbf{different emission paths}
     \end{itemize}
+
+    To do \begin{enumerate}
+        \item Prove this inequality analytically
+        \item Explore different calibrations and level damages
+    \end{enumerate}
 \end{frame}
 
 \begin{frame}
-    \LARGE \textbf{Thank you and ask me anything!}
+    \LARGE \textbf{Thank you!}
 \end{frame}
 
 \appendix

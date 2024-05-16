@@ -1,13 +1,19 @@
+Base.@kwdef struct GrowthDamages
+    ξ::Float64 = 0.00026
+    υ::Float64 = 1.
+end
+Base.@kwdef struct LevelDamages
+    ξ::Float64 = 0.00266
+end
+
+Damages = Union{GrowthDamages, LevelDamages}
+
 Base.@kwdef struct Economy
     # Technology
     ωᵣ::Float64 = 2e-3 # Speed of abatement technology cost reduction
     ϱ::Float64 = 9e-4 # Growth of TFP
     κ::Float64 = 0.0632 # Adjustment costs of abatement technology
-    
-    # Damages
     δₖᵖ::Float64 = 0.0116 # Initial depreciation rate of capital
-    ξ::Float64 = 0.00026
-    υ::Float64 = 3.25
 
     # Output
     A₀::Float64 = 0.113 # Initial TFP
@@ -29,23 +35,12 @@ function β′(t, e, economy::Economy)
     exp(-economy.ωᵣ * t) * e
 end
 
-function d(T, economy::Economy, hogg::Hogg)
-    @unpack υ, ξ = economy
-    ξ * max(T - hogg.Tᵖ, 0.)^υ
+function d(T, damages::GrowthDamages, hogg::Hogg)
+    damages.ξ * max(T - hogg.Tᵖ, 0.)^damages.υ
 end
 
-function d′(T, economy::Economy, hogg::Hogg)
-    @unpack υ, ξ = economy
-    ξ * υ * (T - hogg.Tᵖ)^(υ - 1)
-end
-
-function d′′(T, economy::Economy, hogg::Hogg)
-    @unpack υ, ξ = economy
-    ξ * υ * (υ - 1) * (T - hogg.Tᵖ)^(υ - 2)
-end
-
-function δₖ(T, economy::Economy, hogg::Hogg)
-    economy.δₖᵖ + d(T, economy, hogg)
+function d(T, damages::LevelDamages, hogg::Hogg)
+    inv(1 + damages.ξ * max(T - hogg.Tᵖ, 0.)^2)
 end
 
 function ϕ(t, χ, economy::Economy)

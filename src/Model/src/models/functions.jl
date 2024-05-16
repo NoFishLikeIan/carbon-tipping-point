@@ -10,9 +10,9 @@ end
 
 "Drift of dy in the terminal state, t ≥ τ."
 bterminal(Xᵢ::Point, args...) = bterminal(Xᵢ.T, args...)
-bterminal(T::Float64, χ, model::ModelGeneric) = bterminal(T, χ, model.economy, model.hogg) 
-function bterminal(T::Float64, χ, economy::Economy, hogg::Hogg)
-    ϕ(economy.τ, χ, economy) - economy.δₖᵖ - d(T, economy, hogg)
+bterminal(T::Float64, χ, model::ModelGeneric) = bterminal(T, χ, model.economy, model.damages, model.hogg) 
+function bterminal(T::Float64, χ, economy::Economy, damages::GrowthDamages, hogg::Hogg)
+    ϕ(economy.τ, χ, economy) - economy.δₖᵖ - d(T, damages, hogg)
 end
 
 "Drift of dy."
@@ -23,20 +23,9 @@ function b(t, Xᵢ::Point, u::Policy, model::ModelGeneric)
     abatement = Aₜ * β(t, εₜ, model.economy)
 
     growth = model.economy.ϱ + ϕ(t, u.χ, model.economy) - model.economy.δₖᵖ
-    damage = d(Xᵢ.T, model.economy, model.hogg)
+    damage = d(Xᵢ.T, model.damages, model.hogg)
 
     return growth - abatement - damage
-end
-
-function ∇ᵤb(t, Xᵢ::Point, u::Policy, model::ModelGeneric)
-    M = exp(Xᵢ.m)
-
-    εₜ = ε(t, M, u.α, model)
-
-    ∇α = -A(t, economy) * β′(t, εₜ, model.economy) * ε′(t, M, model)
-    ∇χ = ϕ′(t, u.χ, model.economy)
-
-    return ∇χ, ∇α
 end
 
 "Computes maximum absolute value of the drift of y."
