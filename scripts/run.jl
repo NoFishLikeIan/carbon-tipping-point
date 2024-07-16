@@ -2,7 +2,7 @@ include("terminal.jl")
 include("backward.jl")
 
 ΔΛ = [0.06, 0.08];
-N = 23;
+N = 31;
 
 preferences = EpsteinZin();
 jump = Jump()
@@ -11,7 +11,7 @@ calibration = load_object(joinpath(DATAPATH, "calibration.jld2"));
 # Construct model
 economy = Economy()
 hogg = Hogg()
-damages = GrowthDamages(ξ = 0.000266, υ = 3.25)
+damages = GrowthDamages()
 
 # Construct Grid
 ydomain = log.(economy.Y₀ .* (0.5, 2.))
