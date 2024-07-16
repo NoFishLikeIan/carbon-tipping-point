@@ -1,7 +1,8 @@
 Base.@kwdef struct GrowthDamages
-    ξ::Float64 = 0.00026
-    υ::Float64 = 1.
+    ξ::Float64 = 0.000075
+    υ::Float64 = 3.25
 end
+
 Base.@kwdef struct LevelDamages
     ξ::Float64 = 0.00266
 end

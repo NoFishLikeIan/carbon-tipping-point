@@ -49,17 +49,11 @@
 \maketitle
 
 \begin{abstract}
-  This paper investigates the role of non-linear tipping points in determining optimal abatement policies. To do so, I introduce a stylised ice-albedo tipping point in the climate dynamics and study the consequences this has in determining optimal emissions in a dynamic stochastic general equilibrium model. In line with recent evidence, I assume that climate change hinders economic growth. I show that the presence of a tipping point prescribes ambitious abatement policies, not only in scope but, crucially, in timing. 
-  Finally, by comparing the model with the widely used stochastic tipping model, I show that in the latter abatement is slower and similar to a model with fast temperature growth but no tipping. This casts some doubts on the appropriateness of using stochastic tipping as an approximation for tipping points.
+  This paper investigates the role of non-linear tipping points in determining optimal abatement policies. To do so, I introduce a stylised ice-albedo tipping point in the climate dynamics and study the consequences this has in determining optimal emissions in a dynamic stochastic general equilibrium model. In line with recent evidence, I assume that climate change hinders economic growth. I show that the presence of a tipping point prescribes ambitious abatement policies, not only in scope but, crucially, in timing.
 \end{abstract}
 
 \newpage
-As the world temperature rises, due to carbon dioxide (CO2) emissions from human economic activities, the risk of tipping points in the climate system becomes more concrete \citep{ashwin_extreme_2020,sledd_cloudier_2021}. This risk affects the trade-off between the economic gains from emissions and the damages such emissions impose on the economy. In this paper, I study the relationship between the presence of a tipping point and the optimal abatement of emissions. To do so, I solve a social-planner integrated assessment model with a stylised ice-albedo feedback in the climate dynamics \citep{hogg_glacial_2008,ashwin_tipping_2012} and study the effect this has on optimal abatement policies. The tipping point affects temperature dynamics, and as a consequence optimal emissions, in three ways. First, it introduces a non-linear increase in temperature. Second, it makes positive temperature shocks more persistent than negative ones. Third, it introduces a jump in the abatement necessary to revert temperatures to the pre-tipping-point level. I show that, when tipping points are present, optimal abatement is more ambitious in scope and timing
-
-The importance of modelling precise climate dynamics and tipping points when determining optimal emission paths has been increasingly recognised in economics \citep{van_den_bremer_risk-adjusted_2021,dietz_economic_2021,dietz_are_2020,taconet_social_2021,lontzek_stochastic_2015}. Previous approaches have mostly focused on the stochastic nature of tipping points, by modelling temperature dynamics \citep{dietz_economic_2021} or damages \citep{lontzek_stochastic_2015} as jump processes, with arrival rates increasing in emissions. Yet, many tipping points in the climate system are caused by bifurcations \citep{ashwin_extreme_2020,ashwin_tipping_2012}. In this paper, I show that introducing this class of tipping points in an integrated assessment model yields similar predictions in terms of aggregate emissions, but prescribes much steeper reduction of emissions to keep the risk of tipping low.
-
-To tease out this difference, I study an AK-model in which increases in temperature, beyond pre-industrial levels, reduce economic growth (as in \cite{pindyck_economic_2013} and \cite{hambel_optimal_2021}). This modelling choice, as opposed to having temperatures wipe-out a fraction of the capital stock, as in Nordhaus (\citeyear{nordhaus_estimates_2014,nordhaus_question_2008,nordhaus_revisiting_2017}), is motivated by recent evidence on the role of temperature in reducing economic growth and productivity \citep{burke_global_2015, dietz_growth_2019}.
-
+\subfile{sections/introduction/introduction.tex}
 
 \section{Climate Model}
 
@@ -89,7 +83,7 @@ This paper studies the role of tipping points in determining optimal emissions. 
 The model presented here represents an early and simplified analysis that can be extended in various directions. First, more work is needed to analytically link the risk of tipping and the optimal abatement strategy, in order to quantify precisely the role of higher order climate dynamics in determining the social cost of carbon. Second, the underlying assumption of the social planner's optimisation problem is that she knows the climate dynamics and the role of the ice-albedo feedback. Such an assumption calls for extending the analysis to a situation in which the magnitude of the albedo loss is not known and rather can be estimated using early warning signals. Yet, in the face of uncertainty, the optimal abatement policy derived in this paper serves as a good rule against the possible worst case scenario.
 
 \newpage
-\bibliography{../../scc-tipping-points.bib}
+\bibliography{scc-tipping-points}
 
 \newpage\appendix
 \subfile{sections/numerical-solution/numerical-solution.tex}

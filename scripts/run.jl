@@ -2,7 +2,7 @@ include("terminal.jl")
 include("backward.jl")
 
 ΔΛ = [0.06, 0.08];
-N = 31;
+N = 18;
 
 preferences = EpsteinZin();
 jump = Jump()

@@ -38,8 +38,7 @@ end;
 
 begin # Import
     ΔΛ = [0.06, 0.08];
-    Ω = [0.002]
-	N = 23;
+	N = 31;
 	domains = [
 		Hogg().T₀ .+ (0., 9.),
 		log.(Hogg().M₀ .* (1., 2.)),
@@ -48,14 +47,13 @@ begin # Import
 
 	preferences = EpsteinZin()
 	calibration = load_object(joinpath(DATAPATH, "calibration.jld2"))
-    damages = GrowthDamages(ξ = 0.000266, υ = 3.25)
+    damages = GrowthDamages()
 
 	models = ModelInstance[]
     jumpmodels = ModelBenchmark[]
-	
 
-	for Δλ ∈ ΔΛ, ωᵣ ∈ Ω
-		economy = Economy(ωᵣ = ωᵣ)
+	for Δλ ∈ ΔΛ
+		economy = Economy()
 	    albedo = Albedo(λ₂ = 0.31 - Δλ)
 		hogg = calibrateHogg(albedo)
 
