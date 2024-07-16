@@ -1,0 +1,98 @@
+\documentclass[pdf]{beamer}
+
+\usetheme{Berlin}
+\beamertemplatenavigationsymbolsempty
+\setbeamerfont{frametitle}{size=\small}
+
+\usepackage[utf8]{inputenc}
+\usepackage{hyperref}
+
+% Math
+\usepackage{amsmath, amssymb, mathtools, bbm, bm}
+\usepackage[makeroom]{cancel}
+\definecolor{cbred}{RGB}{216, 27, 96}
+\definecolor{cbblue}{RGB}{30, 137, 229}
+\definecolor{cbyellow}{RGB}{255, 193, 7}
+\definecolor{cbgreen}{RGB}{0, 77, 64}
+\definecolor{cbdarkblue}{RGB}{0, 73, 255}
+
+
+\let\d\relax
+\newcommand{\d}[1]{\mathrm{d}#1}
+\newcommand{\control}[1]{\bm{#1}}
+\newcommand{\T}{{\color{cbred} T}}
+\newcommand{\M}{{\color{cbblue} M}}
+\newcommand{\Y}{{\color{cbgreen} Y}}
+
+% Diagrams
+\usepackage{tikz} 
+\usepackage{tikzit}
+\usepackage{tikzscale}
+\usepackage{pgfplots}
+\usepackage{graphicx}
+\usepackage{wrapfig}
+\usepackage{relsize}
+
+
+% Graphs
+\usepackage{tikz} 
+\usepackage{tikzit}
+\usepackage{pgfplots}
+\usepackage{ifdraft}
+\usetikzlibrary{positioning,fit,calc,decorations.pathreplacing,calligraphy, arrows.meta, pgfplots.groupplots}
+
+\usepgfplotslibrary{external} 
+\tikzexternalize
+
+\pgfplotsset{compat=1.18}
+
+\newcommand{\X}{{\color{violet} X}}
+\newcommand{\inputtikz}[1]{%  
+
+    \ifdraft{
+    \includegraphics[width=0.5\textwidth]{example-image-a}
+    }{
+    \IfFileExists{#1}{
+        \input{#1}
+        }{
+        \includegraphics[width=0.5\textwidth]{example-image-a}
+    }
+    }
+}
+
+% Set colors for sections
+\definecolor{Econ}{RGB}{0, 77, 64}
+\definecolor{Climate}{RGB}{176.97, 0.0, 37.995}
+
+
+\author{Andrea Titton}
+\title{Optimal Emissions and\\Climate Tipping Points}
+\institute{CeNDEF, University of Amsterdam}
+\date{EGU General Assembly 2024}
+
+\begin{document}
+\begin{frame}{What is a tipping point?} 
+    \begin{columns}
+        \begin{column}{0.5\linewidth}
+            {\color{Econ} \textbf{The Economics Way}}
+           \begin{figure}
+                    \inputtikz{../../../plots/intro_baufig_jump.tikz}
+            \end{figure}
+        \end{column}
+        \begin{column}{0.5\linewidth}
+            \only<2>{{\color{Climate} \textbf{The Climate Science Way}} 
+            \begin{figure}
+                    \inputtikz{../../../plots/intro_baufig_8.tikz}
+                \end{figure}}
+        \end{column}
+    \end{columns}
+\end{frame}
+
+\begin{frame}
+    \begin{figure}
+        \includegraphics[width = 0.9\linewidth]{epoc-figure10.pdf}
+    \end{figure}
+\end{frame}
+
+
+\end{document}

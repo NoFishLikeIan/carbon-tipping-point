@@ -30,6 +30,7 @@ begin # Global variables
     DATAPATH = get(env, "DATAPATH", "data")
     PLOTPATH = get(env, "PLOTPATH", "plots")
     PRESENTATIONPATH = joinpath(PLOTPATH, "presentation")
+    jumpcolor = RGB(0, 77 / 255, 64 / 255)
 
     SAVEFIG = false 
     kelvintocelsius = 273.15
@@ -99,6 +100,7 @@ begin # labels and axis
     yearlytime = collect(0:Economy().t₁) 
     ΔTᵤ = last(Tspace) - first(Tspace)
     temperatureticks = makedevxlabels(0., ΔTᵤ, first(models); step = 1, digits = 0)
+    presentationtemperatureticks = makedevxlabels(0., ΔTᵤ, first(models); step = 2, digits = 0)
 end
 
 begin # Load IPCC data
@@ -112,22 +114,23 @@ begin # Load IPCC data
 end
 
 begin # Albedo plot
-    ΔΛfig = [0, 0.06, 0.08]
+    ΔΛfig = [0.06, 0.08]
     albedovariation = [(T -> Model.λ(T, Albedo(λ₂ = Albedo().λ₁ - Δλ))).(Tspace) for Δλ ∈ ΔΛfig]
 
 
     albedofig = @pgf Axis(
         {
-            width = raw"1\textwidth",
-            height = raw"0.6\textwidth",
+            width = raw"0.4\textwidth",
+            height = raw"0.4\textwidth",
             grid = "both",
             xlabel = TEMPLABEL,
-            ylabel = raw"Albedo coefficient $\lambda(T)$",
-            xticklabels = temperatureticks[2],
-            xtick = 0:1:ΔTᵤ,
+            ylabel = raw"$\lambda(T)$",
+            xticklabels = presentationtemperatureticks[2],
+            xtick = 0:2:ΔTᵤ,
             no_markers, ultra_thick,
             xmin = 0, xmax = (ΔTᵤ),
-            ymin = 0.2, ymax = 0.32
+            ymin = 0.2, ymax = 0.32,
+            ytick = 0.2:0.05:0.35
         }
     )
 
@@ -137,7 +140,7 @@ begin # Albedo plot
 
     @pgf for (Δλ, albedodata) in zip(ΔΛfig, albedovariation)
         curve = Plot(
-            {color=seqpaletteΔλ[Δλ], line_width="0.1cm",}, 
+            {color=seqpaletteΔλ[Δλ], line_width="0.4em"}, 
             Coordinates(
                 collect(zip(Tspacedev, albedodata))
             )
@@ -146,12 +149,12 @@ begin # Albedo plot
         label = @sprintf("%.0f \\%%", 100 * Δλ)
         legend = LegendEntry(label)
 
-        push!(albedofig, curve, legend)
+        push!(albedofig, curve) # legend)
     end
     @pgf albedofig["legend style"] = raw"at = {(0.3, 0.5)}"
 
     if SAVEFIG
-        PGFPlotsX.save(joinpath(PLOTPATH, "albedo.tikz"), albedofig; include_preamble = true) 
+        PGFPlotsX.save(joinpath(PLOTPATH, "poster_albedo.tikz"), albedofig; include_preamble = true) 
     end
 
     albedofig
@@ -307,7 +310,7 @@ function rate(u, model, t)
 end
 function affect!(integrator)
     model = integrator.p
-    integrator.u[1] += 0.5 # increase(integrator.u[1], model.hogg, model.jump)
+    integrator.u[1] += 6increase(integrator.u[1], model.hogg, model.jump)
 end
 
 const X₀ = [Hogg().T₀, log(Hogg().M₀), log(Economy().Y₀)];
@@ -352,8 +355,8 @@ begin # Side by side BAU plots
             }, 
             width = raw"0.6\textwidth",
             height = raw"0.6\textwidth",
-            yticklabels = temperatureticks[2],
-            ytick = 0:1:ΔTᵤ,
+            yticklabels = presentationtemperatureticks[2],
+            ytick = 0:2:ΔTᵤ,
             ymin = 0, ymax = ΔTᵤ,
             xmin = Hogg().Mᵖ, xmax = 1200,
             xtick = 200:100:1100,
@@ -365,7 +368,7 @@ begin # Side by side BAU plots
         PGFPlotsX.save(joinpath(PLOTPATH, "baufig.tikz"), baufig; include_preamble = true) 
     end    
 
-    @pgf for (i, Δλ) ∈ enumerate([0., 0.08])
+    @pgf for (i, Δλ) ∈ enumerate([0.08])
         isfirst = Δλ ≈ 0.
         Δλplots = []
         timeseriescolor = seqpaletteΔλ[Δλ]
@@ -446,22 +449,140 @@ begin # Side by side BAU plots
     baufig
 end
 
-begin # Individual BAU plots
-    Δλ = 0.06
-    baufig = @pgf Axis(
+begin # Side by side Jump and Λ
+    baufig = @pgf GroupPlot(
         {
-            width = raw"\linewidth",
-            height = raw"0.8\linewidth",
-            ylabel = TEMPLABEL,
-            xlabel = raw"Carbon concentration $M$",
-            yticklabels = temperatureticks[2],
-            ytick = 0:1:ΔTᵤ,
+            group_style = { 
+                group_size = "2 by 1", 
+                horizontal_sep="0pt",
+                yticklabels_at="edge left"
+            }, 
+            width = raw"0.4\textwidth",
+            height = raw"0.3\textwidth",
+            yticklabels = presentationtemperatureticks[2],
+            ytick = 0:2:ΔTᵤ,
             ymin = 0, ymax = ΔTᵤ,
             xmin = Hogg().Mᵖ, xmax = 1200,
-            xtick = 200:100:1300,
+            xtick = 200:200:1100,
             grid = "both"
         }
     )
+
+    # Jump simulation
+    bausim, baunullcline = simulatebaujump(trajectories = 10);
+    baumedian = timeseries_point_median(bausim, yearlytime)
+    baumedianM = @. exp(last(baumedian.u))
+    baumedianT = @. first(baumedian.u) - Hogg().Tᵖ
+
+    jumpfigs = []
+
+    # Nullcline
+    push!(jumpfigs, @pgf Plot({dashed, color = "black", ultra_thick, forget_plot}, Coordinates(zip(exp.(baunullcline), Tspacedev))))
+
+    mediancoords = Coordinates(zip(baumedianM, baumedianT))
+
+    @pgf push!(
+        jumpfigs,
+        Plot({ line_width="0.3em", color = jumpcolor }, mediancoords),
+        LegendEntry("Stochastic"),
+        Plot({ only_marks, mark_options = { fill = jumpcolor, scale = 1.5, draw_opacity = 0 }, mark_repeat = 20, forget_plot, mark = "*"}, mediancoords)
+    )
+
+    @pgf for sim in bausim
+        path = sim.(yearlytime)
+
+        mpath = @. exp([u[2] for u in path])
+        xpath = @. first(path) - Hogg().Tᵖ
+
+        push!(
+            jumpfigs, 
+            Plot({forget_plot, color = jumpcolor, opacity = 1},
+                Coordinates(zip(mpath, xpath)),
+            )
+        )
+    end
+
+    @pgf push!(baufig,  { xlabel = raw"Carbon concentration $M$", ylabel = TEMPLABEL }, jumpfigs...)
+
+    
+    # Data simulation
+    Δλfigs = []
+
+    for Δλ ∈ [0.06, 0.08]
+        bausim, baunullcline = simulatebau(Δλ; trajectories = 10)
+        baumedian = [timepoint_median(bausim, t) for t in yearlytime]
+        baumedianM = @. exp([u[2] for u in baumedian])
+        baumedianT = @. first(baumedian) - Hogg().Tᵖ
+
+        timeseriescolor = seqpaletteΔλ[Δλ]
+
+        # Nullcline
+        push!(Δλfigs,
+            @pgf Plot({dashed, color = "black", ultra_thick, forget_plot},
+                Coordinates(zip(exp.(baunullcline), Tspacedev))
+            )
+        )
+
+        mediancoords = Coordinates(zip(baumedianM, baumedianT))
+
+        label = @sprintf "%.0f\\%% loss" Δλ * 100
+
+        @pgf begin
+            push!(
+                Δλfigs,
+                Plot({line_width="0.3em", color = timeseriescolor, opacity = 0.8}, mediancoords),
+                LegendEntry(label),
+                Plot({only_marks, mark_options = {fill = timeseriescolor, scale = 1.5, draw_opacity = 0, fill_opacity = 0.8}, mark_repeat = 20, forget_plot, mark = "*"}, mediancoords)
+            )
+        end
+
+        @pgf for sim in bausim
+            path = sim.(yearlytime)
+
+            mpath = @. exp([u[2] for u in path])
+            xpath = @. first(path) - Hogg().Tᵖ
+
+            push!(
+                Δλfigs, 
+                Plot({forget_plot, color = timeseriescolor, opacity = 0.2},
+                    Coordinates(zip(mpath, xpath)),
+                )
+            )
+        end
+    end
+
+    @pgf push!(baufig,  { xlabel = raw"Carbon concentration $M$" }, Δλfigs...)
+  
+    @pgf baufig["legend style"] = raw"at = {(0.45, 0.95)}"
+
+
+    if SAVEFIG
+        PGFPlotsX.save(joinpath(PLOTPATH, "poster_baufig.tikz"), baufig; include_preamble = true) 
+    end
+    
+    baufig
+end
+
+begin # Individual BAU plots
+    Δλ = 0.08
+    baufig = @pgf Axis(
+        {
+            width = raw"\linewidth",
+            height = raw"\linewidth",
+            ylabel = "Temperature",
+            xlabel = raw"CO$_2$",
+            yticklabels = temperatureticks[2][1:2:end],
+            ytick = 0:2:ΔTᵤ,
+            ymin = 0, ymax = ΔTᵤ,
+            xmin = Hogg().Mᵖ, xmax = 1200,
+            xtick = 200:300:1300,
+            grid = "both"
+        }
+    )
+
+    if SAVEFIG
+        PGFPlotsX.save(joinpath(PLOTPATH, "introskeleton-baufig.tikz"), baufig; include_preamble = true) 
+    end
     
     # IPCC benchmark line
     ipcccoords = Coordinates(zip(bauscenario[3:end, "CO2 concentration"], bauscenario[3:end, "Temperature"]))
@@ -474,20 +595,20 @@ begin # Individual BAU plots
         mark_repeat = 2
     }, ipcccoords)
 
-    push!(baufig, LegendEntry("SSP5 - Baseline"), ipccbau)
+    push!(
+        baufig, 
+        # LegendEntry("SSP5 - Baseline"), 
+        ipccbau
+    )
 
     # Data simulation
-    bausim, baunullcline = simulatebau(Δλ; trajectories = 30);
+    bausim, baunullcline = simulatebau(Δλ; trajectories = 10);
     baumedian = timeseries_point_median(bausim, yearlytime)
     baumedianM = @. exp(last(baumedian.u))
     baumedianT = @. first(baumedian.u) - Hogg().Tᵖ
 
-    if SAVEFIG
-        PGFPlotsX.save(joinpath(PLOTPATH, "skeleton-baufig.tikz"), baufig; include_preamble = true) 
-    end
-
     # Nullcline
-    push!(baufig, LegendEntry(raw"$\mu(T, M) = 0$"),
+    push!(baufig, # LegendEntry(raw"$\mu(T, M) = 0$"),
         @pgf Plot({dashed, color = "black", ultra_thick},
             Coordinates(collect(zip(exp.(baunullcline), Tspacedev))))
     )
@@ -498,8 +619,8 @@ begin # Individual BAU plots
 
     @pgf push!(
         baufig,
-        Plot({ line_width="0.1cm", color = seqpaletteΔλ[Δλ] }, mediancoords),
-        LegendEntry(label),
+        Plot({ line_width="0.05cm", color = seqpaletteΔλ[Δλ] }, mediancoords),
+        # LegendEntry(label),
         Plot({ only_marks, mark_options = { fill = seqpaletteΔλ[Δλ], scale = 1.5, draw_opacity = 0 }, mark_repeat = 20, forget_plot, mark = "*"}, mediancoords)
     )
 
@@ -511,7 +632,7 @@ begin # Individual BAU plots
 
         push!(
             baufig, 
-            Plot({forget_plot, color = seqpaletteΔλ[Δλ], opacity = 0.2},
+            Plot({forget_plot, color = seqpaletteΔλ[Δλ], opacity = 1.},
                 Coordinates(zip(mpath, xpath)),
             )
         )
@@ -522,7 +643,7 @@ begin # Individual BAU plots
 
     if SAVEFIG
         filelabel = @sprintf("%.0f", 100 * Δλ)
-        PGFPlotsX.save(joinpath(PLOTPATH, "baufig_$filelabel.tikz"), baufig; include_preamble = true) 
+        PGFPlotsX.save(joinpath(PLOTPATH, "intro_baufig_$filelabel.tikz"), baufig; include_preamble = true) 
     end
 
     baufig
@@ -531,14 +652,14 @@ end
 begin # Jump process
     baufig = @pgf Axis({
             width = raw"\linewidth",
-            height = raw"0.8\linewidth",
-            ylabel = TEMPLABEL,
-            xlabel = raw"Carbon concentration $M$",
-            yticklabels = temperatureticks[2],
-            ytick = 0:1:ΔTᵤ,
+            height = raw"\linewidth",
+            ylabel = "Temperature",
+            xlabel = raw"CO$_2$",
+            yticklabels = temperatureticks[2][1:2:end],
+            ytick = 0:2:ΔTᵤ,
             ymin = 0, ymax = ΔTᵤ,
             xmin = Hogg().Mᵖ, xmax = 1200,
-            xtick = 200:100:1300,
+            xtick = 200:300:1300,
             grid = "both"
         })
     
@@ -553,10 +674,14 @@ begin # Jump process
         mark_repeat = 2
     }, ipcccoords)
 
-    push!(baufig, LegendEntry("SSP5 - Baseline"), ipccbau)
+    push!(
+        baufig, 
+        # LegendEntry("SSP5 - Baseline"), 
+        ipccbau
+    )
 
     # Data simulation
-    bausim, baunullcline = simulatebaujump(trajectories = 30);
+    bausim, baunullcline = simulatebaujump(trajectories = 10);
     baumedian = timeseries_point_median(bausim, yearlytime)
     baumedianM = @. exp(last(baumedian.u))
     baumedianT = @. first(baumedian.u) - Hogg().Tᵖ
@@ -566,7 +691,8 @@ begin # Jump process
     end
 
     # Nullcline
-    push!(baufig, LegendEntry(raw"$\mu(T, M) = 0$"),
+    push!(baufig, 
+        # LegendEntry(raw"$\mu(T, M) = 0$"),
         @pgf Plot({dashed, color = "black", ultra_thick},
             Coordinates(collect(zip(exp.(baunullcline), Tspacedev))))
     )
@@ -575,12 +701,11 @@ begin # Jump process
 
     label = "Stochastic"
 
-    jumpcolor = RGB(0, 77 / 255, 64 / 255)
 
     @pgf push!(
         baufig,
         Plot({ line_width="0.1cm", color = jumpcolor }, mediancoords),
-        LegendEntry(label),
+        # LegendEntry(label),
         Plot({ only_marks, mark_options = { fill = jumpcolor, scale = 1.5, draw_opacity = 0 }, mark_repeat = 20, forget_plot, mark = "*"}, mediancoords)
     )
 
@@ -592,7 +717,7 @@ begin # Jump process
 
         push!(
             baufig, 
-            Plot({forget_plot, color = jumpcolor, opacity = 0.2},
+            Plot({forget_plot, color = jumpcolor, opacity = 1},
                 Coordinates(zip(mpath, xpath)),
             )
         )
@@ -602,9 +727,65 @@ begin # Jump process
 
 
     if SAVEFIG
+        PGFPlotsX.save(joinpath(PLOTPATH, "intro_baufig_jump.tikz"), baufig; include_preamble = true) 
     end
 
     baufig
+end
+
+begin # Jump illustration
+    η = [intensity(T, Hogg(), Jump()) for T in Tspace];
+    ϵ = [increase(T, Hogg(), Jump()) for T in Tspace];
+
+    illjumpfig = @pgf TikzPicture()
+
+    ηaxis = @pgf Axis(
+        {
+            grid = "both",
+            width = raw"0.4\textwidth",
+            height = raw"0.4\textwidth",
+            xlabel = TEMPLABEL,
+            xticklabels = presentationtemperatureticks[2],
+            xtick = 0:2:ΔTᵤ,
+            ytick = 0:0.2:0.8,
+            no_markers, ultra_thick,
+            xmin = 0, xmax = ΔTᵤ,
+            ylabel_style = { color = PALETTE[1] },
+            "axis y line*" = "left",
+            ylabel = "\$\\eta\$",
+            ymin = 0, ymax = maximum(η) * 1.05
+        }
+    ); push!(illjumpfig, ηaxis);
+
+    ηcurve = @pgf Plot({ line_width="0.4em", color = PALETTE[1] }, Coordinates(zip(Tspacedev, η))); 
+    
+    push!(ηaxis, ηcurve)
+
+    ϵaxis = @pgf Axis(
+        {
+            no_markers, ultra_thick,
+            width = raw"0.4\textwidth",
+            height = raw"0.4\textwidth",
+            "axis y line*" = "right",
+            ytick = 0:0.1:0.3,
+            "hide x axis",
+            xmin = 0, xmax = ΔTᵤ,
+            axis_x_line = "none",
+            ylabel_style = {color = generateseqpalette(4)[1] },
+            ylabel = "\$\\epsilon\$",
+            ymin = 0, ymax = maximum(ϵ) * 1.05,
+        }
+    ); push!(illjumpfig, ϵaxis);
+
+    ϵcurve = @pgf Plot({ line_width="0.4em", color = generateseqpalette(4)[1]  }, Coordinates(zip(Tspacedev, ϵ))); 
+    
+    push!(ϵaxis, ϵcurve)
+
+    if SAVEFIG
+        PGFPlotsX.save(joinpath(PLOTPATH, "illjumpfig.tikz"), illjumpfig; include_preamble = true) 
+    end
+
+    illjumpfig
 end
 
 begin # Carbon decay calibration
