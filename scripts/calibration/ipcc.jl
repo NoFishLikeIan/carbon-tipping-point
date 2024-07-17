@@ -6,6 +6,8 @@ using CSV, DataFrames, JLD2
 using DifferentialEquations
 using DiffEqParamEstim, Optimization, OptimizationOptimJL
 
+using Plots
+
 using Model
 
 env = DotEnv.config()
@@ -31,20 +33,27 @@ Eᵇ = bauscenario[:, "CO2 emissions"] * 1e-9 # in Gton
 begin # Calibrate growth rate γᵇ
     growthdata = Array(log.(Mᵇ)')
     
-    function Fbau!(du, u, p, t)
-        du[1] = Model.γ(t, p, T0)
-    end
-
-    calibrationproblem = ODEProblem(Fbau!, [growthdata[1]], extrema(ipcctime))
+    parametricemissions(u, p, t) = p[1] + p[2] * (t - T0) + p[3] * (t - T0)^2
+    p₀ = rand(3)
+    calibrationproblem = ODEProblem{false}(parametricemissions, growthdata[1], extrema(ipcctime); p = p₀)
     
     cost = build_loss_objective(
-        calibrationproblem, Tsit5(), L2Loss(ipcctime, growthdata), 
-        Optimization.AutoForwardDiff();
-        maxiters = 10000, verbose = false
+        calibrationproblem, Tsit5(), L2Loss(ipcctime, growthdata), Optimization.AutoForwardDiff();
+        maxiters = 10000, verbose = false,
+        saveat = ipcctime
     )
 
-    optprob = Optimization.OptimizationProblem(cost, zeros(3))
+    optprob = Optimization.OptimizationProblem(cost, p₀)
     γparameters = solve(optprob, BFGS())
+end
+
+# Plot solution
+begin
+    solvedprob = ODEProblem{false}(parametricemissions, growthdata[1], extrema(ipcctime); p = γparameters)
+    sol = solve(solvedprob)
+
+    plot(ipcctime, growthdata'; label = "IPCC")
+    plot!(T0:0.01:3T, t -> sol(t), label = "Solved")
 end
 
 calibration = Model.Calibration(

@@ -52,10 +52,11 @@ function A(t, economy::Economy)
     economy.A₀ * exp(economy.ϱ * t)
 end
 
+# TODO: Move t₀, Economy -> Calibration
 "Parametric form of γ: (t₀, ∞) → [0, 1]"
 γ(t, economy::Economy, calibration::Calibration) = γ(t, calibration.γparameters, economy.t₀)
 function γ(t, p, t₀)
-    max(p[1] + p[2] * (t - t₀) + p[3] * (t - t₀)^2, 0.)
+   max(p[1] + p[2] * (t - t₀) + p[3] * (t - t₀)^2, 0.)
 end
 
 "Linear interpolation of emissions in `calibration`"
