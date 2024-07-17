@@ -45,6 +45,7 @@ function terminaljacobi!(F̄::AbstractMatrix{Float64}, policy::AbstractMatrix{Fl
         costs = @closure χ -> begin
             investment = ϕ(model.economy.τ, χ, model.economy)
             μy = growth + investment - damage
+
             δy = max(1 + (1 - θ) * (μy - θ * σₖ²) * Δt, 0.)
 
             return g(χ, δy * F′, Δt, model.preferences)
@@ -128,12 +129,12 @@ function vfi(F₀::AbstractMatrix{Float64}, model, G::RegularGrid; tol = 1e-3, m
 
     verbose && println("Starting iterations...")
     for iter in 1:maxiter
-        iterindices = (alternate && isodd(iter)) ? indices : reverse(indices)
+        iterindices = ifelse(alternate && isodd(iter), indices, reverse(indices))
 
         terminaljacobi!(Fᵢ₊₁, pᵢ₊₁, model, G; indices = iterindices)
 
-        ε = maximum(abs.((Fᵢ₊₁ .- Fᵢ)))
-        α = maximum(abs.(pᵢ₊₁ .- pᵢ))
+        ε = maximum(abs.((Fᵢ₊₁ .- Fᵢ) ./ Fᵢ))
+        α = maximum(abs.((pᵢ₊₁ .- pᵢ) ./ pᵢ))
 
         verbose && @printf("Iteration %i / %i, ε = %.8f and α = %.8f...\r", iter, maxiter, ε, α)
 
@@ -152,19 +153,16 @@ end
 
 function computeterminal(model, G::RegularGrid; verbose = true, withsave = true, datapath = "data", iterkwargs...)    
 
-    V₀ = [log(exp(Xᵢ.y)) / preferences.ρ for Xᵢ ∈ G.X];
-    V₀ = (V₀ .- 2maximum(V₀)) / 2maximum(V₀); # Ensurate that V₀ < 0
-
-    V̄, policy = vfi(V₀, model, G; verbose, iterkwargs...)
-
+    F₀ = ones(size(G))
+    F̄, policy = vfi(F₀, model, G; verbose, iterkwargs...)
     
     if withsave
         folder = typeof(model) <: ModelInstance ? "albedo" : "jump"
         filename = makefilename(model, G)
         savepath = joinpath(datapath, folder, "terminal", filename)
         println("Saving solution into $savepath...")
-        jldsave(savepath; V̄, policy)
+        jldsave(savepath; F̄, policy)
     end
 
-    return V̄, policy, G
+    return F̄, policy
 end

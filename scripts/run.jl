@@ -2,8 +2,9 @@ include("terminal.jl")
 include("backward.jl")
 
 ΔΛ = [0.06, 0.08];
-N = 18;
+N = 51;
 
+DATAPATH = "data" # TODO: Move
 preferences = EpsteinZin();
 jump = Jump()
 calibration = load_object(joinpath(DATAPATH, "calibration.jld2"));
@@ -14,16 +15,16 @@ hogg = Hogg()
 damages = GrowthDamages()
 
 # Construct Grid
-ydomain = log.(economy.Y₀ .* (0.5, 2.))
 Tdomain = hogg.T₀ .+ (0., 9.)
 mdomain = log.(hogg.M₀ .* (1., 2.))
-G = RegularGrid([Tdomain, mdomain, ydomain], N)
+G = RegularGrid([Tdomain, mdomain], N)
 
 # Jump process
 @printf("Jump simulation")
 jumpmodel = ModelBenchmark(preferences, economy, damages, hogg, jump, calibration)
-computeterminal(jumpmodel, G; verbose = true, withsave = true, datapath = DATAPATH, alternate = false, tol = 1e-2, maxiter = 5_000)
-computevalue(jumpmodel, G; cache = true, verbose = true)
+computeterminal(jumpmodel, G; verbose = true, withsave = true, datapath = DATAPATH, tol = 1e-6, maxiter = 20)
+
+# computevalue(jumpmodel, G; cache = true, verbose = true)
 
 for Δλ ∈ ΔΛ
     @printf("Albedo simulation with Δλ = %.2f\n", Δλ)
@@ -33,5 +34,5 @@ for Δλ ∈ ΔΛ
     model = ModelInstance(preferences, economy, damages, hogg, albedo, calibration)
     
     computeterminal(model, G; verbose = true, withsave = true, datapath = DATAPATH, alternate = false, tol = 1e-2, maxiter = 5_000)
-    computevalue(model, G; verbose = true, cache = true)
+    # computevalue(model, G; verbose = true, cache = true)
 end

@@ -27,7 +27,7 @@ function f(c, v, Δt, p::EpsteinZin)
 
     β = exp(-p.ρ * Δt)
 
-    consumption = (1 - β) * c^(1 - ψ⁻¹)
+    consumption = Δt * c^(1 - ψ⁻¹)
     value = β * ((1 - p.θ) * v)^inv(aggregator)
 
     return ((consumption + value)^aggregator) / (1 - p.θ)
