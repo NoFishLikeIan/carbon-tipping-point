@@ -15,7 +15,7 @@ Base.@kwdef struct Jump
     j₁::Float64 = 0.0568
     j₀::Float64 = -0.0577
 
-    i₀::Float64 = -1/4
+    i₀::Float64 = -0.25
     i₁::Float64 = 0.95
     
     e₁::Float64 = 2.8
@@ -31,7 +31,8 @@ Base.@kwdef struct Hogg
 
     N₀::Float64 = 286.65543 # [p.p.m.]
     
-    σₜ::Float64 = 1.585 # Volatility of temperature
+    σₜ::Float64 = 0.1 # Volatility of temperature
+    σₘ::Float64 = 0.0078 # Volatility of CO₂
 
     # Climate sensitwivity
     S₀::Float64 = 340.5 # [W / m²] Mean solar radiation
@@ -127,5 +128,5 @@ end
 function intensity(T, hogg::Hogg, jump::Jump)
     ΔT = T - hogg.Tᵖ
     
-    jump.i₀ + jump.i₁ / (1 + jump.e₁ * exp(jump.e₂ * ΔT))
+    max(jump.i₀ + jump.i₁ / (1 + jump.e₁ * exp(jump.e₂ * ΔT)), 0)
 end

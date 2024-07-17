@@ -58,3 +58,38 @@ function gss(f, a, b; tol = 1e-5)
         return yd, (c + b) / 2
     end
 end
+
+
+function gssmin(f, a, b; tol = 1e-5)
+    Δ = b - a
+    
+    n = ceil(Int, log(tol / Δ) / log(ϕ⁻¹))
+    
+    c = a + Δ * ϕ⁻²
+    d = a + Δ * ϕ⁻¹
+
+    yc = f(c)
+    yd = f(d)
+
+    for _ in 1:n
+        if yc < yd
+            b = d
+            d, yd = c, yc
+            Δ *= ϕ⁻¹
+            c = a + ϕ⁻² * Δ
+            yc = f(c)
+        else
+            a = c
+            c, yc = d, yd
+            Δ *= ϕ⁻¹
+            d = a + Δ * ϕ⁻¹
+            yd = f(d)
+        end
+    end
+
+    if yc < yd
+        return yc, (a + d) / 2
+    else
+        return yd, (c + b) / 2
+    end
+end

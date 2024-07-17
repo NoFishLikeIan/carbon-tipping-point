@@ -4,10 +4,10 @@ module Model
 export Economy, Hogg, Albedo, Calibration, Jump
 export Damages, GrowthDamages, LevelDamages
 export calibrateHogg
-export intensity, increase
-export μ, b, bterminal, γ, mstable, boundb, δₘ
+export intensity, increase, d
+export μ, b, bterminal, γ, mstable, boundb, δₘ, ϕ
 export potential, density
-export Preferences, EpsteinZin, LogSeparable, CRRA, LogUtility, f
+export Preferences, EpsteinZin, LogSeparable, CRRA, LogUtility, f, g
 export ModelInstance, ModelBenchmark
 
 # Packages

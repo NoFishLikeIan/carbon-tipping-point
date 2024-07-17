@@ -3,6 +3,8 @@ using Test: @test
 using BenchmarkTools: @btime
 using Plots
 
+using Model, Grid
+
 includet("../terminal.jl")
 includet("../utils/plotting.jl")
 
@@ -11,56 +13,57 @@ begin
 	calibration = load_object(joinpath(DATAPATH, "calibration.jld2"))
 	hogg = Hogg()
 	economy = Economy()
-	damages = GrowthDamages(ξ = 0.000075, υ = 3.25)
-	preferences = EpsteinZin()
+	damages = GrowthDamages()
+	preferences = EpsteinZin(θ = 10.)
 end
 
 begin
-	N = 23
+	N = 101
 
+	albedo = Albedo();
 	Tdomain = hogg.T₀ .+ (0., 9.)
-	mdomain = mstable.(Tdomain, Ref(hogg), Ref(Albedo()))
-	ydomain = log.(economy.Y₀ .* (0.5, 2.))
-	
-	domains = [Tdomain, mdomain, ydomain]
+	mdomain = (mstable(Tdomain[1] - 0.75, hogg, albedo), mstable(Tdomain[2], hogg, albedo))
+
+	domains = [Tdomain, mdomain]
 
 	G = RegularGrid(domains, N);
 end
 
-V₀ = [log(exp(Xᵢ.y)) / preferences.ρ for Xᵢ ∈ G.X];
-V₀ = (V₀ .- 2maximum(V₀)) / 2maximum(V₀); # Ensurate that V₀ < 0
+F₀ = ones(size(G)); F̄ = copy(F₀);
 
 # --- Albedo
-albedo = Albedo();
 model = ModelInstance(preferences, economy, damages, hogg, albedo, calibration);
 
+F̄ = copy(F₀);
+policy = zeros(size(G));
+Tspace = range(G.domains[1]...; length = size(G, 1))
+mspace = range(G.domains[2]...; length = size(G, 2))
+
 begin
-	V̄ = copy(V₀);
-	policy = zeros(size(G));
-	
+
 	anim = @animate for iter in 1:120
 		print("Plotting iteration $iter\r")
-		terminaljacobi!(V̄, policy, model, G)
-		sec = plotsection(V̄, log(economy.Y₀), G; zdim = 3, surf = true, c = :viridis, camera = (45, 45), yflip = false, xflip = true, title = "Iteration $iter")
 
+		terminaljacobi!(F̄, policy, model, G)
+		wireframe(mspace, Tspace, F̄; camera = (45, 45), yflip = false, xflip = true, title = "Iteration $iter", xlabel = "\$m\$", ylabel = "\$T\$")
 	end
 
-	gif(anim; fps = 12)
+	gif(anim; fps = 30)
 end
 
 # --- Jump
-model = ModelBenchmark(preferences, economy, damages, hogg, Jump(), calibration);
+jumpmodel = ModelBenchmark(preferences, economy, damages, hogg, Jump(), calibration);
+
+F̄ = copy(F₀);
+policy = zeros(size(G));
 
 begin
-	V̄ = copy(V₀);
-	policy = zeros(size(G));
-	
 	anim = @animate for iter in 1:120
 		print("Plotting iteration $iter\r")
-		terminaljacobi!(V̄, policy, model, G)
-		sec = plotsection(V̄, log(economy.Y₀), G; zdim = 3, surf = true, c = :viridis, camera = (45, 45), yflip = false, xflip = true, title = "Iteration $iter")
 
+		terminaljacobi!(F̄, policy, jumpmodel, G)
+		wireframe(mspace, Tspace, F̄; camera = (45, 45), yflip = false, xflip = true, title = "Iteration $iter", xlabel = "\$m\$", ylabel = "\$T\$")
 	end
 
-	gif(anim; fps = 12)
+	gif(anim; fps = 30)
 end

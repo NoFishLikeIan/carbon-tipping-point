@@ -1,6 +1,6 @@
 module Grid
 
-export bisection, gss
+export bisection, gss, gssmin
 
 export Point, Policy, Drift
 export Domain, RegularGrid, I, DiagonalRedBlackQueue

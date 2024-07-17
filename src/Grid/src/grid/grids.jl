@@ -1,16 +1,15 @@
 const maxN = floor(Int, 1 / sqrt(eps(Float64)))
 
 const I = (
-    CartesianIndex((1, 0, 0)), 
-    CartesianIndex((0, 1, 0)), 
-    CartesianIndex((0, 0, 1)))
+    CartesianIndex((1, 0)), 
+    CartesianIndex((0, 1))
+)
 
 Domain = Tuple{Float64, Float64}
 
-struct Point <: FieldVector{3, Float64}
+struct Point <: FieldVector{2, Float64}
     T::Float64
     m::Float64
-    y::Float64
 end
 
 struct Policy <: FieldVector{2, Float64}
@@ -18,28 +17,23 @@ struct Policy <: FieldVector{2, Float64}
     α::Float64
 end
 
-struct Drift <: FieldVector{3, Float64}
+struct Drift <: FieldVector{2, Float64}
     dT::Float64
     dm::Float64
-    dy::Float64
 end
 
 Base.abs(d::Drift) = abs.(d)
 
-struct TerminalDrift <: FieldVector{2, Float64}
-    dT::Float64
-    dy::Float64
-end
 
 struct RegularGrid{N}
-    X::Array{Point, 3}
+    X::Array{Point, 2}
     h::Float64
-    Δ::NamedTuple{(:T, :m, :y), NTuple{3, Float64}}
+    Δ::NamedTuple{(:T, :m), NTuple{2, Float64}}
     domains::AbstractArray{Domain}
 
     function RegularGrid(domains::AbstractVector{Domain}, N::Int)
-        if length(domains) != 3 
-            throw("Domain length $(length(domains)) ≠ 3.") 
+        if length(domains) != 2 
+            throw("Domain length $(length(domains)) ≠ 2.") 
         end
 
         if N > maxN @warn "h < ϵ: ensure N ≤ $maxN" end
@@ -48,8 +42,7 @@ struct RegularGrid{N}
         Ω = (range(d[1], d[2]; length = N) for d in domains) 
         Δ = (;
             :T => domains[1][2] - domains[1][1],
-            :m => domains[2][2] - domains[2][1],
-            :y => domains[3][2] - domains[3][1]
+            :m => domains[2][2] - domains[2][1]
         )
         
         X = Point.(product(Ω...))

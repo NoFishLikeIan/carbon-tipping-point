@@ -9,61 +9,68 @@ using Printf: @printf, @sprintf
 
 include("utils/saving.jl")
 
-"Computes the Jacobi iteration for the terminal problem, V̄."
-function terminaljacobi!(V̄::AbstractArray{Float64, 3}, policy::AbstractArray{Float64, 3}, model::ModelInstance, G::RegularGrid; indices = CartesianIndices(G))
+"Computes the Jacobi iteration for the terminal problem, F̄."
+function terminaljacobi!(F̄::AbstractMatrix{Float64}, policy::AbstractMatrix{Float64}, model::ModelInstance, G::RegularGrid; indices = CartesianIndices(G))
 
     L, R = extrema(CartesianIndices(G))
     
-    @batch for idx in indices
+    for idx in indices
+        @unpack θ, ρ, ψ = model.preferences
         σₜ² = (model.hogg.σₜ / (model.hogg.ϵ * G.Δ.T))^2
-        σₖ² = (model.economy.σₖ / G.Δ.y)^2
+        σₘ² = (model.hogg.σₘ / G.Δ.m)^2
+
         Xᵢ = G.X[idx]
         dT = μ(Xᵢ.T, Xᵢ.m, model.hogg, model.albedo) / (model.hogg.ϵ * G.Δ.T)
     
         # Neighbouring nodes
-        # -- GDP
-        Vᵢy₊ = V̄[min(idx + I[3], R)]
-        Vᵢy₋ = V̄[max(idx - I[3], L)]
-    
         # -- Temperature
-        VᵢT₊ = V̄[min(idx + I[1], R)]
-        VᵢT₋ = V̄[max(idx - I[1], L)]
+        FᵢT₊ = F̄[min(idx + I[1], R)]
+        FᵢT₋ = F̄[max(idx - I[1], L)]
+
+        Fᵢm₊ = F̄[min(idx + I[2], R)]
+        Fᵢm₋ = F̄[max(idx - I[2], L)]
     
-        dVT = G.h * abs(dT) * ifelse(dT > 0, VᵢT₊, VᵢT₋) + σₜ² * (VᵢT₊ + VᵢT₋) / 2
+        dTF = G.h * abs(dT) * ifelse(dT > 0, FᵢT₊, FᵢT₋)+ σₜ² * (FᵢT₊ + FᵢT₋) / 2
+        dmF = σₘ² * (Fᵢm₊ + Fᵢm₋) / 2
+
+        Q = σₘ² + σₜ² + G.h * abs(dT)
+        F′ = (dTF + dmF) / Q
+
+        σₖ² = model.economy.σₖ^2
+        damage = d(Xᵢ.T, model.damages, model.hogg)
+        growth = model.economy.ϱ - model.economy.δₖᵖ
+
+        Δt = G.h^2 / Q
         
-        value = @closure χ -> begin
-            dy = bterminal(Xᵢ, χ, model) / G.Δ.y
-            dVy = G.h * abs(dy) * ifelse(dy > 0, Vᵢy₊, Vᵢy₋) + σₖ² * (Vᵢy₊ + Vᵢy₋) / 2
-            
-            # Expected value
-            Q = σₜ² + σₖ² + G.h * (abs(dT) + abs(dy))
-            v = (dVy + dVT) / Q
-            Δt = G.h^2 / Q
+        costs = @closure χ -> begin
+            investment = ϕ(model.economy.τ, χ, model.economy)
+            μy = growth + investment - damage
+            δy = max(1 + (1 - θ) * (μy - θ * σₖ²) * Δt, 0.)
 
-            c = χ * exp(Xᵢ.y)
-
-            f(c, v, Δt, model.preferences)
+            return g(χ, δy * F′, Δt, model.preferences)
         end
 
         # Optimal control
-        v, χ = gss(value, 0., 1.)
+        objmin, χ = gssmin(costs, 0., 1.; tol = 1e-6)
         
         policy[idx] = χ
-        V̄[idx] = v
+        F̄[idx] = objmin
     end
 
-    return V̄, policy
+    return F̄, policy
 end
-function terminaljacobi!(V̄::AbstractArray{Float64, 3}, policy::AbstractArray{Float64, 3}, model::ModelBenchmark, G::RegularGrid; indices = CartesianIndices(G))
+function terminaljacobi!(F̄::AbstractMatrix{Float64}, policy::AbstractMatrix{Float64}, model::ModelBenchmark, G::RegularGrid; indices = CartesianIndices(G))
 
     L, R = extrema(CartesianIndices(G))
     
-    @batch for idx in indices
+    for idx in indices
+        @unpack θ, ρ, ψ = model.preferences
         σₜ² = (model.hogg.σₜ / (model.hogg.ϵ * G.Δ.T))^2
-        σₖ² = (model.economy.σₖ / G.Δ.y)^2
+        σₘ² = (model.hogg.σₘ / G.Δ.m)^2
+
         Xᵢ = G.X[idx]
         dT = μ(Xᵢ.T, Xᵢ.m, model.hogg) / (model.hogg.ϵ * G.Δ.T)
-    
+
         # Jump
         πᵢ = intensity(Xᵢ.T, model.hogg, model.jump)
         qᵢ = increase(Xᵢ.T, model.hogg, model.jump)
@@ -71,75 +78,76 @@ function terminaljacobi!(V̄::AbstractArray{Float64, 3}, policy::AbstractArray{F
         steps = floor(Int, div(qᵢ, G.Δ.T * G.h))
         weight = qᵢ / (G.Δ.T * G.h)
 
-        Vʲ = V̄[min(idx + steps * I[1], R)] * (1 - weight) +
-                V̄[min(idx + (steps + 1) * I[1], R)] * weight
+        Fʲ = F̄[min(idx + steps * I[1], R)] * (1 - weight) +
+                F̄[min(idx + (steps + 1) * I[1], R)] * weight
 
         # Neighbouring nodes
-        # -- GDP
-        Vᵢy₊ = V̄[min(idx + I[3], R)]
-        Vᵢy₋ = V̄[max(idx - I[3], L)]
-    
         # -- Temperature
-        VᵢT₊ = V̄[min(idx + I[1], R)]
-        VᵢT₋ = V̄[max(idx - I[1], L)]
+        FᵢT₊ = F̄[min(idx + I[1], R)]
+        FᵢT₋ = F̄[max(idx - I[1], L)]
+
+        Fᵢm₊ = F̄[min(idx + I[2], R)]
+        Fᵢm₋ = F̄[max(idx - I[2], L)]
     
-        dVT = G.h * abs(dT) * ifelse(dT > 0, VᵢT₊, VᵢT₋) + σₜ² * (VᵢT₊ + VᵢT₋) / 2
+        dTF = G.h * abs(dT) * ifelse(dT > 0, FᵢT₊, FᵢT₋)+ σₜ² * (FᵢT₊ + FᵢT₋) / 2
+        dmF = σₘ² * (Fᵢm₊ + Fᵢm₋) / 2
+
+        Q = σₘ² + σₜ² + G.h * abs(dT)
+        Δt = G.h^2 / Q
+        Fᵈ = (dTF + dmF) / Q
+        F′ = Fᵈ + πᵢ * Δt * (Fʲ - Fᵈ)
+
+        σₖ² = model.economy.σₖ^2
+        damage = d(Xᵢ.T, model.damages, model.hogg)
+        growth = model.economy.ϱ - model.economy.δₖᵖ
         
-        value = @closure χ -> begin
-            dy = bterminal(Xᵢ, χ, model) / G.Δ.y
-            dVy = G.h * abs(dy) * ifelse(dy > 0, Vᵢy₊, Vᵢy₋) + σₖ² * (Vᵢy₊ + Vᵢy₋) / 2
-            
-            # Expected value
-            Q = σₜ² + σₖ² + G.h * (abs(dT) + abs(dy))
-            Vᵈ = (dVy + dVT) / Q 
-            Δt = G.h^2 / Q
-            
-            v = Vᵈ + πᵢ * Δt * (Vʲ - Vᵈ)
+        costs = @closure χ -> begin
+            investment = ϕ(model.economy.τ, χ, model.economy)
+            μy = growth + investment - damage
+            δy = max(1 + (1 - θ) * (μy - θ * σₖ²) * Δt, 0.)
 
-            c = χ * exp(Xᵢ.y)
-
-            f(c, v, Δt, model.preferences)
+            return g(χ, δy * F′, Δt, model.preferences)
         end
 
         # Optimal control
-        v, χ = gss(value, 0., 1.)
+        objmin, χ = gssmin(costs, 0., 1.; tol = 1e-6)
         
         policy[idx] = χ
-        V̄[idx] = v
+        F̄[idx] = objmin
     end
 
-    return V̄, policy
+    return F̄, policy
 end
 
-function vfi(V₀::AbstractArray{Float64, 3}, model, G::RegularGrid; tol = 1e-3, maxiter = 10_000, verbose = false, indices = CartesianIndices(G), alternate = false)
+function vfi(F₀::AbstractMatrix{Float64}, model, G::RegularGrid; tol = 1e-3, maxiter = 10_000, verbose = false, indices = CartesianIndices(G), alternate = false)
     pᵢ = 0.5 .* ones(size(G))
     pᵢ₊₁ = copy(pᵢ)
 
-    Vᵢ = copy(V₀)
-    Vᵢ₊₁ = copy(V₀)
+    Fᵢ = copy(F₀)
+    Fᵢ₊₁ = copy(F₀)
 
     verbose && println("Starting iterations...")
     for iter in 1:maxiter
         iterindices = (alternate && isodd(iter)) ? indices : reverse(indices)
 
-        terminaljacobi!(Vᵢ₊₁, pᵢ₊₁, model, G; indices = iterindices)
+        terminaljacobi!(Fᵢ₊₁, pᵢ₊₁, model, G; indices = iterindices)
 
-        ε = maximum(abs.((Vᵢ₊₁ .- Vᵢ) ./ Vᵢ))
-        α = maximum(abs.(pᵢ₊₁ .- pᵢ) ./ pᵢ)
+        ε = maximum(abs.((Fᵢ₊₁ .- Fᵢ)))
+        α = maximum(abs.(pᵢ₊₁ .- pᵢ))
 
-        verbose && @printf("Iteration %i / %i, ε = %.5f and α = %.5f...\r", iter, maxiter, ε, α)
+        verbose && @printf("Iteration %i / %i, ε = %.8f and α = %.8f...\r", iter, maxiter, ε, α)
 
         if ε < tol
-            verbose && @printf("Converged in %i iterations, ε = %.5f and α = %.5f.\n", iter, ε, α)
-            return Vᵢ₊₁, pᵢ₊₁
+            verbose && @printf("Converged in %i iterations, ε = %.8f and α = %.8f.\n", iter, ε, α)
+            return Fᵢ₊₁, pᵢ₊₁
         end
         
-        Vᵢ .= Vᵢ₊₁
+        Fᵢ .= Fᵢ₊₁
         pᵢ .= pᵢ₊₁
     end
 
     @warn "Convergence failed."
-    return Vᵢ₊₁, pᵢ₊₁
+    return Fᵢ₊₁, pᵢ₊₁
 end
 
 function computeterminal(model, G::RegularGrid; verbose = true, withsave = true, datapath = "data", iterkwargs...)    

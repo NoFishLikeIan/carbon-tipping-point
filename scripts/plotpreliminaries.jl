@@ -16,6 +16,7 @@ using Model, Grid
 
 include("utils/plotting.jl")
 include("utils/saving.jl")
+include("utils/simulating.jl")
 
 begin # Global variables
     env = DotEnv.config()
@@ -290,27 +291,6 @@ begin # Density plots
     end
     
     densfig
-end
-
-function Fbau!(du, u, model::ModelInstance, t)
-	du[1] = μ(u[1], u[2], model.hogg, model.albedo) / model.hogg.ϵ
-	du[2] = γ(t, model.economy, model.calibration)
-end
-function Fbau!(du, u, model::ModelBenchmark, t)
-    du[1] = μ(u[1], u[2], model.hogg) / model.hogg.ϵ
-	du[2] = γ(t, model.economy, model.calibration)
-end
-function Gbau!(du, u, model, t)    
-	du[1] = model.hogg.σₜ / model.hogg.ϵ
-	du[2] = 0.
-end
-
-function rate(u, model, t)
-    intensity(u[1], model.hogg, model.jump)
-end
-function affect!(integrator)
-    model = integrator.p
-    integrator.u[1] += 6increase(integrator.u[1], model.hogg, model.jump)
 end
 
 const X₀ = [Hogg().T₀, log(Hogg().M₀), log(Economy().Y₀)];
