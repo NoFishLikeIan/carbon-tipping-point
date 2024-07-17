@@ -14,7 +14,7 @@ begin
 	hogg = Hogg()
 	economy = Economy()
 	damages = GrowthDamages()
-	preferences = EpsteinZin(θ = 10.)
+	preferences = EpsteinZin()
 end
 
 begin
