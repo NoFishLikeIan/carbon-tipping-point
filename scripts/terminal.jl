@@ -9,6 +9,8 @@ using Printf: @printf, @sprintf
 
 include("utils/saving.jl")
 
+# TODO: The two functions below differe only in expected utility. Factor that out.
+
 "Computes the Jacobi iteration for the terminal problem, F̄."
 function terminaljacobi!(F̄::AbstractMatrix{Float64}, policy::AbstractMatrix{Float64}, model::ModelInstance, G::RegularGrid; indices = CartesianIndices(G))
 
@@ -45,7 +47,6 @@ function terminaljacobi!(F̄::AbstractMatrix{Float64}, policy::AbstractMatrix{Fl
         costs = @closure χ -> begin
             investment = ϕ(model.economy.τ, χ, model.economy)
             μy = growth + investment - damage
-
             δy = max(1 + (1 - θ) * (μy - θ * σₖ²) * Δt, 0.)
 
             return g(χ, δy * F′, Δt, model.preferences)
@@ -79,8 +80,7 @@ function terminaljacobi!(F̄::AbstractMatrix{Float64}, policy::AbstractMatrix{Fl
         steps = floor(Int, div(qᵢ, G.Δ.T * G.h))
         weight = qᵢ / (G.Δ.T * G.h)
 
-        Fʲ = F̄[min(idx + steps * I[1], R)] * (1 - weight) +
-                F̄[min(idx + (steps + 1) * I[1], R)] * weight
+        Fʲ = F̄[min(idx + steps * I[1], R)] * (1 - weight) + F̄[min(idx + (steps + 1) * I[1], R)] * weight
 
         # Neighbouring nodes
         # -- Temperature
@@ -133,10 +133,12 @@ function vfi(F₀::AbstractMatrix{Float64}, model, G::RegularGrid; tol = 1e-3, m
 
         terminaljacobi!(Fᵢ₊₁, pᵢ₊₁, model, G; indices = iterindices)
 
-        ε = maximum(abs.((Fᵢ₊₁ .- Fᵢ) ./ Fᵢ))
-        α = maximum(abs.((pᵢ₊₁ .- pᵢ) ./ pᵢ))
+        ε = maximum(abs.((Fᵢ₊₁ .- Fᵢ)))
+        α = maximum(abs.((pᵢ₊₁ .- pᵢ)))
 
-        verbose && @printf("Iteration %i / %i, ε = %.8f and α = %.8f...\r", iter, maxiter, ε, α)
+        if verbose && (!alternate || isodd(iter))
+            @printf("Iteration %i / %i, ε = %.8f and α = %.8f...\r", iter, maxiter, ε, α)
+        end
 
         if ε < tol
             verbose && @printf("Converged in %i iterations, ε = %.8f and α = %.8f.\n", iter, ε, α)

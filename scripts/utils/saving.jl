@@ -38,22 +38,22 @@ function makefilename(model::ModelBenchmark, G::RegularGrid)
 end
 
 function loadterminal(model, G::RegularGrid; kwargs...)
-    dropdims.(loadterminal([model], G; kwargs...); dims = 4)
+    dropdims.(loadterminal([model], G; kwargs...); dims = 3)
 end
 
 function loadterminal(models::AbstractVector, G::RegularGrid; datapath = "data")
-    V̄ = Array{Float64}(undef, N, N, N, length(models))
-    policy = similar(V̄)
+    F̄ = Array{Float64}(undef, N, N, length(models))
+    policy = similar(F̄)
 
     for (k, model) ∈ enumerate(models)
         folder = typeof(model) <: ModelInstance ? "albedo" : "jump"
         filename = makefilename(model, G)
         savepath = joinpath(datapath, folder, "terminal", filename)
-        V̄[:, :, :, k] .= load(savepath, "V̄")
-        policy[:, :, :, k] .= load(savepath, "policy")
+        F̄[:, :, k] .= load(savepath, "F̄")
+        policy[:, :, k] .= load(savepath, "policy")
     end
 
-    return V̄, policy
+    return F̄, policy
 end
 
 function loadtotal(model, G::RegularGrid; kwargs...)     

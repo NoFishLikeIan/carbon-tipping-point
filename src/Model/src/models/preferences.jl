@@ -40,7 +40,7 @@ function g(χ, F, Δt, p::EpsteinZin)
 
     β = exp(-p.ρ * Δt)
 
-    consumption = (1 - β) * χ^(1 - ψ⁻¹)
+    consumption = (1 - β) * χ^(1 - ψ⁻¹) * Δt / (1 + p.ρ * Δt)
     value = β * F^inv(aggregator)
 
     (consumption + value)^aggregator
