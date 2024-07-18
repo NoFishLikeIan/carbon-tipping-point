@@ -2,15 +2,14 @@ Base.@kwdef struct LogUtility
     ρ::Float64 = 0.015  # Discount rate 
 end
 
-
 Base.@kwdef struct CRRA
     ρ::Float64 = 0.015  # Discount rate 
-    θ::Float64 = 7.    # Relative risk aversion
+    θ::Float64 = 7.     # Relative risk aversion
 end
 
 Base.@kwdef struct LogSeparable
     ρ::Float64 = 0.015  # Discount rate 
-    θ::Float64 = 7.    # Relative risk aversion
+    θ::Float64 = 7.     # Relative risk aversion
 end
 
 Base.@kwdef struct EpsteinZin

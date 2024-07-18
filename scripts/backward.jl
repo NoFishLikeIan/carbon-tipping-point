@@ -52,7 +52,7 @@ function backwardsimulation!(F::SharedMatrix{Float64}, policy::SharedMatrix{Poli
 
                 tᵢ = model.economy.τ - δt
                 # FIXME: γₜ = 0 for t >> 0
-                γₜ = γ(tᵢ, model.economy, model.calibration)
+                γₜ = γ(tᵢ, model.calibration)
                 Xᵢ = G.X[idx]
 
                 dT = μ(Xᵢ.T, Xᵢ.m, model.hogg, model.albedo) / (model.hogg.ϵ * G.Δ.T)
@@ -90,7 +90,7 @@ function backwardsimulation!(F::SharedMatrix{Float64}, policy::SharedMatrix{Poli
                     dFᵢ = G.h * (supdm - abs(dm)) * Fᵢ # ∝ prob of staying
                 
                     F′ = (∂²T + ∂²m + dFT + dFm + dFᵢ) / Qᵢ
-
+                        # FIXME: The drift of y is incorrect
                     δy = max(1 + (1 - model.preferences.θ) * (μy - model.preferences.θ * σₖ²) * Δtᵢ, 0.)
 
                     return g(u.χ, δy * F′, Δtᵢ, model.preferences)
@@ -168,7 +168,7 @@ function backwardsimulation!(F::SharedMatrix{Float64}, policy::SharedMatrix{Poli
                 idx = indices[i]
 
                 tᵢ = model.economy.τ - δt
-                γₜ = γ(tᵢ, model.economy, model.calibration)
+                γₜ = γ(tᵢ, model.calibration)
                 Xᵢ = G.X[idx]
 
                 dT = μ(Xᵢ.T, Xᵢ.m, model.hogg) / (model.hogg.ϵ * G.Δ.T)
@@ -216,7 +216,7 @@ function backwardsimulation!(F::SharedMatrix{Float64}, policy::SharedMatrix{Poli
                     Fᵈ = (∂²T + ∂²m + dFT + dFm + dFᵢ) / Qᵢ
                     
                     F′ = Fᵈ + πᵢ * Δtᵢ * (Fʲ - Fᵈ)
-
+                    # FIXME: The drift of y is incorrect
                     δy = max(1 + (1 - model.preferences.θ) * (μy - model.preferences.θ * σₖ²) * Δtᵢ, 0.)
 
                     return g(u.χ, δy * F′, Δtᵢ, model.preferences)

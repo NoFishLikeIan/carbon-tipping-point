@@ -2,11 +2,11 @@ using Model
 
 function Fbau!(du, u, model::ModelInstance, t)
 	du[1] = μ(u[1], u[2], model.hogg, model.albedo) / model.hogg.ϵ
-	du[2] = γ(t, model.economy, model.calibration)
+	du[2] = γ(t, model.calibration)
 end
 function Fbau!(du, u, model::ModelBenchmark, t)
     du[1] = μ(u[1], u[2], model.hogg) / model.hogg.ϵ
-	du[2] = γ(t, model.economy, model.calibration)
+	du[2] = γ(t, model.calibration)
 end
 function Gbau!(du, u, model, t)    
 	du[1] = model.hogg.σₜ / model.hogg.ϵ

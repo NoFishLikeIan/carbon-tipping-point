@@ -1,22 +1,22 @@
-ModelGeneric = Union{ModelInstance, ModelBenchmark}
+AbstractModel = Union{TippingModel, JumpModel}
 
 "Emissivity rate implied by abatement `α` at time `t` and carbon concentration `M`"
-function ε(t, M, α, model::ModelGeneric)
-    1. - M * (δₘ(M, model.hogg) + γ(t, model.economy, model.calibration) - α) / (Gtonoverppm * Eᵇ(t, model.economy, model.calibration))
+function ε(t, M, α, model::AbstractModel)
+    1. - M * (δₘ(M, model.hogg) + γ(t, model.calibration) - α) / (Gtonoverppm * Eᵇ(t, model.calibration))
 end
-function ε′(t, M, model::ModelGeneric)
-    M / (Gtonoverppm * Eᵇ(t, model.economy, model.calibration))
+function ε′(t, M, model::AbstractModel)
+    M / (Gtonoverppm * Eᵇ(t, model.calibration))
 end
 
 "Drift of dy in the terminal state, t ≥ τ."
 bterminal(Xᵢ::Point, args...) = bterminal(Xᵢ.T, args...)
-bterminal(T::Float64, χ, model::ModelGeneric) = bterminal(T, χ, model.economy, model.damages, model.hogg) 
+bterminal(T::Float64, χ, model::AbstractModel) = bterminal(T, χ, model.economy, model.damages, model.hogg) 
 function bterminal(T::Float64, χ, economy::Economy, damages::GrowthDamages, hogg::Hogg)
     ϕ(economy.τ, χ, economy) - economy.δₖᵖ - d(T, damages, hogg)
 end
 
 "Drift of dy."
-function b(t, Xᵢ::Point, u::Policy, model::ModelGeneric)
+function b(t, Xᵢ::Point, u::Policy, model::AbstractModel)
     εₜ = ε(t, exp(Xᵢ.m), u.α, model)
     Aₜ = A(t, model.economy)
 
@@ -29,8 +29,8 @@ function b(t, Xᵢ::Point, u::Policy, model::ModelGeneric)
 end
 
 "Computes maximum absolute value of the drift of y."
-function boundb(t, Xᵢ::Point, model::ModelGeneric)
-    γₜ = γ(t, model.economy, model.calibration)
+function boundb(t, Xᵢ::Point, model::AbstractModel)
+    γₜ = γ(t, model.calibration)
     δₘᵢ = δₘ(exp(Xᵢ.m), model.hogg)
 
     ll = b(t, Xᵢ, Policy(0., 0.), model)

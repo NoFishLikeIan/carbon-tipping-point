@@ -8,7 +8,7 @@ export intensity, increase, d
 export μ, b, bterminal, γ, mstable, boundb, δₘ, ϕ
 export potential, density
 export Preferences, EpsteinZin, LogSeparable, CRRA, LogUtility, f, g
-export ModelInstance, ModelBenchmark
+export TippingModel, JumpModel, AbstractModel
 
 # Packages
 using Grid: Point, Policy, Drift
@@ -21,21 +21,26 @@ include("models/climate.jl")
 include("models/economy.jl")
 include("models/preferences.jl")
 
-@kwdef struct ModelInstance
-    preferences::Preferences = EpsteinZin()
-    economy::Economy = Economy()
-    damages::Damages = GrowthDamages()
-    hogg::Hogg = Hogg()
-    albedo::Albedo = Albedo()
+struct TippingModel{D <: Damages, P <: Preferences}
+    albedo::Albedo
+
+    preferences::P
+    damages::D
+
+    economy::Economy
+    hogg::Hogg
     calibration::Calibration
 end
 
-@kwdef struct ModelBenchmark
-    preferences::Preferences = EpsteinZin()
-    economy::Economy = Economy()
-    damages::Damages = GrowthDamages()
-    hogg::Hogg = Hogg()
-    jump::Jump = Jump()
+
+struct JumpModel{D <: Damages, P <: Preferences}
+    jump::Jump
+
+    preferences::P
+    damages::D
+
+    economy::Economy
+    hogg::Hogg
     calibration::Calibration
 end
 

@@ -231,7 +231,7 @@ begin # Growth of carbon concentration
         }
     )   
     
-    gdata = [γ(t, first(models).economy, first(models).calibration) for t ∈ yearlytime]
+    gdata = [γ(t, first(models).calibration) for t ∈ yearlytime]
     coords = Coordinates(zip(yearlytime, gdata))
 
     markers = @pgf Plot({ only_marks, mark_options = {fill = gcolor, scale = 1.5, draw_opacity = 0}, mark_repeat = 10}, coords) 

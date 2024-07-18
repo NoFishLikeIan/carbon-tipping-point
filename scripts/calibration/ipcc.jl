@@ -23,8 +23,8 @@ getscenario(s::Int64) = filter(:Scenario => isequal("SSP$(s) - Baseline"), ipccp
 
 bauscenario = getscenario(5)
 ipcctime = bauscenario.Year .- BASELINE_YEAR
-T0 = first(ipcctime)
-T = last(ipcctime)
+T0 = Float64(first(ipcctime))
+T = Float64(last(ipcctime))
 
 Mᵇ = bauscenario[:, "CO2 concentration"]
 Tᵇ = bauscenario[:, "Temperature"]
@@ -56,10 +56,6 @@ begin
     plot!(T0:0.01:3T, t -> sol(t), label = "Solved")
 end
 
-calibration = Model.Calibration(
-    bauscenario.Year, 
-    Eᵇ, 
-    Tuple(γparameters)
-)
+calibration = Model.Calibration(bauscenario.Year, Eᵇ, Tuple(γparameters), (T, T0))
 
 save_object(joinpath(DATAPATH, "calibration.jld2"), calibration)

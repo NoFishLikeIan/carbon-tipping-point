@@ -168,7 +168,7 @@ function F!(dx, x, p::Tuple{ModelInstance, Any, Any}, t)
 	α = αitp(T, m, y, t)
 	
 	dx[1] = μ(T, m, model.hogg, model.albedo) / model.hogg.ϵ
-	dx[2] = γ(t, model.economy, model.calibration) - α
+	dx[2] = γ(t, model.calibration) - α
 	dx[3] = b(t, Point(T, m, y), Policy(χ, α), model)
 
 	return
@@ -182,7 +182,7 @@ function F!(dx, x, p::Tuple{ModelBenchmark, Any, Any}, t)
 	α = αitp(T, m, y, t)
 	
 	dx[1] = μ(T, m, model.hogg) / model.hogg.ϵ
-	dx[2] = γ(t, model.economy, model.calibration) - α
+	dx[2] = γ(t, model.calibration) - α
 	dx[3] = b(t, Point(T, m, y), Policy(χ, α), model)
 
 	return
@@ -233,7 +233,7 @@ begin # Data extraction
             αₜ = αitp(T, m, y, tᵢ)
             
             M = exp(m)
-            Eₜ = (M / Model.Gtonoverppm) * (γ(tᵢ, model.economy, model.calibration) - αₜ)
+            Eₜ = (M / Model.Gtonoverppm) * (γ(tᵢ, model.calibration) - αₜ)
     
             
             E[i, j] = Eₜ

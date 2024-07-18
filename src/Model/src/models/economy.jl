@@ -21,9 +21,6 @@ Base.@kwdef struct Economy
     Y₀::Float64 = 75.8
     σₖ::Float64 = 1.62e-2 # Variance of GDP
 
-    # Domain 
-    t₀::Float64 = -15. # Initial time of IPCC report
-    t₁::Float64 = 80. # Horizon of IPCC report
     τ::Float64 = 300. # Steady state horizon
 end
 
@@ -50,26 +47,4 @@ end
 
 function A(t, economy::Economy)
     economy.A₀ * exp(economy.ϱ * t)
-end
-
-# TODO: Move t₀, Economy -> Calibration
-"Parametric form of γ: (t₀, ∞) → [0, 1]"
-γ(t, economy::Economy, calibration::Calibration) = γ(t, calibration.γparameters, economy.t₀)
-function γ(t, p, t₀)
-   max(p[1] + p[2] * (t - t₀) + p[3] * (t - t₀)^2, 0.)
-end
-
-"Linear interpolation of emissions in `calibration`"
-Eᵇ(t, economy::Economy, calibration::Calibration) = Eᵇ(t, economy.t₀, economy.t₁, calibration.emissions)
-function Eᵇ(t, t₀, t₁, emissions)
-    if t ≤ t₀ return first(emissions) end
-    if t ≥ t₁ return last(emissions) end
-
-    partition = range(t₀, t₁; length = length(emissions))
-    udx = findfirst(tᵢ -> tᵢ > t, partition)
-    ldx = udx - 1
-
-    α = (t - partition[ldx]) / step(partition)
-
-    return (1 - α) * emissions[ldx] + α * emissions[udx]
 end
