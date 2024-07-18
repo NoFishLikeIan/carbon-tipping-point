@@ -15,19 +15,20 @@ hogg = Hogg()
 damages = GrowthDamages()
 
 # Construct Grid
-Tdomain = hogg.T₀ .+ (0., 7.)
-mdomain = (
-    mstable(Tdomain[1] - 0.75, hogg, albedo), mstable(Tdomain[2], hogg, albedo)
-)
+Tdomain = hogg.T₀ .+ (0., 9.)
+mmin = mstable(Tdomain[1] - 0.75, hogg, Albedo())
+mmax = mstable(Tdomain[2], hogg, Albedo())
+
+mdomain = (mmin, mmax)
 domains = [Tdomain, mdomain]
 
 G = RegularGrid(domains, N);
 
 # Jump process
-@printf("Jump simulation")
+@printf("Jump simulation\n")
 jumpmodel = ModelBenchmark(preferences, economy, damages, hogg, jump, calibration)
 computeterminal(jumpmodel, G; verbose = VERBOSE, withsave = true, datapath = DATAPATH, tol = 1e-4, maxiter = 20_000, alternate = true)
-computevalue(jumpmodel, G; cache = true, verbose = VERBOSE)
+computevalue(jumpmodel, G; docache = true, verbose = VERBOSE)
 
 for Δλ ∈ ΔΛ
     @printf("Albedo simulation with Δλ = %.2f\n", Δλ)
@@ -37,5 +38,5 @@ for Δλ ∈ ΔΛ
     model = ModelInstance(preferences, economy, damages, hogg, albedo, calibration)
     
     computeterminal(model, G; verbose = VERBOSE, withsave = true, datapath = DATAPATH, alternate = true, tol = 1e-4, maxiter = 20_000)
-    computevalue(model, G; verbose = VERBOSE, cache = true)
+    computevalue(model, G; verbose = VERBOSE, docache = true)
 end
