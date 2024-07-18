@@ -1,4 +1,4 @@
-AbstractModel = Union{TippingModel, JumpModel}
+AbstractModel{D, P} = Union{TippingModel{D, P}, JumpModel{D, P}} where {D <: Damages, P <: Preferences}
 
 "Emissivity rate implied by abatement `α` at time `t` and carbon concentration `M`"
 function ε(t, M, α, model::AbstractModel)
@@ -8,28 +8,48 @@ function ε′(t, M, model::AbstractModel)
     M / (Gtonoverppm * Eᵇ(t, model.calibration))
 end
 
-"Drift of dy in the terminal state, t ≥ τ."
-bterminal(Xᵢ::Point, args...) = bterminal(Xᵢ.T, args...)
-bterminal(T::Float64, χ, model::AbstractModel) = bterminal(T, χ, model.economy, model.damages, model.hogg) 
-function bterminal(T::Float64, χ, economy::Economy, damages::GrowthDamages, hogg::Hogg)
-    ϕ(economy.τ, χ, economy) - economy.δₖᵖ - d(T, damages, hogg)
+"Drift of log output y in the terminal state, t ≥ τ"
+function bterminal(χ, model::AbstractModel{LevelDamages, P}) where P <: Preferences
+    growth = model.economy.ϱ - model.economy.δₖᵖ
+    investments = ϕ(model.economy.τ, χ, model.economy)
+
+    return growth + investments
+end
+function bterminal(T::Float64, χ, model::AbstractModel{GrowthDamages, P}) where P <: Preferences
+    growth = model.economy.ϱ - model.economy.δₖᵖ
+    investments = ϕ(model.economy.τ, χ, model.economy)
+    damage = d(T, model.damages, model.hogg)
+
+    return growth + investments - damage
 end
 
-"Drift of dy."
-function b(t, Xᵢ::Point, u::Policy, model::AbstractModel)
+"Drift of log output y for t < τ"
+function b(t, Xᵢ::Point, u::Policy, model::AbstractModel{GrowthDamages, P}) where P <: Preferences
     εₜ = ε(t, exp(Xᵢ.m), u.α, model)
     Aₜ = A(t, model.economy)
 
     abatement = Aₜ * β(t, εₜ, model.economy)
 
-    growth = model.economy.ϱ + ϕ(t, u.χ, model.economy) - model.economy.δₖᵖ
+    growth = model.economy.ϱ - model.economy.δₖᵖ
+    investments = ϕ(t, u.χ, model.economy)
     damage = d(Xᵢ.T, model.damages, model.hogg)
 
-    return growth - abatement - damage
+    return growth + investments - abatement - damage
+end
+function b(t, Xᵢ::Point, u::Policy, model::AbstractModel{LevelDamages, P}) where P <: Preferences
+    εₜ = ε(t, exp(Xᵢ.m), u.α, model)
+    Aₜ = A(t, model.economy)
+
+    abatement = Aₜ * β(t, εₜ, model.economy)
+
+    growth = model.economy.ϱ - model.economy.δₖᵖ
+    investments = ϕ(t, u.χ, model.economy)
+
+    return growth + investments - abatement
 end
 
-"Computes maximum absolute value of the drift of y."
-function boundb(t, Xᵢ::Point, model::AbstractModel)
+"Computes maximum absolute value of the drift of output y."
+function bbound(t, Xᵢ::Point, model::AbstractModel)
     γₜ = γ(t, model.calibration)
     δₘᵢ = δₘ(exp(Xᵢ.m), model.hogg)
 
