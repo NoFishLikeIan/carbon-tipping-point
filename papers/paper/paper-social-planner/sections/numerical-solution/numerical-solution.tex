@@ -171,4 +171,36 @@ We assume that at some point in the future $\tau \gg 0$, the abatement rate is e
     \end{split}
 \end{equation}
 
+\section{Separable Value Function}
+
+The Markov Chain approximation yields the Bellman recurrence \begin{equation}
+    \begin{split}
+        (1 - \theta) \; V_{t}(T_t, m_t, Y_t) = \inf_{\chi, \alpha} \; \Bigg(&(1 - \beta_{\Delta t} )\frac{\Delta t}{1 + \rho \Delta t}  (\chi Y_t)^{1 - \frac{1}{\psi}} \\
+        + \; &\beta_{\Delta t}  \E_{\chi, \alpha} \left[(1 - \theta)V_{t + \Delta t}(T_{t + \Delta t}, m_{t + \Delta t}, Y_{t + \Delta t})  \right]^{\frac{1 - \frac{1}{\psi}}{1 - \theta}} \Bigg)^{\frac{1 - \theta}{1 - \frac{1}{\psi}}}.
+    \end{split}
+\end{equation} where $\beta_{\Delta t} \coloneqq e^{-\rho \Delta t}$% FIXME: Fix overfull
+
+Now suppose $(1 - \theta) \; V_{t}(T_t, m_t, Y_t) \equiv Y_t^{1 - \theta} F_t(T_t, m_t)$ for some function $F$. Then we can write \begin{equation}
+    \begin{split}
+        Y_t^{1 - \theta} F_t(T_t, m_t) &= \inf_{\chi, \alpha} \; \left((1 - \beta_{\Delta t}) \; \frac{\Delta t}{1 + \rho \Delta t}  (\chi Y_t)^{1 - \frac{1}{\psi}}
+        + \; \beta_{\Delta t}  \E_{\chi, \alpha} \left[Y_{t + \Delta t}^{1 - \theta} F_{t + \Delta t}(T_{t + \Delta t}, m_{t + \Delta t})\right]^{\frac{1 - \frac{1}{\psi}}{1 - \theta}} \right)^{\frac{1 - \theta}{1 - \frac{1}{\psi}}} \\
+        F_t(T_t, m_t) &= \inf_{\chi, \alpha} \; \left((1 - \beta_{\Delta t}) \; \frac{\Delta t}{1 + \rho \Delta t}  \chi^{1 - \frac{1}{\psi}}
+        + \; \beta_{\Delta t}  \E_{\chi, \alpha} \left[\left(\frac{Y_{t + \Delta t}}{Y_t}\right)^{1 - \theta} F_{t + \Delta t}(T_{t + \Delta t}, m_{t + \Delta t}) \right]^{\frac{1 - \frac{1}{\psi}}{1 - \theta}}  \right)^{\frac{1 - \theta}{1 - \frac{1}{\psi}}} \\
+        &= \inf_{\chi, \alpha} \; \left((1 - \beta_{\Delta t}) \; \frac{\Delta t}{1 + \rho \Delta t}  \chi^{1 - \frac{1}{\psi}}
+        + \; \beta_{\Delta t}  \left( \delta^y_{\chi, \alpha} \E_{\alpha}F_{t + \Delta t}(T_{t + \Delta t}, m_{t + \Delta t}) \right)^{\frac{1 - \frac{1}{\psi}}{1 - \theta}}\right)^{\frac{1 - \theta}{1 - \frac{1}{\psi}}} 
+    \end{split}
+\end{equation} where \begin{equation}
+    \delta^y_{\chi, \alpha} \coloneqq \E_{\chi, \alpha} \left[ \left(\frac{Y_{t + \Delta t}}{Y_t}\right)^{1 - \theta} \right].
+\end{equation} Write \begin{equation}
+    \frac{Y_{t + \Delta t}}{Y_t} = 1 + \mu_y(T_t, \chi_t, \alpha_t) \Delta t + \sigma_y \sqrt{\Delta t} z
+\end{equation} where $z\sim \mathcal{N}(0, 1)$. Then \begin{equation}
+    \begin{split}
+        \left(\frac{Y_{t + \Delta t}}{Y_t}\right)^{1 - \theta} = \; &1 + \left(1 - \theta\right) \mu_y(T_t, \chi_t, \alpha_t) \Delta t + \left(1 - \theta\right) \sigma_y \sqrt{\Delta t} z \\
+        - &\frac{\theta}{2} \left(1 - \theta\right) \sigma_y^2 z^2 \Delta t + o(\Delta t^{3 / 2}),
+    \end{split}
+\end{equation} hence \begin{equation}
+    \delta^y_{\chi, \alpha} = 1 + \Delta t \left(1 - \theta \right) \left(\mu_y(T_t, \chi_t, \alpha_t) - \frac{\theta}{2} \sigma_y^2 \right) + \E[o(\Delta t^{3 / 2})]
+\end{equation}
+
+
 \end{document}

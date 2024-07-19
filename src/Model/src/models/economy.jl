@@ -13,7 +13,7 @@ Base.@kwdef struct Economy
     # Technology
     ωᵣ::Float64 = 2e-3 # Speed of abatement technology cost reduction
     ϱ::Float64 = 9e-4 # Growth of TFP
-    κ::Float64 = 0.0632 # Adjustment costs of abatement technology
+    κ::Float64 = 12.3 # Adjustment costs of abatement technology
     δₖᵖ::Float64 = 0.0116 # Initial depreciation rate of capital
 
     # Output
@@ -42,7 +42,8 @@ function d(T, damages::LevelDamages, hogg::Hogg)
 end
 
 function ϕ(t, χ, economy::Economy)
-    (1 - χ) * A(t, economy) - (economy.κ / 2) * (1 - χ)^2
+    rate = (1 - χ) * A(t, economy)
+    rate - (economy.κ / 2) * rate^2
 end
 
 function A(t, economy::Economy)

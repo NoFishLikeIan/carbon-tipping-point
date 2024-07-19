@@ -15,6 +15,9 @@ function bterminal(χ, model::AbstractModel{LevelDamages, P}) where P <: Prefere
 
     return growth + investments
 end
+function bterminal(_, χ, model::AbstractModel{LevelDamages, P}) where P <: Preferences
+    bterminal(χ, model)
+end
 function bterminal(T::Float64, χ, model::AbstractModel{GrowthDamages, P}) where P <: Preferences
     growth = model.economy.ϱ - model.economy.δₖᵖ
     investments = ϕ(model.economy.τ, χ, model.economy)
@@ -59,4 +62,20 @@ function bbound(t, Xᵢ::Point, model::AbstractModel)
     rr = b(t, Xᵢ, Policy(1., γₜ + δₘᵢ), model)
 
     return max(abs(ll), abs(lr), abs(rl), abs(rr))
+end
+
+function μ(T, m, model::TippingModel)
+    μ(T, m, model.hogg, model.albedo)
+end
+function μ(T, m, model::JumpModel)
+    μ(T, m, model.hogg)
+end
+
+"Stochastic discount factor of output. First order Taylor of `E[(yₜ₊ₑ / yₜ)¹⁻ᶿ]` around e = 0."
+function outputdiscount(Tᵢ, Δt, χ, model::AbstractModel)
+    drift = bterminal(Tᵢ, χ, model)
+
+    adjdrift = drift - model.preferences.θ * model.economy.σₖ^2 / 2
+
+    1 + (1 - model.preferences.θ) * adjdrift * Δt
 end
