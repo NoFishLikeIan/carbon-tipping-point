@@ -1,28 +1,11 @@
 using Printf: @sprintf
 using UnPack: @unpack
 
-const SIMPATHS = Dict(
-    TippingModel{LevelDamages, EpsteinZin}  => "albedo/level",
-    TippingModel{GrowthDamages, EpsteinZin} => "albedo/growth",
-    JumpModel{LevelDamages, EpsteinZin}  => "jump/level",
-    JumpModel{GrowthDamages, EpsteinZin}  => "jump/growth")
+function makefilename(model::ModelInstance, G::RegularGrid)
+    if !(typeof(model.preferences) <: EpsteinZin)
+        throw("Not implemented file saving for non Epstein Zin utilities.")
+    end
 
-function makefilename(model::TippingModel{LevelDamages, EpsteinZin}, G)
-    @unpack ρ, θ, ψ = model.preferences
-    @unpack ωᵣ = model.economy
-    @unpack σₜ = model.hogg
-    @unpack λ₁, λ₂ = model.albedo
-    @unpack ξ = model.damages
-
-    N = size(G, 1)
-    Δλ = λ₁ - λ₂
-
-    filename = @sprintf("N=%i_Δλ=%.2f_ρ=%.5f_θ=%.2f_ψ=%.2f_σ=%.2f_ω=%.5f_ξ=%.6f", N, Δλ, ρ, θ, ψ, σₜ, ωᵣ, ξ)
-
-    return "$(replace(filename, "." => ",")).jld2"
-end
-
-function makefilename(model::TippingModel{GrowthDamages, EpsteinZin}, G)
     @unpack ρ, θ, ψ = model.preferences
     @unpack ωᵣ = model.economy
     @unpack σₜ = model.hogg
@@ -37,7 +20,11 @@ function makefilename(model::TippingModel{GrowthDamages, EpsteinZin}, G)
     return "$(replace(filename, "." => ",")).jld2"
 end
 
-function makefilename(model::JumpModel{GrowthDamages, EpsteinZin}, G)
+function makefilename(model::ModelBenchmark, G::RegularGrid)
+    if !(typeof(model.preferences) <: EpsteinZin)
+        throw("Not implemented file saving for non Epstein Zin utilities.")
+    end
+
     @unpack ρ, θ, ψ = model.preferences
     @unpack ωᵣ = model.economy
     @unpack σₜ = model.hogg
@@ -50,29 +37,16 @@ function makefilename(model::JumpModel{GrowthDamages, EpsteinZin}, G)
     return "$(replace(filename, "." => ",")).jld2"
 end
 
-function makefilename(model::JumpModel{LevelDamages, EpsteinZin}, G)
-    @unpack ρ, θ, ψ = model.preferences
-    @unpack ωᵣ = model.economy
-    @unpack σₜ = model.hogg
-    @unpack ξ = model.damages
-
-    N = size(G, 1)
-
-    filename = @sprintf("N=%i_ρ=%.5f_θ=%.2f_ψ=%.2f_σ=%.2f_ω=%.5f_ξ=%.6f", N, ρ, θ, ψ, σₜ, ωᵣ, ξ)
-
-    return "$(replace(filename, "." => ",")).jld2"
-end
-
-function loadterminal(model, G; kwargs...)
+function loadterminal(model, G::RegularGrid; kwargs...)
     dropdims.(loadterminal([model], G; kwargs...); dims = 3)
 end
 
-function loadterminal(models::AbstractVector{AbstractModel}, G; datapath = "data")
+function loadterminal(models::AbstractVector, G::RegularGrid; datapath = "data")
     F̄ = Array{Float64}(undef, N, N, length(models))
     policy = similar(F̄)
 
     for (k, model) ∈ enumerate(models)
-        folder = SIMPATHS[typeof(model)]
+        folder = typeof(model) <: ModelInstance ? "albedo" : "jump"
         filename = makefilename(model, G)
         savepath = joinpath(datapath, folder, "terminal", filename)
         F̄[:, :, k] .= load(savepath, "F̄")
@@ -82,17 +56,16 @@ function loadterminal(models::AbstractVector{AbstractModel}, G; datapath = "data
     return F̄, policy
 end
 
-# FIXME: Update load total for new value function definition
-function loadtotal(model, G; kwargs...)     
+function loadtotal(model, G::RegularGrid; kwargs...)     
     first(loadtotal([model], G; kwargs...))
 end
-function loadtotal(models::AbstractVector{AbstractModel}, G; datapath = "data")
+function loadtotal(models::AbstractVector, G::RegularGrid; datapath = "data")
     N = size(G, 1)
 
     output = Tuple{Vector{Float64}, Array{Float64, 4}, Array{Policy, 4}}[]
     
     for (k, model) ∈ enumerate(models)
-        folder = SIMPATHS[typeof(model)]
+        folder = typeof(model) <: ModelInstance ? "albedo" : "jump"
         filename = makefilename(model, G)
         file = jldopen(joinpath(datapath, folder, "total", filename), "r")
 

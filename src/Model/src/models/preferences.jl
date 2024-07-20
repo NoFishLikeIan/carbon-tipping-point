@@ -47,20 +47,17 @@ function f(c, v, Δt, p::EpsteinZin)
     return ((consumption + value)^aggregator) / (1 - p.θ)
 end
 
-"""
-Climate damage aggregator. `χ` is the consumtpion rate, `F′` is the expected value of `F` at `t + Δt` and `Δt` is the time step
-"""
-function g(χ, F′, Δt, p::EpsteinZin)
-    ψ⁻¹ = inv(p.ψ)
-    agg = (1 - p.θ) / (1 - ψ⁻¹)
-
-    discounting = Δt / (1 + p.ρ * Δt)
-    consumption = discounting * χ^(1 - ψ⁻¹)
+"Climate damage aggregator. If θ > 1, it ought to be minimised!"
+function g(χ, F, Δt, p::EpsteinZin)
+    ψ⁻¹ = 1 / p.ψ
+    aggregator = (1 - p.θ) / (1 - ψ⁻¹)
 
     β = exp(-p.ρ * Δt)
-    value = (F′)^inv(agg)
 
-    return ((1 -  β) * consumption + β * value)^agg
+    consumption = (1 - β) * χ^(1 - ψ⁻¹) * Δt / (1 + p.ρ * Δt)
+    value = β * F^inv(aggregator)
+
+    (consumption + value)^aggregator
 end
 
 function f(c, v, Δt, p::CRRA)
