@@ -21,7 +21,7 @@ Base.@kwdef struct Economy
     Y₀::Float64 = 75.8
     σₖ::Float64 = 1.62e-2 # Variance of GDP
 
-    τ::Float64 = 300. # Steady state horizon
+    τ::Float64 = 500. # Steady state horizon
 end
 
 "Cost of abatement as a fraction of GDP"

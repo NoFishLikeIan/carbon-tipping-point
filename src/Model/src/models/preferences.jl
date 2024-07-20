@@ -1,21 +1,36 @@
-Base.@kwdef struct LogUtility
-    ρ::Float64 = 0.015  # Discount rate 
+struct LogUtility
+    ρ::Float64  # Discount rate 
 end
 
-Base.@kwdef struct CRRA
-    ρ::Float64 = 0.015  # Discount rate 
-    θ::Float64 = 10.     # Relative risk aversion
+struct CRRA
+    ρ::Float64  # Discount rate 
+    θ::Float64  # Relative risk aversion
 end
 
-Base.@kwdef struct LogSeparable
-    ρ::Float64 = 0.015  # Discount rate 
-    θ::Float64 = 7.     # Relative risk aversion
+struct LogSeparable
+    ρ::Float64  # Discount rate 
+    θ::Float64  # Relative risk aversion
 end
 
-Base.@kwdef struct EpsteinZin
-    ρ::Float64 = 0.015  # Discount rate 
-    θ::Float64 = 10.    # Relative Risk Aversion
-    ψ::Float64 = 1.5   # Elasticity of Intertemporal Complementarity 
+struct EpsteinZin
+    ρ::Float64 # Discount rate 
+    θ::Float64 # Relative Risk Aversion
+    ψ::Float64 # Elasticity of Intertemporal Complementarity
+
+    function EpsteinZin(ρ = 0.015, θ = 10., ψ = 1.)
+        inelastic = ψ ≈ 1.
+        timeadditive = ψ ≈ 1 / θ
+
+        if inelastic && timeadditive
+            LogUtility(ρ)
+        elseif inelastic && !timeadditive
+            LogSeparable(ρ, θ)
+        elseif !inelastic && timeadditive
+            CRRA(ρ, θ)
+        else
+            EpsteinZin(ρ, θ, ψ)
+        end
+    end
 end
 
 Preferences = Union{CRRA, EpsteinZin, LogUtility}
