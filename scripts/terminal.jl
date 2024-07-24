@@ -7,149 +7,110 @@ using FastClosures: @closure
 using Roots: find_zero
 using Printf: @printf, @sprintf
 
-include("utils/saving.jl")
+function cost(Fᵢ′, Tᵢ, Δt, χ, model::AbstractModel{GrowthDamages, P}) where P
+    δ = outputfct(Tᵢ, Δt, χ, model)
 
-# TODO: The two functions below differe only in expected utility. Factor that out.
-
-"Computes the Jacobi iteration for the terminal problem, F̄."
-function terminaljacobi!(F̄::AbstractMatrix{Float64}, policy::AbstractMatrix{Float64}, model::ModelInstance, G::RegularGrid; indices = CartesianIndices(G))
-
-    L, R = extrema(CartesianIndices(G))
-    
-    for idx in indices
-        @unpack θ, ρ, ψ = model.preferences
-        σₜ² = (model.hogg.σₜ / (model.hogg.ϵ * G.Δ.T))^2
-        σₘ² = (model.hogg.σₘ / G.Δ.m)^2
-
-        Xᵢ = G.X[idx]
-        dT = μ(Xᵢ.T, Xᵢ.m, model.hogg, model.albedo) / (model.hogg.ϵ * G.Δ.T)
-    
-        # Neighbouring nodes
-        # -- Temperature
-        FᵢT₊ = F̄[min(idx + I[1], R)]
-        FᵢT₋ = F̄[max(idx - I[1], L)]
-
-        Fᵢm₊ = F̄[min(idx + I[2], R)]
-        Fᵢm₋ = F̄[max(idx - I[2], L)]
-    
-        dTF = G.h * abs(dT) * ifelse(dT > 0, FᵢT₊, FᵢT₋)+ σₜ² * (FᵢT₊ + FᵢT₋) / 2
-        dmF = σₘ² * (Fᵢm₊ + Fᵢm₋) / 2
-
-        Q = σₘ² + σₜ² + G.h * abs(dT)
-        F′ = (dTF + dmF) / Q
-
-        σₖ² = model.economy.σₖ^2
-        damage = d(Xᵢ.T, model.damages, model.hogg)
-        growth = model.economy.ϱ - model.economy.δₖᵖ
-
-        Δt = G.h^2 / Q
-        
-        costs = @closure χ -> begin
-            investment = ϕ(model.economy.τ, χ, model.economy)
-            μy = growth + investment - damage
-            δy = max(1 + (1 - θ) * (μy - θ * σₖ²) * Δt, 0.)
-
-            return g(χ, δy * F′, Δt, model.preferences)
-        end
-
-        # Optimal control
-        objmin, χ = gssmin(costs, 0., 1.; tol = 1e-6)
-        
-        policy[idx] = χ
-        F̄[idx] = objmin
-    end
-
-    return F̄, policy
+    g(χ, δ * Fᵢ′, Δt, model.preferences)
 end
-function terminaljacobi!(F̄::AbstractMatrix{Float64}, policy::AbstractMatrix{Float64}, model::ModelBenchmark, G::RegularGrid; indices = CartesianIndices(G))
+function cost(Fᵢ′, Tᵢ, Δt, χ, model::AbstractModel{LevelDamages, P}) where P
+    δ = outputfct(Tᵢ, Δt, χ, model)
+    damage = d(Tᵢ, model.damages, model.hogg)
 
-    L, R = extrema(CartesianIndices(G))
-    
-    for idx in indices
-        @unpack θ, ρ, ψ = model.preferences
-        σₜ² = (model.hogg.σₜ / (model.hogg.ϵ * G.Δ.T))^2
-        σₘ² = (model.hogg.σₘ / G.Δ.m)^2
-
-        Xᵢ = G.X[idx]
-        dT = μ(Xᵢ.T, Xᵢ.m, model.hogg) / (model.hogg.ϵ * G.Δ.T)
-
-        # Jump
-        πᵢ = intensity(Xᵢ.T, model.hogg, model.jump)
-        qᵢ = increase(Xᵢ.T, model.hogg, model.jump)
-
-        steps = floor(Int, div(qᵢ, G.Δ.T * G.h))
-        weight = qᵢ / (G.Δ.T * G.h)
-
-        Fʲ = F̄[min(idx + steps * I[1], R)] * (1 - weight) + F̄[min(idx + (steps + 1) * I[1], R)] * weight
-
-        # Neighbouring nodes
-        # -- Temperature
-        FᵢT₊ = F̄[min(idx + I[1], R)]
-        FᵢT₋ = F̄[max(idx - I[1], L)]
-
-        Fᵢm₊ = F̄[min(idx + I[2], R)]
-        Fᵢm₋ = F̄[max(idx - I[2], L)]
-    
-        dTF = G.h * abs(dT) * ifelse(dT > 0, FᵢT₊, FᵢT₋)+ σₜ² * (FᵢT₊ + FᵢT₋) / 2
-        dmF = σₘ² * (Fᵢm₊ + Fᵢm₋) / 2
-
-        Q = σₘ² + σₜ² + G.h * abs(dT)
-        Δt = G.h^2 / Q
-        Fᵈ = (dTF + dmF) / Q
-        F′ = Fᵈ + πᵢ * Δt * (Fʲ - Fᵈ)
-
-        σₖ² = model.economy.σₖ^2
-        damage = d(Xᵢ.T, model.damages, model.hogg)
-        growth = model.economy.ϱ - model.economy.δₖᵖ
-        
-        costs = @closure χ -> begin
-            investment = ϕ(model.economy.τ, χ, model.economy)
-            μy = growth + investment - damage
-            δy = max(1 + (1 - θ) * (μy - θ * σₖ²) * Δt, 0.)
-
-            return g(χ, δy * F′, Δt, model.preferences)
-        end
-
-        # Optimal control
-        objmin, χ = gssmin(costs, 0., 1.; tol = 1e-6)
-        
-        policy[idx] = χ
-        F̄[idx] = objmin
-    end
-
-    return F̄, policy
+    g(damage * χ, δ * Fᵢ′, Δt, model.preferences)
 end
 
-function vfi(F₀::AbstractMatrix{Float64}, model, G::RegularGrid; tol = 1e-3, maxiter = 10_000, verbose = false, indices = CartesianIndices(G), alternate = false)
-    pᵢ = 0.5 .* ones(size(G))
-    pᵢ₊₁ = copy(pᵢ)
+function driftstep(idx, F̄, model::AbstractModel, G)
+    L, R = extrema(CartesianIndices(F̄))
 
-    Fᵢ = copy(F₀)
-    Fᵢ₊₁ = copy(F₀)
+    σₜ² = (model.hogg.σₜ / (model.hogg.ϵ * G.Δ.T))^2
+    σₘ² = (model.hogg.σₘ / G.Δ.m)^2
+
+    Xᵢ = G.X[idx]
+    dT = μ(Xᵢ.T, Xᵢ.m, model) / (model.hogg.ϵ * G.Δ.T)
+
+    # Neighbouring nodes
+    FᵢT₊, FᵢT₋ = F̄[min(idx + I[1], R)], F̄[max(idx - I[1], L)]
+    Fᵢm₊, Fᵢm₋ = F̄[min(idx + I[2], R)], F̄[max(idx - I[2], L)]
+
+    dTF = G.h * abs(dT) * ifelse(dT > 0, FᵢT₊, FᵢT₋) + σₜ² * (FᵢT₊ + FᵢT₋) / 2
+    dmF = σₘ² * (Fᵢm₊ + Fᵢm₋) / 2
+
+    Q = σₘ² + σₜ² + G.h * abs(dT)
+    F′ = (dTF + dmF) / Q
+    Δt = G.h^2 / Q
+
+    return F′, Δt
+end
+
+markovstep(idx, F̄, model::TippingModel, G) = driftstep(idx, F̄, model, G)
+function markovstep(idx, F̄, model::JumpModel, G)
+    Fᵈ, Δt = driftstep(idx, F̄, model, G)
+
+    # Update with jump
+    R = maximum(CartesianIndices(F̄))
+    Xᵢ = G.X[idx]
+    πᵢ = intensity(Xᵢ.T, model.hogg, model.jump)
+    qᵢ = increase(Xᵢ.T, model.hogg, model.jump)
+
+    steps = floor(Int, div(qᵢ, G.Δ.T * G.h))
+    weight = qᵢ / (G.Δ.T * G.h)
+
+    Fʲ = F̄[min(idx + steps * I[1], R)] * (1 - weight) + 
+            F̄[min(idx + (steps + 1) * I[1], R)] * weight
+
+    F′ = Fᵈ + πᵢ * Δt * (Fʲ - Fᵈ)
+
+    return F′, Δt
+end
+
+function terminaljacobi!(F̄, policy, model::AbstractModel, G; indices = CartesianIndices(F̄))
+
+    for idx in indices
+        F′, Δt = markovstep(idx, F̄, model, G)
+        Tᵢ = G.X[idx].T
+        χ = policy[idx]
+
+        # Optimal control
+        objective = @closure χ -> cost(F′, Tᵢ, Δt, χ, model)
+        Fᵢ, χ = gssmin(objective, 0., 1.; tol = eps(Float64))
+        
+        F̄[idx] = Fᵢ
+        policy[idx] = χ
+    end
+
+end
+
+function vfi(F₀, model::AbstractModel, G; tol = 1e-3, maxiter = 10_000, verbose = false, indices = CartesianIndices(G), alternate = false)
+    pᵢ, pᵢ₊₁ = similar(F₀), similar(F₀)
+    Fᵢ, Fᵢ₊₁ = copy(F₀), copy(F₀)
 
     verbose && println("Starting iterations...")
+
+    ε, α = Inf, Inf
+
     for iter in 1:maxiter
-        iterindices = ifelse(alternate && isodd(iter), indices, reverse(indices))
+        iterindices = (alternate && isodd(iter)) ? indices : reverse(indices)
+
 
         terminaljacobi!(Fᵢ₊₁, pᵢ₊₁, model, G; indices = iterindices)
 
-        ε = maximum(abs.((Fᵢ₊₁ .- Fᵢ)))
-        α = maximum(abs.((pᵢ₊₁ .- pᵢ)))
+        ε = maximum(abs.((Fᵢ₊₁ .- Fᵢ) ./ Fᵢ))
+        α = maximum(abs.((pᵢ₊₁ .- pᵢ) ./ pᵢ))
 
-        if verbose && (!alternate || isodd(iter))
-            @printf("Iteration %i / %i, ε = %.8f and α = %.8f...\r", iter, maxiter, ε, α)
+        if (ε < tol)
+            verbose && @printf("Converged in %i iterations, ε = %.8f, α = %.8f.\n", iter, ε, α)
+            return Fᵢ₊₁, pᵢ₊₁
         end
 
-        if ε < tol
-            verbose && @printf("Converged in %i iterations, ε = %.8f and α = %.8f.\n", iter, ε, α)
-            return Fᵢ₊₁, pᵢ₊₁
+        if verbose && (!alternate || isodd(iter))
+            @printf("Iteration %i / %i, ε = %.8f, α = %.8f...\r", iter, maxiter, ε, α)
         end
         
         Fᵢ .= Fᵢ₊₁
         pᵢ .= pᵢ₊₁
     end
 
-    @warn "Convergence failed."
+    verbose && @warn "Convergence failed."
     return Fᵢ₊₁, pᵢ₊₁
 end
 
@@ -159,11 +120,11 @@ function computeterminal(model, G::RegularGrid; verbose = true, withsave = true,
     F̄, policy = vfi(F₀, model, G; verbose, iterkwargs...)
     
     if withsave
-        folder = typeof(model) <: ModelInstance ? "albedo" : "jump"
+        folder = SIMPATHS[typeof(model)]
         filename = makefilename(model, G)
-        savepath = joinpath(datapath, folder, "terminal", filename)
+        savepath = joinpath(datapath, folder, filename)
         println("Saving solution into $savepath...")
-        jldsave(savepath; F̄, policy)
+        jldsave(savepath; F̄, policy, G)
     end
 
     return F̄, policy

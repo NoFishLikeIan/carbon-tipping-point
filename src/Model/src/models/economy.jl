@@ -12,14 +12,14 @@ Damages = Union{GrowthDamages, LevelDamages}
 Base.@kwdef struct Economy
     # Technology
     ωᵣ::Float64 = 2e-3 # Speed of abatement technology cost reduction
-    ϱ::Float64 = 9e-4 # Growth of TFP
-    κ::Float64 = 0.0632 # Adjustment costs of abatement technology
+    ϱ::Float64 = 1e-3 # Growth of TFP
+    κ::Float64 = 11.2 # Adjustment costs of abatement technology
     δₖᵖ::Float64 = 0.0116 # Initial depreciation rate of capital
 
     # Output
     A₀::Float64 = 0.113 # Initial TFP
     Y₀::Float64 = 75.8
-    σₖ::Float64 = 1.62e-2 # Variance of GDP
+    σₖ::Float64 = 0.0162 # Variance of GDP
 
     τ::Float64 = 300. # Steady state horizon
 end
@@ -42,7 +42,10 @@ function d(T, damages::LevelDamages, hogg::Hogg)
 end
 
 function ϕ(t, χ, economy::Economy)
-    (1 - χ) * A(t, economy) - (economy.κ / 2) * (1 - χ)^2
+    productivity = (1 - χ) * A(t, economy)
+    adjcosts = economy.κ * productivity^2 / 2.
+        
+    productivity - adjcosts
 end
 
 function A(t, economy::Economy)

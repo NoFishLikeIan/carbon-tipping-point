@@ -6,12 +6,15 @@ export Damages, GrowthDamages, LevelDamages
 export calibrateHogg
 export intensity, increase, d
 export μ, b, bterminal, γ, mstable, boundb, δₘ, ϕ
-export potential, density
-export Preferences, EpsteinZin, LogSeparable, CRRA, LogUtility, f, g
+export criticaltemperature
+export potential, density, outputfct
+export Preferences, EpsteinZin, LogSeparable, CRRA, LogUtility
+export f, g
 export TippingModel, JumpModel, AbstractModel
+export constructdefaultgrid
 
 # Packages
-using Grid: Point, Policy, Drift
+using Grid: Point, Policy, Drift, RegularGrid, gss
 using UnPack: @unpack
 using Roots: find_zero
 using FastClosures: @closure

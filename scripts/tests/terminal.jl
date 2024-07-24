@@ -5,87 +5,72 @@ using Plots
 
 using Model, Grid
 
+includet("../utils/saving.jl")
 includet("../terminal.jl")
-includet("../utils/plotting.jl")
 
 begin
 	DATAPATH = "data"
 	calibration = load_object(joinpath(DATAPATH, "calibration.jld2"))
 	hogg = Hogg()
 	economy = Economy()
-	damages = GrowthDamages()
 	preferences = EpsteinZin()
-end
+	albedo = Albedo()
+end;
+
+# --- Albedo
+damages = GrowthDamages()
+model = TippingModel(albedo, preferences, damages, economy, hogg, calibration);
 
 begin
 	N = 51
+	Tupper = typeof(damages) <: LevelDamages ? hogg.T₀ + 8. : criticaltemperature(model)
 
-	albedo = Albedo();
-	Tdomain = hogg.T₀ .+ (0., 7.)
+	Tdomain = (hogg.Tᵖ, Tupper)
 	mdomain = (mstable(Tdomain[1] - 0.75, hogg, albedo), mstable(Tdomain[2], hogg, albedo))
 
 	domains = [Tdomain, mdomain]
 
 	G = RegularGrid(domains, N);
+
+	Tspace = range(G.domains[1]...; length = size(G, 1))
+	mspace = range(G.domains[2]...; length = size(G, 2))
 end
 
 F₀ = ones(size(G)); F̄ = copy(F₀);
+policy₀ = 0.5 * ones(size(G)); terminalpolicy = copy(policy₀);
+terminaljacobi!(F̄, terminalpolicy, model, G)
 
-# --- Albedo
-model = ModelInstance(preferences, economy, damages, hogg, albedo, calibration);
-
-F̄ = copy(F₀);
-policy = zeros(size(G));
-Tspace = range(G.domains[1]...; length = size(G, 1))
-mspace = range(G.domains[2]...; length = size(G, 2))
+F̄, policy = vfi(F₀, model, G; maxiter = 10_000, verbose = true)
 
 begin
-	anim = @animate for iter in 1:60
-		print("Plotting iteration $iter\r")
+	idxs = 1:N
+	mspacefig = mspace[idxs]
+	Tspacefig = Tspace[idxs]
 
-		terminaljacobi!(F̄, policy, model, G)
-		wireframe(mspace, Tspace, F̄; camera = (45, 45), yflip = false, xflip = true, title = "Iteration $iter", xlabel = "\$m\$", ylabel = "\$T\$")
-	end
+	Ffig = contourf(mspacefig, Tspacefig, log.(F̄[idxs, idxs]); xlabel = "\$m\$", ylabel = "\$T\$", linewidth = 0, dpi = 180)
 
-	gif(anim; fps = 15)
+	polfig = contourf(mspacefig, Tspacefig, policy[idxs, idxs]; xlabel = "\$m\$", ylabel = "\$T\$", linewidth = 0, dpi = 180)
+
+	plot(Ffig, polfig; size = 600 .* (2√2, 1))
 end
 
 # --- Jump
-jumpmodel = ModelBenchmark(preferences, economy, damages, hogg, Jump(), calibration);
+jump = Jump()
+model = JumpModel(jump, preferences, damages, economy, hogg, calibration);
 
 F̄ = [(X.T / hogg.T₀)^2 + (X.m / log(hogg.M₀))^2 for X in G.X]
 policy = zeros(size(G));
 
-begin
-	anim = @animate for iter in 1:60
-		print("Plotting iteration $iter\r")
-
-		terminaljacobi!(F̄, policy, jumpmodel, G)
-		wireframe(mspace, Tspace, F̄; camera = (45, 45), yflip = false, xflip = true, title = "Iteration $iter", xlabel = "\$m\$", ylabel = "\$T\$")
-	end
-
-	gif(anim; fps = 12)
-end
-
-# Value function iteration for albedo
-F₀ = ones(size(G));
-F̄, policy = vfi(F₀, model, G; verbose = true, tol = 1e-4, alternate = true, maxiter = 1_000)
+F̄, policy = vfi(F₀, model, G; maxiter = 10_000, verbose = true, alternate = true)
 
 begin
-	Ffig = wireframe(mspace, Tspace, F̄; camera = (45, 45), yflip = false, xflip = true, xlabel = "\$m\$", ylabel = "\$T\$")
+	idxs = 1:N
+	mspacefig = mspace[idxs]
+	Tspacefig = Tspace[idxs]
 
-	polfig = wireframe(mspace, Tspace, policy; camera = (45, 45), yflip = false, xflip = true, xlabel = "\$m\$", ylabel = "\$T\$")
+	Ffig = contourf(mspacefig, Tspacefig, log.(F̄[idxs, idxs]); xlabel = "\$m\$", ylabel = "\$T\$", linewidth = 0, dpi = 180)
 
-	plot(Ffig, polfig)
-end
+	polfig = contourf(mspacefig, Tspacefig, policy[idxs, idxs]; xlabel = "\$m\$", ylabel = "\$T\$", linewidth = 0, dpi = 180)
 
-# Value function iteration for jump
-F̄j, policyj = vfi(F₀, jumpmodel, G; verbose = true, tol = 1e-4, alternate = true, maxiter = 1_000)
-
-begin
-	Ffig = wireframe(mspace, Tspace, F̄j; camera = (45, 45), yflip = false, xflip = true, xlabel = "\$m\$", ylabel = "\$T\$")
-
-	polfig = wireframe(mspace, Tspace, policyj; camera = (45, 45), yflip = false, xflip = true, xlabel = "\$m\$", ylabel = "\$T\$")
-
-	plot(Ffig, polfig)
+	plot(Ffig, polfig; size = 600 .* (2√2, 1))
 end
