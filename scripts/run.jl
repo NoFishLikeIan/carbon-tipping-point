@@ -1,9 +1,12 @@
+include("utils/saving.jl")
 include("terminal.jl")
 include("backward.jl")
 
 ΔΛ = [0., 0.06, 0.08];
 N = 51;
 VERBOSE = true
+TOL = 1e-5
+RUNTERMINAL = false
 
 # Construct model
 preferences = EpsteinZin();
@@ -24,12 +27,15 @@ for d in damages
 
         G = constructdefaultgrid(N, model)
 
-        computeterminal(model, G; verbose = VERBOSE, datapath = DATAPATH, alternate = true, tol = 1e-3)
+        RUNTERMINAL && computeterminal(model, G; verbose = VERBOSE, datapath = DATAPATH, alternate = true, tol = TOL)
+
+        computebackward(model, G; verbose = VERBOSE, datapath = DATAPATH)
     end
 
     jumpmodel = JumpModel(Jump(), preferences, d, economy, hogg, calibration)
 
     G = constructdefaultgrid(N, jumpmodel)
 
-    computeterminal(model, G; verbose = VERBOSE, datapath = DATAPATH, alternate = true, tol = 1e-3)
+    RUNTERMINAL && computeterminal(jumpmodel, G; verbose = VERBOSE, datapath = DATAPATH, alternate = true, tol = TOL)
+    computebackward(jumpmodel, G; verbose = VERBOSE, datapath = DATAPATH)
 end

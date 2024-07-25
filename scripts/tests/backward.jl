@@ -4,45 +4,54 @@ using BenchmarkTools: @btime
 using JLD2
 using Plots
 
-includet("../backward.jl")
-includet("../terminal.jl")
 includet("../utils/saving.jl")
+includet("../terminal.jl")
+includet("../backward.jl")
 
 begin
 	calibration = load_object(joinpath(DATAPATH, "calibration.jld2"))
 	hogg = Hogg()
 	economy = Economy()
-	damages = GrowthDamages()
+	damages = LevelDamages()
 	preferences = EpsteinZin()
-end
-
-begin
-	N = 21
-
-	albedo = Albedo();
-	Tdomain = hogg.T₀ .+ (0., 7.)
-	mdomain = (mstable(Tdomain[1] - 0.75, hogg, albedo), mstable(Tdomain[2], hogg, albedo))
-
-	domains = [Tdomain, mdomain]
-
-	G = RegularGrid(domains, N);
+	albedo = Albedo(λ₂ = Albedo().λ₁)
 end
 
 # --- Albedo
-model = ModelInstance(preferences, economy, damages, hogg, albedo, calibration);
-F̄, terminalpolicy = loadterminal(model, G);
+N = 51
+model = TippingModel(albedo, preferences, damages, economy, hogg, calibration);
+G = constructdefaultgrid(N, model)
 
+# Testing the backward step
+begin
+	F̄, terminalpolicy = loadterminal(model, G);
+	F = SharedMatrix(F̄);
+	policy = SharedMatrix([Policy(χ, 0.) for χ ∈ terminalpolicy]);
+
+	fullcluster = 1:N^2 .=> 0.
+	Δts = zeros(N^2)
+	t = model.economy.τ
+	ᾱ = γ(t, model.calibration) + δₘ(exp(Xᵢ.m), model.hogg)
+
+	optimiser = Opt(:LN_SBPLX, 2); xtol_rel!(optimiser, 1e-3);
+	lower_bounds!(optimiser, [0., 0.]); upper_bounds!(optimiser, [1., ᾱ]);
+
+	backwardstep!(Δts, F, policy, cluster, model, G, optimiser)
+end;
+
+F̄, terminalpolicy = loadterminal(model, G);
 F = SharedMatrix(F̄);
 policy = SharedMatrix([Policy(χ, 0.) for χ ∈ terminalpolicy]);
-backwardsimulation!(F, policy, model, G; verbose = true, t₀ = 0.)
+backwardsimulation!(F, policy, model, G; verbose = true)
 
 # --- Jump
-jumpmodel = ModelBenchmark(preferences, economy, damages, hogg, Jump(), calibration);
+jump = Jump()
+jumpmodel = JumpModel(jump, preferences, damages, economy, hogg, calibration);
 F̄, terminalpolicy = loadterminal(model, G);
 
 F = SharedMatrix(F̄);
 policy = SharedMatrix([Policy(χ, 0.) for χ ∈ terminalpolicy]);
-backwardsimulation!(F, policy, jumpmodel, G; verbose = true, t₀ = 0.)
+backwardsimulation!(F, policy, jumpmodel, G; verbose = true)
 
 # -- Plot results
 Tspace = range(G.domains[1]...; length = size(G, 1))

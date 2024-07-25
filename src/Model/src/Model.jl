@@ -7,7 +7,8 @@ export calibrateHogg
 export intensity, increase, d
 export μ, b, bterminal, γ, mstable, boundb, δₘ, ϕ
 export criticaltemperature
-export potential, density, outputfct
+export potential, density
+export terminaloutputfct, outputfct
 export Preferences, EpsteinZin, LogSeparable, CRRA, LogUtility
 export f, g
 export TippingModel, JumpModel, AbstractModel

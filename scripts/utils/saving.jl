@@ -1,4 +1,4 @@
-using Model: TippingModel, LevelDamages, EpsteinZin, GrowthDamages
+using Model: TippingModel, LevelDamages, EpsteinZin, GrowthDamages, JumpModel, AbstractModel
 using Printf: @sprintf
 using UnPack: @unpack
 
@@ -64,18 +64,18 @@ function makefilename(model::JumpModel{LevelDamages, EpsteinZin}, G)
     return "$(replace(filename, "." => ",")).jld2"
 end
 
-function loadterminal(model, G; kwargs...)
+function loadterminal(model::AbstractModel, G; kwargs...)
     dropdims.(loadterminal([model], G; kwargs...); dims = 3)
 end
 
-function loadterminal(models::AbstractVector{AbstractModel}, G; datapath = "data")
+function loadterminal(models::AbstractVector{<:AbstractModel}, G; datapath = "data")
     F̄ = Array{Float64}(undef, N, N, length(models))
     policy = similar(F̄)
 
     for (k, model) ∈ enumerate(models)
         folder = SIMPATHS[typeof(model)]
         filename = makefilename(model, G)
-        savepath = joinpath(datapath, folder, "terminal", filename)
+        savepath = joinpath(datapath, "terminal", folder, filename)
         F̄[:, :, k] .= load(savepath, "F̄")
         policy[:, :, k] .= load(savepath, "policy")
     end
@@ -87,7 +87,7 @@ end
 function loadtotal(model, G; kwargs...)     
     first(loadtotal([model], G; kwargs...))
 end
-function loadtotal(models::AbstractVector{AbstractModel}, G; datapath = "data")
+function loadtotal(models::AbstractVector{<:AbstractModel}, G; datapath = "data")
     N = size(G, 1)
 
     output = Tuple{Vector{Float64}, Array{Float64, 4}, Array{Policy, 4}}[]

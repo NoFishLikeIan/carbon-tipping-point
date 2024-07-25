@@ -1,7 +1,6 @@
 AbstractModel{D, P} = Union{TippingModel{D, P}, JumpModel{D, P}} where {D <: Damages, P <: Preferences}
 
 # TODO: break up these functions
-
 "Emissivity rate implied by abatement `α` at time `t` and carbon concentration `M`"
 function ε(t, M, α, model::AbstractModel)
     1. - M * (δₘ(M, model.hogg) + γ(t, model.calibration) - α) / (Gtonoverppm * Eᵇ(t, model.calibration))
@@ -34,7 +33,7 @@ function bterminal(T::Float64, χ, model::AbstractModel{GrowthDamages, P}) where
     return growth + investments - damage
 end
 
-"Drift of log output y for t < τ"
+"Drift of log output y for t < τ" # TODO: Combine the two drifts
 function b(t, Xᵢ::Point, u::Policy, model::AbstractModel{GrowthDamages, P}) where P <: Preferences
     εₜ = ε(t, exp(Xᵢ.m), u.α, model)
     Aₜ = A(t, model.economy)
@@ -47,7 +46,7 @@ function b(t, Xᵢ::Point, u::Policy, model::AbstractModel{GrowthDamages, P}) wh
 
     return growth + investments - abatement - damage
 end
-function b(t, Xᵢ::Point, u::Policy, model::AbstractModel{LevelDamages, P}) where P <: Preferences
+function b(t, Xᵢ::Point, u::Policy, model::AbstractModel)
     εₜ = ε(t, exp(Xᵢ.m), u.α, model)
     Aₜ = A(t, model.economy)
 
@@ -72,9 +71,17 @@ function bbound(t, Xᵢ::Point, model::AbstractModel)
     return max(abs(ll), abs(lr), abs(rl), abs(rr))
 end
 
-function outputfct(Tᵢ, Δt, χ, model::AbstractModel)
+function terminaloutputfct(Tᵢ, Δt, χ, model::AbstractModel)
     drift = bterminal(Tᵢ, χ, model) - model.preferences.θ * model.economy.σₖ^2 / 2
      
+    adj = Δt * (1 - model.preferences.θ) * drift
+
+    return max(1 + adj, 0.)
+end
+
+function outputfct(t, Xᵢ::Point, Δt, u::Policy, model::AbstractModel)
+    drift = b(t, Xᵢ, u, model) - model.preferences.θ * model.economy.σₖ^2 / 2
+
     adj = Δt * (1 - model.preferences.θ) * drift
 
     return max(1 + adj, 0.)

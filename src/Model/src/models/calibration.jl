@@ -9,9 +9,12 @@ end
 
 
 "Parametric form of γ: (t₀, ∞) → [0, 1]"
-γ(t, calibration::Calibration) = γ(t, calibration.γparameters, first(calibration.tspan))
-function γ(t, p, t₀)
-   max(p[1] + p[2] * (t - t₀) + p[3] * (t - t₀)^2, 0.)
+function γ(t, calibration::Calibration)
+    tmin, tmax = calibration.tspan
+    p = calibration.γparameters
+
+    Δt = clamp(t, tmin, tmax) - tmin
+    p[1] + p[2] * Δt + p[3] * Δt^2
 end
 
 "Linear interpolation of emissions in `calibration`"

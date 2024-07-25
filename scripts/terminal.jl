@@ -7,19 +7,19 @@ using FastClosures: @closure
 using Roots: find_zero
 using Printf: @printf, @sprintf
 
-function cost(Fᵢ′, Tᵢ, Δt, χ, model::AbstractModel{GrowthDamages, P}) where P
-    δ = outputfct(Tᵢ, Δt, χ, model)
+function terminalcost(Fᵢ′, Tᵢ, Δt, χ, model::AbstractModel{GrowthDamages, P}) where P
+    δ = terminaloutputfct(Tᵢ, Δt, χ, model)
 
     g(χ, δ * Fᵢ′, Δt, model.preferences)
 end
-function cost(Fᵢ′, Tᵢ, Δt, χ, model::AbstractModel{LevelDamages, P}) where P
-    δ = outputfct(Tᵢ, Δt, χ, model)
+function terminalcost(Fᵢ′, Tᵢ, Δt, χ, model::AbstractModel{LevelDamages, P}) where P
+    δ = terminaloutputfct(Tᵢ, Δt, χ, model)
     damage = d(Tᵢ, model.damages, model.hogg)
 
     g(damage * χ, δ * Fᵢ′, Δt, model.preferences)
 end
 
-function driftstep(idx, F̄, model::AbstractModel, G)
+function terminaldriftstep(idx, F̄, model::AbstractModel, G)
     L, R = extrema(CartesianIndices(F̄))
 
     σₜ² = (model.hogg.σₜ / (model.hogg.ϵ * G.Δ.T))^2
@@ -42,9 +42,9 @@ function driftstep(idx, F̄, model::AbstractModel, G)
     return F′, Δt
 end
 
-markovstep(idx, F̄, model::TippingModel, G) = driftstep(idx, F̄, model, G)
-function markovstep(idx, F̄, model::JumpModel, G)
-    Fᵈ, Δt = driftstep(idx, F̄, model, G)
+terminalmarkovstep(idx, F̄, model::TippingModel, G) = terminaldriftstep(idx, F̄, model, G)
+function terminalmarkovstep(idx, F̄, model::JumpModel, G)
+    Fᵈ, Δt = terminaldriftstep(idx, F̄, model, G)
 
     # Update with jump
     R = maximum(CartesianIndices(F̄))
@@ -66,12 +66,12 @@ end
 function terminaljacobi!(F̄, policy, model::AbstractModel, G; indices = CartesianIndices(F̄))
 
     for idx in indices
-        F′, Δt = markovstep(idx, F̄, model, G)
+        F′, Δt = terminalmarkovstep(idx, F̄, model, G)
         Tᵢ = G.X[idx].T
         χ = policy[idx]
 
         # Optimal control
-        objective = @closure χ -> cost(F′, Tᵢ, Δt, χ, model)
+        objective = @closure χ -> terminalcost(F′, Tᵢ, Δt, χ, model)
         Fᵢ, χ = gssmin(objective, 0., 1.; tol = eps(Float64))
         
         F̄[idx] = Fᵢ
@@ -122,7 +122,7 @@ function computeterminal(model, G::RegularGrid; verbose = true, withsave = true,
     if withsave
         folder = SIMPATHS[typeof(model)]
         filename = makefilename(model, G)
-        savepath = joinpath(datapath, folder, filename)
+        savepath = joinpath(datapath, "terminal", folder, filename)
         println("Saving solution into $savepath...")
         jldsave(savepath; F̄, policy, G)
     end
