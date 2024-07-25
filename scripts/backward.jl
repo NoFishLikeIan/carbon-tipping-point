@@ -112,13 +112,20 @@ function backwardstep!(Δts, F, policy, cluster, model, G, optimiser)
 end
 
 "Backward simulates from F̄ down to F₀, using the albedo model. It assumes that the passed F ≡ F̄"
-function backwardsimulation!(F, policy, model, G; verbose = false, cachepath = nothing, cachestep = 0.25)
+function backwardsimulation!(F, policy, model, G; verbose = false, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0.)
     verbose && println("Starting backward simulation...")
      
     savecache = !isnothing(cachepath)
     if savecache
-        tcache = model.economy.t₁ # Caches only the IPCC forecast timespan
-        isfile(cachepath) && throw("File $cachepath already exists.")
+        tcache = last(model.calibration.tspan) # Caches only the IPCC forecast timespan
+        if isfile(cachepath) 
+            if overwrite 
+                verbose && @warn "Removing file $cachepath.\n"
+                rm(cachepath)
+            else throw("File $cachepath already exists. If you want to overwrite it pass overwrite = true.")
+            end
+        end
+
         cachefile = jldopen(cachepath, "w+")
     end
 
@@ -131,7 +138,7 @@ function backwardsimulation!(F, policy, model, G; verbose = false, cachepath = n
 
     while !all(isempty.(queue.minima))
         tmin = model.economy.τ - minimum(queue.vals)
-        verbose && print("Cluster minimum time = $tmin\r...")
+        verbose && print("Cluster minimum time = $tmin...\r")
 
         clusters = dequeue!(queue)
 
@@ -139,7 +146,7 @@ function backwardsimulation!(F, policy, model, G; verbose = false, cachepath = n
             backwardstep!(Δts, F, policy, cluster, model, G, optimiser)
 
             for i in first.(cluster)
-                if Δts[i] + queue[i] ≤ model.economy.τ
+                if queue[i] ≤ model.economy.τ - tstop
                     queue[i] += Δts[i]
                 end
             end

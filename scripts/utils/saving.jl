@@ -75,7 +75,7 @@ function loadterminal(models::AbstractVector{<:AbstractModel}, G; datapath = "da
     for (k, model) ∈ enumerate(models)
         folder = SIMPATHS[typeof(model)]
         filename = makefilename(model, G)
-        savepath = joinpath(datapath, "terminal", folder, filename)
+        savepath = joinpath(datapath, folder, "terminal", filename)
         F̄[:, :, k] .= load(savepath, "F̄")
         policy[:, :, k] .= load(savepath, "policy")
     end
