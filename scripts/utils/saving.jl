@@ -3,10 +3,10 @@ using Printf: @sprintf
 using UnPack: @unpack
 
 const SIMPATHS = Dict(
-    TippingModel{LevelDamages, EpsteinZin}  => "albedo/level",
-    TippingModel{GrowthDamages, EpsteinZin} => "albedo/growth",
-    JumpModel{LevelDamages, EpsteinZin}  => "jump/level",
-    JumpModel{GrowthDamages, EpsteinZin}  => "jump/growth")
+    TippingModel{LevelDamages, EpsteinZin}  => "simulation/albedo/level",
+    TippingModel{GrowthDamages, EpsteinZin} => "simulation/albedo/growth",
+    JumpModel{LevelDamages, EpsteinZin}  => "simulation/jump/level",
+    JumpModel{GrowthDamages, EpsteinZin}  => "simulation/jump/growth")
 
 function makefilename(model::TippingModel{LevelDamages, EpsteinZin}, G)
     @unpack ρ, θ, ψ = model.preferences

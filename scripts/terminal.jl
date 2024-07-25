@@ -121,8 +121,12 @@ function computeterminal(model, G::RegularGrid; verbose = true, withsave = true,
     
     if withsave
         folder = SIMPATHS[typeof(model)]
+        savefolder = joinpath(datapath, folder, "terminal")
+        if !isdir(savefolder) mkpath(savefolder) end
+        
         filename = makefilename(model, G)
-        savepath = joinpath(datapath, "terminal", folder, filename)
+        savepath = joinpath(savefolder, filename)
+
         println("Saving solution into $savepath...")
         jldsave(savepath; F̄, policy, G)
     end

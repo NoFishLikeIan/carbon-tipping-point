@@ -83,7 +83,7 @@ end
 function backwardstep!(Δts, F, policy, cluster, model, G, optimiser)
     indices = CartesianIndices(G)
 
-    @batch for (i, δt) in cluster
+    @sync @distributed for (i, δt) in cluster
 
         idx = indices[i]
         Xᵢ = G.X[idx]
@@ -163,16 +163,26 @@ function computebackward(model, G; kwargs...)
     F̄, terminalpolicy = loadterminal(model, G)
     computebackward(F̄, terminalpolicy, model, G; kwargs...)
 end
-function computebackward(F̄, terminalpolicy, model, G; verbose = true, withsave = true, datapath = "data", iterkwargs...)    
+function computebackward(F̄, terminalpolicy, model, G; verbose = false, withsave = true, datapath = "data", iterkwargs...) 
     F = SharedMatrix(F̄);
-    policy = SharedMatrix([Policy(χ, 0.) for χ ∈ terminalpolicy]);
+    policy = SharedMatrix([Policy(χ, 0.) for χ ∈ terminalpolicy])
 
-    backwardsimulation!(F, policy, model, G; verbose = verbose, iterkwargs...)
-    
     if withsave
         folder = SIMPATHS[typeof(model)]
+        cachefolder = joinpath(datapath, folder, "cache")
+        if !isdir(cachefolder) mkpath(cachefolder) end
+        
         filename = makefilename(model, G)
-        savepath = joinpath(datapath, folder, filename)
+    end
+
+    cachepath = ifelse(withsave, joinpath(cachefolder, filename), nothing)
+    backwardsimulation!(F, policy, model, G; verbose = verbose, cachepath = cachepath, iterkwargs...)
+    
+    if withsave
+        savepath = joinpath(datapath, folder, "initial")
+        if !isdir(savepath) mkpath(savepath) end
+
+        savepath = joinpath(datapath, folder, "initial", filename)
         println("Saving solution into $savepath...")
         jldsave(savepath; F, policy, G)
     end
