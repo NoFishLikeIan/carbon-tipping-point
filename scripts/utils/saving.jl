@@ -117,3 +117,18 @@ function loadtotal(models::AbstractVector{<:AbstractModel}, G; datapath = "data"
 
     return output
 end
+
+function getbool(env, key, fallback)
+    key ∈ keys(env) ? env[key] == "true" : fallback
+end
+function getnumber(env, key, fallback)
+    if key ∈ keys(env)
+        tol = tryparse(Float64, env[key])
+
+        if !isnothing(tol)
+            return tol
+        end
+    end
+
+    return fallback
+end
