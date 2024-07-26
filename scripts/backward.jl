@@ -96,11 +96,11 @@ function backwardstep!(Δts, F, policy, cluster, model, G)
             cost(F′, t, Xᵢ, Δt, u, model)
         end
 
-        optimiser = Opt(:LN_SBPLX, 2); xtol_rel!(optimiser, 1e-3);
+        optimiser = Opt(:LN_SBPLX, 2); xtol_rel!(optimiser, ᾱ / 100.);
 	    lower_bounds!(optimiser, [0., 0.]); upper_bounds!(optimiser, [1., ᾱ])
         min_objective!(optimiser, objective)
 
-        candidate = min.(policy[idx], [1., ᾱ]) 
+        candidate = min.(policy[idx], [1., ᾱ])
         obj, pol, _ = optimize(optimiser, candidate)
 
         F[idx] = obj
@@ -112,12 +112,11 @@ function backwardstep!(Δts, F, policy, cluster, model, G)
 end
 
 "Backward simulates from F̄ down to F₀, using the albedo model. It assumes that the passed F ≡ F̄"
-function backwardsimulation!(F, policy, model, G; verbose = false, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0.)
+function backwardsimulation!(F, policy, model, G; verbose = false, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = last(model.calibration.tspan))
     verbose && println("Starting backward simulation...")
      
     savecache = !isnothing(cachepath)
     if savecache
-        tcache = last(model.calibration.tspan) # Caches only the IPCC forecast timespan
         if isfile(cachepath) 
             if overwrite 
                 verbose && @warn "Removing file $cachepath.\n"

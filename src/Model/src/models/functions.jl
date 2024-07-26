@@ -1,13 +1,5 @@
-AbstractModel{D, P} = Union{TippingModel{D, P}, JumpModel{D, P}} where {D <: Damages, P <: Preferences}
-
 # TODO: break up these functions
-"Emissivity rate implied by abatement `α` at time `t` and carbon concentration `M`"
-function ε(t, M, α, model::AbstractModel)
-    1. - M * (δₘ(M, model.hogg) + γ(t, model.calibration) - α) / (Gtonoverppm * Eᵇ(t, model.calibration))
-end
-function ε′(t, M, model::AbstractModel)
-    M / (Gtonoverppm * Eᵇ(t, model.calibration))
-end
+AbstractModel{D, P} = Union{TippingModel{D, P}, JumpModel{D, P}} where {D <: Damages, P <: Preferences}
 
 μ(T, m, model::TippingModel) = μ(T, m, model.hogg, model.albedo)
 μ(T, m, model::JumpModel) = μ(T, m, model.hogg)
@@ -31,6 +23,11 @@ function bterminal(T::Float64, χ, model::AbstractModel{GrowthDamages, P}) where
     damage = d(T, model.damages, model.hogg)
 
     return growth + investments - damage
+end
+
+"Emissivity rate implied by abatement `α` at time `t` and carbon concentration `M`"
+function ε(t, M, α, model::AbstractModel)
+    α / (δₘ(M, model.hogg) + γ(t, model.calibration))
 end
 
 "Drift of log output y for t < τ" # TODO: Combine the two drifts

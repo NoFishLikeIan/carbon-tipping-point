@@ -22,7 +22,7 @@ end
 # --- Albedo
 N = 51
 model = TippingModel(albedo, preferences, damages, economy, hogg, calibration);
-G = constructdefaultgrid(N, model)
+G = constructdefaultgrid(N, model);
 
 # Testing the backward step
 begin
@@ -30,12 +30,15 @@ begin
 	F = SharedMatrix(F̄);
 	policy = SharedMatrix([Policy(χ, 0.) for χ ∈ terminalpolicy]);
 
-	fullcluster = 1:N^2 .=> 0.
+	cluster = 1:N^2 .=> 0.
+	i, δt = last(cluster)
 	Δts = SharedVector(zeros(N^2))
 	t = model.economy.τ
 
 	Xᵢ = G.X[rand(CartesianIndices(G))]
 	ᾱ = γ(t, model.calibration) + δₘ(exp(Xᵢ.m), model.hogg)
+
+	u = Policy(rand(terminalpolicy), rand() * ᾱ)
 end;
 
 backwardstep!(Δts, F, policy, fullcluster, model, G)
