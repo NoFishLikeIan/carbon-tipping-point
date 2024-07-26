@@ -1,5 +1,5 @@
-using Distributed: @everywhere, @distributed, @sync, workers
-using SharedArrays: SharedArray, SharedMatrix
+using Distributed: @everywhere, @distributed, @sync, nprocs
+using SharedArrays: SharedArray, SharedMatrix, SharedVector
 using DataStructures: PriorityQueue, dequeue!, enqueue!, peek
 
 using Model, Grid
@@ -80,11 +80,10 @@ end
     end
 end
 
-function backwardstep!(Δts, F, policy, cluster, model, G, optimiser)
+function backwardstep!(Δts, F, policy, cluster, model, G)
     indices = CartesianIndices(G)
 
     @sync @distributed for (i, δt) in cluster
-
         idx = indices[i]
         Xᵢ = G.X[idx]
 
@@ -97,7 +96,8 @@ function backwardstep!(Δts, F, policy, cluster, model, G, optimiser)
             cost(F′, t, Xᵢ, Δt, u, model)
         end
 
-        upper_bounds!(optimiser, [1., ᾱ])
+        optimiser = Opt(:LN_SBPLX, 2); xtol_rel!(optimiser, 1e-3);
+	    lower_bounds!(optimiser, [0., 0.]); upper_bounds!(optimiser, [1., ᾱ])
         min_objective!(optimiser, objective)
 
         candidate = min.(policy[idx], [1., ᾱ]) 
@@ -130,11 +130,7 @@ function backwardsimulation!(F, policy, model, G; verbose = false, cachepath = n
     end
 
     queue = DiagonalRedBlackQueue(G)
-    Δts = SharedArray(zeros(length(queue.vals)))
-
-    optimiser = Opt(:LN_SBPLX, 2)
-    lower_bounds!(optimiser, [0., 0.])
-    xtol_rel!(optimiser, 1e-3)
+    Δts = SharedVector(zeros(length(queue.vals)))
 
     while !all(isempty.(queue.minima))
         tmin = model.economy.τ - minimum(queue.vals)
@@ -143,7 +139,7 @@ function backwardsimulation!(F, policy, model, G; verbose = false, cachepath = n
         clusters = dequeue!(queue)
 
         for cluster in clusters
-            backwardstep!(Δts, F, policy, cluster, model, G, optimiser)
+            backwardstep!(Δts, F, policy, cluster, model, G)
 
             for i in first.(cluster)
                 if queue[i] ≤ model.economy.τ - tstop

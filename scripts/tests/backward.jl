@@ -8,6 +8,8 @@ includet("../utils/saving.jl")
 includet("../terminal.jl")
 includet("../backward.jl")
 
+println("Startup with $(nprocs()) processes...")
+
 begin
 	calibration = load_object(joinpath(DATAPATH, "calibration.jld2"))
 	hogg = Hogg()
@@ -29,15 +31,14 @@ begin
 	policy = SharedMatrix([Policy(χ, 0.) for χ ∈ terminalpolicy]);
 
 	fullcluster = 1:N^2 .=> 0.
-	Δts = zeros(N^2)
+	Δts = SharedVector(zeros(N^2))
 	t = model.economy.τ
+
+	Xᵢ = G.X[rand(CartesianIndices(G))]
 	ᾱ = γ(t, model.calibration) + δₘ(exp(Xᵢ.m), model.hogg)
-
-	optimiser = Opt(:LN_SBPLX, 2); xtol_rel!(optimiser, 1e-3);
-	lower_bounds!(optimiser, [0., 0.]); upper_bounds!(optimiser, [1., ᾱ]);
-
-	backwardstep!(Δts, F, policy, cluster, model, G, optimiser)
 end;
+
+backwardstep!(Δts, F, policy, fullcluster, model, G)
 
 F̄, terminalpolicy = loadterminal(model, G);
 F = SharedMatrix(F̄);
