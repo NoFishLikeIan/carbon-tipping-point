@@ -14,9 +14,8 @@ using Statistics
 
 using Model, Grid
 
-include("utils/plotting.jl")
-include("utils/saving.jl")
-include("utils/simulating.jl")
+include("../utils/saving.jl")
+include("../utils/simulating.jl")
 
 begin # Global variables
     env = DotEnv.config()

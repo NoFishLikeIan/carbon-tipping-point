@@ -1,6 +1,9 @@
 using Model: TippingModel, LevelDamages, EpsteinZin, GrowthDamages, JumpModel, AbstractModel
+using Grid: Policy
 using Printf: @sprintf
 using UnPack: @unpack
+using JLD2: jldopen
+
 
 const SIMPATHS = Dict(
     TippingModel{LevelDamages, EpsteinZin}  => "simulation/albedo/level",
@@ -64,6 +67,8 @@ function makefilename(model::JumpModel{LevelDamages, EpsteinZin}, G)
     return "$(replace(filename, "." => ",")).jld2"
 end
 
+Result = Tuple{Vector{Float64}, Array{Float64, 3}, Array{Policy, 3}}
+
 function loadterminal(model::AbstractModel, G; kwargs...)
     dropdims.(loadterminal([model], G; kwargs...); dims = 3)
 end
@@ -83,36 +88,40 @@ function loadterminal(models::AbstractVector{<:AbstractModel}, G; datapath = "da
     return F̄, policy
 end
 
-# FIXME: Update load total for new value function definition
-function loadtotal(model, G; kwargs...)     
-    first(loadtotal([model], G; kwargs...))
+function loadtotal(model::AbstractModel, G; kwargs...)     
+    first(loadtotal([model], [G]; kwargs...))
 end
-function loadtotal(models::AbstractVector{<:AbstractModel}, G; datapath = "data")
-    N = size(G, 1)
-
-    output = Tuple{Vector{Float64}, Array{Float64, 4}, Array{Policy, 4}}[]
+function loadtotal(models::AbstractVector{<:AbstractModel}, Gs; datapath = "data")
+    output = Result[]
     
     for (k, model) ∈ enumerate(models)
-        folder = SIMPATHS[typeof(model)]
-        filename = makefilename(model, G)
-        file = jldopen(joinpath(datapath, folder, "total", filename), "r")
+        G = Gs[k]
 
-        timesteps = sort(parse.(Float64, keys(file)))
+        folder = SIMPATHS[typeof(model)]
+        cachefolder = joinpath(datapath, folder, "cache")
+        filename = makefilename(model, G)
+
+        cachefile = jldopen(joinpath(cachefolder, filename), "r")
+
+        timekeys = keys(cachefile)
+        timesteps = round.(parse.(Float64, timekeys), digits = 4)
+
+        ix = sortperm(timesteps)
+        timesteps = timesteps[ix]
+        timekeys = timekeys[ix]
 
         T = length(timesteps)
-        V = Array{Float64, 4}(undef, N, N, N, T)
-        policy = Array{Policy, 4}(undef, N, N, N, T)
+        F = Array{Float64, 3}(undef, size(G, 1), size(G, 2), T)
+        policy = Array{Policy, 3}(undef, size(G, 1), size(G, 2), T)
 
-        for (k, tᵢ) ∈ enumerate(timesteps)
-            timekey = string(tᵢ)
-
-            V[:, :, :, k] .= file[timekey]["V"]
-            policy[:, :, :, k] .= file[timekey]["policy"]
+        for (k, key) ∈ enumerate(timekeys)
+            F[:, :, k] .= cachefile[key]["F"]
+            policy[:, :, k] .= cachefile[key]["policy"]
         end
 
-        push!(output, (timesteps, V, policy))
+        push!(output, (timesteps, F, policy))
 
-        close(file)
+        close(cachefile)
     end
 
     return output
