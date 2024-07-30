@@ -3,6 +3,7 @@ using Grid: Policy
 using Printf: @sprintf
 using UnPack: @unpack
 using JLD2: jldopen
+using FileIO: load
 
 
 const SIMPATHS = Dict(
@@ -14,14 +15,14 @@ const SIMPATHS = Dict(
 function makefilename(model::TippingModel{LevelDamages, EpsteinZin}, G)
     @unpack ρ, θ, ψ = model.preferences
     @unpack ωᵣ = model.economy
-    @unpack σₜ = model.hogg
+    @unpack σₜ, σₘ = model.hogg
     @unpack λ₁, λ₂ = model.albedo
     @unpack ξ = model.damages
 
     N = size(G, 1)
     Δλ = λ₁ - λ₂
 
-    filename = @sprintf("N=%i_Δλ=%.2f_ρ=%.5f_θ=%.2f_ψ=%.2f_σ=%.2f_ω=%.5f_ξ=%.6f", N, Δλ, ρ, θ, ψ, σₜ, ωᵣ, ξ)
+    filename = @sprintf("N=%i_Δλ=%.2f_ρ=%.5f_θ=%.2f_ψ=%.2f_σT=%.4f_σm=%.4f_ω=%.5f_ξ=%.6f", N, Δλ, ρ, θ, ψ, σₜ, σₘ, ωᵣ, ξ)
 
     return "$(replace(filename, "." => ",")).jld2"
 end
@@ -29,14 +30,14 @@ end
 function makefilename(model::TippingModel{GrowthDamages, EpsteinZin}, G)
     @unpack ρ, θ, ψ = model.preferences
     @unpack ωᵣ = model.economy
-    @unpack σₜ = model.hogg
+    @unpack σₜ, σₘ = model.hogg
     @unpack λ₁, λ₂ = model.albedo
     @unpack ξ, υ = model.damages
 
     N = size(G, 1)
     Δλ = λ₁ - λ₂
 
-    filename = @sprintf("N=%i_Δλ=%.2f_ρ=%.5f_θ=%.2f_ψ=%.2f_σ=%.2f_ω=%.5f_ξ=%.6f_υ=%.3f", N, Δλ, ρ, θ, ψ, σₜ, ωᵣ, ξ, υ)
+    filename = @sprintf("N=%i_Δλ=%.2f_ρ=%.5f_θ=%.2f_ψ=%.2f_σT=%.4f_σm=%.4f_ω=%.5f_ξ=%.6f_υ=%.3f", N, Δλ, ρ, θ, ψ, σₜ, σₘ, ωᵣ, ξ, υ)
 
     return "$(replace(filename, "." => ",")).jld2"
 end
@@ -44,12 +45,12 @@ end
 function makefilename(model::JumpModel{GrowthDamages, EpsteinZin}, G)
     @unpack ρ, θ, ψ = model.preferences
     @unpack ωᵣ = model.economy
-    @unpack σₜ = model.hogg
+    @unpack σₜ, σₘ = model.hogg
     @unpack ξ, υ = model.damages
 
     N = size(G, 1)
 
-    filename = @sprintf("N=%i_ρ=%.5f_θ=%.2f_ψ=%.2f_σ=%.2f_ω=%.5f_ξ=%.6f_υ=%.3f", N, ρ, θ, ψ, σₜ, ωᵣ, ξ, υ)
+    filename = @sprintf("N=%i_ρ=%.5f_θ=%.2f_ψ=%.2f_σT=%.4f_σm=%.4f_ω=%.5f_ξ=%.6f_υ=%.3f", N, ρ, θ, ψ, σₜ, σₘ, ωᵣ, ξ, υ)
 
     return "$(replace(filename, "." => ",")).jld2"
 end
@@ -57,12 +58,12 @@ end
 function makefilename(model::JumpModel{LevelDamages, EpsteinZin}, G)
     @unpack ρ, θ, ψ = model.preferences
     @unpack ωᵣ = model.economy
-    @unpack σₜ = model.hogg
+    @unpack σₜ, σₘ = model.hogg
     @unpack ξ = model.damages
 
     N = size(G, 1)
 
-    filename = @sprintf("N=%i_ρ=%.5f_θ=%.2f_ψ=%.2f_σ=%.2f_ω=%.5f_ξ=%.6f", N, ρ, θ, ψ, σₜ, ωᵣ, ξ)
+    filename = @sprintf("N=%i_ρ=%.5f_θ=%.2f_ψ=%.2f_σT=%.4f_σm=%.4f_ω=%.5f_ξ=%.6f", N, ρ, θ, ψ, σₜ, σₘ, ωᵣ, ξ)
 
     return "$(replace(filename, "." => ",")).jld2"
 end
@@ -74,7 +75,7 @@ function loadterminal(model::AbstractModel, G; kwargs...)
 end
 
 function loadterminal(models::AbstractVector{<:AbstractModel}, G; datapath = "data")
-    F̄ = Array{Float64}(undef, N, N, length(models))
+    F̄ = Array{Float64}(undef, size(G, 1), size(G, 2), length(models))
     policy = similar(F̄)
 
     for (k, model) ∈ enumerate(models)
@@ -91,14 +92,15 @@ end
 function loadtotal(model::AbstractModel, G; kwargs...)     
     first(loadtotal([model], [G]; kwargs...))
 end
-function loadtotal(models::AbstractVector{<:AbstractModel}, Gs; datapath = "data")
+function loadtotal(models::AbstractVector{<:AbstractModel}, Gs; datapath = "data", allownegative = false)
     output = Result[]
     
     for (k, model) ∈ enumerate(models)
         G = Gs[k]
 
         folder = SIMPATHS[typeof(model)]
-        cachefolder = joinpath(datapath, folder, "cache")
+        controltype = ifelse(allownegative, "allownegative", "nonnegative")
+        cachefolder = joinpath(datapath, folder, controltype, "cache")
         filename = makefilename(model, G)
 
         cachefile = jldopen(joinpath(cachefolder, filename), "r")
