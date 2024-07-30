@@ -18,11 +18,15 @@ preferences = EpsteinZin();
 calibration = load_object(joinpath(DATAPATH, "calibration.jld2"));
 economy = Economy()
 hogg = Hogg()
-damages = (GrowthDamages(), )# (LevelDamages(), GrowthDamages())
+damages = (GrowthDamages(), ) # (LevelDamages(), GrowthDamages())
+negativeemissions = (false, true)
 
 # Terminal simulation
 for d in damages
-    VERBOSE && println("Solving for damages = $d...")
+    if VERBOSE
+        println("Solving for damages = $d...")
+    end
+    
     for Δλ ∈ ΔΛ
         VERBOSE && println("Solving albedo model Δλ = $Δλ")
 
@@ -34,13 +38,25 @@ for d in damages
 
         RUNTERMINAL && computeterminal(model, G; verbose = VERBOSE, datapath = DATAPATH, alternate = true, tol = TOL)
 
-        RUNBACKWARDS && computebackward(model, G; verbose = VERBOSE, datapath = DATAPATH, overwrite = OVERWRITE, tstop = TSTOP, cachestep = CACHESTEP)
+        if RUNBACKWARDS
+            for allownegative in negativeemissions
+                VERBOSE && println("Running backward $(ifelse(allownegative, "with", "without")) negative emissions...")
+                computebackward(model, G; allownegative, verbose = VERBOSE, datapath = DATAPATH, overwrite = OVERWRITE, tstop = TSTOP, cachestep = CACHESTEP)
+            end
+        end
     end
 
     jumpmodel = JumpModel(Jump(), preferences, d, economy, hogg, calibration)
 
     G = constructdefaultgrid(N, jumpmodel)
 
+    VERBOSE && println("Solving jump model")
+
     RUNTERMINAL && computeterminal(jumpmodel, G; verbose = VERBOSE, datapath = DATAPATH, alternate = true, tol = TOL)
-    RUNBACKWARDS && computebackward(jumpmodel, G; verbose = VERBOSE, datapath = DATAPATH, overwrite = OVERWRITE, tstop = TSTOP, cachestep = CACHESTEP)
+    if RUNBACKWARDS
+        for allownegative in negativeemissions
+            VERBOSE && println("Running backward $(ifelse(allownegative, "with", "without")) negative emissions...")
+            computebackward(jumpmodel, G; allownegative, verbose = VERBOSE, datapath = DATAPATH, overwrite = OVERWRITE, tstop = TSTOP, cachestep = CACHESTEP)
+        end
+    end
 end

@@ -14,7 +14,9 @@ begin
 	hogg = Hogg()
 	economy = Economy()
 	preferences = EpsteinZin()
-	albedo = Albedo()
+
+	Δλ = 0.06
+	albedo = Albedo(λ₂ = Albedo().λ₁ - Δλ)
 end;
 
 # --- Albedo
@@ -22,24 +24,19 @@ damages = GrowthDamages()
 model = TippingModel(albedo, preferences, damages, economy, hogg, calibration);
 
 begin
-	N = 51
-	Tupper = typeof(damages) <: LevelDamages ? hogg.T₀ + 8. : criticaltemperature(model)
-
-	Tdomain = (hogg.Tᵖ, Tupper)
-	mdomain = (mstable(Tdomain[1] - 0.75, hogg, albedo), mstable(Tdomain[2], hogg, albedo))
-
-	domains = [Tdomain, mdomain]
-
-	G = RegularGrid(domains, N);
+	N = 71
+	G = constructdefaultgrid(N, model)
 
 	Tspace = range(G.domains[1]...; length = size(G, 1))
 	mspace = range(G.domains[2]...; length = size(G, 2))
 end
 
-F₀ = ones(size(G)); F̄ = copy(F₀);
-policy₀ = 0.5 * ones(size(G)); terminalpolicy = copy(policy₀);
-terminaljacobi!(F̄, terminalpolicy, model, G)
+# F̄, terminalpolicy = loadterminal(model, G)
 
+F₀ = ones(size(G)); F̄ = copy(F₀);
+terminalpolicy = similar(F̄);
+
+terminaljacobi!(F̄, terminalpolicy, model, G)
 F̄, policy = vfi(F₀, model, G; maxiter = 10_000, verbose = true)
 
 begin

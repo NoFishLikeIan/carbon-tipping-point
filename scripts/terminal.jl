@@ -66,12 +66,11 @@ end
 function terminaljacobi!(F̄, policy, model::AbstractModel, G; indices = CartesianIndices(F̄))
 
     for idx in indices
-        F′, Δt = terminalmarkovstep(idx, F̄, model, G)
+        Fᵢ′, Δt = terminalmarkovstep(idx, F̄, model, G)
         Tᵢ = G.X[idx].T
-        χ = policy[idx]
 
         # Optimal control
-        objective = @closure χ -> terminalcost(F′, Tᵢ, Δt, χ, model)
+        objective = @closure χ -> terminalcost(Fᵢ′, Tᵢ, Δt, χ, model)
         Fᵢ, χ = gssmin(objective, 0., 1.; tol = eps(Float64))
         
         F̄[idx] = Fᵢ
@@ -97,7 +96,7 @@ function vfi(F₀, model::AbstractModel, G; tol = 1e-3, maxiter = 10_000, verbos
         ε = maximum(abs.((Fᵢ₊₁ .- Fᵢ) ./ Fᵢ))
         α = maximum(abs.((pᵢ₊₁ .- pᵢ) ./ pᵢ))
 
-        if (ε < tol)
+        if ε < tol
             verbose && @printf("Converged in %i iterations, ε = %.8f, α = %.8f.\n", iter, ε, α)
             return Fᵢ₊₁, pᵢ₊₁
         end

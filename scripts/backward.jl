@@ -80,7 +80,7 @@ end
     end
 end
 
-function backwardstep!(Δts, F, policy, cluster, model, G)
+function backwardstep!(Δts, F, policy, cluster, model, G; allownegative = false)
     indices = CartesianIndices(G)
 
     @sync @distributed for (i, δt) in cluster
@@ -88,7 +88,8 @@ function backwardstep!(Δts, F, policy, cluster, model, G)
         Xᵢ = G.X[idx]
 
         t = model.economy.τ - δt
-        ᾱ = γ(t, model.calibration) + δₘ(exp(Xᵢ.m), model.hogg)
+        ᾱ = allownegative ? 1. : 
+            γ(t, model.calibration) + δₘ(exp(Xᵢ.m), model.hogg)
 
         objective = @closure (x, grad) -> begin
             u = Policy(x[1], x[2]) 
@@ -112,7 +113,7 @@ function backwardstep!(Δts, F, policy, cluster, model, G)
 end
 
 "Backward simulates from F̄ down to F₀, using the albedo model. It assumes that the passed F ≡ F̄"
-function backwardsimulation!(F, policy, model, G; verbose = false, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = last(model.calibration.tspan))
+function backwardsimulation!(F, policy, model, G; verbose = false, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = last(model.calibration.tspan), allownegative = false)
     verbose && println("Starting backward simulation...")
      
     savecache = !isnothing(cachepath)
@@ -138,7 +139,7 @@ function backwardsimulation!(F, policy, model, G; verbose = false, cachepath = n
         clusters = dequeue!(queue)
 
         for cluster in clusters
-            backwardstep!(Δts, F, policy, cluster, model, G)
+            backwardstep!(Δts, F, policy, cluster, model, G; allownegative)
 
             for i in first.(cluster)
                 if queue[i] ≤ model.economy.τ - tstop
@@ -165,29 +166,21 @@ function computebackward(model, G; kwargs...)
     F̄, terminalpolicy = loadterminal(model, G)
     computebackward(F̄, terminalpolicy, model, G; kwargs...)
 end
-function computebackward(F̄, terminalpolicy, model, G; verbose = false, withsave = true, datapath = "data", iterkwargs...) 
+function computebackward(F̄, terminalpolicy, model, G; verbose = false, withsave = true, datapath = "data", allownegative = false, iterkwargs...) 
     F = SharedMatrix(F̄);
     policy = SharedMatrix([Policy(χ, 0.) for χ ∈ terminalpolicy])
 
     if withsave
         folder = SIMPATHS[typeof(model)]
-        cachefolder = joinpath(datapath, folder, "cache")
+        controltype = ifelse(allownegative, "allownegative", "nonnegative")
+        cachefolder = joinpath(datapath, folder, controltype, "cache")
         if !isdir(cachefolder) mkpath(cachefolder) end
         
         filename = makefilename(model, G)
     end
 
     cachepath = ifelse(withsave, joinpath(cachefolder, filename), nothing)
-    backwardsimulation!(F, policy, model, G; verbose = verbose, cachepath = cachepath, iterkwargs...)
-    
-    if withsave
-        savepath = joinpath(datapath, folder, "initial")
-        if !isdir(savepath) mkpath(savepath) end
-
-        savepath = joinpath(datapath, folder, "initial", filename)
-        println("Saving solution into $savepath...")
-        jldsave(savepath; F, policy, G)
-    end
+    backwardsimulation!(F, policy, model, G; verbose, cachepath, allownegative, iterkwargs...)
 
     return F, policy
 end
