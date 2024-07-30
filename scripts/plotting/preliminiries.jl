@@ -275,11 +275,16 @@ function simulatebau(model::JumpModel; trajectories =  100, X₀ = [model.hogg.T
     solve(ensemble, SRIW1(); trajectories)
 end
 
-begin # Side by side BAU Δλ = 0.8
-    bautime = 0:80
-    baumodels = [last(models), jumpmodel]
+bautime = 0:80
 
-    tickstep = 10
+begin # Single simulation
+    
+end
+
+begin # Side by side BAU Δλ = 0.8
+    baumodels = models
+
+    yeartickstep = 10
 
     baufig = @pgf GroupPlot(
         {
@@ -292,8 +297,8 @@ begin # Side by side BAU Δλ = 0.8
             height = raw"0.6\textwidth",
             ymin = Tmin, ymax = Tmax,
             xmin = 0, xmax = maximum(bautime),
-            xtick = 0:tickstep:maximum(bautime),
-            xticklabels = (0:tickstep:maximum(bautime)) .+ BASELINE_YEAR,
+            xtick = 0:yeartickstep:maximum(bautime),
+            xticklabels = (0:yeartickstep:maximum(bautime)) .+ BASELINE_YEAR,
             grid = "both", xticklabel_style = {rotate = 45}
         }
     )
