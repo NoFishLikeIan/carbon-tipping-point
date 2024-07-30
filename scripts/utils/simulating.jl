@@ -5,7 +5,7 @@ function Fbau!(du, u, model::AbstractModel, t)
 	du[1] = μ(u[1], u[2], model) / model.hogg.ϵ
 	du[2] = γ(t, model.calibration)
 end
-function Gbau!(du, u, model, t)    
+function G!(du, u, model, t)    
 	du[1] = model.hogg.σₜ / model.hogg.ϵ
 	du[2] = model.hogg.σₘ
 end
