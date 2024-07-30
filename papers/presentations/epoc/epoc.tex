@@ -47,7 +47,7 @@
 \tikzexternalize
 
 \newcommand{\X}{{\color{violet} X}}
-\newcommand{\inputtikz}[1]{%  
+\newcommand{\includegraphics[width = 0.5\linewidth]}[1]{%  
 
     \ifdraft{
     \includegraphics[width=0.5\textwidth]{example-image-a}
@@ -118,7 +118,7 @@
 
 \begin{frame}{Temperature dynamics}
     \begin{equation*}
-        \epsilon \; \d{\T} = \overbrace{\mu_{\lambda}(\T, \M)}^{\text{LHS} - \text{RHS}} \; \d{t} + \sigma \; \d{w}
+        \epsilon \; \dd{{\T} = \overbrace{\mu_{\lambda}(\T, \M)}^{\text{LHS} - \text{RHS}} \; \dd{t} + \sigma \; \dd{w}
     \end{equation*}
 
     \vspace{10pt}
@@ -133,14 +133,14 @@
     \only<1>{
         \begin{figure}
             \resizebox{!}{0.4\linewidth}{
-                \inputtikz{../../../plots/skeleton-albedo.tikz}
+                \includegraphics[width = 0.5\linewidth]{\plotpath/skeleton-albedo.tikz}
             }
         \end{figure}   
     }
     \only<2>{
         \begin{figure}
             \resizebox{!}{0.4\linewidth}{
-                \inputtikz{../../../plots/albedo.tikz}
+                \includegraphics[width = 0.5\linewidth]{\plotpath/albedo.tikz}
             }
         \end{figure}   
     }
@@ -150,14 +150,14 @@
     \only<1>{
         \begin{figure}
             \resizebox{0.6\linewidth}{!}{
-                \inputtikz{../../../plots/skeleton-nullcline.tikz}
+                \includegraphics[width = 0.5\linewidth]{\plotpath/skeleton-nullcline.tikz}
             }
         \end{figure}   
     }
     \only<2>{
         \begin{figure}
             \resizebox{0.6\linewidth}{!}{
-                \inputtikz{../../../plots/nullcline.tikz}
+                \includegraphics[width = 0.5\linewidth]{\plotpath/nullcline.tikz}
             }
         \end{figure}   
     }
@@ -168,12 +168,12 @@
     \begin{columns}
         \column{0.35\linewidth}
         \begin{equation*}
-            \frac{\d{\M}}{\M} = \left( \gamma^\mathrm{b} - \control{\alpha} \right) \d t
+            \frac{\dd{{\M}}{\M} = \left( \gamma^\mathrm{b} - \control{\alpha} \right) \dd{t}
         \end{equation*}
         \column{0.6\linewidth}
         \begin{figure}[H]
             \centering
-            \inputtikz{../../../plots/growthmfig.tikz}
+            \includegraphics[width = 0.5\linewidth]{\plotpath/growthmfig.tikz}
         \end{figure}
     \end{columns}
 \end{frame}
@@ -182,21 +182,21 @@
     \only<1>{
         \begin{figure}
             \resizebox{0.9\linewidth}{!}{
-                \inputtikz{../../../plots/skeleton-baufig.tikz}
+                \includegraphics[width = 0.5\linewidth]{\plotpath/skeleton-baufig.tikz}
             }
         \end{figure}   
     }
     \only<2>{
         \begin{figure}
             \resizebox{0.9\linewidth}{!}{
-                \inputtikz{../../../plots/baufig_6.tikz}
+                \includegraphics[width = 0.5\linewidth]{\plotpath/baufig_6.tikz}
             }
         \end{figure}   
     }
     \only<3>{
         \begin{figure}
             \resizebox{0.9\linewidth}{!}{
-                \inputtikz{../../../plots/baufig_8.tikz}
+                \includegraphics[width = 0.5\linewidth]{\plotpath/baufig_8.tikz}
             }
         \end{figure}   
     }
@@ -218,7 +218,7 @@
         \end{itemize}
         \column{0.7\linewidth}
         \begin{equation*}
-            \visible<1->{\frac{\d{\Y}}{\Y}} = \varrho - \delta + \phi(1 - \control{\chi})
+            \visible<1->{\frac{\dd{{\Y}}{\Y}} = \varrho - \delta + \phi(1 - \control{\chi})
             \visible<2->{-d(\T) - \omega c(\control{\alpha})}
         \end{equation*}
     \end{columns}
@@ -228,7 +228,7 @@
     \cite{weitzman_ghg_2012}
 
     \begin{figure}
-        \inputtikz{../../../plots/damagefig.tikz}
+        \includegraphics[width = 0.5\linewidth]{\plotpath/damagefig.tikz}
     \end{figure}
 \end{frame}
 
@@ -255,7 +255,7 @@
         \visible<3->{
             \textbf{Objective}
             \begin{equation*}
-                v_t(\T, \M, \Y) = \sup_{\control{\chi, \alpha}} \mathbb{E}_t \int^\infty_t f(\control{\chi}_s Y_s, v_s) \; \d{s} 
+                v_t(\T, \M, \Y) = \sup_{\control{\chi, \alpha}} \mathbb{E}_t \int^\infty_t f(\control{\chi}_s Y_s, v_s) \; \dd{s} 
             \end{equation*}
             \begin{itemize}
                 \item Discount rate $\rho = 1.5 \%$
@@ -276,14 +276,14 @@
 \begin{frame}
     \begin{figure}
         \centering
-        \includegraphics[width = \linewidth]{../../../plots/timestep.png}
+        \includegraphics[width = \linewidth]{\plotpath/timestep.png}
     \end{figure}
 \end{frame}
 
 \begin{frame}{Optimal Abatement with Tipping point}
     \begin{figure}
         \centering
-        \includegraphics[width = \linewidth]{../../../plots/abatement.png}
+        \includegraphics[width = \linewidth]{\plotpath/abatement.png}
     \end{figure}
 \end{frame}
 
@@ -293,7 +293,7 @@
         - \eta \sigma \T^4 + (G_0 + G_1 \log \M / M^{\mathrm{p}})
     \end{equation*}
     \begin{equation*}
-        \epsilon \; \d{\T} = \mu_{\lambda}(\T, \M) + \sigma \d{w} + \Theta(\T) \; \d{N} \text{ with arrival } \pi(\T)
+        \epsilon \; \dd{{\T} = \mu_{\lambda}(\T, \M) + \sigma \dd{w} + \Theta(\T) \; \dd{N} \text{ with arrival } \pi(\T)
     \end{equation*}
     Calibrated as in \cite{hambel_optimal_2021}
 \end{frame}
@@ -303,14 +303,14 @@
     \only<1>{
         \begin{figure}
             \resizebox{0.9\linewidth}{!}{
-                \inputtikz{../../../plots/skeleton-optemissions.tikz}
+                \includegraphics[width = 0.5\linewidth]{\plotpath/skeleton-optemissions.tikz}
             }
         \end{figure}   
     }
     \only<2>{
         \begin{figure}
             \resizebox{0.9\linewidth}{!}{
-                \inputtikz{../../../plots/optemissions.tikz}
+                \includegraphics[width = 0.5\linewidth]{\plotpath/optemissions.tikz}
             }
         \end{figure}   
     }
@@ -337,14 +337,14 @@
 \begin{frame}
     \begin{figure}
         \resizebox{0.9\linewidth}{!}{
-            \inputtikz{../../../plots/optgdp.tikz}
+            \includegraphics[width = 0.5\linewidth]{\plotpath/optgdp.tikz}
         }
     \end{figure}   
 \end{frame}
 \begin{frame}
     \begin{figure}
         \resizebox{0.9\linewidth}{!}{
-            \inputtikz{../../../plots/opttemp.tikz}
+            \includegraphics[width = 0.5\linewidth]{\plotpath/opttemp.tikz}
         }
     \end{figure}   
 \end{frame}

@@ -1,48 +1,22 @@
-\documentclass[11pt]{article}
+\documentclass[12pt]{article}
     \usepackage{style}
     \newcommand{\lang}{en}
-    
-    \usepgfplotslibrary{external} 
-    \tikzexternalize
 
-    \usetikzlibrary{positioning,fit,calc,decorations.pathreplacing,calligraphy, arrows.meta, pgfplots.groupplots}   
-
-    \pgfplotsset{compat=1.18}
-
-    \newcommand{\inputtikz}[1]{%  
-        \IfFileExists{#1}{\input{#1}}{
-            \includegraphics[width=0.5\textwidth]{example-image-a}
-        }
-    }
-
-    % Math commands
-
-    \DeclareMathOperator{\Dx}{\partial_x}
-    \DeclareMathOperator{\Dc}{\partial_c}
-    
-    \let\d\relax
-    \newcommand{\d}[1]{\mathrm{d}#1}
-
-    \let\H\relax
-    \DeclareMathOperator{\H}{\mathcal{H}}
-    \let\Re\relax
-    \DeclareMathOperator{\Re}{\mathbb{R}}
-
-    \DeclareMathOperator{\E}{\mathbb{E}}
-    \newcommand{\unit}[1]{\text{#1}}
-    \newcommand{\control}[1]{#1}
-    \renewcommand{\b}{\mathrm{b}}
-
+    \usepackage{etoolbox}
+    \apptocmd{\sloppy}{\hbadness 10000\relax}{}{} % Fixes under-full box in bibliography
 
     \usepackage{subfiles} % Load last
+
+    \overfullrule=5pt
     
+    % Paper specific commands
+    \def\plotpath{../../../plots}
+    \newcommand{\control}[1]{#1}
 
-    % Make title page
-
-    \author{Andrea Titton\thanks{
-      Faculty of Economics and Business, University of Amsterdam (a.titton@uva.nl). I thank my supervisors Florian Wagener and Cees Diks for the patient guidance on this paper. I also thank the CeNDEF group and the Quantitative Economics section at the University of Amsterdam for helpful comments throughout the many seminars. Finally, I thank the attendees of the SEEMS/ASF seminar series for their feedback.
-    }}
-    \title{The Dangers of Abatement Procrastination in a Tipping Climate}
+    % Title page
+    \author{Andrea Titton}
+    \title{Tipping Point}
+    
 
 \begin{document}
 

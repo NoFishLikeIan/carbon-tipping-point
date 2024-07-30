@@ -18,7 +18,7 @@
 
 \pgfplotsset{compat=1.18}
 
-\newcommand{\inputtikz}[1]{%  
+\newcommand{\includegraphics[width = 0.5\linewidth]}[1]{%  
     \ifdraft{
     \includegraphics[width=0.5\textwidth]{example-image-a}
     }{
@@ -50,7 +50,7 @@ I study the social planner solution to an integrated model with non-linear clima
 
 \begin{figure}[H]
     \centering
-    \resizebox{0.6\linewidth}{!}{\inputtikz{../../plots/albedo.tikz}}
+    \resizebox{0.6\linewidth}{!}{\includegraphics[width = 0.5\linewidth]{../../plots/albedo.tikz}}
     \caption{Albedo coefficients at different levels of temperature deviations from pre-industrial levels $T^{\mathrm{p}}$ and different parametrisations.}
     \label{fig:albedo}
 \end{figure}
@@ -64,7 +64,7 @@ The model has been calibrated using the SSP5 projections from the IPCC \citep{kr
 
 \begin{figure}[H]
     \centering
-    \resizebox{0.7\linewidth}{!}{\inputtikz{../../plots/baufig.tikz}}
+    \resizebox{0.7\linewidth}{!}{\includegraphics[width = 0.5\linewidth]{../../plots/baufig.tikz}}
     \caption{Business as usual path of temperature with small (left) and large (right) albedo drop. Each marker represents the temperature every 20 years, starting from 2020. In black, the \textit{SSP5 - Baseline} model.}
     \label{fig:bau}
 \end{figure}

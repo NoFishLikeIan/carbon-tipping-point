@@ -47,7 +47,7 @@
 \pgfplotsset{compat=1.18}
 
 \newcommand{\X}{{\color{violet} X}}
-\newcommand{\inputtikz}[1]{%  
+\newcommand{\includegraphics[width = 0.5\linewidth]}[1]{%  
 
     \ifdraft{
     \includegraphics[width=0.5\textwidth]{example-image-a}
@@ -76,13 +76,13 @@
         \begin{column}{0.5\linewidth}
             {\color{Econ} \textbf{The Economics Way}}
            \begin{figure}
-                    \inputtikz{../../../plots/intro_baufig_jump.tikz}
+                    \includegraphics[width = 0.5\linewidth]{\plotpath/intro_baufig_jump.tikz}
             \end{figure}
         \end{column}
         \begin{column}{0.5\linewidth}
             \only<2>{{\color{Climate} \textbf{The Climate Science Way}} 
             \begin{figure}
-                    \inputtikz{../../../plots/intro_baufig_8.tikz}
+                    \includegraphics[width = 0.5\linewidth]{\plotpath/intro_baufig_8.tikz}
                 \end{figure}}
         \end{column}
     \end{columns}

@@ -47,7 +47,7 @@
 \pgfplotsset{compat=1.18}
 
 \newcommand{\X}{{\color{violet} X}}
-\newcommand{\inputtikz}[1]{%  
+\newcommand{\includegraphics[width = 0.5\linewidth]}[1]{%  
 
     \ifdraft{
     \includegraphics[width=0.5\textwidth]{example-image-a}
@@ -99,14 +99,14 @@
 \begin{frame}
     Textbook energy balance \citeauthor{ashwin_tipping_2012} (\citeyear{ashwin_tipping_2012}) model for temperature $\T$ and CO$_2$ concentration $\M$ dynamics \vspace{5pt}
     \only<1>{\begin{equation}
-        \epsilon \; \text{d} \T = \mu(\T, \M) \; \d{t} + \sigma \; \d{W} + \epsilon(\T) \; \d{N}
+        \epsilon \; \text{d} \T = \mu(\T, \M) \; \dd{t} + \sigma \; \dd{W} + \epsilon(\T) \; \dd{N}
     \end{equation} \vspace{2pt}
     \begin{equation}
         \mu(\T, \M) = S + G_0 + G_1 \log(\M / M^p) - \eta \sigma \T^4
     \end{equation}}
     \only<2>{
         \begin{equation}
-            \epsilon \; \text{d} \T = \mu(\T, \M) \; \d{t} + \sigma \; \d{W} + {\color{red} \cancel{{\color{black} \epsilon(\T) \; \d{N}}}}
+            \epsilon \; \text{d} \T = \mu(\T, \M) \; \dd{t} + \sigma \; \dd{W} + {\color{red} \cancel{{\color{black} \epsilon(\T) \; \dd{N}}}}
         \end{equation} \vspace{2pt}
         \begin{equation}
             \mu(\T, \M) = S \underbrace{(1 - \lambda(\T))}_{\text{Ice-albedo}} + G_0 + G_1 \log(\M / M^p) - \eta \sigma \T^4
@@ -118,28 +118,28 @@
     \only<1>{
         \begin{figure}
             \resizebox{0.9\linewidth}{!}{
-                \inputtikz{../../../plots/skeleton-baufig.tikz}
+                \includegraphics[width = 0.5\linewidth]{\plotpath/skeleton-baufig.tikz}
             }
         \end{figure}   
     }
     \only<2>{
         \begin{figure}
             \resizebox{0.9\linewidth}{!}{
-                \inputtikz{../../../plots/baufig_6.tikz}
+                \includegraphics[width = 0.5\linewidth]{\plotpath/baufig_6.tikz}
             }
         \end{figure}   
     }
     \only<3>{
         \begin{figure}
             \resizebox{0.9\linewidth}{!}{
-                \inputtikz{../../../plots/baufig_8.tikz}
+                \includegraphics[width = 0.5\linewidth]{\plotpath/baufig_8.tikz}
             }
         \end{figure}   
     }
     \only<4>{
         \begin{figure}
             \resizebox{0.9\linewidth}{!}{
-                \inputtikz{../../../plots/baufig_jump.tikz}
+                \includegraphics[width = 0.5\linewidth]{\plotpath/baufig_jump.tikz}
             }
         \end{figure}   
     }
@@ -149,10 +149,10 @@
 \begin{frame}
     Maximise NPV of consumption subject to\vspace{2em}
     \begin{equation*}
-        \frac{\d{\Y}}{\Y} = \Big(\text{tech. growth} - \text{abatement} - \text{damages}(\T)\Big)\; \d{t} + \sigma \d{W}
+        \frac{\dd{{\Y}}{\Y} = \Big(\text{tech. growth} - \text{abatement} - \text{damages}(\T)\Big)\; \dd{t} + \sigma \dd{W}
     \end{equation*} \vspace{2em}
     \begin{equation*}
-        \frac{\d{\M}}{\M} = \Big(\text{BAU} - \text{abatement}\Big)\; \d{t}
+        \frac{\dd{{\M}}{\M} = \Big(\text{BAU} - \text{abatement}\Big)\; \dd{t}
     \end{equation*}
 \end{frame}
 
@@ -161,14 +161,14 @@
     \only<1>{
         \begin{figure}
             \resizebox{0.9\linewidth}{!}{
-                \inputtikz{../../../plots/skeleton-optemissions.tikz}
+                \includegraphics[width = 0.5\linewidth]{\plotpath/skeleton-optemissions.tikz}
             }
         \end{figure}   
     }
     \only<2>{
         \begin{figure}
             \resizebox{0.9\linewidth}{!}{
-                \inputtikz{../../../plots/optemissions.tikz}
+                \includegraphics[width = 0.5\linewidth]{\plotpath/optemissions.tikz}
             }
         \end{figure}   
     }

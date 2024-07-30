@@ -77,7 +77,7 @@
 \pgfplotsset{compat=1.18}
 
 \newcommand{\X}{{\color{violet} X}}
-\newcommand{\inputtikz}[1]{%  
+\newcommand{\includegraphics[width = 0.5\linewidth]}[1]{%  
 
     \ifdraft{
     \includegraphics[width=0.5\textwidth]{example-image-a}
@@ -128,13 +128,13 @@
 
     \begin{equation*}
         \begin{split}
-            \epsilon \; \d{\T} = \; &C(\M) \; \d{t} \;+ \sigma \; \d{W} \\
-            + \; &S + \epsilon(\T) \; \d{N}
+            \epsilon \; \dd{{\T} = \; &C(\M) \; \dd{t} \;+ \sigma \; \dd{W} \\
+            + \; &S + \epsilon(\T) \; \dd{N}
         \end{split}
     \end{equation*}
 
     \begin{figure}
-        \inputtikz{../../../plots/illjumpfig.tikz}
+        \includegraphics[width = 0.5\linewidth]{\plotpath/illjumpfig.tikz}
     \end{figure} 
 
 \end{column}
@@ -145,13 +145,13 @@
 
     \begin{equation*}
         \begin{split}
-            \epsilon \; \d{\T} = \; &C(\M) \; \d{t} \;+ \sigma \; \d{W} \\
-            + \; &S \big(1 - \lambda(\T)\big) \d{t}
+            \epsilon \; \dd{{\T} = \; &C(\M) \; \dd{t} \;+ \sigma \; \dd{W} \\
+            + \; &S \big(1 - \lambda(\T)\big) \dd{t}
         \end{split}
     \end{equation*}
 
     \begin{figure}
-        \inputtikz{../../../plots/poster_albedo.tikz}
+        \includegraphics[width = 0.5\linewidth]{\plotpath/poster_albedo.tikz}
     \end{figure} 
 \end{column}
 
@@ -160,7 +160,7 @@
 Two different ways that lead to two different \textbf{dynamics}.
 
 \begin{figure}
-    \inputtikz{../../../plots/poster_baufig.tikz}
+    \includegraphics[width = 0.5\linewidth]{\plotpath/poster_baufig.tikz}
 \end{figure}
 
 \vspace{1em}
@@ -202,7 +202,7 @@ Two different ways that lead to two different \textbf{dynamics}.
     \begin{column}{\onecolwid}
         \textbf{Objective}
         Maximise net-present value of consumption \begin{equation*}
-            V_0 = \sup_{\chi, \alpha} \int^\infty_0 f(\chi_t \Y_t, V_t) \; \d{t}
+            V_0 = \sup_{\chi, \alpha} \int^\infty_0 f(\chi_t \Y_t, V_t) \; \dd{t}
         \end{equation*} where $f$ is Epstein-Zin aggregator (\citeyear{epstein_substitution_1989})
     \end{column}
 \end{columns}
@@ -251,13 +251,13 @@ Two different ways that lead to two different \textbf{dynamics}.
             \begin{subfigure}{0.45\textwidth}
                 \centering
                 \captionsetup{labelformat=empty}
-                \includegraphics[width = 0.9\linewidth]{../../../plots/qr-paper.png}
+                \includegraphics[width = 0.9\linewidth]{\plotpath/qr-paper.png}
                 \caption{\textbf{Paper}}
             \end{subfigure}
             \begin{subfigure}{0.45\textwidth}
                 \centering
                 \captionsetup{labelformat=empty}
-                \includegraphics[width = 0.9\linewidth]{../../../plots/qr-website.png}
+                \includegraphics[width = 0.9\linewidth]{\plotpath/qr-website.png}
                 \caption{\textbf{Website}}
             \end{subfigure}  
         \end{figure}

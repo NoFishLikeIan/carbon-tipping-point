@@ -67,7 +67,7 @@ Utility preferences as specified by (\ref{eq:utility}) and (\ref{eq:aggregator})
 To make sense of this utility specification it is useful to consider two illustrative parameter cases. First, as the elasticity of intertemporal substitution converges to the inverse  coefficient of relative risk aversion, $\psi \to 1 / \theta$, the aggregator (\ref{eq:aggregator}) becomes separable \begin{equation}
     \lim_{\psi \to 1 / \theta} f(C, U) = \rho \left(\frac{1}{1 - \theta} C^{1 - \theta} - U\right),
 \end{equation} and the utility (\ref{eq:utility}) simplifies to the usual time separable formulation \begin{equation}
-    U(\control{\alpha}, \control{\chi}) = \rho\E \int^{\infty}_t \exp\big(-\rho (s - t) \big) \; \frac{1}{1 - \theta} C(s)^{1 - \theta} \; \d{t}.
+    U(\control{\alpha}, \control{\chi}) = \rho\E \int^{\infty}_t \exp\big(-\rho (s - t) \big) \; \frac{1}{1 - \theta} C(s)^{1 - \theta} \; \dd{t}.
 \end{equation} Second, if we let the elasticity of intertemporal substitution converge to one, $\psi \to 1$, we obtain the log-separable aggregator \begin{equation} \label{eq:epstein-zin:log-separable}
     f(C, U) = \rho (1 - \theta)U \left(\log(C) - \frac{1}{1 - \theta} \log\big( (1 - \theta) U \big) \right).
 \end{equation}
@@ -84,7 +84,7 @@ The calibrated carbon decay $\delta_m$, as a function of the carbon stored in si
 
 \begin{figure}[H]
     \centering
-    \inputtikz{../../../plots/decay.tikz}
+    \input{\plotpath/decay.tikz}
     \caption{Estimated decay of carbon $\delta_m$ as a  function of the carbon stored in sinks $N$.}
     \label{fig:decay}
 \end{figure}
@@ -93,8 +93,8 @@ To simplify matters I will assume that the amount of carbon sinks present in the
 
 \begin{figure}[H]
     \centering
-    \inputtikz{../../../plots/decaypathfig.tikz}
-    \caption{Estimated decay of carbon $\delta_m$ under the business as usual emission scenario $M^{\b}$. Each marker is the decay after every decade.}
+    \input{\plotpath/decaypathfig.tikz}
+    \caption{Estimated decay of carbon $\delta_m$ under the business as usual emission scenario $M^{b}$. Each marker is the decay after every decade.}
     \label{fig:decaypath}
 \end{figure}
 
@@ -106,7 +106,7 @@ The social planner problem depends on time $t$ and three state variables: temper
 \end{equation} where the two controls $\control{\chi}, \control{\alpha}$ are functions $[0, \infty) \times \mathcal{S} \mapsto [0, 1]$. The state vector $X$ follows the drift \begin{equation}
     w(t, X,  \control{\chi}, \control{\alpha}) = \begin{pmatrix}
         \mu_T(T) + \mu_m(m) \\
-        \gamma^{\b} - \control{\alpha} \\
+        \gamma^{b} - \control{\alpha} \\
         \varrho + \phi(t, \control{\chi}) - A(t) \beta(t, \control{\alpha}) - \delta_K(T)
     \end{pmatrix}
 \end{equation}
@@ -120,10 +120,10 @@ The social planner problem depends on time $t$ and three state variables: temper
 
 \section{Approximating Markov Chain} \label{appendix:approximating-markov-chain}
 
-Th numerical method employed here adapts that presented in \citep{kushner_numerical_2001}. First, we define a suitably large domain for the state variables $\mathcal{X} \subseteq \mathbb{R}^3$ and let $x = (T, m, y) \in \mathcal{X}$ be the state vector. Then, let $u = (\chi, \alpha) \in \mathcal{U} \coloneqq [0, 1] \times [0, \gamma^\b]$ be the vector of controls. Then we can define the operator \begin{equation}
+Th numerical method employed here adapts that presented in \citep{kushner_numerical_2001}. First, we define a suitably large domain for the state variables $\mathcal{X} \subseteq \mathbb{R}^3$ and let $x = (T, m, y) \in \mathcal{X}$ be the state vector. Then, let $u = (\chi, \alpha) \in \mathcal{U} \coloneqq [0, 1] \times [0, \gamma^b]$ be the vector of controls. Then we can define the operator \begin{equation}
     \begin{split}
         \mathcal{L}_t^u = \; &\frac{\mu(T, m)}{\epsilon} \frac{\partial}{\partial T} + \big(\varrho + \phi(\chi) - \delta_k - d(T) - A \beta(\alpha) \big) \frac{\partial}{\partial y} + \\ 
-        &(\gamma^\b - \alpha)\frac{\partial}{\partial m} + \frac{(\sigma_T / \epsilon)^2}{2} \frac{\partial^2}{\partial T^2} + \frac{\sigma^2_k}{2} \frac{\partial^2}{\partial y^2} 
+        &(\gamma^b - \alpha)\frac{\partial}{\partial m} + \frac{(\sigma_T / \epsilon)^2}{2} \frac{\partial^2}{\partial T^2} + \frac{\sigma^2_k}{2} \frac{\partial^2}{\partial y^2} 
     \end{split}
 \end{equation} such that the value functional at time $t$ satisfies \begin{equation} \label{eq:operator-definition}
     -\partial_t V_t =  \sup_{u} \; \mathcal{L}_t^u V_t + f(\chi, y, V_t).
@@ -132,11 +132,11 @@ Th numerical method employed here adapts that presented in \citep{kushner_numeri
 We seek to define a Markov chain consistent with (\ref{eq:operator-definition}), over a finite grid in the unit cube \begin{equation}\Omega_h = \{0, h, 2h \ldots 1 - h, 1\}^3.\end{equation} First we define the state dynamics over the unit cube by letting $\tilde{X} = X / \lvert\mathcal{X}\rvert$ where \begin{equation}
     \mathcal{X} = [T^p, T^p + \Delta T] \times [m_0, \overline{m}] \times [y_0, \overline{y}]
 \end{equation} and defining the dynamics \begin{equation}
-    d \tilde{X} = \omega(t, X, u) \; \d{t} + \Sigma \; \d w
+    d \tilde{X} = \omega(t, X, u) \; \dd{t} + \Sigma \; \dd{w}
 \end{equation} where \begin{equation}
     \omega(t, X, u) = \begin{pmatrix}
         \mu(T, m) / \epsilon \Delta T \\
-        (\gamma^{\b} - \alpha) / (\overline{m} - m_0) \\
+        (\gamma^{b} - \alpha) / (\overline{m} - m_0) \\
         \big(\varrho + \phi(\chi) - \delta_k - d(T) - A \beta(\alpha) \big) / (\overline{y} - y_0)
     \end{pmatrix} 
 \end{equation} and \begin{equation}
@@ -160,9 +160,9 @@ Finally, let \begin{equation}
 \section{Post-transition phase}
 
 We assume that at some point in the future $\tau \gg 0$, the abatement rate is equal to emission growth, $\gamma^b = \alpha$, and technological progress caps, $\varrho = 0$, such that the state variables evolve according to dynamics \begin{align}
-    \d{m} &= 0, \\
-    \epsilon \; \d T &= \mu(T, m) \; \d t + \sigma_T \; \d w_1 \text{ and } \\
-    \d y &= \big( \phi(\chi) - \delta_k^p - d(T) \big) \; \d t + \sigma_k \; d w_2.
+    \dd{m} &= 0, \\
+    \epsilon \; \dd{T} &= \mu(T, m) \; \dd{t} + \sigma_T \; \dd{w_1} \text{ and } \\
+    \d y &= \big( \phi(\chi) - \delta_k^p - d(T) \big) \; \dd{t} + \sigma_k \; d w_2.
 \end{align} I call this the \textit{post-transition} phase. We can then compute a steady state value function $V_t \eqqcolon \overline{V}$ for all $t \geq \tau$, which satisfies the Hamilton-Bellman-Jacobi equation \begin{equation}
     0 = \overline{\mathcal{L}}^\chi \; \overline{V} + f(\chi, y, \overline{V}),
 \end{equation} where \begin{equation}

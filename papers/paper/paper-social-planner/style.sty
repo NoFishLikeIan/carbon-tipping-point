@@ -6,21 +6,26 @@
 
 \usepackage{amsmath, amssymb, mathtools, bbm, amsthm}
 \usepackage{bm}
-\usepackage{textcomp, gensymb}
+\usepackage{siunitx, physics, textcomp, gensymb}
+
+% Math commands
+\newcommand{\E}{\mathbb{E}}
+\renewcommand{\Re}{\mathbb{R}}
+
 
 \usepackage{algorithm}
 \usepackage{algorithmic}
 \usepackage{pdflscape}
 \usepackage[dvipsnames]{xcolor}
-\definecolor{myred}{RGB}{155, 34, 38}
-\definecolor{mygreen}{RGB}{10, 147, 150}
+\definecolor{citered}{RGB}{155, 34, 38}
+\definecolor{citegreen}{RGB}{10, 147, 150}
 \usepackage[colorlinks=true]{hyperref}
-\hypersetup{citecolor=myred}
-\hypersetup{urlcolor=mygreen}
-\hypersetup{linkcolor=myred}
+\hypersetup{citecolor=citered}
+\hypersetup{urlcolor=citegreen}
+\hypersetup{linkcolor=citered}
 \usepackage{amssymb}
 \usepackage{subcaption}
-\usepackage[a4paper, total={6in, 9.5in}]{geometry}
+\usepackage[a4paper, margin=1.25in]{geometry}
 \fontfamily{ppl}\selectfont 
 
 \usepackage{wrapfig}
@@ -41,12 +46,21 @@
 \usepackage{multirow}
 \usepackage{lscape}
 
+% Externalise tikz
+\usepgfplotslibrary{external} 
+\tikzexternalize % Precompile images
+
+\usetikzlibrary{positioning,fit,calc,decorations.pathreplacing,calligraphy, arrows.meta, pgfplots.groupplots}
+
+\pgfplotsset{compat=1.18}
+
 % Theorems
 \usepackage{thmtools, thm-restate}
-\declaretheorem{theorem}
-\declaretheorem{lemma}
+
 \declaretheorem{proposition}
-\declaretheorem{corollary}
+\declaretheorem[parent=proposition]{lemma}
+\declaretheorem[parent=proposition]{corollary}
+
 \declaretheorem{assumption}
 \declaretheorem{definition}
 

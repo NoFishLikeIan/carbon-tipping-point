@@ -36,7 +36,7 @@
 \pgfplotsset{compat=1.18}
 
 \newcommand{\X}{{\color{violet} X}}
-\newcommand{\inputtikz}[1]{%  
+\newcommand{\includegraphics[width = 0.5\linewidth]}[1]{%  
 
     \ifdraft{
     \includegraphics[width=0.5\textwidth]{example-image-a}
@@ -148,7 +148,7 @@
         \begin{equation*}
             \begin{split}
                 \epsilon \; \d {{ \color{red} T }} = \big( &{\color{orange} S_0} (1 - \lambda({\color{red} T})) - \eta \sigma {\color{red} T}^4 \\ 
-                + &G_0 + G_1 \log {\color{blue} M} / M^{\mathrm{p}} \big) \d t \\
+                + &G_0 + G_1 \log {\color{blue} M} / M^{\mathrm{p}} \big) \dd{t} \\
                 + &\sigma_T \d W
             \end{split}
         \end{equation*}
@@ -161,14 +161,14 @@
     \end{equation*}
     \begin{figure}
     \resizebox{!}{0.4\linewidth}{
-        \inputtikz{../../../plots/albedo.tikz}
+        \includegraphics[width = 0.5\linewidth]{\plotpath/albedo.tikz}
     }
     \end{figure}
 \end{frame}
 
 \begin{frame} \frametitle{Albedo loss}
     \centering
-    \inputtikz{../../../plots/nullcline.tikz}
+    \includegraphics[width = 0.5\linewidth]{\plotpath/nullcline.tikz}
 \end{frame}
 
 \begin{frame} \frametitle{Carbon Concentration}
@@ -177,7 +177,7 @@
         $\gamma^\mathrm{b}$: growth rate of carbon concentration $M$ under the business-as-usual scenario.
         \column{0.6\linewidth}
         \begin{figure}[H]
-            \inputtikz{../../../plots/growthmfig.tikz}
+            \includegraphics[width = 0.5\linewidth]{\plotpath/growthmfig.tikz}
         \end{figure}
     \end{columns}
 \end{frame}
@@ -187,12 +187,12 @@
     \begin{columns}
         \column{0.35\linewidth}
         \begin{equation*}
-            \d m = \frac{\d M}{M} = \left( \gamma^\mathrm{b} - \control{\alpha} \right) \d t
+            \dd{m} = \frac{\dd{M}}{M} = \left( \gamma^\mathrm{b} - \control{\alpha} \right) \dd{t}
         \end{equation*}
         \column{0.6\linewidth}
         \begin{figure}[H]
             \centering
-            \inputtikz{../../../plots/growthmfig.tikz}
+            \includegraphics[width = 0.5\linewidth]{\plotpath/growthmfig.tikz}
         \end{figure}
     \end{columns}
 \end{frame}
@@ -200,14 +200,14 @@
 \begin{frame}{Business-as-usual dynamics}
     \begin{figure}[H]
         \centering
-        \inputtikz{../../../plots/presentation/baufig.tikz}
+        \includegraphics[width = 0.5\linewidth]{\plotpath/presentation/baufig.tikz}
     \end{figure}
 \end{frame}
 
 \begin{frame}{Business-as-usual dynamics}
     \begin{figure}[H]
         \centering
-        \inputtikz{../../../plots/presentation/bau-x-dens.tikz}
+        \includegraphics[width = 0.5\linewidth]{\plotpath/presentation/bau-x-dens.tikz}
     \end{figure}
 \end{frame}
 
@@ -216,19 +216,19 @@
     \begin{columns}
         \column{0.35\linewidth}
         \begin{equation*}
-            \frac{\d {{\color{cyan} y}}}{\d t} = \varrho \; - \; \delta_k + \phi(1 - \control{\chi})
+            \frac{\d {{\color{cyan} y}}}{\dd{t}} = \varrho \; - \; \delta_k + \phi(1 - \control{\chi})
         \end{equation*}
         \column{0.6\linewidth}
         \pause \begin{figure}[H]
             \centering
-            \inputtikz{../../../plots/phifig.tikz}
+            \includegraphics[width = 0.5\linewidth]{\plotpath/phifig.tikz}
         \end{figure}
     \end{columns}
 \end{frame}
 
 \begin{frame} \frametitle{Economy... with climate change}
     \begin{equation*}
-        \frac{\d {{\color{cyan} y}}}{\d t} = \varrho - \delta_k + \phi(1 - \control{\chi}) - d({\color{red} T}) - \frac{\omega}{2} \left(1 - \frac{E(\control{\alpha})}{E^{\mathrm{B}}} \right)^2
+        \frac{\d {{\color{cyan} y}}}{\dd{t}} = \varrho - \delta_k + \phi(1 - \control{\chi}) - d({\color{red} T}) - \frac{\omega}{2} \left(1 - \frac{E(\control{\alpha})}{E^{\mathrm{B}}} \right)^2
     \end{equation*}
 \end{frame}
 
@@ -236,7 +236,7 @@
 
 \begin{frame}{Social Planner}
     The social planner at time $t$ is trying to maximise \begin{equation*}
-        U(t, \X, \control{\alpha}, \control{\chi}) = \mathbb{E}_{\X} \int^\infty_t f\Big(\underbrace{\control{\chi} e^{{\color{cyan} y}}}_{C}, U(t, \X, \control{\alpha}, \control{\chi})\Big) \; \d t
+        U(t, \X, \control{\alpha}, \control{\chi}) = \mathbb{E}_{\X} \int^\infty_t f\Big(\underbrace{\control{\chi} e^{{\color{cyan} y}}}_{C}, U(t, \X, \control{\alpha}, \control{\chi})\Big) \; \dd{t}
     \end{equation*} where $f(C, U)$ is the Epstein-Zin aggregator and $\X = ({\color{red} T}, {\color{blue} m}, {\color{cyan} y})$.
 \end{frame}
 
@@ -263,7 +263,7 @@
 \section{Solution method}
 \begin{frame}{Terminal condition}
     \begin{enumerate}
-        \item \textbf{Assume} that at some point $\tau$ (e.g. 500 years) abatement is free, hence $\d m = 0$.
+        \item \textbf{Assume} that at some point $\tau$ (e.g. 500 years) abatement is free, hence $\dd{m} = 0$.
         \pause \item Solve the ``terminal'' problem \begin{equation*}
             0 = \sup_{\control{\chi}} f(\control{\chi} e^{\color{cyan} y}, \overline{V}) + \partial_y \overline{V} \times \Big( \phi(t, 1 - \control{\chi}) - \delta_k - d({\color{red} T}) \Big)
         \end{equation*}
@@ -273,7 +273,7 @@
 \begin{frame}{Terminal condition}
     \begin{figure}[H]
         \centering
-        \includegraphics[width = 0.8\linewidth]{../../../plots/presentation/termfig.png}
+        \includegraphics[width = 0.8\linewidth]{\plotpath/presentation/termfig.png}
     \end{figure}
 \end{frame}
 
