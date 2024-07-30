@@ -30,7 +30,7 @@ function ε(t, M, α, model::AbstractModel)
     α / (δₘ(M, model.hogg) + γ(t, model.calibration))
 end
 
-"Drift of log output y for t < τ" # TODO: Combine the two drifts
+"Drift of log output y for `t < τ`" # TODO: Combine the two drifts
 function b(t, Xᵢ::Point, u::Policy, model::AbstractModel{GrowthDamages, P}) where P <: Preferences
     εₜ = ε(t, exp(Xᵢ.m), u.α, model)
     Aₜ = A(t, model.economy)
@@ -68,6 +68,7 @@ function bbound(t, Xᵢ::Point, model::AbstractModel)
     return max(abs(ll), abs(lr), abs(rl), abs(rr))
 end
 
+# TODO: Combine the two output functions.
 function terminaloutputfct(Tᵢ, Δt, χ, model::AbstractModel)
     drift = bterminal(Tᵢ, χ, model) - model.preferences.θ * model.economy.σₖ^2 / 2
      
@@ -84,7 +85,7 @@ function outputfct(t, Xᵢ::Point, Δt, u::Policy, model::AbstractModel)
     return max(1 + adj, 0.)
 end
 
-"Computes the temperature level for which it is impossible to achieve positive GDP growth"
+"Computes the temperature level for which it is impossible to achieve positive output growth"
 function criticaltemperature(model::AbstractModel{GrowthDamages, P}) where P <: Preferences
     maximumgrowth = Tᵢ -> begin
         rate, _ = gss(χ -> bterminal(Tᵢ, χ, model), 0., 1.)

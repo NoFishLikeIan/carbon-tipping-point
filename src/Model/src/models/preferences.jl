@@ -52,15 +52,14 @@ Climate damage aggregator. `χ` is the consumtpion rate, `F′` is the expected 
 """
 function g(χ, F′, Δt, p::EpsteinZin)
     ψ⁻¹ = inv(p.ψ)
-    agg = (1 - p.θ) / (1 - ψ⁻¹)
+    agg = (1 - ψ⁻¹) / (1 - p.θ)
 
-    discounting = Δt / (1 + p.ρ * Δt)
-    consumption = discounting * χ^(1 - ψ⁻¹)
+    consumption = χ^(1 - ψ⁻¹)
 
     β = exp(-p.ρ * Δt)
-    value = (F′)^inv(agg)
+    value = F′^agg
 
-    return ((1 -  β) * consumption + β * value)^agg
+    return ((1 -  β) * consumption + β * value)^inv(agg)
 end
 
 function f(c, v, Δt, p::CRRA)

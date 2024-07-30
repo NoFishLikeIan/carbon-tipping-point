@@ -31,8 +31,8 @@ Base.@kwdef struct Hogg
 
     N₀::Float64 = 286.65543 # [p.p.m.]
     
-    σₜ::Float64 = 1.5 # Standard deviation of temperature
-    σₘ::Float64 = 0.026 # Standard deviation of CO₂
+    σₜ::Float64 = 1.584 # Standard deviation of temperature
+    σₘ::Float64 = 0.0078 # Standard deviation of CO₂ 
 
     # Climate sensitwivity
     S₀::Float64 = 340.5 # [W / m²] Mean solar radiation

@@ -14,7 +14,7 @@ Base.@kwdef struct Economy
     ωᵣ::Float64 = 2e-3 # Speed of abatement technology cost reduction
     ϱ::Float64 = 1e-3 # Growth of TFP
     κ::Float64 = 11.2 # Adjustment costs of abatement technology
-    δₖᵖ::Float64 = 0.0116 # Initial depreciation rate of capital
+    δₖᵖ::Float64 = 0.0162 # Initial depreciation rate of capital
 
     # Output
     A₀::Float64 = 0.113 # Initial TFP
