@@ -25,7 +25,7 @@ end
 using PlutoUI; TableOfContents()
 
 # ╔═╡ 5eb83b47-5f48-463d-8abb-21eaf36dbc25
-using JLD2, FastClosures
+using JLD2, FastClosures, Interpolations
 
 # ╔═╡ cbd38547-eea1-4214-88c7-944c1aca82c2
 using Model, Grid
@@ -92,8 +92,8 @@ md"# Analysis"
 
 # ╔═╡ 623654ff-251c-4570-a870-009933e62197
 begin # Parameters
-	damage = LevelDamages()
-	albedo = Albedo(λ₂ = Albedo().λ₁)
+	damage = GrowthDamages()
+	albedo = Albedo(λ₂ = Albedo().λ₁ - 0.08)
 	jump = Jump()
 
 	model = TippingModel(albedo, preferences, damage, economy, hogg, calibration)
@@ -106,7 +106,9 @@ end;
 begin
 	G = constructdefaultgrid(N, model)
 	result = Saving.loadtotal(model, G; datapath = DATAPATH)
-	Fitp, χitp, αitp = Simulating.buildinterpolations(result, G)
+
+	
+	Fitp, χitp, αitp = [extrapolate(itp, Line()) for itp in Simulating.buildinterpolations(result, G)]
 end;
 
 # ╔═╡ 7787a015-b714-4107-829e-ac2e7224a864
@@ -122,20 +124,12 @@ md"
 `t =` $(@bind tfig Slider(range(extrema(first(result))...; step = 1/4), default = 0., show_value = true))
 "
 
-# ╔═╡ 39f4e853-debb-4224-bb30-7a85bd8a35fb
-let
-	fₜ = @closure (T, m) -> log(Fitp(T, m, tfig))
-	zlims = log.(extrema(Fitp.coefs))
-	
-	contourf(Tspace, mspace, fₜ; xlabel = "\$T\$", ylabel = "\$m\$", title = "\$\\log(F_t)\$ at \$t = $tfig\$", clims = zlims, linewidth = 0.)
-end
-
 # ╔═╡ 033b0310-2df1-4613-81f8-39274d2318ba
 let
 	χₜ = @closure (T, m) -> χitp(T, m, tfig)
-	αₜ = @closure (T, m) -> αitp(T, m, tfig)
+	αₜ = @closure (T, m) -> αitp(T, m, tfig) 
 	
-	consfig = contourf(Tspace, mspace, χₜ; xlabel = "\$T\$", ylabel = "\$m\$", title = "Time \$t = $tfig\$; \$\\chi\$", clims = (0, 1), linewidth = 0.)
+	consfig = contourf(Tspace, mspace, χₜ; xlabel = "\$T\$", ylabel = "\$m\$", title = "Time \$t = $tfig\$; \$\\chi\$", linewidth = 0.)
 
 	abatfig = contourf(Tspace, mspace, αₜ; xlabel = "\$T\$", ylabel = "\$m\$", title = "\$\\alpha\$", linewidth = 0.)
 
@@ -145,8 +139,43 @@ end
 # ╔═╡ 0df8cf8d-4134-47ec-b3d2-c98248ba859f
 md"## Simulate"
 
-# ╔═╡ a40b7065-f7ca-47ae-a05c-982de4a3c3b4
+# ╔═╡ d0bc5b5a-c77b-4349-a75a-3908bc8db790
+X₀ = [model.hogg.T₀, log(model.hogg.M₀)]
 
+# ╔═╡ a40b7065-f7ca-47ae-a05c-982de4a3c3b4
+function F!(dx, x, p, t)
+	αitp, model = p
+	T, m = x
+	
+	dx[1] = μ(T, m, model) / model.hogg.ϵ
+	dx[2] = γ(t, model.calibration) - αitp(T, m, t)
+end;
+
+# ╔═╡ 4d88129c-3f7e-4542-82f5-3a8e849ddfdf
+function G!(dσ, x, p, t)
+	model = p[2]
+	dσ[1] = model.hogg.σₜ / model.hogg.ϵ
+	dσ[2] = 0. # model.hogg.σₘ
+end;
+
+# ╔═╡ fe85b26a-71d7-4665-a136-b6af0914b866
+begin
+	fn = SDEFunction(F!, G!)
+	prob = SDEProblem(fn, X₀, (0., 80.); p = (αitp, model))
+	ensembleprob = EnsembleProblem(prob)
+end;
+
+# ╔═╡ 4d2de052-4620-4c0f-a312-f680181a311d
+sol = solve(ensembleprob, trajectories = 100);
+
+# ╔═╡ 03ceea83-2ef3-4aba-a8d8-b412e562a4b5
+let
+	summ = EnsembleSummary(sol, 0:0.1:80)
+	Tfig = plot(summ; idxs = (1), ylabel = "\$T\$", xlabel = "\$t\$", yticks = (hogg.Tᵖ .+ (1.5:0.5:10), 1.5:0.5:10))
+	mfig = plot(summ; idxs = (2), ylabel = "\$m\$", xlabel = "\$t\$")
+
+	plot(Tfig, mfig; size = 450 .* (2√2, 1.), margins = 5Plots.mm)
+end
 
 # ╔═╡ Cell order:
 # ╟─35f99656-f68a-455c-9042-b5afc5e7a4a8
@@ -167,7 +196,11 @@ md"## Simulate"
 # ╠═891cac99-6427-47f2-8956-d4eb7817ea54
 # ╠═7787a015-b714-4107-829e-ac2e7224a864
 # ╟─78c11f3a-1325-46e5-974b-ae67b9637834
-# ╟─39f4e853-debb-4224-bb30-7a85bd8a35fb
-# ╟─033b0310-2df1-4613-81f8-39274d2318ba
+# ╠═033b0310-2df1-4613-81f8-39274d2318ba
 # ╟─0df8cf8d-4134-47ec-b3d2-c98248ba859f
+# ╠═d0bc5b5a-c77b-4349-a75a-3908bc8db790
 # ╠═a40b7065-f7ca-47ae-a05c-982de4a3c3b4
+# ╠═4d88129c-3f7e-4542-82f5-3a8e849ddfdf
+# ╠═fe85b26a-71d7-4665-a136-b6af0914b866
+# ╠═4d2de052-4620-4c0f-a312-f680181a311d
+# ╠═03ceea83-2ef3-4aba-a8d8-b412e562a4b5
