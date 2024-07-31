@@ -14,8 +14,7 @@ using Statistics
 
 using Model, Grid
 
-include("../utils/plotting.jl")
-include("../utils/saving.jl")
+includet("../utils/saving.jl")
 
 begin # Global variables
     env = DotEnv.config()
@@ -124,8 +123,8 @@ begin # Construct interpolations
 	resultsmap = OrderedDict()
 	jumpresultsmap = OrderedDict()
 
-	for ωᵣ ∈ Ω
-		j = findfirst(m -> ωᵣ ≈ m.economy.ωᵣ, jumpmodels)
+	for ω ∈ Ω
+		j = findfirst(m -> ω ≈ m.economy.ω, jumpmodels)
 
 		res = jumpresults[j]	
 		ts, V, policy = res
@@ -136,10 +135,10 @@ begin # Construct interpolations
 		Vitp = linear_interpolation(nodes, V; extrapolation_bc = Flat())
 
 		
-		jumpresultsmap[ωᵣ] = (χitp, αitp, Vitp, jumpmodels[j])
+		jumpresultsmap[ω] = (χitp, αitp, Vitp, jumpmodels[j])
 		
 		for Δλ ∈ ΔΛ
-			k = findfirst(m -> ωᵣ ≈ m.economy.ωᵣ && Δλ ≈ m.albedo.λ₁ - m.albedo.λ₂, models)
+			k = findfirst(m -> ω ≈ m.economy.ω && Δλ ≈ m.albedo.λ₁ - m.albedo.λ₂, models)
 
 			res = results[k]
 			model = models[k]
@@ -152,7 +151,7 @@ begin # Construct interpolations
 			Vitp = linear_interpolation(nodes, V; extrapolation_bc = Flat())
 
 			
-			resultsmap[(ωᵣ, Δλ)] = (χitp, αitp, Vitp, model)
+			resultsmap[(ω, Δλ)] = (χitp, αitp, Vitp, model)
 		end
 	end
 

@@ -92,8 +92,10 @@ md"# Analysis"
 
 # ╔═╡ 623654ff-251c-4570-a870-009933e62197
 begin # Parameters
+	Δλ = 0.08
+	allownegative = false
+	albedo = Albedo(λ₂ = Albedo().λ₁ - Δλ)
 	damage = GrowthDamages()
-	albedo = Albedo(λ₂ = Albedo().λ₁ - 0.08)
 	jump = Jump()
 
 	model = TippingModel(albedo, preferences, damage, economy, hogg, calibration)
@@ -105,9 +107,7 @@ end;
 # ╔═╡ 891cac99-6427-47f2-8956-d4eb7817ea54
 begin
 	G = constructdefaultgrid(N, model)
-	result = Saving.loadtotal(model, G; datapath = DATAPATH)
-
-	
+	result = Saving.loadtotal(model, G; datapath = DATAPATH, allownegative)
 	Fitp, χitp, αitp = [extrapolate(itp, Line()) for itp in Simulating.buildinterpolations(result, G)]
 end;
 
@@ -126,12 +126,14 @@ md"
 
 # ╔═╡ 033b0310-2df1-4613-81f8-39274d2318ba
 let
-	χₜ = @closure (T, m) -> χitp(T, m, tfig)
-	αₜ = @closure (T, m) -> αitp(T, m, tfig) 
-	
-	consfig = contourf(Tspace, mspace, χₜ; xlabel = "\$T\$", ylabel = "\$m\$", title = "Time \$t = $tfig\$; \$\\chi\$", linewidth = 0.)
+	χₜ = @closure (m, T) -> χitp(T, m, tfig)
+	dm = @closure (m, T) -> 1 - Model.ε(tfig, exp(m), αitp(T, m, tfig), model)
 
-	abatfig = contourf(Tspace, mspace, αₜ; xlabel = "\$T\$", ylabel = "\$m\$", title = "\$\\alpha\$", linewidth = 0.)
+	nullcline = [mstable(T, model.hogg, model.albedo) for T in Tspace]
+	
+	consfig = heatmap(mspace, Tspace, χₜ; ylabel = "\$T\$", xlabel = "\$m\$", title = "Time \$t = $tfig\$; \$\\chi\$", xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0., clims = (0.4, 0.55)); plot!(consfig, nullcline, Tspace; linestyle = :dash, c = :white, label = false, linewidth = 3)
+
+	abatfig = heatmap(mspace, Tspace, dm; ylabel = "\$T\$", xlabel = "\$m\$", title = "\$E / E^b\$", xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0., c = :Reds, clims = (0., 1.)); plot!(abatfig , nullcline, Tspace; linestyle = :dash, c = :white, label = false, linewidth = 3)
 
 	plot(consfig, abatfig; size = 500 .* (2√2, 1), margins = 10Plots.mm)
 end
@@ -146,16 +148,18 @@ X₀ = [model.hogg.T₀, log(model.hogg.M₀)]
 function F!(dx, x, p, t)
 	αitp, model = p
 	T, m = x
+
+	abatement = αitp(T, m, t)
 	
 	dx[1] = μ(T, m, model) / model.hogg.ϵ
-	dx[2] = γ(t, model.calibration) - αitp(T, m, t)
+	dx[2] = γ(t, model.calibration) - abatement
 end;
 
 # ╔═╡ 4d88129c-3f7e-4542-82f5-3a8e849ddfdf
 function G!(dσ, x, p, t)
 	model = p[2]
 	dσ[1] = model.hogg.σₜ / model.hogg.ϵ
-	dσ[2] = 0. # model.hogg.σₘ
+	dσ[2] = model.hogg.σₘ
 end;
 
 # ╔═╡ fe85b26a-71d7-4665-a136-b6af0914b866
@@ -170,12 +174,18 @@ sol = solve(ensembleprob, trajectories = 100);
 
 # ╔═╡ 03ceea83-2ef3-4aba-a8d8-b412e562a4b5
 let
+	Mlabels = round.(range(hogg.M₀, 1.25hogg.M₀; length = 10), digits = 2)
+	mticks = log.(Mlabels)
+	
 	summ = EnsembleSummary(sol, 0:0.1:80)
-	Tfig = plot(summ; idxs = (1), ylabel = "\$T\$", xlabel = "\$t\$", yticks = (hogg.Tᵖ .+ (1.5:0.5:10), 1.5:0.5:10))
-	mfig = plot(summ; idxs = (2), ylabel = "\$m\$", xlabel = "\$t\$")
+	Tfig = plot(summ; idxs = (1), ylabel = "\$T\$", xlabel = "\$t\$", yticks = (hogg.Tᵖ .+ (1.25:0.25:10), 1.25:0.5:10))
+	mfig = plot(summ; idxs = (2), ylabel = "\$m\$", xlabel = "\$t\$", yticks = (mticks, Mlabels))
 
 	plot(Tfig, mfig; size = 450 .* (2√2, 1.), margins = 5Plots.mm)
 end
+
+# ╔═╡ 8bbec470-150c-479a-855e-7d9e3e76c03e
+
 
 # ╔═╡ Cell order:
 # ╟─35f99656-f68a-455c-9042-b5afc5e7a4a8
@@ -204,3 +214,4 @@ end
 # ╠═fe85b26a-71d7-4665-a136-b6af0914b866
 # ╠═4d2de052-4620-4c0f-a312-f680181a311d
 # ╠═03ceea83-2ef3-4aba-a8d8-b412e562a4b5
+# ╠═8bbec470-150c-479a-855e-7d9e3e76c03e

@@ -112,8 +112,8 @@ md"# Markov Chain of Terminal Problem"
 
 # ╔═╡ b852741b-4857-40f1-82b6-52504827e819
 begin
-	# F̄, terminalpolicy = Saving.loadterminal(model, G; datapath=DATAPATH)
-	F̄ = copy(F₀)
+	F̄, terminalpolicy = Saving.loadterminal(model, G; datapath=DATAPATH)
+	# F̄ = copy(F₀)
 end;
 
 # ╔═╡ cdb1d34f-ff03-49b1-b1d1-75db7aad46c7
@@ -132,12 +132,20 @@ begin
 	end
 end;
 
+# ╔═╡ dcf00953-09b5-4cfd-95ce-8a6d882d9174
+let
+	timefig = heatmap(mspace, Tspace, (m, T) -> terminalmarkovstep(T, m) |> last; xlabel = "\$m\$", ylabel = "\$T\$", title = "\$\\Delta t\$", clims = (0, Inf), cmap = :Reds)
+	markovfig = heatmap(mspace, Tspace, (m, T) -> terminalmarkovstep(T, m) |> first |> log; xlabel = "\$m\$", ylabel = "\$T\$", cmap = :coolwarm, title = "\$\\log \\mathbb{E}[F_{t + \\Delta t}]\$")
+
+	plot(timefig, markovfig; size = 400 .* (2√2, 1), margins = 10Plots.mm)
+end
+
 # ╔═╡ 837f8bac-8f45-443b-8b59-10deb045c4e1
 md"``\chi =`` $(@bind χ Slider(unit, default = 0.5, show_value = true))"
 
 # ╔═╡ 072d27e3-2d6f-43a4-b319-e345631b57ad
 let
-	heatmap(mspace, Tspace, (m, T) -> terminalcosts(T, m, χ) |> log; xlabel = "\$m\$", ylabel = "\$T\$", clims = (-0.2, 0.2), cmap = :coolwarm, title = "\$\\log F_1 \\mid \\chi = $χ\$")
+	heatmap(mspace, Tspace, (m, T) -> terminalcosts(T, m, χ) |> log; xlabel = "\$m\$", ylabel = "\$T\$", cmap = :coolwarm, title = "\$\\log \\bar{F} \\mid \\chi = $χ\$", clims = (-6, 6))
 end
 
 # ╔═╡ 30c3dc7a-9b6d-4f94-881a-f29607edbdff
@@ -195,9 +203,10 @@ end
 # ╠═b852741b-4857-40f1-82b6-52504827e819
 # ╠═cdb1d34f-ff03-49b1-b1d1-75db7aad46c7
 # ╠═ac633771-3b7f-4cb4-8f41-210f676883c4
+# ╟─dcf00953-09b5-4cfd-95ce-8a6d882d9174
 # ╟─837f8bac-8f45-443b-8b59-10deb045c4e1
-# ╟─072d27e3-2d6f-43a4-b319-e345631b57ad
+# ╠═072d27e3-2d6f-43a4-b319-e345631b57ad
 # ╠═30c3dc7a-9b6d-4f94-881a-f29607edbdff
 # ╟─0fd33a23-b2ec-4857-9a13-4e06d43b9d24
-# ╟─d21ccdc8-f43d-45bc-9409-8008b2b2db17
+# ╠═d21ccdc8-f43d-45bc-9409-8008b2b2db17
 # ╠═ebff6eea-2014-470f-a3ee-fffbb7603cfd

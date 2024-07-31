@@ -11,7 +11,7 @@ Damages = Union{GrowthDamages, LevelDamages}
 
 Base.@kwdef struct Economy
     # Technology
-    ωᵣ::Float64 = 2e-3 # Speed of abatement technology cost reduction
+    ω::Float64 = 2e-3 # Speed of abatement technology cost reduction
     ϱ::Float64 = 1e-3 # Growth of TFP
     κ::Float64 = 11.2 # Adjustment costs of abatement technology
     δₖᵖ::Float64 = 0.0162 # Initial depreciation rate of capital
@@ -26,11 +26,11 @@ end
 
 "Cost of abatement as a fraction of GDP"
 function β(t, e, economy::Economy)
-    (e^2 / 2) * exp(-economy.ωᵣ * t)
+    (e^2 / 2) * exp(-economy.ω * t)
 end
 
 function β′(t, e, economy::Economy)
-    exp(-economy.ωᵣ * t) * e
+    exp(-economy.ω * t) * e
 end
 
 function d(T, damages::GrowthDamages, hogg::Hogg)
