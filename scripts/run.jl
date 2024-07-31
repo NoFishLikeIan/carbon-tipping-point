@@ -19,7 +19,7 @@ preferences = EpsteinZin();
 calibration = load_object(joinpath(DATAPATH, "calibration.jld2"));
 economy = Economy()
 hogg = Hogg()
-damages = (LevelDamages(), GrowthDamages()) # (LevelDamages(), GrowthDamages())
+damages = (LevelDamages(), GrowthDamages())
 negativeemissions = (false, true)
 
 # Terminal simulation
@@ -35,7 +35,7 @@ for d in damages
 
         G = constructdefaultgrid(N, model)
 
-        RUNTERMINAL && computeterminal(model, G; verbose = VERBOSE, datapath = DATAPATH, alternate = true, tol = TOL)
+        RUNTERMINAL && computeterminal(model, G; verbose = VERBOSE, datapath = DATAPATH, alternate = true, tol = TOL, overwrite = OVERWRITE)
 
         if RUNBACKWARDS
             for allownegative in negativeemissions
@@ -51,7 +51,7 @@ for d in damages
         G = constructdefaultgrid(N, jumpmodel)
         VERBOSE && println("\nSolving jump model...")
         if RUNTERMINAL
-            computeterminal(jumpmodel, G; verbose = VERBOSE, datapath = DATAPATH, alternate = true, tol = TOL)
+            computeterminal(jumpmodel, G; verbose = VERBOSE, datapath = DATAPATH, alternate = true, tol = TOL, overwrite = OVERWRITE)
         end
 
         if RUNBACKWARDS
