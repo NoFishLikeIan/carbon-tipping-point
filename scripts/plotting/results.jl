@@ -123,8 +123,8 @@ begin # Construct interpolations
 	resultsmap = OrderedDict()
 	jumpresultsmap = OrderedDict()
 
-	for ω ∈ Ω
-		j = findfirst(m -> ω ≈ m.economy.ω, jumpmodels)
+	for ωᵣ ∈ ωᵣ
+		j = findfirst(m -> ωᵣ ≈ m.economy.ωᵣ, jumpmodels)
 
 		res = jumpresults[j]	
 		ts, V, policy = res
@@ -135,10 +135,10 @@ begin # Construct interpolations
 		Vitp = linear_interpolation(nodes, V; extrapolation_bc = Flat())
 
 		
-		jumpresultsmap[ω] = (χitp, αitp, Vitp, jumpmodels[j])
+		jumpresultsmap[ωᵣ] = (χitp, αitp, Vitp, jumpmodels[j])
 		
 		for Δλ ∈ ΔΛ
-			k = findfirst(m -> ω ≈ m.economy.ω && Δλ ≈ m.albedo.λ₁ - m.albedo.λ₂, models)
+			k = findfirst(m -> ωᵣ ≈ m.economy.ωᵣ && Δλ ≈ m.albedo.λ₁ - m.albedo.λ₂, models)
 
 			res = results[k]
 			model = models[k]
@@ -151,7 +151,7 @@ begin # Construct interpolations
 			Vitp = linear_interpolation(nodes, V; extrapolation_bc = Flat())
 
 			
-			resultsmap[(ω, Δλ)] = (χitp, αitp, Vitp, model)
+			resultsmap[(ωᵣ, Δλ)] = (χitp, αitp, Vitp, model)
 		end
 	end
 
@@ -198,14 +198,14 @@ function G!(dx, x, p, t)
 end;
 
 begin # Solver
-    ω = first(keys(resultsmap))[1]
+    ωᵣ = first(keys(resultsmap))[1]
 	tspan = (0., Economy().t₁)
 
 	problems = OrderedDict{Float64, SDEProblem}()
 	fn = SDEFunction(F!, G!)
 
 	for Δλ ∈ ΔΛ
-		χitp, αitp, _, model = resultsmap[(ω, Δλ)]
+		χitp, αitp, _, model = resultsmap[(ωᵣ, Δλ)]
 		parameters = (model, χitp, αitp)
 		
 		problems[Δλ] = SDEProblem(fn, X₀, tspan, parameters)
@@ -215,7 +215,7 @@ begin # Solver
 end;
 
 begin # Solver for benchmark
-	χitp, αitp, _, model = jumpresultsmap[ω]
+	χitp, αitp, _, model = jumpresultsmap[ωᵣ]
 	parameters = (model, χitp, αitp)
 			
 	jumpproblem = SDEProblem(fn, X₀, tspan, parameters)
@@ -286,7 +286,7 @@ begin # Emission comparison figure
         
     # Albedo
     for Δλ ∈ [0.06, 0.08]
-        _, αitp, _, model = resultsmap[(ω, Δλ)];
+        _, αitp, _, model = resultsmap[(ωᵣ, Δλ)];
         solution = solutions[Δλ];
         emissions = emissionpath(solution, model, αitp);
 
@@ -310,7 +310,7 @@ begin # Emission comparison figure
 
     # Jump
     jumpcolor = RGB(0, 77 / 255, 64 / 255)
-	_, αitp, _, jumpmodel = jumpresultsmap[ω]
+	_, αitp, _, jumpmodel = jumpresultsmap[ωᵣ]
 	emissions = emissionpath(jumpsolution, jumpmodel, αitp)
 
     for E ∈ eachcol(emissions)
@@ -353,7 +353,7 @@ begin # Consumption
     )
 
     for Δλ ∈ [0.06, 0.08]
-        χitp, _, _, model = resultsmap[(ω, Δλ)];
+        χitp, _, _, model = resultsmap[(ωᵣ, Δλ)];
         solution = solutions[Δλ];
 
         X = variablepath(solution, model)
@@ -370,7 +370,7 @@ begin # Consumption
     end
     
     # Jump
-	jumpχitp, _, _, jumpmodel = jumpresultsmap[ω]
+	jumpχitp, _, _, jumpmodel = jumpresultsmap[ωᵣ]
 	X = variablepath(jumpsolution, jumpmodel)
 	Y = [exp(x.y) for x ∈ X]
     
@@ -408,7 +408,7 @@ begin # Temperature
     )
 
     for Δλ ∈ [0.06, 0.08]
-        χitp, _, _, model = resultsmap[(ω, Δλ)];
+        χitp, _, _, model = resultsmap[(ωᵣ, Δλ)];
         solution = solutions[Δλ];
 
         X = variablepath(solution, model)
@@ -426,7 +426,7 @@ begin # Temperature
     end
     
     # Jump
-	jumpχitp, _, _, jumpmodel = jumpresultsmap[ω]
+	jumpχitp, _, _, jumpmodel = jumpresultsmap[ωᵣ]
 	X = variablepath(jumpsolution, jumpmodel)
 	temps = [x.T for x ∈ X]
 

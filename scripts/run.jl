@@ -8,6 +8,7 @@ N = 51;
 VERBOSE = getbool(env, "VERBOSE", false)
 RUNTERMINAL = getbool(env, "RUNTERMINAL", false)
 RUNBACKWARDS = getbool(env, "RUNBACKWARDS", false)
+RUNJUMP = getbool(env, "RUNJUMP", false)
 OVERWRITE = getbool(env, "OVERWRITE", false)
 TOL = getnumber(env, "TOL", 1e-3)
 TSTOP = getnumber(env, "TSTOP", 0.)
@@ -18,14 +19,12 @@ preferences = EpsteinZin();
 calibration = load_object(joinpath(DATAPATH, "calibration.jld2"));
 economy = Economy()
 hogg = Hogg()
-damages = (GrowthDamages(), ) # (LevelDamages(), GrowthDamages())
+damages = (LevelDamages(), GrowthDamages()) # (LevelDamages(), GrowthDamages())
 negativeemissions = (false, true)
 
 # Terminal simulation
 for d in damages
-    if VERBOSE
-        println("Solving for damages = $d...")
-    end
+    VERBOSE && println("\nSolving for damages = $d...")
     
     for Δλ ∈ ΔΛ
         VERBOSE && println("Solving albedo model Δλ = $Δλ")
@@ -45,18 +44,21 @@ for d in damages
             end
         end
     end
+    
+    if RUNJUMP 
+        jumpmodel = JumpModel(Jump(), preferences, d, economy, hogg, calibration)
+    
+        G = constructdefaultgrid(N, jumpmodel)
+        VERBOSE && println("\nSolving jump model...")
+        if RUNTERMINAL
+            computeterminal(jumpmodel, G; verbose = VERBOSE, datapath = DATAPATH, alternate = true, tol = TOL)
+        end
 
-    jumpmodel = JumpModel(Jump(), preferences, d, economy, hogg, calibration)
-
-    G = constructdefaultgrid(N, jumpmodel)
-
-    VERBOSE && println("Solving jump model")
-
-    RUNTERMINAL && computeterminal(jumpmodel, G; verbose = VERBOSE, datapath = DATAPATH, alternate = true, tol = TOL)
-    if RUNBACKWARDS
-        for allownegative in negativeemissions
-            VERBOSE && println("Running backward $(ifelse(allownegative, "with", "without")) negative emissions...")
-            computebackward(jumpmodel, G; allownegative, verbose = VERBOSE, datapath = DATAPATH, overwrite = OVERWRITE, tstop = TSTOP, cachestep = CACHESTEP)
+        if RUNBACKWARDS
+            for allownegative in negativeemissions
+                VERBOSE && println("Running backward $(ifelse(allownegative, "with", "without")) negative emissions...")
+                computebackward(jumpmodel, G; allownegative, verbose = VERBOSE, datapath = DATAPATH, overwrite = OVERWRITE, tstop = TSTOP, cachestep = CACHESTEP)
+            end
         end
     end
 end

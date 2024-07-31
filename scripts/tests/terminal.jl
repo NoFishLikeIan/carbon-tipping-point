@@ -15,7 +15,7 @@ begin
 	economy = Economy()
 	preferences = EpsteinZin()
 
-	Δλ = 0.06
+	Δλ = 0.08
 	albedo = Albedo(λ₂ = Albedo().λ₁ - Δλ)
 end;
 

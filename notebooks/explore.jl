@@ -129,7 +129,7 @@ let
 	χₜ = @closure (m, T) -> χitp(T, m, tfig)
 	dm = @closure (m, T) -> 1 - Model.ε(tfig, exp(m), αitp(T, m, tfig), model)
 
-	nullcline = [mstable(T, model.hogg, model.albedo) for T in Tspace]
+	nullcline = [mstable(T, model) for T in Tspace]
 	
 	consfig = heatmap(mspace, Tspace, χₜ; ylabel = "\$T\$", xlabel = "\$m\$", title = "Time \$t = $tfig\$; \$\\chi\$", xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0., clims = (0.4, 0.55)); plot!(consfig, nullcline, Tspace; linestyle = :dash, c = :white, label = false, linewidth = 3)
 
@@ -174,7 +174,7 @@ sol = solve(ensembleprob, trajectories = 100);
 
 # ╔═╡ 03ceea83-2ef3-4aba-a8d8-b412e562a4b5
 let
-	Mlabels = round.(range(hogg.M₀, 1.25hogg.M₀; length = 10), digits = 2)
+	Mlabels = round.(range(hogg.Mᵖ, 1.25hogg.M₀; length = 20), digits = 2)
 	mticks = log.(Mlabels)
 	
 	summ = EnsembleSummary(sol, 0:0.1:80)

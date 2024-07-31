@@ -74,7 +74,7 @@ begin
 	DATAPATH = "../data"
 	calibration = load_object(joinpath(DATAPATH, "calibration.jld2"))
 	hogg = Hogg()
-	economy = Economy()
+	economy = Economy(τ = 500.)
 	preferences = EpsteinZin()
 end;
 

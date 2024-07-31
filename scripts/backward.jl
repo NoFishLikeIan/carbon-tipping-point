@@ -121,8 +121,17 @@ function backwardsimulation!(F, policy, model, G; verbose = false, cachepath = n
         if isfile(cachepath) 
             if overwrite 
                 verbose && @warn "Removing file $cachepath.\n"
+
                 rm(cachepath)
-            else throw("File $cachepath already exists. If you want to overwrite it pass overwrite = true.")
+            else 
+                verbose && @warn "File $cachepath already exists. If you want to overwrite it pass overwrite = true. Will copy the results into `F` and `policy`.\n"
+
+                Fcache, policycache = loadtotal(model, G; allownegative)
+
+                F .= Fcache
+                policy .= policycache
+
+                return F, policy
             end
         end
 

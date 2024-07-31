@@ -11,7 +11,8 @@ Damages = Union{GrowthDamages, LevelDamages}
 
 Base.@kwdef struct Economy
     # Technology
-    ω::Float64 = 2e-3 # Speed of abatement technology cost reduction
+    ωᵣ::Float64 = 0.017558043747351086 # Speed of abatement technology cost reduction
+    ω₀::Float64 = 0.11 # Fraction of GDP required today to abate
     ϱ::Float64 = 1e-3 # Growth of TFP
     κ::Float64 = 11.2 # Adjustment costs of abatement technology
     δₖᵖ::Float64 = 0.0162 # Initial depreciation rate of capital
@@ -21,16 +22,16 @@ Base.@kwdef struct Economy
     Y₀::Float64 = 75.8
     σₖ::Float64 = 0.0162 # Variance of GDP
 
-    τ::Float64 = 300. # Steady state horizon
+    τ::Float64 = 500. # Steady state horizon
 end
 
 "Cost of abatement as a fraction of GDP"
 function β(t, e, economy::Economy)
-    (e^2 / 2) * exp(-economy.ω * t)
+    economy.ω₀ * exp(-economy.ωᵣ * t) * e^2
 end
 
 function β′(t, e, economy::Economy)
-    exp(-economy.ω * t) * e
+    exp(-economy.ωᵣ * t) * e
 end
 
 function d(T, damages::GrowthDamages, hogg::Hogg)

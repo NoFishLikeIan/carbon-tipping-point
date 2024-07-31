@@ -39,13 +39,13 @@ struct RegularGrid{N}
         if N > maxN @warn "h < ϵ: ensure N ≤ $maxN" end
 
         h = 1 / (N - 1)
-        Ω = (range(d[1], d[2]; length = N) for d in domains) 
+        ωᵣ = (range(d[1], d[2]; length = N) for d in domains) 
         Δ = (;
             :T => domains[1][2] - domains[1][1],
             :m => domains[2][2] - domains[2][1]
         )
         
-        X = Point.(product(Ω...))
+        X = Point.(product(ωᵣ...))
 
         new{N}(X, h, Δ, domains)
     end
