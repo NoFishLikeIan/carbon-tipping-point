@@ -36,7 +36,7 @@ for d in damages
 
         G = constructdefaultgrid(N, model)
 
-        RUNTERMINAL && computeterminal(model, G; verbose = VERBOSE, datapath = DATAPATH, alternate = true, tol = TOL)
+        RUNTERMINAL && computeterminal(model, G; verbose = VERBOSE, datapath = DATAPATH, alternate = true, tol = TOL, overwrite = OVERWRITE)
 
         if RUNBACKWARDS
             for allownegative in negativeemissions
