@@ -18,7 +18,16 @@ The Fokker-Planck equation for the density of temperature $p$ is \begin{equation
 
 \section{Calibration} \label{appendix:calibration}
 
-\begin{tabular}{ |p{1cm}||p{3cm}|p{10cm}|  }
+\subsection{Abatement Costs}
+
+To abate a fraction $e$ of emissions vis-a-vis the BAU scenario requires a fraction \begin{equation}
+    \beta(\varepsilon) = \varepsilon^2 
+    ; \omega_0 e^{-\omega_r t}
+\end{equation} of GDP. Following \citep{nordhaus_revisiting_2017}, we assume that abating all emissions ($e = 1$) in 2020 costs 11\% of GDP while doing so in 2100 costs 2.7\% of GDP. This yields the calibrated $\omega_0$ and $\omega_r$
+
+\subsection{Summary of Parameters}
+
+\begin{tabular}{ |p{1cm}||p{3cm}|p{8cm}|  }
     \hline
     \multicolumn{3}{|c|}{Preferences} \\
     \hline
@@ -28,8 +37,9 @@ The Fokker-Planck equation for the density of temperature $p$ is \begin{equation
     \hline\hline
     \multicolumn{3}{|c|}{Economy} \\
     \hline
-    $\omega$ & $0.002$ & Speed of abatement technology cost reduction \\
-    $\varrho$ & $0.0009$ & Growth of TFP \\
+    $\omega_0$ & $11 \%$ & GDP loss required to fully abate today\\
+    $\omega_r$ & $2.7 \%$ & Rate of abatement cost reduction \\
+    $\varrho$ & $0.9 \%$ & Growth of TFP \\
     $\kappa$ & $6\%32$ & Adjustment costs of abatement technology \\
     $\delta_k$ & $0.0116$ & Initial depreciation rate of capital \\
     $\xi$ & $0.00026$ & Coefficient of damage function \\
