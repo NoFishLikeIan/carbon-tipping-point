@@ -54,19 +54,20 @@ TableOfContents()
 
 # ╔═╡ 48b9fd38-0ac8-4efc-9e9f-8e83c9ea3199
 begin
-	const DATAPATH = "../data"
-	const IPCCDATAPATH = joinpath(DATAPATH, "climate-data", "proj-median.csv")
+	DATAPATH = "../data"
+	IPCCDATAPATH = joinpath(DATAPATH, "climate-data", "proj-median.csv")
 	
-	const economy = Economy()
-	const calibration = load_object(joinpath(DATAPATH, "calibration.jld2"))
-	const ipccproj = CSV.read(IPCCDATAPATH, DataFrame)
+	economy = Economy()
+	calibration = load_object(joinpath(DATAPATH, "calibration.jld2"))
+	ipccproj = CSV.read(IPCCDATAPATH, DataFrame)
+	hogg = Hogg()
 end;
 
 # ╔═╡ d0693c70-c6f1-4b78-b50f-0de2c4e096f5
 begin
-	const baseline = filter(:Scenario => isequal("SSP5 - Baseline"), ipccproj)
-	const Mᵇ = linear_interpolation(calibration.years .- 2020, baseline[:, "CO2 concentration"]; extrapolation_bc = Line())
-	const Tᵇ = linear_interpolation(calibration.years .- 2020, baseline[:, "Temperature"]; extrapolation_bc = Line())
+	baseline = filter(:Scenario => isequal("SSP5 - Baseline"), ipccproj)
+	Mᵇ = linear_interpolation(calibration.years .- 2020, baseline[:, "CO2 concentration"]; extrapolation_bc = Line())
+	Tᵇ = linear_interpolation(calibration.years .- 2020, baseline[:, "Temperature"]; extrapolation_bc = Line())
 end;
 
 # ╔═╡ 544d662d-8a48-47cf-9fd3-bada252ee18d
@@ -80,7 +81,7 @@ function F!(du, u, p, t)
 	T, m = u
 
 	du[1] = μ(T, m, hogg, albedo) / hogg.ϵ
-	du[2] = γ(t, economy, calibration)
+	du[2] = γ(t, calibration)
 end;
 
 # ╔═╡ 60592af4-38a3-446e-b08e-47967364aec3
@@ -88,24 +89,29 @@ function G!(Σ, u, p, t)
 	hogg, albedo = p
 
 	Σ[1] = hogg.σₜ / hogg.ϵ
-	Σ[2] = 0.
+	Σ[2] = hogg.σₘ
 end;
 
 # ╔═╡ 8a38caf4-c79d-4dfb-aef6-c723495b483d
-md"``\Delta\lambda:`` $(@bind Δλ Slider(0:0.01:0.1, default = 0., show_value = true))
+md"
+- ``T^c`` $(@bind Tᶜ Slider(1.8:0.01:3.5, default = 2., show_value = true))
+- ``\Delta T`` $(@bind ΔT Slider(0:0.01:4., default = 1.8, show_value = true))
+
+- ``\Delta\lambda`` $(@bind Δλ Slider(0:0.005:0.1, default = 0.05, show_value = true))
 "
 
 # ╔═╡ d837589f-25a6-4500-b1ac-b20db496b485
 begin
-	albedo = Albedo(λ₂ = 0.31 - Δλ, T₂ = 291)
-	hogg = calibrateHogg(albedo)
+	albedo = Albedo(Tᶜ = Tᶜ, ΔT = ΔT, Δλ = Δλ)
 
-	Tspace = range(hogg.Tᵖ, hogg.Tᵖ + 13.; length = 101)
+	Tspace = range(hogg.Tᵖ, hogg.Tᵖ + 8.; length = 101)
 	nullcline = [Model.mstable(T, hogg, albedo) for T ∈ Tspace]
 	
-	u₀ = [ hogg.T₀, log(hogg.M₀) ]
+	u₀ =  [ hogg.T₀, log(hogg.M₀) ] # [hogg.Tᵖ + 3., mstable(hogg.Tᵖ + 3, hogg, albedo)]
+
+	tspan = (0., calibration.tspan[2])
 	
-	prob = SDEProblem(SDEFunction(F!, G!), u₀, (0., economy.t₁), (hogg, albedo))
+	prob = SDEProblem(SDEFunction(F!, G!), u₀, tspan, (hogg, albedo))
 end
 
 # ╔═╡ 7e67776d-ac49-4a29-a601-d9418ce91e2e
@@ -113,13 +119,13 @@ solution = solve(EnsembleProblem(prob); trajectories = 6);
 
 # ╔═╡ 1507326b-eab2-43c0-b981-ca0ca5aad997
 begin
-	timespan = range(0., economy.t₁; length = 101)
+	timespan = range(tspan...; length = 101)
 	path = timeseries_point_median(solution, timespan)
 	
-	simfig = plot(xlabel = "\$m\$", ylabel = "\$T\$", ylims = extrema(Tspace), xlims = (5.5, 7.5), yticks = (hogg.Tᵖ:(hogg.Tᵖ + 13.), 0:13))
+	simfig = plot(xlabel = "\$m\$", ylabel = "\$T\$", ylims = extrema(Tspace), xlims = (5.5, 7.), yticks = (hogg.Tᵖ:(hogg.Tᵖ + maximum(Tspace)), 0:maximum(Tspace)))
 
 	plot!(simfig, nullcline, Tspace; c = :black, linestyle = :dash, label = false)
-	plot!(simfig, path[2, :], path[1, :]; c = :darkred, label = "Albedo")
+	plot!(simfig, path[2, :], path[1, :]; c = :darkred, label = "Simulation")
 	plot!(simfig, log.(Mᵇ.(timespan)), Tᵇ.(timespan) .+ hogg.Tᵖ; c = :black, linewidth = 3, label = "BaU")
 
 	for simulation in solution
@@ -163,7 +169,7 @@ end
 begin
 	jumprate = VariableRateJump(intensity, affect!)
 	jumpprob = JumpProblem(
-		ODEProblem(F!, u₀, (0., economy.t₁), (hogg, Albedo(λ₂ = albedo.λ₁))),
+		ODEProblem(F!, u₀, tspan, (hogg, Albedo(Δλ = 0.))),
 		Direct(), jumprate
 	)
 
@@ -204,7 +210,7 @@ end
 # ╟─8a38caf4-c79d-4dfb-aef6-c723495b483d
 # ╠═d837589f-25a6-4500-b1ac-b20db496b485
 # ╠═7e67776d-ac49-4a29-a601-d9418ce91e2e
-# ╟─1507326b-eab2-43c0-b981-ca0ca5aad997
+# ╠═1507326b-eab2-43c0-b981-ca0ca5aad997
 # ╟─31c8af20-05e0-4355-937e-f0a0b3fc72d7
 # ╠═b6795842-7e9f-44eb-8768-b6065f6cbda1
 # ╠═6ec0461e-a901-4bc6-8f0e-a4b1e7f89f67
