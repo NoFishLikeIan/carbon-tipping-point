@@ -16,13 +16,12 @@ function makefilename(model::TippingModel{LevelDamages, EpsteinZin}, G)
     @unpack ρ, θ, ψ = model.preferences
     @unpack ωᵣ = model.economy
     @unpack σₜ, σₘ = model.hogg
-    @unpack λ₁, λ₂ = model.albedo
+    @unpack Tᶜ = model.albedo
     @unpack ξ = model.damages
 
     N = size(G, 1)
-    Δλ = λ₁ - λ₂
 
-    filename = @sprintf("N=%i_Δλ=%.2f_ρ=%.5f_θ=%.2f_ψ=%.2f_σT=%.4f_σm=%.4f_ωᵣ=%.5f_ξ=%.6f", N, Δλ, ρ, θ, ψ, σₜ, σₘ, ωᵣ, ξ)
+    filename = @sprintf("N=%i_Tc=%.2f_ρ=%.5f_θ=%.2f_ψ=%.2f_σT=%.4f_σm=%.4f_ωᵣ=%.5f_ξ=%.6f", N, Tᶜ, ρ, θ, ψ, σₜ, σₘ, ωᵣ, ξ)
 
     return "$(replace(filename, "." => ",")).jld2"
 end
@@ -31,13 +30,12 @@ function makefilename(model::TippingModel{GrowthDamages, EpsteinZin}, G)
     @unpack ρ, θ, ψ = model.preferences
     @unpack ωᵣ = model.economy
     @unpack σₜ, σₘ = model.hogg
-    @unpack λ₁, λ₂ = model.albedo
+    @unpack Tᶜ = model.albedo
     @unpack ξ, υ = model.damages
 
     N = size(G, 1)
-    Δλ = λ₁ - λ₂
 
-    filename = @sprintf("N=%i_Δλ=%.2f_ρ=%.5f_θ=%.2f_ψ=%.2f_σT=%.4f_σm=%.4f_ωᵣ=%.5f_ξ=%.6f_υ=%.3f", N, Δλ, ρ, θ, ψ, σₜ, σₘ, ωᵣ, ξ, υ)
+    filename = @sprintf("N=%i_Tc=%.2f_ρ=%.5f_θ=%.2f_ψ=%.2f_σT=%.4f_σm=%.4f_ωᵣ=%.5f_ξ=%.6f_υ=%.3f", N, Tᶜ, ρ, θ, ψ, σₜ, σₘ, ωᵣ, ξ, υ)
 
     return "$(replace(filename, "." => ",")).jld2"
 end

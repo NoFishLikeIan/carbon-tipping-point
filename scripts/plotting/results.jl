@@ -53,8 +53,8 @@ begin # Import
 
 	for Δλ ∈ ΔΛ
 		economy = Economy()
-	    albedo = Albedo(λ₂ = 0.31 - Δλ)
-		hogg = calibrateHogg(albedo)
+	    albedo = Albedo(Δλ = Δλ)
+		hogg = equilibriumHogg(albedo)
 
 	    model = ModelInstance(preferences, economy, damages, hogg, albedo, calibration)
         jumpmodel = ModelBenchmark(preferences, economy, damages, Hogg(), Jump(), calibration)

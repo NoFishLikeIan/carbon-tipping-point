@@ -29,8 +29,7 @@ for d in damages
     for Δλ ∈ ΔΛ
         VERBOSE && println("Solving albedo model Δλ = $Δλ")
 
-        λ₂ = Albedo().λ₁ - Δλ
-        albedo = Albedo(λ₂ = λ₂)
+        albedo = Albedo(Δλ = Δλ)
         model = TippingModel(albedo, preferences, d, economy, hogg, calibration)
 
         G = constructdefaultgrid(N, model)

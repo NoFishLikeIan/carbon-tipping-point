@@ -16,7 +16,7 @@ begin
 	economy = Economy()
 	damages = LevelDamages()
 	preferences = EpsteinZin()
-	albedo = Albedo(λ₂ = Albedo().λ₁)
+	albedo = Albedo(Δλ = Δλ)
 end
 
 # --- Albedo
