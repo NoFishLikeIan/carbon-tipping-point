@@ -16,7 +16,7 @@ begin
 	preferences = EpsteinZin()
 
 	Δλ = 0.08
-	albedo = Albedo(λ₂ = Albedo().λ₁ - Δλ)
+	albedo = Albedo(Δλ = Δλ)
 end;
 
 # --- Albedo

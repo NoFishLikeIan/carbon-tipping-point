@@ -32,7 +32,7 @@ begin # Global variables
 end;
 
 begin # Construct models and grids
-    ΔΛ = [0., 0.06, 0.08];
+    thresholds = [2., 3.4]
 	N = 51;
 
 	calibration = load_object(joinpath(DATAPATH, "calibration.jld2"))
@@ -40,14 +40,13 @@ begin # Construct models and grids
     damages = GrowthDamages()
     economy = Economy()
     jump = Jump()
+    hogg = Hogg()
 
     jumpmodel = JumpModel(jump, preferences, damages, economy, Hogg(), calibration)
     
 	models = TippingModel[]
-	for Δλ ∈ ΔΛ
-	    albedo = Albedo(λ₂ = Albedo().λ₁ - Δλ)
-		hogg = calibrateHogg(albedo)
-
+	for Tᶜ ∈ thresholds
+	    albedo = Albedo(Tᶜ = Tᶜ)
 	    model = TippingModel(albedo, preferences, damages, economy, hogg, calibration)
 
 		push!(models, model)
@@ -56,15 +55,13 @@ end;
 
 begin # Labels, colors and axis
     PALETTE = colorschemes[:grays]
-    graypalette = n -> get(PALETTE, range(0.1, 0.8; length = n)) |> reverse
-    
-    λgrays = graypalette(length(ΔΛ))
-    λcolors = Dict(ΔΛ .=> graypalette(length(ΔΛ)))
+    graypalette = n -> get(PALETTE, range(0.1, 0.8; length = n))
 
+    thresholdcolor = Dict(thresholds .=> graypalette(length(thresholds)))
 
     TEMPLABEL = "Temperature deviations \$T - T^{p}\$"
 
-    ΔTmax = 9.
+    ΔTmax = 8.
     ΔTspace = range(0., ΔTmax; length = 51)
     Tspace = ΔTspace .+ Hogg().Tᵖ
 
@@ -83,10 +80,12 @@ begin # Load IPCC data
     getscenario(s) = filter(:Scenario => isequal("SSP$(s) - Baseline"), ipccproj)
 
     bauscenario = getscenario(5)
-end
+end;
 
 begin # Albedo plot
-    albedovariation = [(T -> Model.λ(T, Albedo(λ₂ = Albedo().λ₁ - Δλ))).(Tspace) for Δλ ∈ ΔΛ]
+    albedovariation = [[Model.λ(T, model.hogg, model.albedo) for T in Tspace] for model in models]
+
+    ytick = 0.26:0.02:0.32
 
     albedofig = @pgf Axis(
         {
@@ -98,8 +97,9 @@ begin # Albedo plot
             xticklabels = temperatureticks[2],
             xtick = temperatureticks[1],
             xmin = Tmin, xmax = Tmax,
-            ymin = 0.2, ymax = 0.32,
-            ytick = 0.2:0.05:0.35
+            ymin = ytick[1] - 0.01, ymax = ytick[end] + 0.01,
+            ytick = ytick,
+            yticklabels = [@sprintf("%.0f\\%%", 100 * x) for x in ytick]
         }
     )
 
@@ -107,19 +107,20 @@ begin # Albedo plot
         PGFPlotsX.save(joinpath(PLOTPATH, "skeleton-albedo.tikz"), albedofig; include_preamble = true) 
     end
 
-    @pgf for (Δλ, loss) in zip(ΔΛ, albedovariation)
+    @pgf for (model, loss) in zip(models, albedovariation)
+        Tᶜ = model.albedo.Tᶜ
         curve = Plot(
-            { color = λcolors[Δλ], line_width = LINE_WIDTH }, 
+            { color = thresholdcolor[Tᶜ], line_width = LINE_WIDTH }, 
             Coordinates(zip(Tspace, loss))
         ) 
 
-        label = @sprintf("%.0f \\%%", 100 * Δλ)
+        label = "\$$(Tᶜ)^{\\circ}\$"
         legend = LegendEntry(label)
 
         push!(albedofig, curve, legend)
     end
 
-    @pgf albedofig["legend style"] = raw"at = {(0.4, 0.4)}"
+    @pgf albedofig["legend style"] = raw"at = {(0.9, 0.9)}"
 
     if SAVEFIG
         PGFPlotsX.save(joinpath(PLOTPATH, "albedo.tikz"), albedofig; include_preamble = true) 
@@ -129,13 +130,27 @@ begin # Albedo plot
 end
 
 begin # Nullcline plot
-    nullclinevariation = Vector{Float64}[]
+    nullclinevariation = Dict{Float64, Vector{Vector{NTuple{2, Float64}}}}()
+    for model ∈ models
+        nullclines = Vector{NTuple{2, Float64}}[]
+        
+        currentM = NTuple{2, Float64}[]
+        currentlystable = true
 
-    for (k, Δλ) ∈ enumerate(ΔΛ)
-        model = models[k]
-        null = [Model.Mstable(T, model.hogg, model.albedo) for T in Tspace]
+        for T in Tspace
+            M = Model.Mstable(T, model.hogg, model.albedo)
+            isstable = Model.radiativeforcing′(T, model.hogg, model.albedo) < 0
+            if isstable == currentlystable
+                push!(currentM, (M, T))
+            else
+                currentlystable = !currentlystable
+                push!(nullclines, currentM)
+                currentM = [ (M, T) ]
+            end
+        end
 
-        push!(nullclinevariation, null)
+        push!(nullclines, currentM)
+        nullclinevariation[model.albedo.Tᶜ] = nullclines 
     end
 
     nullclinefig = @pgf Axis(
@@ -145,7 +160,7 @@ begin # Nullcline plot
             grid = "both",
             ylabel = TEMPLABEL,
             xlabel = raw"Carbon concentration $M$",
-            xmin = defaultmodel.hogg.Mᵖ, xmax = 900,
+            xmin = models[1].hogg.Mᵖ, xmax = 900,
             xtick = 200:100:900,
             yticklabels = temperatureticks[2],
             ytick = temperatureticks[1],
@@ -157,21 +172,26 @@ begin # Nullcline plot
         PGFPlotsX.save(joinpath(PLOTPATH, "skeleton-nullcline.tikz"), nullclinefig; include_preamble = true) 
     end
 
-    @pgf for (Δλ, nullclinedata) in zip(ΔΛ, nullclinevariation)
-        nullclinecoords = Coordinates(zip(nullclinedata, Tspace))
+    for model in models
+        Tᶜ = model.albedo.Tᶜ
+        color = thresholdcolor[Tᶜ]
 
-        curve = Plot({color = λcolors[Δλ], line_width=LINE_WIDTH}, nullclinecoords) 
+        stableleft, unstable, stableright = nullclinevariation[Tᶜ]
 
-        label = @sprintf("%.0f \\%%", 100 * Δλ)
+        leftcurve = @pgf Plot({color = color, line_width=LINE_WIDTH}, Coordinates(stableleft))
+        unstablecurve = @pgf Plot({color = color, line_width=LINE_WIDTH, forget_plot, dotted}, Coordinates(unstable)) 
+        rightcurve = @pgf Plot({color = color, line_width=LINE_WIDTH, forget_plot}, Coordinates(stableright)) 
+
+        label = "\$$(Tᶜ)^{\\circ}\$"
         legend = LegendEntry(label)
 
-        push!(nullclinefig, curve, legend)
+        push!(nullclinefig, leftcurve, legend, unstablecurve, rightcurve)
     end
 
     @pgf nullclinefig["legend style"] = raw"at = {(0.95, 0.3)}"
 
     if SAVEFIG
-        PGFPlotsX.save(joinpath(PLOTPATH, "nullcline.tikz"), nullclinefig; include_preamble = true) 
+        PGFPlotsX.save(joinpath(PLOTPATH, "nullcline.tikz"), nullclinefig; include_preamble = true)
     end
 
     nullclinefig
@@ -238,7 +258,7 @@ begin # Density plots
         legend = LegendEntry(label)
         @pgf push!(densfig,
             Plot({
-                color = λcolors[Δλ],
+                color = thresholdcolor[Δλ],
                 line_width="0.1cm", 
             }, Coordinates(zip(Tspace, d))),
             legend

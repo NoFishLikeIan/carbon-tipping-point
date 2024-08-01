@@ -3,7 +3,7 @@ module Model
 # Models
 export Economy, Hogg, Albedo, Calibration, Jump
 export Damages, GrowthDamages, LevelDamages
-export calibrateHogg
+export equilibriumHogg
 export intensity, increase, d
 export μ, b, bterminal, γ, mstable, boundb, δₘ, ϕ
 export criticaltemperature
