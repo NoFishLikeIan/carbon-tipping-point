@@ -1,0 +1,20 @@
+\documentclass[../../main.tex]{subfiles}
+\begin{document}
+
+There are two world regions high ($h$) and low ($l$) income countries. The temperature $T$ dynamics are as given. The log carbon concentration $m$ follow \begin{equation}
+    \dd{m} = \left( \gamma^b_h + \gamma^b_l - \alpha_h - \alpha_l \right) \dd{t} + \sigma_w \dd{W}_m
+\end{equation} where $\gamma^b_i$ is the BAU growth rate and $\alpha_i$ is the abatement rate. The two regions' output evolves as \begin{equation}
+    \dd{y}_i = \Big( \varrho + \phi(\chi) - \delta_k - A \beta_i(\varepsilon_i) - d(T) \Big) \dd{t} + \sigma_{k, i} \dd{W}_{k, i}.
+\end{equation} Assume the two countries differ only in their abatement cost functions $\beta_i$. The region $i \in \{h, l\}$ objective is given by \begin{equation}
+    U_i = \mathbb{E} \int_{t}^{\infty} u(C_{i, t}) \; e^{-\rho t} \dd{t}.
+\end{equation}
+
+\subsection{Markov Chain Approximation}
+
+We approximate the above problem as follows.
+
+\begin{equation}
+    V_{i, t}(T, m) = \max_{\chi, \alpha_i} \Delta t \; u(\chi Y_t) + e^{-\rho \Delta t} \E_{\alpha_i, \alpha_j} V_{i, t + \Delta t}(T, m)
+\end{equation}
+
+\end{document}
