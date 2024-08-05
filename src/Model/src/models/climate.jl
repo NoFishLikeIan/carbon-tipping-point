@@ -113,10 +113,12 @@ Mstable(T, args...) = exp(mstable(T, args...))
 
 function potential(T, m, hogg::Hogg, albedo::Albedo)
 	@unpack λ₁, Δλ = albedo
-    Tᵢ = (albedo.Tᶜ + albedo.T₂) / 2
-	G = Model.fₘ(m, hogg)
+    T₁ = albedo.Tᶜ + hogg.Tᵖ
+    T₂ = T₁ + albedo.ΔT
+    inflexion = (T₁ + T₂) / 2
+	G = ghgforcing(m, hogg)
 
-	(hogg.η / 5) * T^5 - G * T - (1 - λ₁) * hogg.S₀ * T - hogg.S₀ * Δλ * log(1 + exp(T - Tᵢ))
+	(hogg.η / 5) * T^5 - G * T - (1 - λ₁) * hogg.S₀ * T - hogg.S₀ * Δλ * log(1 + exp(T - inflexion))
 end
 
 function density(T, m, hogg::Hogg, albedo::Albedo; normalisation = 1e-5)
