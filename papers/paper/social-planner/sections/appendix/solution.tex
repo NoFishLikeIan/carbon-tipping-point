@@ -1,92 +1,12 @@
 \documentclass[../../main.tex]{subfiles}
 \begin{document}
+\section{Solution to Maximisation} \label{appendix:solution}
 
-\section{Steady State Density derivation} \label{appendix:density}
-
-The Fokker-Planck equation for the density of temperature $p$ is \begin{equation}
-    \partial_T \left\{ \frac{1}{\epsilon} \mu(T, m) p(T) + \frac{\sigma^2_T}{2\varepsilon^2} p^\prime(T) \right\} = 0,
-\end{equation} such that, the steady state temperature $\overline{p}$ satisfies the ODE \begin{equation}
-    \frac{1}{\epsilon} \mu(T, m) \overline{p}(T) + \frac{\sigma^2_T}{2\varepsilon^2} \overline{p}^\prime(T) = 0,
-\end{equation} which has solutions \begin{equation}
-    \overline{p}(T) \propto exp\left( -\frac{V(T, m)}{\sigma^2_T / 2\epsilon^2} \right), 
-\end{equation} where \begin{equation}
-    \begin{split}
-        V(T, m) = &(\mu_m(m) + (1 - \lambda_1)S_0) T - \frac{\eta}{5} T^5 + \\
-        &S_0 (\lambda_1 - \lambda_2) \log(1 + \exp(T - T_i)).
-    \end{split}
-\end{equation}
-
-\section{Calibration} \label{appendix:calibration}
-
-\subsection{Abatement Costs}
-
-To abate a fraction $e$ of emissions vis-a-vis the BAU scenario requires a fraction \begin{equation}
-    \beta(\varepsilon) = \varepsilon^2 
-    ; \omega_0 e^{-\omega_r t}
-\end{equation} of GDP. Following \citep{nordhaus_revisiting_2017}, we assume that abating all emissions ($e = 1$) in 2020 costs 11\% of GDP while doing so in 2100 costs 2.7\% of GDP. This yields the calibrated $\omega_0$ and $\omega_r$
-
-\subsection{Summary of Parameters}
-
-\begin{tabular}{ |p{1cm}||p{3cm}|p{8cm}|  }
-    \hline
-    \multicolumn{3}{|c|}{Preferences} \\
-    \hline
-    $\rho$ & $0.015$ & Discount rate \\
-    $\theta$ & $10$ & Relative risk aversion \\
-    $\psi$ & $1.5$ & Elasticity of intertemporal substitution \\
-    \hline\hline
-    \multicolumn{3}{|c|}{Economy} \\
-    \hline
-    $\omega_0$ & $11 \%$ & GDP loss required to fully abate today\\
-    $\omega_r$ & $2.7 \%$ & Rate of abatement cost reduction \\
-    $\varrho$ & $0.9 \%$ & Growth of TFP \\
-    $\kappa$ & $6\%32$ & Adjustment costs of abatement technology \\
-    $\delta_k$ & $0.0116$ & Initial depreciation rate of capital \\
-    $\xi$ & $0.00026$ & Coefficient of damage function \\
-    $\nu$ & $3.25$ & Exponent of damage function \\
-    $A_0$ & $0.113$ & Initial TFP \\
-    $Y_0$ & $75.8$ & Initial GDP \\
-    $\sigma_k$ & $0.0162$ & Variance of GDP \\
-    $\tau$ & $500$ & Steady state horizon  \\
-    \hline
-    \hline 
-    \multicolumn{3}{|c|}{Climate} \\
-    \hline
-    $T_0$ & 288.$56$ & [K] Initial temperature \\
-    $T^{\mathrm{p}}$ & 287.$15$ & [K] Pre-industrial temperature \\
-    $M_0$ & $410$ & [p.p.m.] Initial carbon concentration \\
-    $M^{\mathrm{p}}$ & $280$ & [p.p.m.] Pre-industrial carbon concentration \\
-    $N_0$ & $286.65543$ & [p.p.m.] Initial carbon in sinks \\
-    $\sigma_T$ & $1.5844$ & Volatility of temperature \\
-    $S_0$ & $342$ & [W / m²] Mean solar radiation \\
-    $\epsilon$ & $15.844$ & [J / m² K year] Heat capacity of the ocean \\
-    $\eta$ & $5.67e-8$ & Stefan-Boltzmann constant  \\
-    $G_1$ & $20.5$ & [W / m²] Effect of CO$_2$ on radiation budget \\
-    $G_0$ & $150$ & [W / m²] Pre-industrial GHG radiation budget \\
-    \hline\hline
-    \multicolumn{3}{|c|}{Albedo} \\
-    \hline 
-    $T_i$ & $292.75$ & [K] temperature inflection point \\
-    \hline
-\end{tabular}
-
-\section{Motivation behind the use of Epstein-Zin preferences} \label{appendix:epstein-zin}
-
-Utility preferences as specified by (\ref{eq:utility}) and (\ref{eq:aggregator}) were introduced by \citep{epstein_substitution_1989} (discrete time) and \citep{duffie_asset_1992} (continuous time) to circumvent two undesirable features of additive preferences (e.g. CRRA utility) in finance. First, under additive preferences the elasticity of intertemporal substitution is the inverse of the coefficient of relative risk aversion. Second, an agent having additive preferences is indifferent between earlier or later resolution of uncertainty. Translated to the integrated models, as the one discussed in this paper, these two features yield a counter-intuitive mechanism: the abatement path becomes less ambitious as agents become more risk averse \citep{pindyck_economic_2013}. This is because, in a growing economy with rising consumption, future utility decreases in risk aversion, which yields, ceteris paribus, a higher optimal emission path. The use of Epstein-Zin preferences is a common way to overcome this issue \citep{pindyck_economic_2013, crost_optimal_2013, ackerman_epsteinzin_2013, hambel_optimal_2021,  olijslagers_discounting_2019}.
-
-To make sense of this utility specification it is useful to consider two illustrative parameter cases. First, as the elasticity of intertemporal substitution converges to the inverse  coefficient of relative risk aversion, $\psi \to 1 / \theta$, the aggregator (\ref{eq:aggregator}) becomes separable \begin{equation}
-    \lim_{\psi \to 1 / \theta} f(C, U) = \rho \left(\frac{1}{1 - \theta} C^{1 - \theta} - U\right),
-\end{equation} and the utility (\ref{eq:utility}) simplifies to the usual time separable formulation \begin{equation}
-    U(\control{\alpha}, \control{\chi}) = \rho\E \int^{\infty}_t \exp\big(-\rho (s - t) \big) \; \frac{1}{1 - \theta} C(s)^{1 - \theta} \; \dd{t}.
-\end{equation} Second, if we let the elasticity of intertemporal substitution converge to one, $\psi \to 1$, we obtain the log-separable aggregator \begin{equation} \label{eq:epstein-zin:log-separable}
-    f(C, U) = \rho (1 - \theta)U \left(\log(C) - \frac{1}{1 - \theta} \log\big( (1 - \theta) U \big) \right).
-\end{equation}
-
-\section{Simplifying Assumptions} \label{appendix:assumptions}
+\subsection{Simplifying Assumptions} \label{appendix:assumptions}
 
 For computational purposes, it is convenient to make some simplifying assumption to reduce the dimensionality of the state space.
 
-\subsection{Decay Rate of Carbon}
+\subsubsection{Decay Rate of Carbon}
  
 The calibrated carbon decay $\delta_m$, as a function of the carbon stored in sinks $N$, is illustrated in Figure (\ref{fig:decay}). The calibration assumes a functional form \begin{equation}
     \delta_m(N) = a_{\delta} e^{-\left(\frac{N - c_{\delta}}{b_{\delta}}\right)^2},
@@ -108,27 +28,7 @@ To simplify matters I will assume that the amount of carbon sinks present in the
     \label{fig:decaypath}
 \end{figure}
 
-\iffalse
-\section{Hamilton-Bellman-Jacobi Equation and the Social Cost of Carbon} \label{appendix:hjb}
-
-The social planner problem depends on time $t$ and three state variables: temperature $T$, atmospheric log-concentration of CO$_2$ $m$, and output $y$. For convenience, let $X$ be the vector of state variables at time $t$, taking values in the domain $\mathcal{S}$. The value function is defined as \begin{equation}
-    V(t, X) = \sup_{(\control{\chi}, \control{\alpha})} U(\control{\chi}, \control{\alpha}; t, X),
-\end{equation} where the two controls $\control{\chi}, \control{\alpha}$ are functions $[0, \infty) \times \mathcal{S} \mapsto [0, 1]$. The state vector $X$ follows the drift \begin{equation}
-    w(t, X,  \control{\chi}, \control{\alpha}) = \begin{pmatrix}
-        \mu_T(T) + \mu_m(m) \\
-        \gamma^{b} - \control{\alpha} \\
-        \varrho + \phi(t, \control{\chi}) - A(t) \beta(t, \control{\alpha}) - \delta_K(T)
-    \end{pmatrix}
-\end{equation}
-
-\begin{proposition}
-    The value function satisfies the Hamilton-Bellman-Jacobi equation \begin{equation}
-        0 = \sup_{\control{\alpha}, \control{\chi}} \; \Bigg\{ f(\control{\chi}, y, V ) + \nabla_X V \cdot w  \Bigg\} + \frac{\sigma_T^2}{2} \; \Big(\partial^2_T V \Big) + \partial_t V
-    \end{equation}
-\end{proposition}
-\fi
-
-\section{Approximating Markov Chain} \label{appendix:approximating-markov-chain}
+\subsection{Approximating Markov Chain} \label{appendix:approximating-markov-chain}
 
 Th numerical method employed here adapts that presented in \citep{kushner_numerical_2001}. First, we define a suitably large domain for the state variables $\mathcal{X} \subseteq \mathbb{R}^3$ and let $x = (T, m, y) \in \mathcal{X}$ be the state vector. Then, let $u = (\chi, \alpha) \in \mathcal{U} \coloneqq [0, 1] \times [0, \gamma^b]$ be the vector of controls. Then we can define the operator \begin{equation}
     \begin{split}
@@ -167,7 +67,7 @@ Finally, let \begin{equation}
     V^h(t, X) = \sum_{\tilde{X}} p(X, \tilde{X}) V^h(\tilde{X}) + \frac{1}{1 - \theta} \left(e^{-\rho \Delta t} ((1 - \theta) V^h(t, X))^{\frac{1 - 1 / \psi}{1 - \theta}} + \Delta t C^{1 - \frac{1}{\psi}} \right)^{\frac{1 - \theta}{1 - 1 / \psi}}.
 \end{equation} \citep{kushner_numerical_2001} have shown that the transitional probabilities $p$ form a consistent Markov chain and that $V^h \to V$ as $h \to 0$.
 
-\section{Post-transition phase}
+\subsection{Post-transition phase}
 
 We assume that at some point in the future $\tau \gg 0$, the abatement rate is equal to emission growth, $\gamma^b = \alpha$, and technological progress caps, $\varrho = 0$, such that the state variables evolve according to dynamics \begin{align}
     \dd{m} &= 0, \\
@@ -182,7 +82,7 @@ We assume that at some point in the future $\tau \gg 0$, the abatement rate is e
 \end{equation}
 
 
-\section{Separable Value Function}
+\subsection{Separable Value Function}
 
 The Markov Chain approximation yields the Bellman recurrence \begin{equation}
     \begin{split}

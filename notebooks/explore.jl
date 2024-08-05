@@ -92,9 +92,9 @@ md"# Analysis"
 
 # ╔═╡ 623654ff-251c-4570-a870-009933e62197
 begin # Parameters
-	Δλ = 0.08
+	Tᶜ = 1.8
 	allownegative = false
-	albedo = Albedo(λ₂ = Albedo().λ₁ - Δλ)
+	albedo = Albedo(Tᶜ = Tᶜ)
 	damage = GrowthDamages()
 	jump = Jump()
 
@@ -170,7 +170,7 @@ begin
 end;
 
 # ╔═╡ 4d2de052-4620-4c0f-a312-f680181a311d
-sol = solve(ensembleprob, trajectories = 100);
+sol = solve(ensembleprob, trajectories = 10_000);
 
 # ╔═╡ 03ceea83-2ef3-4aba-a8d8-b412e562a4b5
 let
@@ -213,5 +213,5 @@ end
 # ╠═4d88129c-3f7e-4542-82f5-3a8e849ddfdf
 # ╠═fe85b26a-71d7-4665-a136-b6af0914b866
 # ╠═4d2de052-4620-4c0f-a312-f680181a311d
-# ╠═03ceea83-2ef3-4aba-a8d8-b412e562a4b5
+# ╟─03ceea83-2ef3-4aba-a8d8-b412e562a4b5
 # ╠═8bbec470-150c-479a-855e-7d9e3e76c03e

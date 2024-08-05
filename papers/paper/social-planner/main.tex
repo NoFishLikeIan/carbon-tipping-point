@@ -8,6 +8,7 @@
     \usepackage{subfiles} % Load last
 
     \overfullrule=5pt
+    \pgfplotsset{compat=newest}
     
     % Paper specific commands
     \def\plotpath{../../../plots}
@@ -15,7 +16,7 @@
 
     % Title page
     \author{Andrea Titton}
-    \title{Tipping Point}
+    \title{Tipping Points Wrong}
     
 
 \begin{document}
@@ -29,11 +30,15 @@
 \newpage
 \subfile{sections/introduction/introduction.tex}
 
-\section{Climate Model}
+\section{Model}
+
+This section introduces the climate model and the economy.
+
+\subsection{Climate Model}
 
 \subfile{sections/climate-model/climate-model.tex}
 
-\section{Economy}
+\subsection{Economy}
 
 \subfile{sections/economy-model/economy-model.tex}
 
@@ -60,6 +65,7 @@ The model presented here represents an early and simplified analysis that can be
 \bibliography{scc-tipping-points}
 
 \newpage\appendix
-\subfile{sections/numerical-solution/numerical-solution.tex}
+\subfile{sections/appendix/climate.tex}
+\subfile{sections/appendix/solution.tex}
 
 \end{document}

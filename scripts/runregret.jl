@@ -2,7 +2,7 @@ include("utils/saving.jl")
 include("terminal.jl")
 include("backward.jl")
 
-thresholds = [2., 3.4];
+thresholds = [1.5, 1.8];
 N = 51;
 
 VERBOSE = getbool(env, "VERBOSE", false)

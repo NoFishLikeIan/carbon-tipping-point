@@ -1,21 +1,14 @@
 \documentclass[../../main.tex]{subfiles}
 \begin{document}
 
-To derive the optimal abatement path and the social cost of carbon, I solve the problem of a social planner who derives utility from consumption, is risk averse, and discounts the future. To disentangle the role of these two components I model the social planner as having Epstein-Zin preferences. Societal utility $U$ at time $t$, given an abatement strategy $\control{\alpha}$ and a consumption schedule $\control{\chi}$, is defined recursively by the integral equation as \begin{equation} \label{eq:utility}
-    U(t; \control{\alpha}(t), \control{\chi}(t)) = \E_t \int^{\infty}_t f\left(C(s), U(s; \control{\alpha}(s), \control{\chi}(s))\right) \; \dd{s}
-\end{equation} where $C(s) = \control{\chi}(s) Y(s)$ is the consumption path. Introducing the coefficient of relative risk aversion $\theta > 1$, elasticity of intertemporal substitution $\psi > 0$, and the discount rate $\rho$, the Epstein-Zin aggregator \citep{duffie_asset_1992} is defined as \begin{equation} \label{eq:aggregator}
-    f(C, U) = \frac{\rho}{1 - 1 / \psi} (1 - \theta) U  \left( \left(\frac{C}{((1 - \theta) U)^{\frac{1}{1 - \theta}}}\right)^{1 - 1 / \psi} - 1 \right).
-\end{equation} Given the optimal abatement and consumption schedule $\control{\alpha}$ and $\control{\chi}$, let the value function be defined recursively as \begin{equation}
-    V_t(T, m, y) = \sup_{\control{\chi}, \control{\alpha}} \E_t \int^{\infty}_t f(C, V_s) \; \dd{s},
-\end{equation} which satisfies the  Hamilton-Jacobi-Bellman (HJB) \begin{equation}
-    \begin{split}
-        -\partial_t V_t = \; &f(C, V_t) + \partial_T V_t \; \mu(T, m) + \partial_m V_t \; (\gamma_t - \alpha) \; + \\
-        &\partial_y V_t \; \Big(\varrho + \phi(\chi) - \delta_k - A \beta(\varepsilon) - d(T) \Big) \; + \\
-        &\frac{\sigma^2_k}{2} \partial^2_y V_t + \frac{\sigma^2_T}{2} \partial^2_T V_t
-    \end{split}
-\end{equation}
+This section introduces the objective of the social planner and the resulting maximisation problem. Societal utility at time $t$ given a state $X_t \coloneqq (T_t, M_t, N_t, Y_t)$ is recursively defined as \begin{equation} \label{eq:social-objective}
+    V_t(X_t) = \sup_{\chi, \alpha} \mathbb{E} 
+    \int_{t}^{\infty} f(\chi_s(X_s) Y_s, V_s(X_s)) \dd{s}
+\end{equation} where $\chi$ is chosen from the set of continuous functions from the state space to $[0, 1]$, $\alpha$ from the set of continuos functions from the state space to $[0, \gamma^t_b + \delta_m(N_t)]$, and $f$ is an Epstein-Zin aggregator \begin{equation} \label{eq:aggregator}
+    f(c, u) \coloneqq \frac{\rho}{1 - 1 / \psi} (1 - \theta) u  \left( \left(\frac{c}{((1 - \theta) u)^{\frac{1}{1 - \theta}}}\right)^{1 - 1 / \psi} - 1 \right).
+\end{equation} Consumption is integrated into a utility index by means of the Epstein-Zin integrator \citep{duffie_asset_1992}. This aggregator plays a dual role. First, it allows to disentangle the role of relative risk aversion $\theta$, elasticity of intertemporal substitution $\psi$ and the discount rate $\rho$ in determining optimal abatement paths. Second, it circumvents the known paradoxical result that abatement policies becomes less ambitious as society becomes more risk averse \citep{pindyck_economic_2013}. The paths of consumption and climate abatement resulting from the maximisation problem are then the optimal consumption and abatement paths. Details on solving this are given in Appendix \ref{appendix:solution}.
 
-The HJB equation is then solved numerically to obtain the value function at time $t = 0$, $V_0$, and obtain optimal consumption and abatement schedules. The details of the numerical procedure are laid out in Appendix \ref{appendix:assumptions} and \ref{appendix:approximating-markov-chain}.
+%  TODO: Find better citation
 
 
 \end{document}

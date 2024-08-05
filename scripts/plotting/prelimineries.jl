@@ -29,10 +29,11 @@ begin # Global variables
     SAVEFIG = false 
     kelvintocelsius = 273.15
     LINE_WIDTH = 2.5
+    SEED = 11148705
 end;
 
 begin # Construct models and grids
-    thresholds = [2., 3.4]
+    thresholds = [2., 3.5]
 	N = 51;
 
 	calibration = load_object(joinpath(DATAPATH, "calibration.jld2"))
@@ -59,7 +60,7 @@ begin # Labels, colors and axis
 
     thresholdcolor = Dict(thresholds .=> graypalette(length(thresholds)))
 
-    TEMPLABEL = "Temperature deviations \$T - T^{p}\$"
+    TEMPLABEL = "Temperature deviations \$T_t - T^{p}\$"
 
     ΔTmax = 8.
     ΔTspace = range(0., ΔTmax; length = 51)
@@ -71,7 +72,11 @@ begin # Labels, colors and axis
     temperatureticks = collect.(makedeviationtickz(0., ΔTmax, first(models); step = 1, digits = 0))
 
     Tmin, Tmax = extrema(temperatureticks[1])
-end
+
+    X₀ = [hogg.T₀, log(hogg.M₀)]
+
+    baufn = SDEFunction(Fbau!, G!)
+end;
 
 begin # Load IPCC data
     IPCCDATAPATH = joinpath(DATAPATH, "climate-data", "proj-median.csv")
@@ -93,7 +98,7 @@ begin # Albedo plot
             height = raw"0.5\textwidth",
             grid = "both",
             xlabel = TEMPLABEL,
-            ylabel = "\$\\lambda(T)\$",
+            ylabel = "\$\\lambda(T_t)\$",
             xticklabels = temperatureticks[2],
             xtick = temperatureticks[1],
             xmin = Tmin, xmax = Tmax,
@@ -110,7 +115,7 @@ begin # Albedo plot
     @pgf for (model, loss) in zip(models, albedovariation)
         Tᶜ = model.albedo.Tᶜ
         curve = Plot(
-            { color = thresholdcolor[Tᶜ], line_width = LINE_WIDTH }, 
+            { color = thresholdcolor[Tᶜ], line_width = LINE_WIDTH, opacity = 0.8 }, 
             Coordinates(zip(Tspace, loss))
         ) 
 
@@ -128,6 +133,21 @@ begin # Albedo plot
 
     albedofig
 end
+
+begin
+    sims = Dict{Float64, DiffEqArray}()
+
+    for model in reverse(models)
+        color = thresholdcolor[model.albedo.Tᶜ]
+
+        prob = SDEProblem(baufn, X₀, (0., 80.), model)
+        sol = solve(prob; seed = SEED)
+        
+        simpath = sol(0:1:80)
+
+        sims[model.albedo.Tᶜ] = simpath
+    end
+end;
 
 begin # Nullcline plot
     nullclinevariation = Dict{Float64, Vector{Vector{NTuple{2, Float64}}}}()
@@ -153,15 +173,17 @@ begin # Nullcline plot
         nullclinevariation[model.albedo.Tᶜ] = nullclines 
     end
 
+    Mmax = 1000.
+
     nullclinefig = @pgf Axis(
         {
-            width = raw"0.7\textwidth",
+            width = raw"0.9\textwidth",
             height = raw"0.7\textwidth",
             grid = "both",
             ylabel = TEMPLABEL,
-            xlabel = raw"Carbon concentration $M$",
-            xmin = models[1].hogg.Mᵖ, xmax = 900,
-            xtick = 200:100:900,
+            xlabel = raw"Carbon concentration $M_t$",
+            xmin = models[1].hogg.Mᵖ, xmax = Mmax,
+            xtick = 200:100:Mmax,
             yticklabels = temperatureticks[2],
             ytick = temperatureticks[1],
             ymin = Tmin, ymax = Tmax
@@ -172,7 +194,7 @@ begin # Nullcline plot
         PGFPlotsX.save(joinpath(PLOTPATH, "skeleton-nullcline.tikz"), nullclinefig; include_preamble = true) 
     end
 
-    for model in models
+    for model in reverse(models) # Nullcline plots
         Tᶜ = model.albedo.Tᶜ
         color = thresholdcolor[Tᶜ]
 
@@ -182,10 +204,22 @@ begin # Nullcline plot
         unstablecurve = @pgf Plot({color = color, line_width=LINE_WIDTH, forget_plot, dotted}, Coordinates(unstable)) 
         rightcurve = @pgf Plot({color = color, line_width=LINE_WIDTH, forget_plot}, Coordinates(stableright)) 
 
-        label = "\$$(Tᶜ)^{\\circ}\$"
+        label = "\$T^c = $(Tᶜ)^{\\circ}\$"
         legend = LegendEntry(label)
 
         push!(nullclinefig, leftcurve, legend, unstablecurve, rightcurve)
+    end
+
+    for model in models # Simulation plots
+        color = thresholdcolor[model.albedo.Tᶜ]
+        simpath = sims[model.albedo.Tᶜ]
+        simcoords = Coordinates(zip(exp.(last.(simpath.u)), first.(simpath.u)))
+        
+        curve = @pgf Plot({ color = color, line_width = LINE_WIDTH / 2,  forget_plot, opacity = 0.7 }, simcoords)
+
+        markers = @pgf Plot({ only_marks, mark_options = { fill = "black", scale = 1.5, draw_opacity = 0, color = color, opacity = 0.7 }, mark_repeat = 10}, simcoords) 
+
+        push!(nullclinefig, curve, markers)
     end
 
     @pgf nullclinefig["legend style"] = raw"at = {(0.95, 0.3)}"
@@ -200,17 +234,22 @@ end
 begin # Growth of carbon concentration
     horizon = Int(last(yearlytime))
 
+    ytick = (0.6:0.2:1.4) ./ 100
+
     gfig = @pgf Axis(
         {
-            width = raw"0.75\linewidth",
-            height = raw"0.75\linewidth",
+            width = raw"0.5\textwidth",
+            height = raw"0.5\textwidth",
             grid = "both",
-            ylabel = raw"Growth rate $\gamma^{b}$",
+            ylabel = raw"Growth rate $\gamma_t^{b}$",
             xlabel = raw"Year",
             xtick = 0:20:horizon,
             xmin = 0, xmax = horizon,
             xticklabels = BASELINE_YEAR .+ (0:20:horizon),
-            ultra_thick, xticklabel_style = {rotate = 45}
+            ultra_thick, xticklabel_style = {rotate = 45},
+            ytick = ytick,
+            ymin = minimum(ytick) - 5e-4, ymax = maximum(ytick) + 5e-4,
+            yticklabels = [@sprintf("%.1f\\%%", 100 * x) for x in ytick]
         }
     )   
     
@@ -232,14 +271,15 @@ end
 
 # --- Business-as-usual dynamics
 begin # Density plots
-    ytick = range(2.505674517612567, 2.509962798461946; length = 10) # A bit ugly but I do not know how to remove the ticks
+    # ytick = range(2.505674517612567, 2.509962798461946; length = 10) # A bit ugly but I do not know how to remove the ticks
 
     densfig = @pgf Axis({
         width = raw"0.4\textwidth",
         height = raw"0.4\textwidth",
         grid = "both",
         ylabel = "Density",
-        ytick = ytick, yticklabels = ["" for y ∈ ytick],
+        # ytick = ytick, 
+        yticklabels = ["" for y ∈ ytick],
         xlabel = TEMPLABEL,
         xmin = Tmin, xmax = Tmax,
         xtick = temperatureticks[1],
@@ -247,18 +287,19 @@ begin # Density plots
         ultra_thick, xticklabel_style = {rotate = 45}
     })
 
-    for (k, Δλ) ∈ enumerate(ΔΛ)
-        model = models[k]
-        d = [Model.density(T, log(1.2model.hogg.M₀), model.hogg, model.albedo) for T in Tspace ]
+    for model in models
+        d = [Model.density(T, log(1.5model.hogg.M₀), model.hogg, model.albedo) for T in Tspace ]
         
         l, u = extrema(d)
         d = @. (d - l) / (u - l)
 
-        label = @sprintf("%.0f \\%%", 100 * Δλ)
+        Tᶜ = model.albedo.Tᶜ
+
+        label = "\$$(Tᶜ)^{\\circ}\$"
         legend = LegendEntry(label)
         @pgf push!(densfig,
             Plot({
-                color = thresholdcolor[Δλ],
+                color = thresholdcolor[Tᶜ],
                 line_width="0.1cm", 
             }, Coordinates(zip(Tspace, d))),
             legend
@@ -273,8 +314,6 @@ begin # Density plots
     
     densfig
 end
-
-const baufn = SDEFunction(Fbau!, G!);
 
 function simulatebau(model::TippingModel; trajectories = 100, X₀ = [model.hogg.T₀, log(model.hogg.M₀)])
     prob = SDEProblem(baufn, X₀, (0., 80.), model)
@@ -384,7 +423,7 @@ begin # Carbon decay calibration
 
     decayfig = @pgf Axis(
         {
-            width = raw"0.7\textwidth",
+            width = raw"0.5\textwidth",
             height = raw"0.5\textwidth",
             grid = "both",
             xlabel = raw"Carbon stored in sinks $N$",
@@ -433,8 +472,7 @@ begin # Carbon decay path
 end
 
 begin # Damage fig
-
-    ds = [Model.d(T, damages, tippingmodel.hogg) for T in Tspace]
+    ds = [Model.d(T, damages, hogg) for T in Tspace]
 
     maxpercentage = ceil(maximum(ds), digits = 2)
     ytick = 0:0.02:maxpercentage
@@ -446,7 +484,7 @@ begin # Damage fig
             height = raw"0.5\textwidth",
             grid = "both",
             xlabel = TEMPLABEL,
-            ylabel = raw"Damage function $d(T)$",
+            ylabel = raw"Damage function $d(T_t)$",
             xticklabels = temperatureticks[2],
             xtick = temperatureticks[1],
             xmin = Tmin, xmax = Tmax,
@@ -454,8 +492,6 @@ begin # Damage fig
             yticklabels = yticklabels, ytick = ytick, ymin = -0.01
         }
     )
-
-    ds = [Model.d(T, damages, tippingmodel.hogg) for T in Tspace]
 
     @pgf damagecurve = Plot({line_width = LINE_WIDTH},
         Coordinates(Tspace, ds)
