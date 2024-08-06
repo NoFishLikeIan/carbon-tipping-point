@@ -80,7 +80,7 @@ end
     end
 end
 
-function backwardstep!(Δts, F, policy, cluster, model, G; allownegative = false)
+function backwardstep!(Δts, F, policy, cluster, model, G; allownegative = false, s = 1e-2)
     indices = CartesianIndices(G)
 
     @sync @distributed for (i, δt) in cluster
@@ -103,17 +103,20 @@ function backwardstep!(Δts, F, policy, cluster, model, G; allownegative = false
 
         candidate = min.(policy[idx], [1., ᾱ])
         obj, pol, _ = optimize(optimiser, candidate)
+        
+        polₜ = Policy(pol[1], pol[2])
+        timestep = last(markovstep(t, idx, F, polₜ, model, G))
 
+        
+        w = inv(1 + s * timestep) # Policy smoothing
+        policy[idx] = policy[idx] * (1 - w) + polₜ * w
         F[idx] = obj
-        policy[idx] = Policy(pol[1], pol[2])
-
-        timestep = last(markovstep(t, idx, F, policy[idx], model, G))
         Δts[i] = timestep
     end
 end
 
 "Backward simulates from F̄ down to F₀, using the albedo model. It assumes that the passed F ≡ F̄"
-function backwardsimulation!(F, policy, model, G; verbose = false, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = last(model.calibration.tspan), allownegative = false)
+function backwardsimulation!(F, policy, model, G; verbose = false, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = last(model.calibration.tspan), allownegative = false, stepkwargs...)
     verbose && println("Starting backward simulation...")
      
     savecache = !isnothing(cachepath)
@@ -148,7 +151,7 @@ function backwardsimulation!(F, policy, model, G; verbose = false, cachepath = n
         clusters = dequeue!(queue)
 
         for cluster in clusters
-            backwardstep!(Δts, F, policy, cluster, model, G; allownegative)
+            backwardstep!(Δts, F, policy, cluster, model, G; allownegative, stepkwargs...)
 
             for i in first.(cluster)
                 if queue[i] ≤ model.economy.τ - tstop

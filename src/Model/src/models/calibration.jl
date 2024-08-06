@@ -5,16 +5,24 @@ struct Calibration
 
     # Domain 
     tspan::NTuple{2, Float64} # Span of the IPCC data wrt to 2020
+    r::Float64 # Decay rate for t > t₁
 end
 
-
+function γpol(t, calibration::Calibration)
+    tmin = first(calibration.tspan)
+    p = calibration.γparameters
+    p[1] + p[2] * (t - tmin) + p[3] * (t - tmin)^2
+end
 "Parametric form of γ: (t₀, ∞) → [0, 1]"
 function γ(t, calibration::Calibration)
     tmin, tmax = calibration.tspan
     p = calibration.γparameters
+    Δt = min(t, tmax) - tmin
 
-    Δt = clamp(t, tmin, tmax) - tmin
-    p[1] + p[2] * Δt + p[3] * Δt^2
+    pol = p[1] + p[2] * Δt + p[3] * Δt^2
+    decay = exp(-calibration.r * max(0, t  - tmax))
+
+    return pol * decay
 end
 
 "Linear interpolation of emissions in `calibration`"

@@ -14,9 +14,7 @@ begin
 	hogg = Hogg()
 	economy = Economy()
 	preferences = EpsteinZin()
-
-	Δλ = 0.08
-	albedo = Albedo(Δλ = Δλ)
+	albedo = Albedo()
 end;
 
 # --- Albedo
@@ -24,14 +22,14 @@ damages = GrowthDamages()
 model = TippingModel(albedo, preferences, damages, economy, hogg, calibration);
 
 begin
-	N = 71
+	N = 51
 	G = constructdefaultgrid(N, model)
 
 	Tspace = range(G.domains[1]...; length = size(G, 1))
 	mspace = range(G.domains[2]...; length = size(G, 2))
 end
 
-# F̄, terminalpolicy = loadterminal(model, G)
+F̄, terminalpolicy = loadterminal(model, G)
 
 F₀ = ones(size(G)); F̄ = copy(F₀);
 terminalpolicy = similar(F̄);

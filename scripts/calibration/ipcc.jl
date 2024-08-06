@@ -5,6 +5,7 @@ using CSV, DataFrames, JLD2
 
 using DifferentialEquations
 using DiffEqParamEstim, Optimization, OptimizationOptimJL
+using Roots, FastClosures
 
 using Plots
 
@@ -49,7 +50,12 @@ begin # Calibrate growth rate γᵇ
 
     optprob = Optimization.OptimizationProblem(cost, p₀)
     γparameters = solve(optprob, BFGS())
+
+    p₀, p₁, p₂ = γparameters.u
+    Δ = (T - T0)
+    r = -(p₁ + 2p₂ * Δ) / (p₀ + p₁ * Δ + p₂ * Δ^2)
 end
+
 
 # Plot solution
 begin
@@ -60,5 +66,5 @@ begin
     plot!(ipcctime, t -> sol(t); label = "Solved", marker = :o)
 end
 
-calibration = Model.Calibration(bauscenario.Year, Eᵇ, Tuple(γparameters), (T0, T))
+calibration = Model.Calibration(bauscenario.Year, Eᵇ, Tuple(γparameters), (T0, T), r)
 save_object(joinpath(DATAPATH, "calibration.jld2"), calibration)

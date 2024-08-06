@@ -2,7 +2,7 @@ const secondstoyears = 60 * 60 * 24 * 365.25
 const Gtonoverppm = 1 / 7.821
 
 Base.@kwdef struct Albedo
-	Tᶜ::Float64 = 3.35  # Initiation of Albedo from pre industrial levels
+	Tᶜ::Float64 = 3.5  # Initiation of Albedo from pre industrial levels
     ΔT::Float64 = 1.8  # Temperature change until ice loss
      
     λ₁::Float64 = 0.31 # Pre-transition albedo
