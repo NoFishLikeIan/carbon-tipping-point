@@ -130,9 +130,9 @@ end
 function getbool(env, key, fallback)
     key ∈ keys(env) ? env[key] == "true" : fallback
 end
-function getnumber(env, key, fallback)
+function getnumber(env, key, fallback; type = Float64)
     if key ∈ keys(env)
-        tol = tryparse(Float64, env[key])
+        tol = tryparse(type, env[key])
 
         if !isnothing(tol)
             return tol

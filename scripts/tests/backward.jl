@@ -14,9 +14,9 @@ begin
 	calibration = load_object(joinpath(DATAPATH, "calibration.jld2"))
 	hogg = Hogg()
 	economy = Economy()
-	damages = LevelDamages()
+	damages = GrowthDamages()
 	preferences = EpsteinZin()
-	albedo = Albedo(Δλ = Δλ)
+	albedo = Albedo()
 end
 
 # --- Albedo
@@ -32,7 +32,7 @@ begin
 
 	cluster = 1:N^2 .=> 0.
 	Δts = SharedVector(zeros(N^2))
-	u = Policy(rand(terminalpolicy), rand())
+	i, δt = first(cluster)
 end;
 
 backwardstep!(Δts, F, policy, cluster, model, G)
@@ -40,6 +40,10 @@ backwardstep!(Δts, F, policy, cluster, model, G)
 F̄, terminalpolicy = loadterminal(model, G);
 F = SharedMatrix(F̄);
 policy = SharedMatrix([Policy(χ, 0.) for χ ∈ terminalpolicy]);
-backwardsimulation!(F, policy, model, G; verbose = true)
 
-computebackward(model, G; allownegative = true, verbose = true, datapath = "data", overwrite = true, tstop = 299.5, cachestep = 0.1)
+backwardstep!(Δts, F, policy, cluster, model, G; s = 1.)
+heatmap(last.(policy), clims = (0, Inf), c = :Greens)
+
+# backwardsimulation!(F, policy, model, G; verbose = true, s = 1)
+
+# computebackward(model, G; verbose = true, tstop = economy.τ - 0.1)

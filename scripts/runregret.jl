@@ -2,8 +2,7 @@ include("utils/saving.jl")
 include("terminal.jl")
 include("backward.jl")
 
-thresholds = [1.5, 1.8];
-N = 51;
+N = getnumber(env, "N", 51; type = Int)
 
 VERBOSE = getbool(env, "VERBOSE", false)
 RUNTERMINAL = getbool(env, "RUNTERMINAL", false)
@@ -12,14 +11,18 @@ OVERWRITE = getbool(env, "OVERWRITE", false)
 TOL = getnumber(env, "TOL", 1e-3)
 TSTOP = getnumber(env, "TSTOP", 0.)
 CACHESTEP = getnumber(env, "CACHESTEP", 1 / 4)
+SMOOTHING = getnumber(env, "SMOOTHING", 1 / 2)
+
+OVERWRITE && @warn "Running in overwrite mode!"
 
 # Construct model
+thresholds = [2.];
 preferences = EpsteinZin();
 calibration = load_object(joinpath(DATAPATH, "calibration.jld2"));
 economy = Economy()
 hogg = Hogg()
-damages = (LevelDamages(), GrowthDamages())
-negativeemissions = (false, true)
+damages = [GrowthDamages()]
+negativeemissions = [false]
 
 # Terminal simulation
 for d in damages
