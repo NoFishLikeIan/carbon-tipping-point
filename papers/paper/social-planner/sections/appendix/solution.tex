@@ -2,24 +2,22 @@
 \begin{document}
 \section{Solution to Maximisation} \label{appendix:solution}
 
-\subsection{Simplifying Assumptions} \label{appendix:assumptions}
+This appendix deals with the solution of the maximisation problem (\ref{eq:social-objective}).
 
-For computational purposes, it is convenient to make some simplifying assumption to reduce the dimensionality of the state space.
-
-\subsubsection{Decay Rate of Carbon}
+\subsection{Simplifying Assumptions on the Decay Rate of Carbon} \label{appendix:assumptions}
  
-The calibrated carbon decay $\delta_m$, as a function of the carbon stored in sinks $N$, is illustrated in Figure (\ref{fig:decay}). The calibration assumes a functional form \begin{equation}
-    \delta_m(N) = a_{\delta} e^{-\left(\frac{N - c_{\delta}}{b_{\delta}}\right)^2},
+To reduce the state space, following \cite{hambel_optimal_2021}, I make an assumption on the decay rate of carbon. The calibrated carbon decay $\delta_m$, as a function of the carbon stored in sinks $N_t$, is illustrated in Figure \ref{fig:decay}. The calibration assumes a functional form \begin{equation}
+    \delta_m(N_t) = a_{\delta} e^{-\left(\frac{N_t - c_{\delta}}{b_{\delta}}\right)^2},
 \end{equation} for parameters $a_{\delta}, b_{\delta}, c_{\delta}$.
 
 \begin{figure}[H]
     \centering
     \input{\plotpath/decay.tikz}
-    \caption{Estimated decay of carbon $\delta_m$ as a  function of the carbon stored in sinks $N$.}
+    \caption{Estimated decay of carbon $\delta_m$ as a  function of the carbon stored in sinks $N_t$.}
     \label{fig:decay}
 \end{figure}
 
-To simplify matters I will assume that the amount of carbon sinks present in the atmosphere is a constant fraction of the concentration in the atmosphere, $N = \frac{N_0}{M_0} M$. Using this setup, under a business-as-usual emission scenario, the decay of carbon follows the path in Figure \ref{fig:decaypath}.
+I assume that the amount of carbon sinks present in the atmosphere is a constant fraction of the concentration in the atmosphere, $N_t = \frac{N_0}{M_0} M_t$. Abusing notation, I henceforth write $\delta_m(M_t)$ for the decay rate. Using this setup, under a business-as-usual emission scenario, the decay of carbon follows the path in Figure \ref{fig:decaypath}.
 
 \begin{figure}[H]
     \centering
@@ -28,89 +26,56 @@ To simplify matters I will assume that the amount of carbon sinks present in the
     \label{fig:decaypath}
 \end{figure}
 
+\subsection{Hamilton-Jacobi-Bellmann equation} 
+
+Using the assumption from Appendix \ref{appendix:assumptions}, the value function $V$ at time $t$ depends only on temperature $T_t$, log-carbon concentration $m_t$ and output $Y_t$. This satisfies the Hamilton-Jacobi-Bellmann equation \begin{equation} \label{eq:hjb}
+    \begin{split}
+        -\partial_t V = \sup_{\chi, \alpha} \; &f(\chi Y, V) + \partial_m V \; (\gamma^b_t - \alpha) + \partial_m^2 V \; \frac{\sigma_m^2}{2}  \\ 
+        + \; &\partial_Y V (\varrho + \phi(\chi) - d(T) - \beta_t(\varepsilon(\alpha))) +  \partial_k^2 V \; \frac{\sigma_k^2}{2} \\
+        + \; &\partial_T V \; \frac{r(T) + g(m)}{\epsilon} + \partial_T^2 V \; \frac{(\sigma_T / \epsilon)^2}{2}. 
+    \end{split}
+\end{equation}
+
+It is easy to check that the ansatz \begin{equation} \label{eq:ansatz}
+    V_t(T, m, Y) = \frac{Y^{1 - \theta}}{1 - \theta} F_t(T, m) 
+\end{equation} satisfies (\ref{eq:hjb}). 
+
 \subsection{Approximating Markov Chain} \label{appendix:approximating-markov-chain}
 
-Th numerical method employed here adapts that presented in \citep{kushner_numerical_2001}. First, we define a suitably large domain for the state variables $\mathcal{X} \subseteq \mathbb{R}^3$ and let $x = (T, m, y) \in \mathcal{X}$ be the state vector. Then, let $u = (\chi, \alpha) \in \mathcal{U} \coloneqq [0, 1] \times [0, \gamma^b]$ be the vector of controls. Then we can define the operator \begin{equation}
+The Hamilton-Jacobi-Bellmann equation (\ref{eq:hjb}) is solved for $F$ by adapting the method proposed in \cite{kushner_numerical_2001}. The idea is to discretise the state space of $T$ and $m$ and compute time dependent intervals $\Delta t(T, m)$. Then, constructing a Markov chain $\mathcal{M}$ over the discretised space, parametrised by some small step size $h$. Then we compute a discretised value function $F^h$ with the property that $F^h \to F$ as $h \to 0$.
+
+Given an $h$, construct a grid \begin{equation}
+    \Omega_h = \{0, h, 2h, \ldots, 1 - h, 1\}^2,
+\end{equation} over the unit cube. This grid covers a suitable subset of the state space \begin{equation}
+    \mathcal{X} \coloneqq [T^p, T^p + \Delta T] \times [m^p, m^p + \Delta m] 
+\end{equation} where $\Delta m$ is chosen such that $T^p + \Delta T$ is stable at $m^p + \Delta m$.
+
+Using the ansatz (\ref{eq:ansatz}) we can define a discrete value function $F^h_t$ over the grid such that $F^h_t \to F_t$ as $h \to 0$ over $\chi$, that is \begin{equation} \label{eq:recursive-markov-chain}
     \begin{split}
-        \mathcal{L}_t^u = \; &\frac{\mu(T, m)}{\epsilon} \frac{\partial}{\partial T} + \big(\varrho + \phi(\chi) - \delta_k - d(T) - A \beta(\alpha) \big) \frac{\partial}{\partial y} + \\ 
-        &(\gamma^b - \alpha)\frac{\partial}{\partial m} + \frac{(\sigma_T / \epsilon)^2}{2} \frac{\partial^2}{\partial T^2} + \frac{\sigma^2_k}{2} \frac{\partial^2}{\partial y^2} 
+        F_t^h(T_t, m_t) = \min_{\chi, \alpha} \; \Bigg( &\left(1 - e^{-\rho \Delta t}\right) \chi^{1 - \frac{1}{\psi}} + \\
+        &e^{-\rho \Delta t} \left(\delta_y(\chi) \; \mathbb{E}_{t, \mathcal{M}(\alpha)}  F_{t + \Delta t}^h(T_{t + \Delta t}, m_{t + \Delta t})\right)^{\frac{1 - \frac{1}{\psi}}{1 - \theta}} \Bigg)^{\frac{1 - \theta}{1 - \frac{1}{\psi}}}
     \end{split}
-\end{equation} such that the value functional at time $t$ satisfies \begin{equation} \label{eq:operator-definition}
-    -\partial_t V_t =  \sup_{u} \; \mathcal{L}_t^u V_t + f(\chi, y, V_t).
-\end{equation}
-
-We seek to define a Markov chain consistent with (\ref{eq:operator-definition}), over a finite grid in the unit cube \begin{equation}\Omega_h = \{0, h, 2h \ldots 1 - h, 1\}^3.\end{equation} First we define the state dynamics over the unit cube by letting $\tilde{X} = X / \lvert\mathcal{X}\rvert$ where \begin{equation}
-    \mathcal{X} = [T^p, T^p + \Delta T] \times [m_0, \overline{m}] \times [y_0, \overline{y}]
-\end{equation} and defining the dynamics \begin{equation}
-    d \tilde{X} = \omega(t, X, u) \; \dd{t} + \Sigma \; \dd{w}
-\end{equation} where \begin{equation}
-    \omega(t, X, u) = \begin{pmatrix}
-        \mu(T, m) / \epsilon \Delta T \\
-        (\gamma^{b} - \alpha) / (\overline{m} - m_0) \\
-        \big(\varrho + \phi(\chi) - \delta_k - d(T) - A \beta(\alpha) \big) / (\overline{y} - y_0)
-    \end{pmatrix} 
-\end{equation} and \begin{equation}
-    \Sigma = \begin{pmatrix}
-        \sigma_T / \epsilon \Delta T  & 0 & 0 \\
-        0 & 0 & 0 \\
-        0 & 0 & \sigma_K / (\overline{y} - y_0)\\
-    \end{pmatrix}.
-\end{equation}
-
-For a given state $X_i$ we can now define the transition probabilities. Let \begin{equation}
-    Q(X_i) = \left(\frac{\sigma_T}{\epsilon \Delta T}\right)^2 + \left(\frac{\sigma_K}{\overline{y} - y_0}\right)^2 + h \max_u \; \lvert \omega(t, X_i, u)  \rvert
-\end{equation} then \begin{equation}
-    p(X_i, X_i \pm h \Delta T) = \frac{\frac{\sigma^2_T}{2(\epsilon \Delta T)^2} + h \; \omega^{\pm}_T(t, X_i, u)}{Q(X_i)}.
-\end{equation}
-
-Finally, let \begin{equation}
-    V^h(t, X) = \sum_{\tilde{X}} p(X, \tilde{X}) V^h(\tilde{X}) + \frac{1}{1 - \theta} \left(e^{-\rho \Delta t} ((1 - \theta) V^h(t, X))^{\frac{1 - 1 / \psi}{1 - \theta}} + \Delta t C^{1 - \frac{1}{\psi}} \right)^{\frac{1 - \theta}{1 - 1 / \psi}}.
-\end{equation} \citep{kushner_numerical_2001} have shown that the transitional probabilities $p$ form a consistent Markov chain and that $V^h \to V$ as $h \to 0$.
-
-\subsection{Post-transition phase}
-
-We assume that at some point in the future $\tau \gg 0$, the abatement rate is equal to emission growth, $\gamma^b = \alpha$, and technological progress caps, $\varrho = 0$, such that the state variables evolve according to dynamics \begin{align}
-    \dd{m} &= 0, \\
-    \epsilon \; \dd{T} &= \mu(T, m) \; \dd{t} + \sigma_T \; \dd{w_1} \text{ and } \\
-    \d y &= \big( \phi(\chi) - \delta_k^p - d(T) \big) \; \dd{t} + \sigma_k \; d w_2.
-\end{align} I call this the \textit{post-transition} phase. We can then compute a steady state value function $V_t \eqqcolon \overline{V}$ for all $t \geq \tau$, which satisfies the Hamilton-Bellman-Jacobi equation \begin{equation}
-    0 = \overline{\mathcal{L}}^\chi \; \overline{V} + f(\chi, y, \overline{V}),
-\end{equation} where \begin{equation}
+\end{equation} where \begin{equation} 
     \begin{split}
-        \overline{\mathcal{L}}^\chi = \; &\frac{\mu(T, m)}{\epsilon} \frac{\partial}{\partial T} + \Big(\phi(\chi) - \delta_k - d(T) \Big) \frac{\partial}{\partial y} + \frac{(\sigma_T / \epsilon)^2}{2} \frac{\partial^2}{\partial T^2} + \frac{\sigma^2_k}{2} \frac{\partial^2}{\partial y^2}.
+        \delta_y(\chi) &\coloneqq \mathbb{E}_{t} \left[\left(\frac{Y_{t + \Delta t}}{Y_t}\right)^{1 - \theta}\right] \\
+        &= 1 + \Delta t (1 - \theta) \left(\varrho + \phi(\chi) - d(T_t) - \frac{\theta}{2} \sigma^2_k \right) + \mathbb{E}_{t} \big[ o(\Delta t^{\frac{3}{2}}) \big].
     \end{split}
-\end{equation}
+\end{equation} and $\mathbb{E}_{t, \mathcal{M}(\alpha)}$ is the expectation with respect to the Markov chain $\mathcal{M}(\alpha)$ over the grid. This can be constructed, given a step size $h$, as follows. Introduce the normalising factor \begin{equation}
+    Q_t(T, m, \alpha) \coloneqq \left(\frac{\sigma_T}{ \epsilon \Delta T}\right)^2 + \left(\frac{\sigma_m}{\Delta m}\right)^2 + h \left\lvert \frac{r(T) + g(m)}{\epsilon \Delta T} \right\rvert + h \left\lvert \frac{\gamma^b_t - \alpha}{\Delta m} \right\rvert.
+\end{equation} Then the probabilities of moving from a point $(T, m)$ of the grid to an adjacent point are given by \begin{align}
+    p(T \pm h \Delta T, m \mid T, m) &\propto \frac{1}{2} \left(\frac{\sigma_T}{ \epsilon \Delta T}\right)^2 + h \left(\frac{r(T) + g(m)}{\epsilon \Delta T}\right)^{\pm} \text{ and } \\
+    p(T, m \pm h \Delta m \mid T, m) &\propto \frac{1}{2} \left(\frac{\sigma_m}{\Delta m}\right)^2 + h \left(\frac{\gamma^b_t - \alpha}{\Delta m}\right)^{\pm}
+\end{align} where $(\cdot)^{+} \coloneqq \max\{\cdot, 0\}$ and $(\cdot)^{-} \coloneqq -\min\{\cdot, 0\}$. One can readily check that this is a well defined probability measure. Finally, the time step is given by \begin{equation}
+    \Delta t = h^2 / Q_t(T, m, \alpha),
+\end{equation} which satisfies $\Delta t \to 0$ as $h \to 0$.
 
+Then, as the aggregator used in (\ref{eq:recursive-markov-chain}) converges to $f$ (\ref{eq:aggregator}) \citep{epstein_substitution_1989}, the chain described here satisfies the convergence properties outlined in \cite{kushner_numerical_2001}, we have $F^h_t \to F_t$ as $h \to 0$.
 
-\subsection{Separable Value Function}
-
-The Markov Chain approximation yields the Bellman recurrence \begin{equation}
+The Markov chain defined above allows to derive $F^h_{t}(T_{t}, m_{t})$ from the subsequent $F^h_{t + \Delta t}(T_{t + \Delta t}, m_{t + \Delta t})$. This requires a terminal condition $\bar{F}^h(T_\tau, m_\tau) \coloneqq F^h_{\tau}(T_{\tau}, m_{\tau})$. To derive this, assume that at some point in a far future $\tau \gg 0$, the abatement is free and all emissions are abated, $\gamma^b = \alpha$, such that $\dd{m} = \sigma_m \dd{W}_m$. Then we construct an equivalent, control independent, Markov chain $\bar{\mathcal{M}}$ as above for \begin{equation}
     \begin{split}
-        (1 - \theta) \; V_{t}(T_t, m_t, Y_t) = \inf_{\chi, \alpha} \; \Bigg(&(1 - \beta_{\Delta t} )\frac{\Delta t}{1 + \rho \Delta t}  (\chi Y_t)^{1 - \frac{1}{\psi}} \\
-        + \; &\beta_{\Delta t}  \E_{\chi, \alpha} \left[(1 - \theta)V_{t + \Delta t}(T_{t + \Delta t}, m_{t + \Delta t}, Y_{t + \Delta t})  \right]^{\frac{1 - \frac{1}{\psi}}{1 - \theta}} \Bigg)^{\frac{1 - \theta}{1 - \frac{1}{\psi}}}.
-    \end{split}
-\end{equation} where $\beta_{\Delta t} \coloneqq e^{-\rho \Delta t}$% FIXME: Fix overfull
-
-Now suppose $(1 - \theta) \; V_{t}(T_t, m_t, Y_t) \equiv Y_t^{1 - \theta} F_t(T_t, m_t)$ for some function $F$. Then we can write \begin{equation}
-    \begin{split}
-        Y_t^{1 - \theta} F_t(T_t, m_t) &= \inf_{\chi, \alpha} \; \left((1 - \beta_{\Delta t}) \; \frac{\Delta t}{1 + \rho \Delta t}  (\chi Y_t)^{1 - \frac{1}{\psi}}
-        + \; \beta_{\Delta t}  \E_{\chi, \alpha} \left[Y_{t + \Delta t}^{1 - \theta} F_{t + \Delta t}(T_{t + \Delta t}, m_{t + \Delta t})\right]^{\frac{1 - \frac{1}{\psi}}{1 - \theta}} \right)^{\frac{1 - \theta}{1 - \frac{1}{\psi}}} \\
-        F_t(T_t, m_t) &= \inf_{\chi, \alpha} \; \left((1 - \beta_{\Delta t}) \; \frac{\Delta t}{1 + \rho \Delta t}  \chi^{1 - \frac{1}{\psi}}
-        + \; \beta_{\Delta t}  \E_{\chi, \alpha} \left[\left(\frac{Y_{t + \Delta t}}{Y_t}\right)^{1 - \theta} F_{t + \Delta t}(T_{t + \Delta t}, m_{t + \Delta t}) \right]^{\frac{1 - \frac{1}{\psi}}{1 - \theta}}  \right)^{\frac{1 - \theta}{1 - \frac{1}{\psi}}} \\
-        &= \inf_{\chi, \alpha} \; \left((1 - \beta_{\Delta t}) \; \frac{\Delta t}{1 + \rho \Delta t}  \chi^{1 - \frac{1}{\psi}}
-        + \; \beta_{\Delta t}  \left( \delta^y_{\chi, \alpha} \E_{\alpha}F_{t + \Delta t}(T_{t + \Delta t}, m_{t + \Delta t}) \right)^{\frac{1 - \frac{1}{\psi}}{1 - \theta}}\right)^{\frac{1 - \theta}{1 - \frac{1}{\psi}}} 
-    \end{split}
-\end{equation} where \begin{equation}
-    \delta^y_{\chi, \alpha} \coloneqq \E_{\chi, \alpha} \left[ \left(\frac{Y_{t + \Delta t}}{Y_t}\right)^{1 - \theta} \right].
-\end{equation} Write \begin{equation}
-    \frac{Y_{t + \Delta t}}{Y_t} = 1 + \mu_y(T_t, \chi_t, \alpha_t) \Delta t + \sigma_y \sqrt{\Delta t} z
-\end{equation} where $z\sim \mathcal{N}(0, 1)$. Then \begin{equation}
-    \begin{split}
-        \left(\frac{Y_{t + \Delta t}}{Y_t}\right)^{1 - \theta} = \; &1 + \left(1 - \theta\right) \mu_y(T_t, \chi_t, \alpha_t) \Delta t + \left(1 - \theta\right) \sigma_y \sqrt{\Delta t} z \\
-        - &\frac{\theta}{2} \left(1 - \theta\right) \sigma_y^2 z^2 \Delta t + o(\Delta t^{3 / 2}),
-    \end{split}
-\end{equation} hence \begin{equation}
-    \delta^y_{\chi, \alpha} = 1 + \Delta t \left(1 - \theta \right) \left(\mu_y(T_t, \chi_t, \alpha_t) - \frac{\theta}{2} \sigma_y^2 \right) + \E[o(\Delta t^{3 / 2})]
-\end{equation}
+        \bar{F}^h(T_t, m_t) = \min_{\chi} \; \Bigg( &\left(1 - e^{-\rho \Delta t}\right) \chi^{1 - \frac{1}{\psi}} + \\
+        &e^{-\rho \Delta t} \left(\delta_y(\chi) \; \mathbb{E}_{t, \bar{\mathcal{M}}} \bar{F}^h(T_{t + \Delta t}, m_{t + \Delta t})\right)^{\frac{1 - \frac{1}{\psi}}{1 - \theta}} \Bigg)^{\frac{1 - \theta}{1 - \frac{1}{\psi}}}.
+    \end{split}.
+\end{equation} This is now a fixed point equation for $\bar{F}$ which can be solved by value or policy function iteration.
 
 \end{document}
