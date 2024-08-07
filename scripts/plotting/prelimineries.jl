@@ -231,36 +231,80 @@ begin # Nullcline plot
     nullclinefig
 end
 
+
+# --- Business-as-usual dynamics
+begin # Simulate carbon concentrations
+    mbau(m, model, t) = γ(t, model.calibration)
+    σₘbau(m, model, t) = model.hogg.σₘ
+
+    mfn = SDEFunction(mbau, σₘbau);
+
+    mbauprob = SDEProblem(mfn, log(hogg.M₀), (0., 80.), first(models));
+    mensemble = EnsembleProblem(mbauprob);
+    mbausims = solve(mensemble; trajectories = 10_000)
+end
+
 begin # Growth of carbon concentration
+
+    # Growth rate figure    
     horizon = Int(last(yearlytime))
+    
+    gfig = @pgf GroupPlot({
+        group_style = { 
+            group_size = "1 by 2",
+            xticklabels_at = "edge bottom",
+            vertical_sep = "3pt"
+        },
+        xmin = 0., xmax = horizon
+    })
 
-    ytick = (0.6:0.2:1.4) ./ 100
+    growthticks = (0.6:0.2:1.4) ./ 100
 
-    gfig = @pgf Axis(
-        {
-            width = raw"0.5\textwidth",
-            height = raw"0.5\textwidth",
-            grid = "both",
-            ylabel = raw"Growth rate $\gamma_t^{b}$",
-            xlabel = raw"Year",
-            xtick = 0:20:horizon,
-            xmin = 0, xmax = horizon,
-            xticklabels = BASELINE_YEAR .+ (0:20:horizon),
-            ultra_thick, xticklabel_style = {rotate = 45},
-            ytick = ytick,
-            ymin = minimum(ytick) - 5e-4, ymax = maximum(ytick) + 5e-4,
-            yticklabels = [@sprintf("%.1f\\%%", 100 * x) for x in ytick]
-        }
-    )   
+    γfig = Axis()   
     
     gdata = [γ(t, calibration) for t ∈ yearlytime]
     coords = Coordinates(zip(yearlytime, gdata))
 
-    markers = @pgf Plot({ only_marks, mark_options = {fill = "black", scale = 1.5, draw_opacity = 0}, mark_repeat = 10}, coords) 
+    markers = @pgf Plot({ only_marks, mark_options = {fill = "black", scale = 1.5, draw_opacity = 0}, mark_repeat = 10}, coords)
 
     curve = @pgf Plot({color = "black", line_width="0.1cm"}, coords) 
 
-    push!(gfig, curve, markers)
+    @pgf push!(gfig, {
+        width = raw"0.7\textwidth",
+        height = raw"0.4\textwidth",
+        grid = "both",
+        ylabel = raw"Growth rate $\gamma_t^{b}$",
+        ytick = growthticks,
+        ymin = minimum(growthticks) - 5e-4, ymax = maximum(growthticks) + 5e-4,
+        yticklabels = [@sprintf("%.1f\\%%", 100 * x) for x in growthticks],
+        xtick = 0:10:horizon,
+    }, curve, markers)
+
+
+    mbaumedian = timeseries_point_median(msims, yearlytime)
+    mlower = timeseries_point_quantile(msims, 0.05, yearlytime)
+    mupper  = timeseries_point_quantile(msims, 0.95, yearlytime)
+
+    mfig = @pgf Axis()
+
+    medianplot = @pgf Plot({ line_width = LINE_WIDTH }, Coordinates(zip(yearlytime, exp.(mbaumedian))) )
+        
+    lowerplot = @pgf Plot({ line_width = LINE_WIDTH, dotted, opacity = 0.5 }, Coordinates(zip(yearlytime, exp.(mlower))) )
+    upperplot = @pgf Plot({ line_width = LINE_WIDTH, dotted, opacity = 0.5 }, Coordinates(zip(yearlytime, exp.(mupper))) )
+
+    push!(mfig, medianplot, lowerplot, upperplot)
+
+    @pgf push!(gfig, {
+        width = raw"0.7\textwidth",
+        height = raw"0.4\textwidth",
+        grid = "both",
+        ylabel = raw"Carbon concentration $M_t^{b}$",
+        xlabel = raw"Year",
+        xtick = 0:10:horizon,
+        xmin = 0, xmax = horizon,
+        xticklabels = BASELINE_YEAR .+ (0:10:horizon),
+        xticklabel_style = {rotate = 45},
+    }, mfig)
 
     if SAVEFIG
         PGFPlotsX.save(joinpath(PLOTPATH, "growthmfig.tikz"), gfig; include_preamble = true) 
@@ -269,7 +313,7 @@ begin # Growth of carbon concentration
     gfig
 end
 
-# --- Business-as-usual dynamics
+
 begin # Density plots
     # ytick = range(2.505674517612567, 2.509962798461946; length = 10) # A bit ugly but I do not know how to remove the ticks
 
@@ -336,9 +380,6 @@ end
 
 bautime = 0:80
 
-begin # Single simulation
-    
-end
 
 begin # Side by side BAU Δλ = 0.8
     baumodels = models
