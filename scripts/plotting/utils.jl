@@ -1,6 +1,6 @@
 function stringifydeviation(ΔT; digits = 2)
     fsign = ΔT > 0 ? "+" : ""
-    fmt = Printf.Format("$fsign%0.$(digits)f")
+    fmt = Printf.Format("$fsign%0.$(digits)f°")
     return Printf.format(fmt, ΔT)
 end
 

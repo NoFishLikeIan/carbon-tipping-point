@@ -269,13 +269,16 @@ begin # Growth of carbon concentration
 
     curve = @pgf Plot({color = "black", line_width="0.1cm"}, coords) 
 
+    ymin, ymax = extrema(growthticks)
+
     @pgf push!(gfig, {
-        width = raw"0.7\textwidth",
-        height = raw"0.4\textwidth",
+        width = raw"0.9\textwidth",
+        height = raw"0.6\textwidth",
         grid = "both",
         ylabel = raw"Growth rate $\gamma_t^{b}$",
         ytick = growthticks,
-        ymin = minimum(growthticks) - 5e-4, ymax = maximum(growthticks) + 5e-4,
+        ymin = ymin - 5e-4, 
+        ymax = ymax + 5e-4,
         yticklabels = [@sprintf("%.1f\\%%", 100 * x) for x in growthticks],
         xtick = 0:10:horizon,
     }, curve, markers)
@@ -295,8 +298,8 @@ begin # Growth of carbon concentration
     push!(mfig, medianplot, lowerplot, upperplot)
 
     @pgf push!(gfig, {
-        width = raw"0.7\textwidth",
-        height = raw"0.4\textwidth",
+        width = raw"0.9\textwidth",
+        height = raw"0.6\textwidth",
         grid = "both",
         ylabel = raw"Carbon concentration $M_t^{b}$",
         xlabel = raw"Year",
@@ -390,7 +393,7 @@ begin # Side by side BAU Δλ = 0.8
         {
             group_style = { 
                 group_size = "1 by $(length(baumodels))", 
-                vertical_sep="1pt",
+                w="1pt",
                 xticklabels_at="edge bottom"
             }, 
             width = raw"\textwidth",

@@ -16,7 +16,7 @@ SMOOTHING = getnumber(env, "SMOOTHING", 1 / 2)
 OVERWRITE && @warn "Running in overwrite mode!"
 
 # Construct model
-thresholds = [2.];
+thresholds = [1.5, 1.8, 2.5, 3., 3.5];
 preferences = EpsteinZin();
 calibration = load_object(joinpath(DATAPATH, "calibration.jld2"));
 economy = Economy()
