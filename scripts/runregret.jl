@@ -1,6 +1,6 @@
 include("utils/saving.jl")
-include("terminal.jl")
-include("backward.jl")
+include("markov/terminal.jl")
+include("markov/backward.jl")
 
 N = getnumber(env, "N", 51; type = Int)
 

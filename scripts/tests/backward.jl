@@ -5,8 +5,8 @@ using JLD2
 using Plots
 
 includet("../utils/saving.jl")
-includet("../terminal.jl")
-includet("../backward.jl")
+includet("../markov/terminal.jl")
+includet("../markov/backward.jl")
 
 println("Startup with $(nprocs()) processes...")
 
