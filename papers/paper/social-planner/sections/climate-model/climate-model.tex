@@ -22,7 +22,7 @@ Abatement efforts $\alpha_t$ lower the growth rate of carbon concentration $M_t$
     \dd{m}_t = \big(\gamma^b_t - \alpha_t \big) \dd{t} + \sigma_m \dd{W}_{m, t}.
 \end{equation} By assumption, I assume that negative emissions are not attainable, namely \begin{equation}
     \alpha_t \leq \gamma^b_t + \delta_m(N_t).
-\end{equation} This assumption is tested in Appendix (\textbf{?}). \iffalse TODO: talk about this assumption further. \fi Implementing no abatement policy $\alpha_t = 0$ corresponds to a business as usual scenario $M_t \equiv M^b_t$, while implementing a full abatement policy $\alpha_t = \gamma^b_t$ stabilises carbon concentration. Any abatement policy $\alpha_t$ can be implicitly linked back to the corresponding level of emissions by introducing an emission reduction rate $\varepsilon(\alpha_t)$, which keeps tracks of what percentage of emission has been abated \begin{equation}
+\end{equation} This assumption is tested in Appendix (\textbf{?}). \iffalse TODO: talk about this assumption further. \fi Implementing no abatement policy $\alpha_t = 0$ corresponds to a business as usual scenario $M_t \equiv M^b_t$, while implementing a full abatement policy $\alpha_t = \gamma^b_t$ stabilises carbon concentration. Any abatement policy $\alpha_t$ can be implicitly linked back to the corresponding level of emissions by introducing an emission reduction rate $\varepsilon(\alpha_t)$, which keeps tracks of what percentage of emission has been abated \begin{equation} \label{eq:emissivity}
     E_t = \big(1 - \varepsilon(\alpha_t)\big) E^b_t.
 \end{equation}
 
@@ -45,7 +45,7 @@ Under specification (\ref{eq:albedo-specification}), the transition function $\l
     \input{\plotpath/albedo.tikz}
     \caption{Coefficient $\lambda(T)$ for different threshold temperatures $T^c \in \{1.5, 3.5\}$}
     \label{fig:albedo_coefficient}
-\end{figure} Despite being a highly stylised average model for a complex and spatially heterogeneous process, $\lambda$ captures the core mechanism behind feedback processes in the temperature dynamics. Putting these processes together we can write the two determinants of temperature dynamics: radiative forcing, which only depends on temperature, \begin{equation}
+\end{figure} Despite being a highly stylised average model for a complex and spatially heterogeneous process, $\lambda$ captures the core mechanism behind feedback processes in the temperature dynamics. Putting these processes together we can write the two determinants of temperature dynamics: radiative forcing, which only depends on temperature, \begin{equation} \label{eq:forcing}
     r(T_t) \coloneqq S_0 \left(1 - \lambda(T_t)\right) - \eta\sigma T_t^4
 \end{equation} and the greenhouse gasses effects, which only depends on the log deviation of atmospheric carbon concentration with respect to its pre-industrial levels, \begin{equation}
     g(m_t) \coloneqq G_0 + G_1 (m_t - m^p).
@@ -69,6 +69,7 @@ Figure \ref{fig:nullclines} displays how this mechanism impacts the dynamics of 
     \label{fig:nullclines}
 \end{figure}
 
+% TODO: Talk about the limitations of stochastic tipping
 \iffalse
 \subsubsection{Critical Slowdown and Early Warning Signals}
 

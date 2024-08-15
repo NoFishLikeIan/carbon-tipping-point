@@ -2,7 +2,7 @@
 \begin{document}
 
 This section introduces the objective of the social planner and the resulting maximisation problem. Societal utility at time $t$ given a state $X_t \coloneqq (T_t, M_t, N_t, Y_t)$ is recursively defined as \begin{equation} \label{eq:social-objective}
-    V_t(X_t) = \sup_{\chi, \alpha} \mathbb{E} 
+    V_t(X_t) = \sup_{\chi, \alpha} \mathbb{E}_t 
     \int_{t}^{\infty} f(\chi_s(X_s) Y_s, V_s(X_s)) \dd{s}
 \end{equation} where $\chi$ is chosen from the set of continuous functions from the state space to $[0, 1]$, $\alpha$ from the set of continuos functions from the state space to $[0, \gamma^t_b + \delta_m(N_t)]$, and $f$ is an Epstein-Zin aggregator \begin{equation} \label{eq:aggregator}
     f(c, u) \coloneqq \frac{\rho}{1 - 1 / \psi} (1 - \theta) u  \left( \left(\frac{c}{((1 - \theta) u)^{\frac{1}{1 - \theta}}}\right)^{1 - 1 / \psi} - 1 \right).

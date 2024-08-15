@@ -65,6 +65,20 @@ end
     
         return F′, Δt
     end
+
+    function adjpolicy(idx, policy)
+        uᵢ = policy[idx]
+
+        L, R = extrema(CartesianIndices(policy))
+        # -- Temperature
+        uᵢT₊ = policy[min(idx + I[1], R)]
+        uᵢT₋ = policy[max(idx - I[1], L)]
+        # -- Carbon concentration
+        uᵢm₊ = policy[min(idx + I[2], R)]
+        uᵢm₋ = policy[max(idx - I[2], L)]
+
+        return (uᵢT₊ + uᵢT₋ + uᵢm₊ + uᵢm₋ + uᵢ) / 5.
+    end
 end
 
 @everywhere begin # Costs
@@ -106,10 +120,10 @@ function backwardstep!(Δts, F, policy, cluster, model, G; allownegative = false
         
         polₜ = Policy(pol[1], pol[2])
         timestep = last(markovstep(t, idx, F, polₜ, model, G))
-
         
-        w = inv(1 + s * timestep) # Policy smoothing
-        policy[idx] = policy[idx] * (1 - w) + polₜ * w
+        w = inv(1 + s * timestep) # Policy smoothing over time
+
+        policy[idx] = adjpolicy(idx, policy) * (1 - w) + polₜ * w
         F[idx] = obj
         Δts[i] = timestep
     end
