@@ -2,18 +2,18 @@ struct Calibration
     years::Vector{Int} # Years of the ipcc data
     emissions::Vector{Float64} # Emissions in gton / year
     γparameters::NTuple{3, Float64} # Paramters for γ
+    r::Float64 # Decay rate for t > t₁
 
     # Domain 
     tspan::NTuple{2, Float64} # Span of the IPCC data wrt to 2020
-    r::Float64 # Decay rate for t > t₁
 end
 
-function γpol(t, calibration::Calibration)
-    tmin = first(calibration.tspan)
-    p = calibration.γparameters
-    p[1] + p[2] * (t - tmin) + p[3] * (t - tmin)^2
+struct RegionalCalibration
+    calibration::Calibration
+    hiweights::Vector{Float64} # High income weighting
 end
-"Parametric form of γ: (t₀, ∞) → [0, 1]"
+
+"Growth rate of carbon concentration in BAU"
 function γ(t, calibration::Calibration)
     tmin, tmax = calibration.tspan
     p = calibration.γparameters
@@ -25,20 +25,31 @@ function γ(t, calibration::Calibration)
     return pol * decay
 end
 
+"Growth rate of carbon concentration in BAU, regionally broke up"
+function γ(t, rc::RegionalCalibration)
+    γₜ = γ(t, rc.calibration)
+    hw = weight(t, rc)
+
+    return γₜ * hw, γₜ * (1 - hw)
+end
+
+
 "Linear interpolation of emissions in `calibration`"
-Eᵇ(t, calibration::Calibration) = Eᵇ(t, calibration.tspan, calibration.emissions)
-function Eᵇ(t, tspan, emissions)
+Eᵇ(t, calibration::Calibration) = interpolateovert(t, calibration.tspan, calibration.emissions)
+weight(t, rc::RegionalCalibration) = interpolateovert(t, rc.calibration.tspan, rc.hiweights)
+
+function interpolateovert(t, tspan, v)
 
     tmin, tmax = tspan
     
-    if t ≤ tmin return first(emissions) end
-    if t ≥ tmax return last(emissions) end
+    if t ≤ tmin return first(v) end
+    if t ≥ tmax return last(v) end
 
-    partition = range(tmin, tmax; length = length(emissions))
+    partition = range(tmin, tmax; length = length(v))
     udx = findfirst(tᵢ -> tᵢ > t, partition)
     ldx = udx - 1
 
     α = (t - partition[ldx]) / step(partition)
 
-    return (1 - α) * emissions[ldx] + α * emissions[udx]
+    return (1 - α) * v[ldx] + α * v[udx]
 end

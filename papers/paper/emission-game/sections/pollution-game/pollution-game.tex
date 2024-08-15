@@ -6,7 +6,17 @@ There are two world regions high ($h$) and low ($l$) income countries. The tempe
 \end{equation} where $\gamma^b_i$ is the BAU growth rate and $\alpha_i$ is the abatement rate. The two regions' output evolves as \begin{equation}
     \dd{y}_i = \Big( \varrho + \phi(\chi) - \delta_k - A \beta_i(\varepsilon_i) - d(T) \Big) \dd{t} + \sigma_{k, i} \dd{W}_{k, i}.
 \end{equation} Assume the two countries differ only in their abatement cost functions $\beta_i$. The region $i \in \{h, l\}$ objective is given by \begin{equation}
-    U_i = \mathbb{E} \int_{t}^{\infty} u(C_{i, t}) \; e^{-\rho t} \dd{t}.
+    V_{i, t} = \mathbb{E} \int_{t}^{\infty} f(C_{i, s}, V_{i, s}) \dd{s}.
+\end{equation} We assume a countries abatement strategy to be given by \begin{equation}
+    \alpha_i = \varphi(t, T, m, \alpha_j).
+\end{equation}
+
+The HJB for player $i \in \{l, h\} $is then \begin{equation} \label{eq:hjb}
+    \begin{split}
+        -\partial_t V_i = \sup_{\chi_i, \alpha_i} \; &f(\chi_i Y_i, V_i) + \partial_m V_i \; (\gamma^b_t - \alpha_i - \alpha_j) + \partial_m^2 V_i \; \frac{\sigma_m^2}{2}  \\ 
+        + \; &\partial_Y V_i (\varrho_i + \phi_i(\chi_i) - d_i(T) - \beta_{i, t}(\varepsilon_i(\alpha_i))) +  \partial_Y^2 V_i \; \frac{\sigma_k^2}{2} \\
+        + \; &\partial_T V_i \; \frac{r(T) + g(m)}{\epsilon} + \partial_T^2 V_i \; \frac{(\sigma_T / \epsilon)^2}{2}. 
+    \end{split}
 \end{equation}
 
 \subsection{Markov Chain Approximation}

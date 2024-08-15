@@ -1,7 +1,8 @@
 module Model
 
 # Models
-export Economy, Hogg, Albedo, Calibration, Jump
+export Economy, Hogg, Albedo, Jump
+export Calibration, RegionalCalibration
 export Damages, GrowthDamages, LevelDamages
 export equilibriumHogg
 export intensity, increase, d

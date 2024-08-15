@@ -26,12 +26,12 @@ I assume that the amount of carbon sinks present in the atmosphere is a constant
     \label{fig:decaypath}
 \end{figure}
 
-\subsection{Hamilton-Jacobi-Bellmann equation} 
+\subsection{Hamilton-Jacobi-Bellman equation} 
 
-Using the assumption from Appendix \ref{appendix:assumptions}, the value function $V$ at time $t$ depends only on temperature $T_t$, log-carbon concentration $m_t$ and output $Y_t$. This satisfies the Hamilton-Jacobi-Bellmann equation \begin{equation} \label{eq:hjb}
+Using the assumption from Appendix \ref{appendix:assumptions}, the value function $V$ at time $t$ depends only on temperature $T_t$, log-carbon concentration $m_t$ and output $Y_t$. This satisfies the Hamilton-Jacobi-Bellman equation \begin{equation} \label{eq:hjb}
     \begin{split}
         -\partial_t V = \sup_{\chi, \alpha} \; &f(\chi Y, V) + \partial_m V \; (\gamma^b_t - \alpha) + \partial_m^2 V \; \frac{\sigma_m^2}{2}  \\ 
-        + \; &\partial_Y V (\varrho + \phi(\chi) - d(T) - \beta_t(\varepsilon(\alpha))) +  \partial_k^2 V \; \frac{\sigma_k^2}{2} \\
+        + \; &\partial_Y V (\varrho + \phi(\chi) - d(T) - \beta_t(\varepsilon(\alpha))) +  \partial_k^2 V \; \frac{\sigma_Y^2}{2} \\
         + \; &\partial_T V \; \frac{r(T) + g(m)}{\epsilon} + \partial_T^2 V \; \frac{(\sigma_T / \epsilon)^2}{2}. 
     \end{split}
 \end{equation}
@@ -42,7 +42,7 @@ It is easy to check that the ansatz \begin{equation} \label{eq:ansatz}
 
 \subsection{Approximating Markov Chain} \label{appendix:approximating-markov-chain}
 
-The Hamilton-Jacobi-Bellmann equation (\ref{eq:hjb}) is solved for $F$ by adapting the method proposed in \cite{kushner_numerical_2001}. The idea is to discretise the state space of $T$ and $m$ and compute time dependent intervals $\Delta t(T, m)$. Then, constructing a Markov chain $\mathcal{M}$ over the discretised space, parametrised by some small step size $h$. Then we compute a discretised value function $F^h$ with the property that $F^h \to F$ as $h \to 0$.
+The Hamilton-Jacobi-Bellman equation (\ref{eq:hjb}) is solved for $F$ by adapting the method proposed in \cite{kushner_numerical_2001}. The idea is to discretise the state space of $T$ and $m$ and compute time dependent intervals $\Delta t(T, m)$. Then, constructing a Markov chain $\mathcal{M}$ over the discretised space, parametrised by some small step size $h$. Then we compute a discretised value function $F^h$ with the property that $F^h \to F$ as $h \to 0$.
 
 Given an $h$, construct a grid \begin{equation}
     \Omega_h = \{0, h, 2h, \ldots, 1 - h, 1\}^2,
