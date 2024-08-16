@@ -101,7 +101,7 @@ begin # Load IPCC data
 end;
 
 # --- Optimal emissions 
-results = loadtotal(models, Gs; datapath = DATAPATH);
+results = loadplanner(models, Gs; datapath = DATAPATH);
 itps = buildinterpolations(results, Gs);
 modelmap = Dict(models .=> itps);
 

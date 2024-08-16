@@ -94,7 +94,7 @@ end
     end
 end
 
-function backwardstep!(Δts, F, policy, cluster, model, G; allownegative = false, s = 1e-2)
+function backwardstep!(Δts, F, policy, cluster, model::AbstractModel, G; allownegative = false, s = 1e-2)
     indices = CartesianIndices(G)
 
     @sync @distributed for (i, δt) in cluster
@@ -130,7 +130,7 @@ function backwardstep!(Δts, F, policy, cluster, model, G; allownegative = false
 end
 
 "Backward simulates from F̄ down to F₀, using the albedo model. It assumes that the passed F ≡ F̄"
-function backwardsimulation!(F, policy, model, G; verbose = false, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = last(model.calibration.tspan), allownegative = false, stepkwargs...)
+function backwardsimulation!(F, policy, model::AbstractModel, G; verbose = false, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = last(model.calibration.tspan), allownegative = false, stepkwargs...)
     verbose && println("Starting backward simulation...")
      
     savecache = !isnothing(cachepath)
@@ -143,7 +143,7 @@ function backwardsimulation!(F, policy, model, G; verbose = false, cachepath = n
             else 
                 verbose && @warn "File $cachepath already exists. If you want to overwrite it pass overwrite = true. Will copy the results into `F` and `policy`.\n"
 
-                _, Fcache, policycache = loadtotal(model, G; allownegative)
+                _, Fcache, policycache = loadplanner(model, G; allownegative)
 
                 F .= Fcache[:, :, 1]
                 policy .= policycache[:, :, 1]
@@ -188,11 +188,11 @@ function backwardsimulation!(F, policy, model, G; verbose = false, cachepath = n
     return F, policy
 end
 
-function computebackward(model, G; kwargs...)
+function computebackward(model::AbstractModel, G; kwargs...)
     F̄, terminalpolicy = loadterminal(model, G)
     computebackward(F̄, terminalpolicy, model, G; kwargs...)
 end
-function computebackward(F̄, terminalpolicy, model, G; verbose = false, withsave = true, datapath = "data", allownegative = false, iterkwargs...) 
+function computebackward(F̄, terminalpolicy, model::AbstractModel, G; verbose = false, withsave = true, datapath = "data", allownegative = false, iterkwargs...) 
     F = SharedMatrix(F̄);
     policy = SharedMatrix([Policy(χ, 0.) for χ ∈ terminalpolicy])
 

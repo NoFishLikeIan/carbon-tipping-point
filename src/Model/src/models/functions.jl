@@ -1,10 +1,8 @@
 # TODO: break up these functions
-AbstractModel{D, P} = Union{TippingModel{D, P}, JumpModel{D, P}} where {D <: Damages, P <: Preferences}
-
-μ(T, m, model::TippingModel) = μ(T, m, model.hogg, model.albedo)
-μ(T, m, model::JumpModel) = μ(T, m, model.hogg)
-mstable(T, model::TippingModel) = mstable(T, model.hogg, model.albedo)
-mstable(T, model::JumpModel) = mstable(T, model.hogg)
+μ(T, m, model::AbstractTippingModel) = μ(T, m, model.hogg, model.albedo)
+μ(T, m, model::AbstractJumpModel) = μ(T, m, model.hogg)
+mstable(T, model::AbstractTippingModel) = mstable(T, model.hogg, model.albedo)
+mstable(T, model::AbstractJumpModel) = mstable(T, model.hogg)
 
 "Drift of log output y in the terminal state, t ≥ τ"
 function bterminal(χ, model::AbstractModel{LevelDamages, P}) where P <: Preferences

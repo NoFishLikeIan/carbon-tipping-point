@@ -1,4 +1,4 @@
-using Model: TippingModel, LevelDamages, EpsteinZin, GrowthDamages, JumpModel, AbstractModel
+using Model
 using Grid: Policy
 using Printf: @sprintf
 using UnPack: @unpack
@@ -7,12 +7,17 @@ using FileIO: load
 
 
 const SIMPATHS = Dict(
-    TippingModel{LevelDamages, EpsteinZin}  => "simulation/albedo/level",
-    TippingModel{GrowthDamages, EpsteinZin} => "simulation/albedo/growth",
-    JumpModel{LevelDamages, EpsteinZin}  => "simulation/jump/level",
-    JumpModel{GrowthDamages, EpsteinZin}  => "simulation/jump/growth")
+    TippingModel{LevelDamages, EpsteinZin}  => "albedo/level",
+    TippingGameModel{LevelDamages, EpsteinZin}  => "albedo/level",
+    TippingModel{GrowthDamages, EpsteinZin} => "albedo/growth",
+    TippingGameModel{GrowthDamages, EpsteinZin} => "albedo/growth",
+    JumpModel{LevelDamages, EpsteinZin}  => "jump/level",
+    JumpGameModel{LevelDamages, EpsteinZin}  => "jump/level",
+    JumpModel{GrowthDamages, EpsteinZin}  => "jump/growth",
+    JumpGameModel{GrowthDamages, EpsteinZin}  => "jump/growth"
+)
 
-function makefilename(model::TippingModel{LevelDamages, EpsteinZin}, G)
+function makefilename(model::AbstractTippingModel{LevelDamages, EpsteinZin}, G)
     @unpack ρ, θ, ψ = model.preferences
     @unpack ωᵣ = model.economy
     @unpack σₜ, σₘ = model.hogg
@@ -26,7 +31,7 @@ function makefilename(model::TippingModel{LevelDamages, EpsteinZin}, G)
     return "$(replace(filename, "." => ",")).jld2"
 end
 
-function makefilename(model::TippingModel{GrowthDamages, EpsteinZin}, G)
+function makefilename(model::AbstractTippingModel{GrowthDamages, EpsteinZin}, G)
     @unpack ρ, θ, ψ = model.preferences
     @unpack ωᵣ = model.economy
     @unpack σₜ, σₘ = model.hogg
@@ -40,7 +45,7 @@ function makefilename(model::TippingModel{GrowthDamages, EpsteinZin}, G)
     return "$(replace(filename, "." => ",")).jld2"
 end
 
-function makefilename(model::JumpModel{GrowthDamages, EpsteinZin}, G)
+function makefilename(model::AbstractJumpModel{GrowthDamages, EpsteinZin}, G)
     @unpack ρ, θ, ψ = model.preferences
     @unpack ωᵣ = model.economy
     @unpack σₜ, σₘ = model.hogg
@@ -53,7 +58,7 @@ function makefilename(model::JumpModel{GrowthDamages, EpsteinZin}, G)
     return "$(replace(filename, "." => ",")).jld2"
 end
 
-function makefilename(model::JumpModel{LevelDamages, EpsteinZin}, G)
+function makefilename(model::AbstractJumpModel{LevelDamages, EpsteinZin}, G)
     @unpack ρ, θ, ψ = model.preferences
     @unpack ωᵣ = model.economy
     @unpack σₜ, σₘ = model.hogg
@@ -72,14 +77,14 @@ function loadterminal(model::AbstractModel, G; kwargs...)
     dropdims.(loadterminal([model], G; kwargs...); dims = 3)
 end
 
-function loadterminal(models::AbstractVector{<:AbstractModel}, G; datapath = "data")
+function loadterminal(models::AbstractVector{<:AbstractModel}, G; datapath = "data/simulation")
     F̄ = Array{Float64}(undef, size(G, 1), size(G, 2), length(models))
     policy = similar(F̄)
 
     for (k, model) ∈ enumerate(models)
         folder = SIMPATHS[typeof(model)]
         filename = makefilename(model, G)
-        savepath = joinpath(datapath, folder, "terminal", filename)
+        savepath = joinpath(datapath, "terminal", folder, filename)
         F̄[:, :, k] .= load(savepath, "F̄")
         policy[:, :, k] .= load(savepath, "policy")
     end
@@ -87,10 +92,10 @@ function loadterminal(models::AbstractVector{<:AbstractModel}, G; datapath = "da
     return F̄, policy
 end
 
-function loadtotal(model::AbstractModel, G; kwargs...)     
-    first(loadtotal([model], [G]; kwargs...))
+function loadplanner(model::AbstractModel, G; kwargs...)     
+    first(loadplanner([model], [G]; kwargs...))
 end
-function loadtotal(models::AbstractVector{<:AbstractModel}, Gs; datapath = "data", allownegative = false)
+function loadplanner(models::AbstractVector{<:AbstractModel}, Gs; datapath = "data/simulation", allownegative = false)
     output = Result[]
     
     for (k, model) ∈ enumerate(models)
@@ -98,10 +103,11 @@ function loadtotal(models::AbstractVector{<:AbstractModel}, Gs; datapath = "data
 
         folder = SIMPATHS[typeof(model)]
         controltype = ifelse(allownegative, "allownegative", "nonnegative")
-        cachefolder = joinpath(datapath, folder, controltype, "cache")
+        cachefolder = joinpath(datapath, "planner", folder, controltype, "cache")
         filename = makefilename(model, G)
+        savepath = joinpath(cachefolder, filename)
 
-        cachefile = jldopen(joinpath(cachefolder, filename), "r")
+        cachefile = jldopen(savepath, "r")
 
         timekeys = keys(cachefile)
         timesteps = round.(parse.(Float64, timekeys), digits = 4)
