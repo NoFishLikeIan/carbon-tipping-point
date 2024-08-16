@@ -14,9 +14,10 @@ export Preferences, EpsteinZin, LogSeparable, CRRA, LogUtility
 export f, g
 export TippingModel, JumpModel, AbstractPlannerModel
 export TippingGameModel, JumpGameModel, AbstractGameModel
-export AbstractJumpModel, AbstractGameModel
+export AbstractJumpModel, AbstractTippingModel
 export AbstractModel
 export constructdefaultgrid
+export regionaleconomydefaults
 
 # Packages
 using Grid: Point, Policy, Drift, RegularGrid, gss
@@ -31,45 +32,45 @@ include("models/preferences.jl")
 
 struct TippingModel{D <: Damages, P <: Preferences}
     albedo::Albedo
+    hogg::Hogg
 
     preferences::P
     damages::D
 
     economy::Economy
-    hogg::Hogg
     calibration::Calibration
 end
 
 struct TippingGameModel{D <: Damages, P <: Preferences}
     albedo::Albedo
-
-    preferences::P
-    damages::D
-
-    economy::Economy
     hogg::Hogg
+
+    preferences::NTuple{2, P}
+    damages::NTuple{2, D}
+
+    economy::NTuple{2, Economy}
     regionalcalibration::RegionalCalibration
 end
 
 struct JumpModel{D <: Damages, P <: Preferences}
     jump::Jump
+    hogg::Hogg
 
     preferences::P
     damages::D
 
     economy::Economy
-    hogg::Hogg
     calibration::Calibration
 end
 
 struct JumpGameModel{D <: Damages, P <: Preferences}
+    albedo::Albedo
     jump::Jump
 
-    preferences::P
-    damages::D
+    preferences::NTuple{2, P}
+    damages::NTuple{2, D}
 
-    economy::Economy
-    hogg::Hogg
+    economy::NTuple{2, Economy}
     regionalcalibration::RegionalCalibration
 end
 

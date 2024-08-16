@@ -18,7 +18,7 @@ using Model, Grid
 end
 
 @everywhere begin # Markov chain
-    function driftstep(t, idx, F, u::Policy, model::AbstractModel, G)
+    function driftstep(t, idx, F, u::Policy, model::AbstractGameModel, G, α)
         L, R = extrema(CartesianIndices(F))
         σₜ² = (model.hogg.σₜ / (model.hogg.ϵ * G.Δ.T))^2
         σₘ² = (model.hogg.σₘ / G.Δ.m)^2
@@ -94,7 +94,7 @@ end
     end
 end
 
-function backwardstep!(Δts, F, policy, cluster, model, G; allownegative = false, s = 1e-2)
+function backwardstep!(Δts, F::AbstractArray{Float64, 4}, policy::AbstractArray{Policy, 4}, cluster, model::AbstractGameModel, G; allownegative = false, s = 1e-2)
     indices = CartesianIndices(G)
 
     @sync @distributed for (i, δt) in cluster
@@ -102,8 +102,13 @@ function backwardstep!(Δts, F, policy, cluster, model, G; allownegative = false
         Xᵢ = G.X[idx]
 
         t = model.economy.τ - δt
-        ᾱ = allownegative ? 1. : 
-            γ(t, model.calibration) + δₘ(exp(Xᵢ.m), model.hogg)
+        γₕ, γₗ = γ(t, model.regionalcalibration)
+
+        ᾱₕ, ᾱₗ = allownegative ? (1., 1.) :
+            (γₕ, γₗ) .+ δₘ(exp(Xᵢ.m), model.hogg)
+
+        Aₕ = ᾱₕ * range(0, 1; length = size(F, 3))
+        Aₗ = 
 
         objective = @closure (x, grad) -> begin
             u = Policy(x[1], x[2]) 
@@ -143,7 +148,7 @@ function backwardsimulation!(F, policy, model, G; verbose = false, cachepath = n
             else 
                 verbose && @warn "File $cachepath already exists. If you want to overwrite it pass overwrite = true. Will copy the results into `F` and `policy`.\n"
 
-                _, Fcache, policycache = loadplanner(model, G; allownegative)
+                _, Fcache, policycache = loadtotal(model, G; allownegative)
 
                 F .= Fcache[:, :, 1]
                 policy .= policycache[:, :, 1]

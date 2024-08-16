@@ -32,7 +32,7 @@ for d in damages
         VERBOSE && println("Solving model with Tᶜ = $Tᶜ...")
 
         albedo = Albedo(Tᶜ = Tᶜ)
-        model = TippingModel(albedo, preferences, d, economy, hogg, calibration)
+        model = TippingModel(albedo, hogg, preferences, d, economy, calibration)
 
         G = constructdefaultgrid(N, model)
 

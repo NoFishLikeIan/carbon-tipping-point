@@ -24,7 +24,7 @@ negativeemissions = [false]
 for d in damages
     VERBOSE && println("\nSolving for damages = $d...")
     
-    jumpmodel = JumpModel(Jump(), preferences, d, economy, hogg, calibration)
+    jumpmodel = JumpModel(Jump(), hogg, preferences, d, economy, calibration)
 
     G = constructdefaultgrid(N, jumpmodel)
     VERBOSE && println("\nSolving jump model...")

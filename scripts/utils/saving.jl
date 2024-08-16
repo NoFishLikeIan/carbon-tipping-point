@@ -7,14 +7,15 @@ using FileIO: load
 
 
 const SIMPATHS = Dict(
-    TippingModel{LevelDamages, EpsteinZin}  => "albedo/level",
-    TippingGameModel{LevelDamages, EpsteinZin}  => "albedo/level",
-    TippingModel{GrowthDamages, EpsteinZin} => "albedo/growth",
-    TippingGameModel{GrowthDamages, EpsteinZin} => "albedo/growth",
-    JumpModel{LevelDamages, EpsteinZin}  => "jump/level",
-    JumpGameModel{LevelDamages, EpsteinZin}  => "jump/level",
-    JumpModel{GrowthDamages, EpsteinZin}  => "jump/growth",
-    JumpGameModel{GrowthDamages, EpsteinZin}  => "jump/growth"
+    TippingModel{LevelDamages, EpsteinZin}  => "planner/albedo/level",
+    TippingModel{GrowthDamages, EpsteinZin} => "planner/albedo/growth",
+    JumpModel{LevelDamages, EpsteinZin}  => "planner/jump/level",
+    JumpModel{GrowthDamages, EpsteinZin}  => "planner/jump/growth",
+
+    TippingGameModel{LevelDamages, EpsteinZin}  => "game/albedo/level",
+    TippingGameModel{GrowthDamages, EpsteinZin} => "game/albedo/growth",
+    JumpGameModel{LevelDamages, EpsteinZin}  => "game/jump/level",
+    JumpGameModel{GrowthDamages, EpsteinZin}  => "game/jump/growth"
 )
 
 function makefilename(model::AbstractTippingModel{LevelDamages, EpsteinZin}, G)
@@ -84,7 +85,7 @@ function loadterminal(models::AbstractVector{<:AbstractModel}, G; datapath = "da
     for (k, model) ∈ enumerate(models)
         folder = SIMPATHS[typeof(model)]
         filename = makefilename(model, G)
-        savepath = joinpath(datapath, "terminal", folder, filename)
+        savepath = joinpath(datapath, folder, "terminal", filename)
         F̄[:, :, k] .= load(savepath, "F̄")
         policy[:, :, k] .= load(savepath, "policy")
     end
@@ -92,10 +93,10 @@ function loadterminal(models::AbstractVector{<:AbstractModel}, G; datapath = "da
     return F̄, policy
 end
 
-function loadplanner(model::AbstractModel, G; kwargs...)     
-    first(loadplanner([model], [G]; kwargs...))
+function loadtotal(model::AbstractModel, G; kwargs...)     
+    first(loadtotal([model], [G]; kwargs...))
 end
-function loadplanner(models::AbstractVector{<:AbstractModel}, Gs; datapath = "data/simulation", allownegative = false)
+function loadtotal(models::AbstractVector{<:AbstractModel}, Gs; datapath = "data/simulation", allownegative = false)
     output = Result[]
     
     for (k, model) ∈ enumerate(models)
@@ -103,7 +104,7 @@ function loadplanner(models::AbstractVector{<:AbstractModel}, Gs; datapath = "da
 
         folder = SIMPATHS[typeof(model)]
         controltype = ifelse(allownegative, "allownegative", "nonnegative")
-        cachefolder = joinpath(datapath, "planner", folder, controltype, "cache")
+        cachefolder = joinpath(datapath, folder, controltype, "cache")
         filename = makefilename(model, G)
         savepath = joinpath(cachefolder, filename)
 

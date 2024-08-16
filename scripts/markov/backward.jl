@@ -143,7 +143,7 @@ function backwardsimulation!(F, policy, model::AbstractModel, G; verbose = false
             else 
                 verbose && @warn "File $cachepath already exists. If you want to overwrite it pass overwrite = true. Will copy the results into `F` and `policy`.\n"
 
-                _, Fcache, policycache = loadplanner(model, G; allownegative)
+                _, Fcache, policycache = loadtotal(model, G; allownegative)
 
                 F .= Fcache[:, :, 1]
                 policy .= policycache[:, :, 1]

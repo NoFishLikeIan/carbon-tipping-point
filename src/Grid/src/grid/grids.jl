@@ -24,7 +24,6 @@ end
 
 Base.abs(d::Drift) = abs.(d)
 
-
 struct RegularGrid{N}
     X::Array{Point, 2}
     h::Float64

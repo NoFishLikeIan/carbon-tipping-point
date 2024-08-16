@@ -21,7 +21,7 @@ end
 
 # --- Albedo
 N = 51
-model = TippingModel(albedo, preferences, damages, economy, hogg, calibration);
+model = TippingModel(albedo, hogg, preferences, damages, economy, calibration);
 G = constructdefaultgrid(N, model);
 
 # Testing the backward step

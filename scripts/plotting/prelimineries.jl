@@ -43,12 +43,12 @@ begin # Construct models and grids
     jump = Jump()
     hogg = Hogg()
 
-    jumpmodel = JumpModel(jump, preferences, damages, economy, Hogg(), calibration)
+    jumpmodel = JumpModel(jump, Hogg(), preferences, damages, economy, calibration)
     
 	models = TippingModel[]
 	for Tᶜ ∈ thresholds
 	    albedo = Albedo(Tᶜ = Tᶜ)
-	    model = TippingModel(albedo, preferences, damages, economy, hogg, calibration)
+	    model = TippingModel(albedo, hogg, preferences, damages, economy, calibration)
 
 		push!(models, model)
 	end

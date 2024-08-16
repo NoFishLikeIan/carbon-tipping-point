@@ -46,14 +46,14 @@ begin # Construct models and grids
     jump = Jump()
     hogg = Hogg()
 
-    jumpmodel = JumpModel(jump, preferences, damages, economy, Hogg(), calibration)
+    jumpmodel = JumpModel(jump, Hogg(), preferences, damages, economy, calibration)
     
 	models = AbstractModel[]
     Gs = RegularGrid[]
 
 	for Tᶜ ∈ thresholds
 	    albedo = Albedo(Tᶜ = Tᶜ)
-	    model = TippingModel(albedo, preferences, damages, economy, hogg, calibration)
+	    model = TippingModel(albedo, hogg, preferences, damages, economy, calibration)
 
         G = constructdefaultgrid(N, model)
 
@@ -61,7 +61,7 @@ begin # Construct models and grids
         push!(Gs, G)
 	end
 
-    jumpmodel = JumpModel(jump, preferences, damages, economy, hogg, calibration)
+    jumpmodel = JumpModel(jump,  hogg, preferences, damages, economy, calibration)
     push!(models, jumpmodel)
     push!(Gs, constructdefaultgrid(N, jumpmodel))
 end;
@@ -101,7 +101,7 @@ begin # Load IPCC data
 end;
 
 # --- Optimal emissions 
-results = loadplanner(models, Gs; datapath = DATAPATH);
+results = loadtotal(models, Gs; datapath = DATAPATH);
 itps = buildinterpolations(results, Gs);
 modelmap = Dict(models .=> itps);
 
