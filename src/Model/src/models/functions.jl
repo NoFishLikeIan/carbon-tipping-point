@@ -111,7 +111,7 @@ end
 
 "Computes the temperature level for which it is impossible to achieve positive output growth"
 function constructdefaultgrid(N, model::AbstractModel)
-    T̄ = model.hogg.T₀ + (typeof(model.damages) <: LevelDamages ? 8. : 9.)
+    T̄ = model.hogg.T₀ + ifelse(isa(model.damages, LevelDamages), 8., 9.)
 
     Tdomain = (model.hogg.Tᵖ, T̄)
     mdomain = (
@@ -120,4 +120,18 @@ function constructdefaultgrid(N, model::AbstractModel)
     )
 
     RegularGrid([Tdomain, mdomain], N)
+end
+
+function breakgamemodel(model::AbstractGameModel)
+    dh, dl = model.damages
+    ph, pl = model.preferences
+    calibration = model.regionalcalibration.calibration
+    eh, el = model.economy
+
+    OutModel = ifelse(isa(model, TippingGameModel), TippingModel, JumpModel)
+
+    modelh = OutModel(model.albedo, model.hogg, ph, dh, eh, calibration)
+    modell = OutModel(model.albedo, model.hogg, pl, dl, el, calibration)
+
+    return modelh, modell
 end

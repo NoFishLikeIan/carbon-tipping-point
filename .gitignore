@@ -449,3 +449,6 @@ papers/presentations/figures
 .vscode
 **/*.mem
 *.code-workspace
+.env
+.envgame
+.env.example

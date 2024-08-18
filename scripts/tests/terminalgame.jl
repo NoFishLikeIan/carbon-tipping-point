@@ -10,16 +10,18 @@ includet("../markov/terminal.jl")
 
 begin
 	DATAPATH = "data"
-	calibration = load_object(joinpath(DATAPATH, "regionalcalibration.jld2"))
+	calibration = load_object(joinpath(DATAPATH, "calibration.jld2"))
+	rc = load_object(joinpath(DATAPATH, "regionalcalibration.jld2"))
 	hogg = Hogg()
-	economy = regionaleconomydefaults()
-	preferences = EpsteinZin()
+	economy = RegionalEconomies()
+	preferences = (EpsteinZin(), EpsteinZin())
 	albedo = Albedo()
+	damages = (GrowthDamages(), GrowthDamages())
 end;
 
 # --- Albedo
-damages = GrowthDamages()
-model = TippingGameModel(albedo, preferences, damages, economy, hogg, calibration);
+plannermodel = TippingModel(albedo, hogg, first(preferences), first(damages), first(economy), calibration)
+model = TippingGameModel(albedo, hogg, preferences, damages, economy, rc);
 
 begin
 	N = 51

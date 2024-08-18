@@ -17,7 +17,7 @@ export TippingGameModel, JumpGameModel, AbstractGameModel
 export AbstractJumpModel, AbstractTippingModel
 export AbstractModel
 export constructdefaultgrid
-export regionaleconomydefaults
+export RegionalEconomies, breakgamemodel
 
 # Packages
 using Grid: Point, Policy, Drift, RegularGrid, gss

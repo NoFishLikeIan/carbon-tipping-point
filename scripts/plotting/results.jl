@@ -140,7 +140,7 @@ begin # Solve an ensemble problem for all models with the bau scenario
 
         prob = SDEProblem(F!, G!, x₀, (0., 80.), p)
 
-        if typeof(model) <: JumpModel
+        if isa(model, Jumpmodel)
             jumpprob = JumpProblem(prob, ratejump)
             ensprob = EnsembleProblem(jumpprob)
             abatedsol = solve(ensprob, SRIW1(); trajectories = 1_000)
@@ -237,7 +237,7 @@ begin
 
         
 
-        ylabel = if typeof(model) <: TippingModel
+        ylabel = if isa(model, TippingModel)
             if model.albedo.Tᶜ < 2
                 raw"\textit{imminent}"
             else
