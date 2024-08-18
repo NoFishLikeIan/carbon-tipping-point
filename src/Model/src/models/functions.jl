@@ -4,32 +4,38 @@
 mstable(T, model::AbstractTippingModel) = mstable(T, model.hogg, model.albedo)
 mstable(T, model::AbstractJumpModel) = mstable(T, model.hogg)
 
-"Drift of log output y in the terminal state, t ≥ τ"
-function bterminal(χ, model::AbstractModel{LevelDamages, P}) where P <: Preferences
-    growth = model.economy.ϱ - model.economy.δₖᵖ
-    investments = ϕ(model.economy.τ, χ, model.economy)
+function bterminal(χ::Float64, economy::Economy)
+    growth = economy.ϱ - economy.δₖᵖ
+    investments = ϕ(economy.τ, χ, economy)
 
     return growth + investments
+end
+function bterminal(χ::Float64, model::AbstractPlannerModel{LevelDamages, P}) where P <: Preferences
+    bterminal(χ, model.economy)
+end
+function bterminal(χ::NTuple{2, Float64}, model::AbstractGameModel{LevelDamages, P}) where P <: Preferences
+    bterminal.(χ, model.economy)
 end
 function bterminal(_, χ, model::AbstractModel{LevelDamages, P}) where P <: Preferences # This is kept for compatibility, TODO: There is probably a better way to do it.
     bterminal(χ, model)
 end
-
-function bterminal(T::Float64, χ, model::AbstractModel{GrowthDamages, P}) where P <: Preferences
-    growth = model.economy.ϱ - model.economy.δₖᵖ
-    investments = ϕ(model.economy.τ, χ, model.economy)
-    damage = d(T, model.damages, model.hogg)
-
-    return growth + investments - damage
+function bterminal(T::Float64, χ::Float64, model::AbstractPlannerModel{GrowthDamages, P}) where P <: Preferences
+    bterminal(χ, model.economy) - d(T, model.damages, model.hogg)
+end
+function bterminal(T::Float64, χ::NTuple{2, Float64}, model::AbstractGameModel{GrowthDamages, P}) where P <: Preferences
+    bterminal.(χ, model.economy) .- d.(T, model.damages, Ref(model.hogg))
 end
 
 "Emissivity rate implied by abatement `α` at time `t` and carbon concentration `M`"
-function ε(t, M, α, model::AbstractModel)
+function ε(t, M, α, model::AbstractPlannerModel) 
     α / (δₘ(M, model.hogg) + γ(t, model.calibration))
+end
+function ε(t, M, α::NTuple{2, Float64}, model::AbstractGameModel)
+    α ./ (δₘ(M, model.hogg) .+ γ(t, model.regionalcalibration))
 end
 
 "Drift of log output y for `t < τ`" # TODO: Combine the two drifts
-function b(t, Xᵢ::Point, u::Policy, model::AbstractModel{GrowthDamages, P}) where P <: Preferences
+function b(t, Xᵢ::Point, u::Policy, model::AbstractModel{GrowthDamages, P}) where P <: Preferences 
     εₜ = ε(t, exp(Xᵢ.m), u.α, model)
     Aₜ = A(t, model.economy)
 
@@ -41,7 +47,7 @@ function b(t, Xᵢ::Point, u::Policy, model::AbstractModel{GrowthDamages, P}) wh
 
     return growth + investments - abatement - damage
 end
-function b(t, Xᵢ::Point, u::Policy, model::AbstractModel)
+function b(t, Xᵢ::Point, u::Policy, model::AbstractModel{LevelDamages, P}) where P <: Preferences
     εₜ = ε(t, exp(Xᵢ.m), u.α, model)
     Aₜ = A(t, model.economy)
 
@@ -52,50 +58,60 @@ function b(t, Xᵢ::Point, u::Policy, model::AbstractModel)
 
     return growth + investments - abatement
 end
+function b(t, Xᵢ::Point, u::NTuple{2, Policy}, model::AbstractGameModel{GrowthDamages, P}) where P <: Preferences
+    αs = @. getproperty(u, :α)
+    χs = @. getproperty(u, :χ)
 
-"Computes maximum absolute value of the drift of output y."
-function bbound(t, Xᵢ::Point, model::AbstractModel)
-    γₜ = γ(t, model.calibration)
-    δₘᵢ = δₘ(exp(Xᵢ.m), model.hogg)
+    εₜ = ε(t, exp(Xᵢ.m), αs, model)
+    Aₜ = @. A(t, model.economy)
 
-    ll = b(t, Xᵢ, Policy(0., 0.), model)
-    lr = b(t, Xᵢ, Policy(0., γₜ + δₘᵢ), model)
-    rl = b(t, Xᵢ, Policy(1., 0.), model)
-    rr = b(t, Xᵢ, Policy(1., γₜ + δₘᵢ), model)
+    abatement = @. Aₜ * β(t, εₜ, model.economy)
 
-    return max(abs(ll), abs(lr), abs(rl), abs(rr))
+    growth = @. getproperty(model.economy, :ϱ) - getproperty(model.economy, :δₖᵖ)
+    investments = @. ϕ(t, χs, model.economy)
+    damage = d.(Xᵢ.T, model.damages, Ref(model.hogg))
+
+    @. growth + investments - abatement - damage
 end
 
-# TODO: Combine the two output functions.
-function terminaloutputfct(Tᵢ, Δt, χ, model::AbstractModel)
+# TODO: Combine the two terminal output function
+function terminaloutputfct(Tᵢ, Δt, χ, model::AbstractPlannerModel)
     drift = bterminal(Tᵢ, χ, model) - model.preferences.θ * model.economy.σₖ^2 / 2
      
     adj = Δt * (1 - model.preferences.θ) * drift
 
     return max(1 + adj, 0.)
 end
+function terminaloutputfct(Tᵢ, Δt, χs, model::AbstractGameModel)
+    θs = getproperty.(model.preferences, :θ)
 
-function outputfct(t, Xᵢ::Point, Δt, u::Policy, model::AbstractModel)
+    drift = bterminal(Tᵢ, χs, model) .- θs .* getproperty.(model.economy, :σₖ) .^2 ./ 2
+     
+    adj = @. Δt * (1 - θs) * drift
+
+    @. max(1 + adj, 0.)
+end
+
+function outputfct(t, Xᵢ::Point, Δt, u::Policy, model::AbstractPlannerModel)
     drift = b(t, Xᵢ, u, model) - model.preferences.θ * model.economy.σₖ^2 / 2
 
     adj = Δt * (1 - model.preferences.θ) * drift
 
     return max(1 + adj, 0.)
 end
+function outputfct(t, Xᵢ::Point, Δt, u::NTuple{2, Policy}, model::AbstractGameModel)
+    θs = getproperty.(model.preferences, :θ)
+    
+    drift = b(t, Xᵢ, u, model) .- θs .* getproperty.(model.economy, :σₖ) .^2 ./ 2
+     
+    adj = @. Δt * (1 - θs) * drift
 
-"Computes the temperature level for which it is impossible to achieve positive output growth"
-function criticaltemperature(model::AbstractModel{GrowthDamages, P}) where P <: Preferences
-    maximumgrowth = Tᵢ -> begin
-        rate, _ = gss(χ -> bterminal(Tᵢ, χ, model), 0., 1.)
-        return rate
-    end
-
-    find_zero(maximumgrowth, model.hogg.Tᵖ .+ (0., 15.))
+    @. max(1 + adj, 0.)
 end
 
+"Computes the temperature level for which it is impossible to achieve positive output growth"
 function constructdefaultgrid(N, model::AbstractModel)
-    T̄ = typeof(model.damages) <: LevelDamages ? 
-    model.hogg.T₀ + 8. : criticaltemperature(model)
+    T̄ = model.hogg.T₀ + (typeof(model.damages) <: LevelDamages ? 8. : 9.)
 
     Tdomain = (model.hogg.Tᵖ, T̄)
     mdomain = (
