@@ -17,125 +17,80 @@ using Model, Grid
     DATAPATH = get(env, "DATAPATH", "data")
 end
 
-@everywhere begin # Markov chain
-    function driftstep(t, idx, F, u::Policy, model::AbstractGameModel, G, α)
-        L, R = extrema(CartesianIndices(F))
-        σₜ² = (model.hogg.σₜ / (model.hogg.ϵ * G.Δ.T))^2
-        σₘ² = (model.hogg.σₘ / G.Δ.m)^2
+@everywhere include("chain.jl")
 
-        Xᵢ = G.X[idx]
-        dT = μ(Xᵢ.T, Xᵢ.m, model) / (model.hogg.ϵ * G.Δ.T)
-        dm = γ(t, model.calibration) - u.α
-
-        # -- Temperature
-        FᵢT₊ = F[min(idx + I[1], R)]
-        FᵢT₋ = F[max(idx - I[1], L)]
-        # -- Carbon concentration
-        Fᵢm₊ = F[min(idx + I[2], R)]
-        Fᵢm₋ = F[max(idx - I[2], L)]
-
-        Q = σₘ² + σₜ² + G.h * (abs(dT) + abs(dm))
-
-        dTF = G.h * abs(dT) * ifelse(dT > 0, FᵢT₊, FᵢT₋) + σₜ² * (FᵢT₊ + FᵢT₋) / 2
-        dmF = G.h * abs(dm) * ifelse(dm > 0, Fᵢm₊, Fᵢm₋) + σₘ² * (Fᵢm₊ + Fᵢm₋) / 2
-
-        F′ = (dTF + dmF) / Q
-        Δt = G.h^2 / Q
-
-        return F′, Δt
-    end
-
-    markovstep(t, idx, F, u, model::TippingModel, G) = driftstep(t, idx, F, u, model, G)
-    function markovstep(t, idx, F, u, model::JumpModel, G)
-        Fᵈ, Δt = driftstep(t, idx, F, u, model, G)
-    
-        # Update with jump
-        R = maximum(CartesianIndices(F))
-        Xᵢ = G.X[idx]
-        πᵢ = intensity(Xᵢ.T, model.hogg, model.jump)
-        qᵢ = increase(Xᵢ.T, model.hogg, model.jump)
-    
-        steps = floor(Int, div(qᵢ, G.Δ.T * G.h))
-        weight = qᵢ / (G.Δ.T * G.h)
-    
-        Fʲ = F[min(idx + steps * I[1], R)] * (1 - weight) + 
-                F[min(idx + (steps + 1) * I[1], R)] * weight
-    
-        F′ = Fᵈ + πᵢ * Δt * (Fʲ - Fᵈ)
-    
-        return F′, Δt
-    end
-
-    function adjpolicy(idx, policy)
-        uᵢ = policy[idx]
-
-        L, R = extrema(CartesianIndices(policy))
-        # -- Temperature
-        uᵢT₊ = policy[min(idx + I[1], R)]
-        uᵢT₋ = policy[max(idx - I[1], L)]
-        # -- Carbon concentration
-        uᵢm₊ = policy[min(idx + I[2], R)]
-        uᵢm₋ = policy[max(idx - I[2], L)]
-
-        return (uᵢT₊ + uᵢT₋ + uᵢm₊ + uᵢm₋ + uᵢ) / 5.
-    end
-end
-
-@everywhere begin # Costs
-    function cost(F′, t, Xᵢ::Point, Δt, u::Policy, model::AbstractModel{GrowthDamages, P}) where P
-        δ = outputfct(t, Xᵢ, Δt, u, model)
-        g(u.χ, δ * F′, Δt, model.preferences)
-    end
-
-    function cost(F′, t, Xᵢ::Point, Δt, u::Policy, model::AbstractModel{LevelDamages, P}) where P
-        δ = outputfct(t, Xᵢ, Δt, u, model)
-        damage = d(Xᵢ.T, model.damages, model.hogg)
-        g(u.χ * damage, δ * F′, Δt, model.preferences)
-    end
-end
-
-function backwardstep!(Δts, F::AbstractArray{Float64, 4}, policy::AbstractArray{Policy, 4}, cluster, model::AbstractGameModel, G; allownegative = false, s = 1e-2)
+function backwardstep!(Δts, Fs::NTuple{2, AbstractArray{Float64, 3}}, policies::NTuple{2, AbstractArray{Policy, 3}}, cluster, model::AbstractGameModel, G)
     indices = CartesianIndices(G)
+    highmodel, lowmodel = breakgamemodel(model)
 
     @sync @distributed for (i, δt) in cluster
         idx = indices[i]
         Xᵢ = G.X[idx]
 
-        t = model.economy.τ - δt
-        γₕ, γₗ = γ(t, model.regionalcalibration)
+        t = first(model.economy).τ - δt
+        δₘₜ = δₘ(exp(Xᵢ.m), model.hogg)
+        ᾱₕ, ᾱₗ = γ(t, model.regionalcalibration) .+ δₘₜ
 
-        ᾱₕ, ᾱₗ = allownegative ? (1., 1.) :
-            (γₕ, γₗ) .+ δₘ(exp(Xᵢ.m), model.hogg)
+        optimiserₕ = Opt(:LN_SBPLX, 2); xtol_rel!(optimiserₕ, ᾱₕ / 100.);
+	    lower_bounds!(optimiserₕ, [0., 0.]); upper_bounds!(optimiserₕ, [1., ᾱₕ])
+        
+        Aₗ = ᾱₗ * range(0, 1; length = size(Fs[1], 3))
+        for (k, αₗ) in enumerate(Aₗ)
+            pₖ = @view policies[1][:, :, k]
+            Fₖ = @view Fs[1][:, :, k]
 
-        Aₕ = ᾱₕ * range(0, 1; length = size(F, 3))
-        Aₗ = 
+            objective = @closure (x, grad) -> begin
+                u = Policy(x[1], x[2])
+                F′, Δt = markovstep(t, idx, Fₖ, u, αₗ, model, G)
+                cost(F′, t, Xᵢ, Δt, u, highmodel)
+            end
 
-        objective = @closure (x, grad) -> begin
-            u = Policy(x[1], x[2]) 
-            F′, Δt = markovstep(t, idx, F, u, model, G)
-            cost(F′, t, Xᵢ, Δt, u, model)
+            min_objective!(optimiserₕ, objective)
+            candidate = min.(pₖ[idx], [1., ᾱₕ])
+
+            obj, pol, _ = optimize(optimiserₕ, candidate)
+
+            Fₖ[idx] = obj
+            pₖ[idx] = pol
+
+            timestep = last(markovstep(t, idx, Fₖ, pₖ[idx], αₗ, model, G))
+            Δts[i] = timestep
         end
 
-        optimiser = Opt(:LN_SBPLX, 2); xtol_rel!(optimiser, ᾱ / 100.);
-	    lower_bounds!(optimiser, [0., 0.]); upper_bounds!(optimiser, [1., ᾱ])
-        min_objective!(optimiser, objective)
+        optimiserₗ = Opt(:LN_SBPLX, 2); xtol_rel!(optimiserₗ, ᾱₗ / 100.);
+	    lower_bounds!(optimiserₗ, [0., 0.]); upper_bounds!(optimiserₗ, [1., ᾱₗ])
 
-        candidate = min.(policy[idx], [1., ᾱ])
-        obj, pol, _ = optimize(optimiser, candidate)
-        
-        polₜ = Policy(pol[1], pol[2])
-        timestep = last(markovstep(t, idx, F, polₜ, model, G))
-        
-        w = inv(1 + s * timestep) # Policy smoothing over time
+        Aₕ = ᾱₕ * range(0, 1; length = size(Fs[2], 3))
+        for (k, αₕ) in enumerate(Aₕ)
+            pₖ = @view policies[2][:, :, k]
+            Fₖ = @view Fs[2][:, :, k]
 
-        policy[idx] = adjpolicy(idx, policy) * (1 - w) + polₜ * w
-        F[idx] = obj
-        Δts[i] = timestep
+            objective = @closure (x, grad) -> begin
+                u = Policy(x[1], x[2])
+                F′, Δt = markovstep(t, idx, Fₖ, u, αₕ, model, G)
+                cost(F′, t, Xᵢ, Δt, u, lowmodel)
+            end
+
+            min_objective!(optimiserₕ, objective)
+            candidate = min.(pₖ[idx], [1., ᾱₕ])
+
+            obj, pol, _ = optimize(optimiserₕ, candidate)
+
+            Fₖ[idx] = obj
+            pₖ[idx] = pol
+
+            timestep = last(markovstep(t, idx, Fₖ, pₖ[idx], αₕ, model, G))
+            Δts[i] = min(timestep, Δts[i])
+        end
     end
 end
 
-"Backward simulates from F̄ down to F₀, using the albedo model. It assumes that the passed F ≡ F̄"
-function backwardsimulation!(F, policy, model, G; verbose = false, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = last(model.calibration.tspan), allownegative = false, stepkwargs...)
+function backwardsimulation!(
+    Fs::NTuple{2, AbstractArray{Float64, 3}}, 
+    policies::NTuple{2, AbstractArray{Policy, 3}}, 
+    model::AbstractGameModel, 
+    G; 
+    verbose = false, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = last(model.regionalcalibration.calibration.tspan), allownegative = false, stepkwargs...)
     verbose && println("Starting backward simulation...")
      
     savecache = !isnothing(cachepath)
@@ -161,16 +116,15 @@ function backwardsimulation!(F, policy, model, G; verbose = false, cachepath = n
     end
 
     queue = DiagonalRedBlackQueue(G)
-    Δts = SharedVector(zeros(length(queue.vals)))
+    Δts = SharedVector(zeros(N^2))
 
-    while !all(isempty.(queue.minima))
-        tmin = model.economy.τ - minimum(queue.vals)
-        verbose && print("Cluster minimum time = $tmin...\r")
+    while !isqempty(queue)
+        tmin = first(model.economy).τ - minimum(queue.vals)
 
         clusters = dequeue!(queue)
 
         for cluster in clusters
-            backwardstep!(Δts, F, policy, cluster, model, G; allownegative, stepkwargs...)
+            backwardstep!(Δts, Fs, policies, cluster, model, G; stepkwargs...)
 
             for i in first.(cluster)
                 if queue[i] ≤ model.economy.τ - tstop
@@ -197,9 +151,17 @@ function computebackward(model, G; kwargs...)
     F̄, terminalpolicy = loadterminal(model, G)
     computebackward(F̄, terminalpolicy, model, G; kwargs...)
 end
-function computebackward(F̄, terminalpolicy, model, G; verbose = false, withsave = true, datapath = "data", allownegative = false, iterkwargs...) 
-    F = SharedMatrix(F̄);
-    policy = SharedMatrix([Policy(χ, 0.) for χ ∈ terminalpolicy])
+function computebackward(F̄::Array{Float64, 3}, terminalpolicy::Array{Float64, 3}, model::AbstractModel, G; verbose = false, withsave = true, datapath = "data", allownegative = false, M = 10, iterkwargs...)
+    N₁, N₂ = size(G)
+    nmodels = size(F̄, 3)
+
+    Fs = ntuple(_ -> SharedArray{Float64}(N₁, N₂, M), nmodels)
+    policies = ntuple(_ -> SharedArray{Policy}(N₁, N₂, M), nmodels)
+
+    for m in eachindex(Fs), k in axes(Fs[m], 3)
+        Fs[m][:, :, k] .= F̄[:, :, m]
+        policies[m][:, :, k] .= [Policy(χ, 0.) for χ ∈ terminalpolicy[:, :, m]]
+    end
 
     if withsave
         folder = SIMPATHS[typeof(model)]
@@ -211,7 +173,7 @@ function computebackward(F̄, terminalpolicy, model, G; verbose = false, withsav
     end
 
     cachepath = ifelse(withsave, joinpath(cachefolder, filename), nothing)
-    backwardsimulation!(F, policy, model, G; verbose, cachepath, allownegative, iterkwargs...)
+    backwardsimulation!(Fs, policies, model, G; verbose, cachepath, allownegative, iterkwargs...)
 
     return F, policy
 end

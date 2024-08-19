@@ -1,11 +1,15 @@
 include("utils/saving.jl")
 include("markov/terminal.jl")
+include("markov/game.jl")
 
 env = DotEnv.config(".envgame")
 DATAPATH = get(env, "DATAPATH", "data")
 SIMPATH = get(env, "SIMULATIONPATH", "game")
 
-N = getnumber(env, "N", 51; type = Int)
+datapath = joinpath(DATAPATH, SIMPATH)
+
+N = getnumber(env, "N", 31; type = Int)
+M = getnumber(env, "M", 10; type = Int)
 
 VERBOSE = getbool(env, "VERBOSE", false)
 RUNTERMINAL = getbool(env, "RUNTERMINAL", false)
@@ -20,7 +24,7 @@ OVERWRITE && @warn "Running in overwrite mode!"
 
 # Construct model
 begin
-    thresholds = [1.5, 1.8, 2.5, 3., 3.5];
+    thresholds = [1.5, 2.5];
     preferences = EpsteinZin();
     rc = load_object(joinpath(DATAPATH, "regionalcalibration.jld2"));
     economies = RegionalEconomies()
@@ -40,15 +44,15 @@ for Tᶜ ∈ thresholds
     highmodel, lowmodel = breakgamemodel(model)
 
     if RUNTERMINAL
-        computeterminal(highmodel, G; verbose = VERBOSE, datapath = joinpath(DATAPATH, SIMPATH, "high"), alternate = true, tol = TOL, overwrite = OVERWRITE)
+        for (label, regionalmodel) in zip(("high", "low"), breakgamemodel(model))
+            VERBOSE && println("Solving for $label income countries...")
 
-        computeterminal(lowmodel, G; verbose = VERBOSE, datapath = joinpath(DATAPATH, SIMPATH, "low"), alternate = true, tol = TOL, overwrite = OVERWRITE)
+            computeterminal(regionalmodel, G; verbose = VERBOSE, datapath, alternate = true, tol = TOL, overwrite = OVERWRITE, addpath = label) 
+        end
     end
 
     if RUNBACKWARDS
-        for allownegative in negativeemissions
-            VERBOSE && println("Running backward $(ifelse(allownegative, "with", "without")) negative emissions...")
-            computebackward(model, G; allownegative, verbose = VERBOSE, datapath = DATAPATH, overwrite = OVERWRITE, tstop = TSTOP, cachestep = CACHESTEP)
-        end
+        VERBOSE && println("Running backward game simulation...")
+        computebackward(model, G; verbose = VERBOSE, datapath, overwrite = OVERWRITE, tstop = TSTOP, cachestep = CACHESTEP)
     end
 end

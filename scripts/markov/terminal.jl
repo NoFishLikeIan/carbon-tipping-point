@@ -113,11 +113,11 @@ function vfi(F₀, model::AbstractModel, G; tol = 1e-3, maxiter = 10_000, verbos
     return Fᵢ₊₁, pᵢ₊₁
 end
 
-function computeterminal(model, G::RegularGrid; verbose = true, withsave = true, datapath = "data", overwrite = false, iterkwargs...)
+function computeterminal(model, G::RegularGrid; verbose = true, withsave = true, datapath = "data", overwrite = false, addpath = "", iterkwargs...)
 
     if withsave
         folder = SIMPATHS[typeof(model)]
-        savefolder = joinpath(datapath, folder, "terminal")
+        savefolder = joinpath(datapath, folder, "terminal", addpath)
         if !isdir(savefolder) mkpath(savefolder) end
         
         filename = makefilename(model, G)

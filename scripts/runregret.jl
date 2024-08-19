@@ -2,7 +2,7 @@ include("utils/saving.jl")
 include("markov/terminal.jl")
 include("markov/backward.jl")
 
-N = getnumber(env, "N", 51; type = Int)
+N = getnumber(env, "N", 31; type = Int)
 
 VERBOSE = getbool(env, "VERBOSE", false)
 RUNTERMINAL = getbool(env, "RUNTERMINAL", false)
