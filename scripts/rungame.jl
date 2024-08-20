@@ -18,13 +18,12 @@ OVERWRITE = getbool(env, "OVERWRITE", false)
 TOL = getnumber(env, "TOL", 1e-3)
 TSTOP = getnumber(env, "TSTOP", 0.)
 CACHESTEP = getnumber(env, "CACHESTEP", 1 / 4)
-SMOOTHING = getnumber(env, "SMOOTHING", 1 / 2)
 
 OVERWRITE && @warn "Running in overwrite mode!"
 
 # Construct model
 begin
-    thresholds = [1.5, 2.5];
+    thresholds = [2.5];
     preferences = EpsteinZin();
     rc = load_object(joinpath(DATAPATH, "regionalcalibration.jld2"));
     economies = RegionalEconomies()
@@ -40,10 +39,9 @@ for Tᶜ ∈ thresholds
     model = TippingGameModel(albedo, hogg, (preferences, preferences), (damages, damages), economies, rc)
 
     G = constructdefaultgrid(N, model)
-
-    highmodel, lowmodel = breakgamemodel(model)
-
+    
     if RUNTERMINAL
+        highmodel, lowmodel = breakgamemodel(model)
         for (label, regionalmodel) in zip(("high", "low"), breakgamemodel(model))
             VERBOSE && println("Solving for $label income countries...")
 

@@ -131,7 +131,7 @@ function computeterminal(model, G::RegularGrid; verbose = true, withsave = true,
             else
                 verbose && @warn "File $savepath already exists. If you want to overwrite it pass overwrite = true. Will copy the results into `F` and `policy`.\n"
 
-                F̄, policy = loadterminal(model, G; datapath)
+                F̄, policy = loadterminal(model, G; datapath, addpath)
 
                 return F̄, policy
             end

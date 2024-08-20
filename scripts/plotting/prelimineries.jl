@@ -3,11 +3,8 @@ using JLD2, DotEnv, CSV
 using UnPack
 using DataFrames, DataStructures
 
-using FiniteDiff
 using DifferentialEquations, DifferentialEquations.EnsembleAnalysis
 
-using KernelDensity
-using Interpolations
 using Plots, Printf, PGFPlotsX, Colors, ColorSchemes
 using Statistics
 
@@ -33,7 +30,8 @@ begin # Global variables
 end;
 
 begin # Construct models and grids
-    thresholds = [2., 3.5]
+    thresholds = [2.5, 1.5]
+    labels = Dict(thresholds .=> ["remote", "imminent"])
 	N = 51;
 
 	calibration = load_object(joinpath(DATAPATH, "calibration.jld2"))
@@ -58,7 +56,7 @@ begin # Labels, colors and axis
     PALETTE = colorschemes[:grays]
     graypalette = n -> get(PALETTE, range(0.1, 0.8; length = n))
 
-    thresholdcolor = Dict(thresholds .=> graypalette(length(thresholds)))
+    thresholdcolor = Dict(thresholds .=> reverse(graypalette(length(thresholds))))
 
     TEMPLABEL = "Temperature deviations \$T_t - T^{p}\$"
 
@@ -104,7 +102,8 @@ begin # Albedo plot
             xmin = Tmin, xmax = Tmax,
             ymin = ytick[1] - 0.01, ymax = ytick[end] + 0.01,
             ytick = ytick,
-            yticklabels = [@sprintf("%.0f\\%%", 100 * x) for x in ytick]
+            yticklabels = [@sprintf("%.0f\\%%", 100 * x) for x in ytick],
+            legend_cell_align = "left"
         }
     )
 
@@ -119,16 +118,16 @@ begin # Albedo plot
             Coordinates(zip(Tspace, loss))
         ) 
 
-        label = "\$$(Tᶜ)^{\\circ}\$"
+        label = labels[Tᶜ]
         legend = LegendEntry(label)
 
         push!(albedofig, curve, legend)
     end
 
-    @pgf albedofig["legend style"] = raw"at = {(0.9, 0.9)}"
+    @pgf albedofig["legend style"] = raw"at = {(0.95, 0.95)}"
 
     if SAVEFIG
-        PGFPlotsX.save(joinpath(PLOTPATH, "albedo.tikz"), albedofig; include_preamble = true) 
+        PGFPlotsX.save(joinpath(PLOTPATH, "albedo.tikz"), albedofig; include_preamble = true)
     end
 
     albedofig
@@ -137,9 +136,7 @@ end
 begin
     sims = Dict{Float64, DiffEqArray}()
 
-    for model in reverse(models)
-        color = thresholdcolor[model.albedo.Tᶜ]
-
+    for model in models
         prob = SDEProblem(baufn, X₀, (0., 80.), model)
         sol = solve(prob; seed = SEED)
         
@@ -186,7 +183,8 @@ begin # Nullcline plot
             xtick = 200:100:Mmax,
             yticklabels = temperatureticks[2],
             ytick = temperatureticks[1],
-            ymin = Tmin, ymax = Tmax
+            ymin = Tmin, ymax = Tmax,
+            legend_cell_align = "left"
         }
     )
 
@@ -194,7 +192,7 @@ begin # Nullcline plot
         PGFPlotsX.save(joinpath(PLOTPATH, "skeleton-nullcline.tikz"), nullclinefig; include_preamble = true) 
     end
 
-    for model in reverse(models) # Nullcline plots
+    for model in models # Nullcline plots
         Tᶜ = model.albedo.Tᶜ
         color = thresholdcolor[Tᶜ]
 
@@ -204,7 +202,7 @@ begin # Nullcline plot
         unstablecurve = @pgf Plot({color = color, line_width=LINE_WIDTH, forget_plot, dotted}, Coordinates(unstable)) 
         rightcurve = @pgf Plot({color = color, line_width=LINE_WIDTH, forget_plot}, Coordinates(stableright)) 
 
-        label = "\$T^c = $(Tᶜ)^{\\circ}\$"
+        label = labels[Tᶜ]
         legend = LegendEntry(label)
 
         push!(nullclinefig, leftcurve, legend, unstablecurve, rightcurve)

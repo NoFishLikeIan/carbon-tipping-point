@@ -12,9 +12,6 @@ using Model, Grid
     using Base: Order
     using FastClosures: @closure
     using NLopt: Opt, lower_bounds!, upper_bounds!, min_objective!, optimize, xtol_rel!
-        
-    env = DotEnv.config()
-    DATAPATH = get(env, "DATAPATH", "data")
 end
 
 @everywhere include("chain.jl")
@@ -113,9 +110,9 @@ function backwardsimulation!(F, policy, model::AbstractModel, G; verbose = false
     return F, policy
 end
 
-function computebackward(model::AbstractModel, G; kwargs...)
+function computebackward(model::AbstractModel, G; datapath = "data", kwargs...)
     F̄, terminalpolicy = loadterminal(model, G)
-    computebackward(F̄, terminalpolicy, model, G; kwargs...)
+    computebackward(F̄, terminalpolicy, model, G; datapath, kwargs...)
 end
 function computebackward(F̄, terminalpolicy, model::AbstractModel, G; verbose = false, withsave = true, datapath = "data", allownegative = false, iterkwargs...) 
     F = SharedMatrix(F̄);

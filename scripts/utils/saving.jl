@@ -85,8 +85,8 @@ end
 
 Result = Tuple{Vector{Float64}, Array{Float64, 3}, Array{Policy, 3}}
 
-function loadterminal(model::AbstractModel, G; kwargs...)
-    dropdims.(loadterminal([model], G; addpath = first(addpath), kwargs...); dims = 3)
+function loadterminal(model::AbstractModel, G; addpath = "", kwargs...)
+    dropdims.(loadterminal([model], G; addpath = [addpath], kwargs...); dims = 3)
 end
 
 function loadterminal(models::AbstractVector{<:AbstractModel}, G; datapath = "data/simulation", addpath = repeat([""], length(models)))

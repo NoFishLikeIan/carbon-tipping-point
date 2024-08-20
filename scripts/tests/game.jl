@@ -26,10 +26,24 @@ model = TippingGameModel(albedo, hogg, preferences, damages, economy, rc);
 
 begin
 	N = 31
+	M = 10
 	G = constructdefaultgrid(N, model)
 
 	Tspace = range(G.domains[1]...; length = size(G, 1))
 	mspace = range(G.domains[2]...; length = size(G, 2))
 end
 
-F̄, terminalpolicy = loadterminal(collect(breakgamemodel(model)), G; datapath = "data/simulation/game", addpath = ["high", "low"])
+begin
+	F̄, terminalpolicy = loadterminal(collect(breakgamemodel(model)), G; datapath = "data/simulation/game", addpath = ["high", "low"])
+
+	N₁, N₂ = size(G)
+	nmodels = size(F̄, 3)
+
+	Fs = ntuple(_ -> SharedArray{Float64}(N₁, N₂, M), nmodels)
+	policies = ntuple(_ -> SharedArray{Policy}(N₁, N₂, M), nmodels)
+
+	for m in eachindex(Fs), k in axes(Fs[m], 3)
+		Fs[m][:, :, k] .= F̄[:, :, m]
+		policies[m][:, :, k] .= [Policy(χ, 0.) for χ ∈ terminalpolicy[:, :, m]]
+	end
+end

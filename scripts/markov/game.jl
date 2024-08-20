@@ -19,83 +19,73 @@ end
 
 @everywhere include("chain.jl")
 
-function backwardstep!(Δts, Fs::NTuple{2, AbstractArray{Float64, 3}}, policies::NTuple{2, AbstractArray{Policy, 3}}, cluster, model::AbstractGameModel, G)
+function backwardstep!(Δts, F::AbstractArray{Float64, 4}, policies::AbstractArray{Policy, 4}, cluster, model::AbstractGameModel, G)
     indices = CartesianIndices(G)
-    highmodel, lowmodel = breakgamemodel(model)
+    models = breakgamemodel(model)
 
-    @sync @distributed for (i, δt) in cluster
-        idx = indices[i]
+    τ = models[1].economy.τ
+    M = size(F, 3)
+    unit = range(0, 1; length = M)
+
+    optimiser = Opt(:LN_SBPLX, 2)
+    lower_bounds!(optimiser, [0., 0.]); 
+
+    @sync @distributed for (l, δt) in cluster
+        idx = indices[l]
         Xᵢ = G.X[idx]
 
-        t = first(model.economy).τ - δt
+        t = τ - δt
         δₘₜ = δₘ(exp(Xᵢ.m), model.hogg)
-        ᾱₕ, ᾱₗ = γ(t, model.regionalcalibration) .+ δₘₜ
+        ᾱ = γ(t, model.regionalcalibration) .+ δₘₜ
 
-        optimiserₕ = Opt(:LN_SBPLX, 2); xtol_rel!(optimiserₕ, ᾱₕ / 100.);
-	    lower_bounds!(optimiserₕ, [0., 0.]); upper_bounds!(optimiserₕ, [1., ᾱₕ])
-        
-        Aₗ = ᾱₗ * range(0, 1; length = size(Fs[1], 3))
-        for (k, αₗ) in enumerate(Aₗ)
-            pₖ = @view policies[1][:, :, k]
-            Fₖ = @view Fs[1][:, :, k]
+        Δtₗ = Inf
 
-            objective = @closure (x, grad) -> begin
-                u = Policy(x[1], x[2])
-                F′, Δt = markovstep(t, idx, Fₖ, u, αₗ, model, G)
-                cost(F′, t, Xᵢ, Δt, u, highmodel)
+        for (i, regionalmodel) in enumerate(models)
+            j = ifelse(i == 1, 2, 1)
+
+            xtol_rel!(optimiser, ᾱ[i] / M)
+            upper_bounds!(optimiser, [1., ᾱ[i]])
+
+            A = ᾱ[j] * unit
+
+            for (k, αⱼ) in enumerate(A)
+                pₖ = @view policies[:, :, k, i]
+                Fₖ = @view F[:, :, k, i]
+    
+                objective = @closure (x, _) -> begin
+                    u = Policy(x[1], x[2])
+                    F′, Δt = markovstep(t, idx, Fₖ, u, αⱼ, regionalmodel, G)
+                    cost(F′, t, Xᵢ, Δt, u, regionalmodel)
+                end
+
+                min_objective!(optimiser, objective)
+                candidate = min.(pₖ[idx], [1., ᾱ[i]])
+
+                obj, pol, _ = optimize(optimiser, candidate)
+
+                Fₖ[idx] = obj
+                pₖ[idx] = pol
+
+                timestep = last(markovstep(t, idx, Fₖ, pₖ[idx], αⱼ, regionalmodel, G))
+
+                Δtₗ = min(timestep, Δtₗ)
             end
-
-            min_objective!(optimiserₕ, objective)
-            candidate = min.(pₖ[idx], [1., ᾱₕ])
-
-            obj, pol, _ = optimize(optimiserₕ, candidate)
-
-            Fₖ[idx] = obj
-            pₖ[idx] = pol
-
-            timestep = last(markovstep(t, idx, Fₖ, pₖ[idx], αₗ, model, G))
-            Δts[i] = timestep
         end
 
-        optimiserₗ = Opt(:LN_SBPLX, 2); xtol_rel!(optimiserₗ, ᾱₗ / 100.);
-	    lower_bounds!(optimiserₗ, [0., 0.]); upper_bounds!(optimiserₗ, [1., ᾱₗ])
-
-        Aₕ = ᾱₕ * range(0, 1; length = size(Fs[2], 3))
-        for (k, αₕ) in enumerate(Aₕ)
-            pₖ = @view policies[2][:, :, k]
-            Fₖ = @view Fs[2][:, :, k]
-
-            objective = @closure (x, grad) -> begin
-                u = Policy(x[1], x[2])
-                F′, Δt = markovstep(t, idx, Fₖ, u, αₕ, model, G)
-                cost(F′, t, Xᵢ, Δt, u, lowmodel)
-            end
-
-            min_objective!(optimiserₕ, objective)
-            candidate = min.(pₖ[idx], [1., ᾱₕ])
-
-            obj, pol, _ = optimize(optimiserₕ, candidate)
-
-            Fₖ[idx] = obj
-            pₖ[idx] = pol
-
-            timestep = last(markovstep(t, idx, Fₖ, pₖ[idx], αₕ, model, G))
-            Δts[i] = min(timestep, Δts[i])
-        end
+        Δts[l] = Δtₗ
     end
 end
 
 function backwardsimulation!(
-    Fs::NTuple{2, AbstractArray{Float64, 3}}, 
-    policies::NTuple{2, AbstractArray{Policy, 3}}, 
-    model::AbstractGameModel, 
-    G; 
+    F::AbstractArray{Float64, 4}, 
+    policies::AbstractArray{Policy, 4},
+    model::AbstractGameModel, G; 
     verbose = false, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = last(model.regionalcalibration.calibration.tspan), allownegative = false, stepkwargs...)
     verbose && println("Starting backward simulation...")
      
     savecache = !isnothing(cachepath)
     if savecache
-        if isfile(cachepath) 
+        if isfile(cachepath)
             if overwrite 
                 verbose && @warn "Removing file $cachepath.\n"
 
@@ -117,17 +107,19 @@ function backwardsimulation!(
 
     queue = DiagonalRedBlackQueue(G)
     Δts = SharedVector(zeros(N^2))
+    τ = first(model.economy).τ
 
     while !isqempty(queue)
-        tmin = first(model.economy).τ - minimum(queue.vals)
-
+        tmin = τ - minimum(queue.vals)
         clusters = dequeue!(queue)
 
         for cluster in clusters
-            backwardstep!(Δts, Fs, policies, cluster, model, G; stepkwargs...)
+            backwardstep!(Δts, F, policies, cluster, model, G; stepkwargs...)
+
+            verbose && print("Cluster minimum time = $tmin...\r")
 
             for i in first.(cluster)
-                if queue[i] ≤ model.economy.τ - tstop
+                if queue[i] ≤ τ - tstop
                     queue[i] += Δts[i]
                 end
             end
@@ -137,30 +129,31 @@ function backwardsimulation!(
             verbose && println("\nSaving cache at $tcache...")
             group = JLD2.Group(cachefile, "$tcache")
             group["F"] = F
-            group["policy"] = policy
+            group["policies"] = policies
             tcache = tcache - cachestep 
         end
     end
 
     if savecache close(cachefile) end
 
-    return F, policy
+    return F, policies
 end
 
-function computebackward(model, G; kwargs...)
-    F̄, terminalpolicy = loadterminal(model, G)
-    computebackward(F̄, terminalpolicy, model, G; kwargs...)
+function computebackward(model::AbstractGameModel, G; datapath = "data", kwargs...)
+    models = collect(breakgamemodel(model))
+    F̄, terminalpolicy = loadterminal(models, G; addpath = ["high", "low"], datapath)
+    computebackward(F̄, terminalpolicy, model, G; datapath, kwargs...)
 end
-function computebackward(F̄::Array{Float64, 3}, terminalpolicy::Array{Float64, 3}, model::AbstractModel, G; verbose = false, withsave = true, datapath = "data", allownegative = false, M = 10, iterkwargs...)
+function computebackward(F̄::Array{Float64, 3}, terminalpolicy::Array{Float64, 3}, model::AbstractGameModel, G; verbose = false, withsave = true, datapath = "data", allownegative = false, M = 10, iterkwargs...)
     N₁, N₂ = size(G)
     nmodels = size(F̄, 3)
 
-    Fs = ntuple(_ -> SharedArray{Float64}(N₁, N₂, M), nmodels)
-    policies = ntuple(_ -> SharedArray{Policy}(N₁, N₂, M), nmodels)
+    F = SharedArray{Float64}(N₁, N₂, M, nmodels)
+    policies = SharedArray{Policy}(N₁, N₂, M, nmodels)
 
-    for m in eachindex(Fs), k in axes(Fs[m], 3)
-        Fs[m][:, :, k] .= F̄[:, :, m]
-        policies[m][:, :, k] .= [Policy(χ, 0.) for χ ∈ terminalpolicy[:, :, m]]
+    for k in 1:nmodels
+        F[:, :, :, k] .= F̄[:, :, k]
+        policies[:, :, :, k] .= [Policy(χ, 0.) for χ ∈ terminalpolicy[:, :, k]]
     end
 
     if withsave
@@ -172,8 +165,9 @@ function computebackward(F̄::Array{Float64, 3}, terminalpolicy::Array{Float64, 
         filename = makefilename(model, G)
     end
 
-    cachepath = ifelse(withsave, joinpath(cachefolder, filename), nothing)
-    backwardsimulation!(Fs, policies, model, G; verbose, cachepath, allownegative, iterkwargs...)
+    cachepath = withsave ? joinpath(cachefolder, filename) : nothing
+    
+    backwardsimulation!(F, policies, model, G; verbose, cachepath, allownegative, iterkwargs...)
 
-    return F, policy
+    return F, policies
 end
