@@ -62,7 +62,7 @@ function backwardsimulation!(F, policy, model::AbstractModel, G; verbose = false
             else 
                 verbose && @warn "File $cachepath already exists. If you want to overwrite it pass overwrite = true. Will copy the results into `F` and `policy`.\n"
 
-                _, Fcache, policycache = loadtotal(model, G; datapath, allownegative)
+                _, Fcache, policycache = loadtotal(model; datapath, allownegative)
 
                 F .= Fcache[:, :, 1]
                 policy .= policycache[:, :, 1]
@@ -76,7 +76,7 @@ function backwardsimulation!(F, policy, model::AbstractModel, G; verbose = false
     end
 
     queue = DiagonalRedBlackQueue(G)
-    Δts = SharedVector(zeros(length(queue.vals)))
+    Δts = SharedVector(zeros(N^2))
 
     while !isqempty(queue)
         tmin = model.economy.τ - minimum(queue.vals)

@@ -67,5 +67,5 @@ function cost(F′, t, Xᵢ::Point, Δt, u::Policy, model::AbstractModel{LevelDa
 end
 
 function isqempty(q)
-    all(isempty.(q.minima))
+    all((isempty(m) for m in q.minima))
 end

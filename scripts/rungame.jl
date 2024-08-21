@@ -32,7 +32,7 @@ hogg = Hogg()
 damages = GrowthDamages()
 
 # Construct Grid
-Tdomain = hogg.Tᵖ .+ (0., 9.);
+Tdomain = hogg.Tᵖ .+ (0., 7.);
 mdomain = (mstable(Tdomain[1], hogg), mstable(Tdomain[2], hogg))
 G = RegularGrid([Tdomain, mdomain], N)
 
