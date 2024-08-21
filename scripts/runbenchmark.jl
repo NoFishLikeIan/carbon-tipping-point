@@ -2,8 +2,12 @@ include("utils/saving.jl")
 include("markov/terminal.jl")
 include("markov/backward.jl")
 
-N = getnumber(env, "N", 51; type = Int)
+env = DotEnv.config()
+DATAPATH = get(env, "DATAPATH", "data")
+SIMPATH = get(env, "SIMULATIONPATH", "simulation/planner")
+datapath = joinpath(DATAPATH, SIMPATH)
 
+N = getnumber(env, "N", 31; type = Int)
 VERBOSE = getbool(env, "VERBOSE", false)
 RUNTERMINAL = getbool(env, "RUNTERMINAL", false)
 RUNBACKWARDS = getbool(env, "RUNBACKWARDS", false)
@@ -12,30 +16,31 @@ TOL = getnumber(env, "TOL", 1e-3)
 TSTOP = getnumber(env, "TSTOP", 0.)
 CACHESTEP = getnumber(env, "CACHESTEP", 1 / 4)
 
+OVERWRITE && @warn "Running in overwrite mode!"
+
 # Construct model
 preferences = EpsteinZin();
 calibration = load_object(joinpath(DATAPATH, "calibration.jld2"));
 economy = Economy()
 hogg = Hogg()
-damages = [GrowthDamages()]
-negativeemissions = [false]
+damages = GrowthDamages()
+jump = Jump()
+allownegative = false
 
-# Terminal simulation
-for d in damages
-    VERBOSE && println("\nSolving for damages = $d...")
-    
-    jumpmodel = JumpModel(Jump(), hogg, preferences, d, economy, calibration)
+jumpmodel = JumpModel(jump, hogg, preferences, damages, economy, calibration)
 
-    G = constructdefaultgrid(N, jumpmodel)
-    VERBOSE && println("\nSolving jump model...")
-    if RUNTERMINAL
-        computeterminal(jumpmodel, G; verbose = VERBOSE, datapath = DATAPATH, alternate = true, tol = TOL)
-    end
+# Construct Grid
+Tdomain = hogg.Tᵖ .+ (0., 9.);
+mdomain = (mstable(Tdomain[1], hogg), mstable(Tdomain[2], hogg))
+G = RegularGrid([Tdomain, mdomain], N)
 
-    if RUNBACKWARDS
-        for allownegative in negativeemissions
-            VERBOSE && println("Running backward $(ifelse(allownegative, "with", "without")) negative emissions...")
-            computebackward(jumpmodel, G; allownegative, verbose = VERBOSE, datapath = DATAPATH, overwrite = OVERWRITE, tstop = TSTOP, cachestep = CACHESTEP)
-        end
-    end
+VERBOSE && println("\nSolving jump model...")
+if RUNTERMINAL
+    Gterminal = terminalgrid(N, model)
+    computeterminal(jumpmodel, Gterminal; verbose = VERBOSE, datapath = DATAPATH, alternate = true, tol = TOL)
+end
+
+if RUNBACKWARDS
+    VERBOSE && println("Running backward $(ifelse(allownegative, "with", "without")) negative emissions...")
+    computebackward(jumpmodel, G; allownegative, verbose = VERBOSE, datapath = DATAPATH, overwrite = OVERWRITE, tstop = TSTOP, cachestep = CACHESTEP)
 end

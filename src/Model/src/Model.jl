@@ -16,7 +16,7 @@ export TippingModel, JumpModel, AbstractPlannerModel
 export TippingGameModel, JumpGameModel, AbstractGameModel
 export AbstractJumpModel, AbstractTippingModel
 export AbstractModel
-export constructdefaultgrid
+export terminalgrid
 export RegionalEconomies, breakgamemodel
 
 # Packages

@@ -1,16 +1,13 @@
 include("utils/saving.jl")
 include("markov/terminal.jl")
-include("markov/game.jl")
+include("markov/backward.jl")
 
-env = DotEnv.config(".envgame")
+env = DotEnv.config()
 DATAPATH = get(env, "DATAPATH", "data")
-SIMPATH = get(env, "SIMULATIONPATH", "game")
-
+SIMPATH = get(env, "SIMULATIONPATH", "simulation/planner")
 datapath = joinpath(DATAPATH, SIMPATH)
 
 N = getnumber(env, "N", 31; type = Int)
-M = getnumber(env, "M", 10; type = Int)
-
 VERBOSE = getbool(env, "VERBOSE", false)
 RUNTERMINAL = getbool(env, "RUNTERMINAL", false)
 RUNBACKWARDS = getbool(env, "RUNBACKWARDS", false)
@@ -26,35 +23,31 @@ thresholds = [1.5, 2.5];
 
 # Construct model
 preferences = EpsteinZin();
-rc = load_object(joinpath(DATAPATH, "regionalcalibration.jld2"));
-economies = RegionalEconomies()
+calibration = load_object(joinpath(DATAPATH, "calibration.jld2"));
+economy = Economy()
 hogg = Hogg()
 damages = GrowthDamages()
+allownegative = false
 
 # Construct Grid
 Tdomain = hogg.Tᵖ .+ (0., 9.);
 mdomain = (mstable(Tdomain[1], hogg), mstable(Tdomain[2], hogg))
 G = RegularGrid([Tdomain, mdomain], N)
 
-# Terminal simulation
 for Tᶜ ∈ thresholds
     VERBOSE && println("Solving model with Tᶜ = $Tᶜ...")
-
+    
     albedo = Albedo(Tᶜ = Tᶜ)
-    model = TippingGameModel(albedo, hogg, (preferences, preferences), (damages, damages), economies, rc)
-
+    model = TippingModel(albedo, hogg, preferences, damages, economy, calibration)
+    
+    # Terminal simulation
     if RUNTERMINAL
         Gterminal = terminalgrid(N, model)
-        highmodel, lowmodel = breakgamemodel(model)
-        for (label, regionalmodel) in zip(("high", "low"), breakgamemodel(model))
-            VERBOSE && println("Solving for $label income countries...")
-
-            computeterminal(regionalmodel, G; verbose = VERBOSE, datapath, alternate = true, tol = TOL, overwrite = OVERWRITE, addpath = label) 
-        end
+        computeterminal(model, Gterminal; verbose = VERBOSE, datapath = datapath, alternate = true, tol = TOL, overwrite = OVERWRITE)
     end
 
     if RUNBACKWARDS
-        VERBOSE && println("Running backward game simulation...")
-        computebackward(model, G; verbose = VERBOSE, datapath, overwrite = OVERWRITE, tstop = TSTOP, cachestep = CACHESTEP)
+        VERBOSE && println("Running backward $(ifelse(allownegative, "with", "without")) negative emissions...")
+        computebackward(model, G; allownegative, verbose = VERBOSE, datapath = datapath, overwrite = OVERWRITE, tstop = TSTOP, cachestep = CACHESTEP)
     end
 end

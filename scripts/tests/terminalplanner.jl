@@ -23,13 +23,13 @@ model = TippingModel(albedo, hogg, preferences, damages, economy, calibration);
 
 begin
 	N = 51
-	G = constructdefaultgrid(N, model)
+	G = terminalgrid(N, model)
 
 	Tspace = range(G.domains[1]...; length = size(G, 1))
 	mspace = range(G.domains[2]...; length = size(G, 2))
 end
 
-F̄, terminalpolicy = loadterminal(model, G)
+F̄, terminalpolicy = loadterminal(model)
 
 F₀ = ones(size(G)); F̄ = copy(F₀);
 terminalpolicy = similar(F̄);

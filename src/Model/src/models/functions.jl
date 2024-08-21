@@ -109,15 +109,32 @@ function outputfct(t, Xᵢ::Point, Δt, u::NTuple{2, Policy}, model::AbstractGam
     @. max(1 + adj, 0.)
 end
 
+function criticaltemperature(model::AbstractPlannerModel{GrowthDamages, P}) where P <: Preferences
+    maximumgrowth = Tᵢ -> begin
+        rate, _ = gss(χ -> bterminal(Tᵢ, χ, model), 0., 1.)
+        return rate
+    end
+
+    find_zero(maximumgrowth, model.hogg.Tᵖ .+ (0., 15.))
+end
+function criticaltemperature(model::AbstractGameModel{GrowthDamages, P}) where P <: Preferences
+    h, l = breakgamemodel(model)
+
+    return min(criticaltemperature(h), criticaltemperature(l))
+end
+
 "Computes the temperature level for which it is impossible to achieve positive output growth"
-function constructdefaultgrid(N, model::AbstractModel)
-    T̄ = model.hogg.T₀ + ifelse(isa(model.damages, LevelDamages), 8., 9.)
+function terminalgrid(N, model::AbstractModel{GrowthDamages, P}) where P <: Preferences
+    T̄ = criticaltemperature(model)
 
     Tdomain = (model.hogg.Tᵖ, T̄)
-    mdomain = (
-        mstable(Tdomain[1], model), 
-        mstable(Tdomain[2], model)
-    )
+    mdomain = (mstable(model.hogg.Tᵖ, model), mstable(T̄, model))
+
+    RegularGrid([Tdomain, mdomain], N)
+end
+function terminalgrid(N, model::AbstractModel{LevelDamages, P}) where P <: Preferences
+    Tdomain = model.hogg.Tᵖ .+ (0., 9.)
+    mdomain = (mstable(Tdomain[1], model), mstable(Tdomain[2], model))
 
     RegularGrid([Tdomain, mdomain], N)
 end

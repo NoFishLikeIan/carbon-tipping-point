@@ -26,7 +26,7 @@ G = constructdefaultgrid(N, model);
 
 # Testing the backward step
 begin
-	F̄, terminalpolicy = loadterminal(model, G);
+	F̄, terminalpolicy = loadterminal(model);
 	F = SharedMatrix(F̄);
 	policy = SharedMatrix([Policy(χ, 0.) for χ ∈ terminalpolicy]);
 
@@ -37,7 +37,7 @@ end;
 
 backwardstep!(Δts, F, policy, cluster, model, G)
 
-F̄, terminalpolicy = loadterminal(model, G);
+F̄, terminalpolicy = loadterminal(model);
 F = SharedMatrix(F̄);
 policy = SharedMatrix([Policy(χ, 0.) for χ ∈ terminalpolicy]);
 

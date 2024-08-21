@@ -93,7 +93,7 @@ function backwardsimulation!(
             else 
                 verbose && @warn "File $cachepath already exists. If you want to overwrite it pass overwrite = true. Will copy the results into `F` and `policy`.\n"
 
-                _, Fcache, policycache = loadtotal(model, G; allownegative)
+                _, Fcache, policycache = loadtotal(model; allownegative)
 
                 F .= Fcache[:, :, 1]
                 policy .= policycache[:, :, 1]
@@ -103,6 +103,7 @@ function backwardsimulation!(
         end
 
         cachefile = jldopen(cachepath, "w+")
+        cachefile["G"] = G
     end
 
     queue = DiagonalRedBlackQueue(G)
@@ -140,11 +141,21 @@ function backwardsimulation!(
 end
 
 function computebackward(model::AbstractGameModel, G; datapath = "data", kwargs...)
-    models = collect(breakgamemodel(model))
-    F̄, terminalpolicy = loadterminal(models, G; addpath = ["high", "low"], datapath)
-    computebackward(F̄, terminalpolicy, model, G; datapath, kwargs...)
+
+    h, l = breakgamemodel(model)
+    F̄low, pollow, Gterminal = loadterminal(l; addpath = "low", datapath)
+    F̄high, polhigh, _ = loadterminal(h; addpath = "high", datapath)
+
+    F̄ = cat(F̄high, F̄low; dims = 3)
+    terminalpolicy = cat(polhigh, pollow; dims = 3)
+    
+    terminalres = F̄, terminalpolicy, Gterminal
+    
+    computebackward(terminalres, model, G; datapath, kwargs...)
 end
-function computebackward(F̄::Array{Float64, 3}, terminalpolicy::Array{Float64, 3}, model::AbstractGameModel, G; verbose = false, withsave = true, datapath = "data", allownegative = false, M = 10, iterkwargs...)
+function computebackward(terminalres::Tuple{Array{Float64, 3}, Array{Float64, 3}, RegularGrid}, model::AbstractGameModel, G; verbose = false, withsave = true, datapath = "data", allownegative = false, M = 10, iterkwargs...)
+    F̄, terminalconsumption, Gterminal = terminalres
+    
     N₁, N₂ = size(G)
     nmodels = size(F̄, 3)
 
@@ -152,8 +163,9 @@ function computebackward(F̄::Array{Float64, 3}, terminalpolicy::Array{Float64, 
     policies = SharedArray{Policy}(N₁, N₂, M, nmodels)
 
     for k in 1:nmodels
-        F[:, :, :, k] .= F̄[:, :, k]
-        policies[:, :, :, k] .= [Policy(χ, 0.) for χ ∈ terminalpolicy[:, :, k]]
+        F[:, :, :, k] .= interpolateovergrid(Gterminal, G, F̄[:, :, k])
+        terminalpolicy = [Policy(χ, 0.) for χ ∈ terminalconsumption[:, :, k]]
+        policies[:, :, :, k] .= interpolateovergrid(Gterminal, G, terminalpolicy)
     end
 
     if withsave
@@ -162,7 +174,7 @@ function computebackward(F̄::Array{Float64, 3}, terminalpolicy::Array{Float64, 
         cachefolder = joinpath(datapath, folder, controltype, "cache")
         if !isdir(cachefolder) mkpath(cachefolder) end
         
-        filename = makefilename(model, G)
+        filename = makefilename(model)
     end
 
     cachepath = withsave ? joinpath(cachefolder, filename) : nothing

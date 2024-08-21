@@ -16,7 +16,7 @@ end
 
 @everywhere include("chain.jl")
 
-function backwardstep!(Δts, F, policy, cluster, model::AbstractModel, G; allownegative = false, s = 1e-2)
+function backwardstep!(Δts, F, policy, cluster, model::AbstractModel, G; allownegative = false, M = 100)
     indices = CartesianIndices(G)
 
     @sync @distributed for (i, δt) in cluster
@@ -33,19 +33,16 @@ function backwardstep!(Δts, F, policy, cluster, model::AbstractModel, G; allown
             cost(F′, t, Xᵢ, Δt, u, model)
         end
 
-        optimiser = Opt(:LN_SBPLX, 2); xtol_rel!(optimiser, ᾱ / 100.);
+        optimiser = Opt(:LN_SBPLX, 2); xtol_rel!(optimiser, ᾱ / M);
 	    lower_bounds!(optimiser, [0., 0.]); upper_bounds!(optimiser, [1., ᾱ])
         min_objective!(optimiser, objective)
 
         candidate = min.(policy[idx], [1., ᾱ])
         obj, pol, _ = optimize(optimiser, candidate)
         
-        polₜ = Policy(pol[1], pol[2])
-        timestep = last(markovstep(t, idx, F, polₜ, model, G))
-        
-        w = inv(1 + s * timestep) # Policy smoothing over time
+        policy[idx] = Policy(pol[1], pol[2])
+        timestep = last(markovstep(t, idx, F, policy[idx], model, G))
 
-        policy[idx] = adjpolicy(idx, policy) * (1 - w) + polₜ * w
         F[idx] = obj
         Δts[i] = timestep
     end
@@ -65,7 +62,7 @@ function backwardsimulation!(F, policy, model::AbstractModel, G; verbose = false
             else 
                 verbose && @warn "File $cachepath already exists. If you want to overwrite it pass overwrite = true. Will copy the results into `F` and `policy`.\n"
 
-                _, Fcache, policycache = loadtotal(model, G; allownegative)
+                _, Fcache, policycache = loadtotal(model, G; datapath, allownegative)
 
                 F .= Fcache[:, :, 1]
                 policy .= policycache[:, :, 1]
@@ -75,12 +72,13 @@ function backwardsimulation!(F, policy, model::AbstractModel, G; verbose = false
         end
 
         cachefile = jldopen(cachepath, "w+")
+        cachefile["G"] = G
     end
 
     queue = DiagonalRedBlackQueue(G)
     Δts = SharedVector(zeros(length(queue.vals)))
 
-    while !all(isempty.(queue.minima))
+    while !isqempty(queue)
         tmin = model.economy.τ - minimum(queue.vals)
         verbose && print("Cluster minimum time = $tmin...\r")
 
@@ -111,20 +109,24 @@ function backwardsimulation!(F, policy, model::AbstractModel, G; verbose = false
 end
 
 function computebackward(model::AbstractModel, G; datapath = "data", kwargs...)
-    F̄, terminalpolicy = loadterminal(model, G)
-    computebackward(F̄, terminalpolicy, model, G; datapath, kwargs...)
+    terminalresults = loadterminal(model; datapath)
+    computebackward(terminalresults, model, G; datapath, kwargs...)
 end
-function computebackward(F̄, terminalpolicy, model::AbstractModel, G; verbose = false, withsave = true, datapath = "data", allownegative = false, iterkwargs...) 
-    F = SharedMatrix(F̄);
-    policy = SharedMatrix([Policy(χ, 0.) for χ ∈ terminalpolicy])
+function computebackward(terminalresults, model::AbstractModel, G; verbose = false, withsave = true, datapath = "data", allownegative = false, iterkwargs...)
+    F̄, terminalconsumption, terminalG = terminalresults
+    F = SharedMatrix(interpolateovergrid(terminalG, G, F̄));
+
+    terminalpolicy = [Policy(χ, 0.) for χ ∈ terminalconsumption]
+
+    policy = SharedMatrix(interpolateovergrid(terminalG, G, terminalpolicy))
 
     if withsave
         folder = SIMPATHS[typeof(model)]
         controltype = ifelse(allownegative, "allownegative", "nonnegative")
-        cachefolder = joinpath(datapath, folder, controltype, "cache")
+        cachefolder = joinpath(datapath, folder, controltype)
         if !isdir(cachefolder) mkpath(cachefolder) end
         
-        filename = makefilename(model, G)
+        filename = makefilename(model)
     end
 
     cachepath = ifelse(withsave, joinpath(cachefolder, filename), nothing)

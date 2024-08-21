@@ -120,7 +120,7 @@ function computeterminal(model, G::RegularGrid; verbose = true, withsave = true,
         savefolder = joinpath(datapath, folder, "terminal", addpath)
         if !isdir(savefolder) mkpath(savefolder) end
         
-        filename = makefilename(model, G)
+        filename = makefilename(model)
         savepath = joinpath(savefolder, filename)
 
         if isfile(savepath)
@@ -131,9 +131,9 @@ function computeterminal(model, G::RegularGrid; verbose = true, withsave = true,
             else
                 verbose && @warn "File $savepath already exists. If you want to overwrite it pass overwrite = true. Will copy the results into `F` and `policy`.\n"
 
-                F̄, policy = loadterminal(model, G; datapath, addpath)
+                F̄, policy, G = loadterminal(model; datapath, addpath)
 
-                return F̄, policy
+                return F̄, policy, G
             end
         end
 
@@ -147,5 +147,5 @@ function computeterminal(model, G::RegularGrid; verbose = true, withsave = true,
         jldsave(savepath; F̄, policy, G)
     end
 
-    return F̄, policy
+    return F̄, policy, G
 end
