@@ -20,60 +20,42 @@ function affect!(integrator)
     integrator.u[1] += q
 end
 
-Result = Tuple{Vector{Float64}, Array{Float64, 3}, Array{Policy, 3}}
+Result = Tuple{Vector{Float64}, Array{Float64, 3}, Array{Policy, 3}, RegularGrid}
 
 "Constructs spline of results"
-buildsplines(result::Result, G; splinekwargs...) = buildsplines([result], [G]; splinekwargs...) |> first
-function buildsplines(results::AbstractVector{Result}, Gs; splinekwargs...)
-    itps = Dict{Float64, NTuple{3, Spline2D}}[]
+function buildsplines(result::Result; splinekwargs...)
+    timespace, F, policy, G = result
 
-    for (k, result) in enumerate(results)
-        G = Gs[k]
-        timespace, F, policy = result
+    Tspace = range(G.domains[1]...; length = size(G, 1))
+    mspace = range(G.domains[2]...; length = size(G, 2))
 
-        Tspace = range(G.domains[1]...; length = size(G, 1))
-        mspace = range(G.domains[2]...; length = size(G, 2))
+    timesplines = Dict{Float64, NTuple{3, Spline2D}}()
 
-        timesplines = Dict{Float64, NTuple{3, Spline2D}}()
+    for (k, t) in enumerate(timespace)
+        pol = policy[:, :, k]
 
-        for (k, t) in enumerate(timespace)
-            pol = policy[:, :, k]
-
-            timesplines[t] = map(
-                M -> Spline2D(Tspace, mspace, M; splinekwargs...),
-                (F[:, :, k], first.(pol), last.(pol))
-            )
-        end
-
-        push!(itps, timesplines)
+        timesplines[t] = map(
+            M -> Spline2D(Tspace, mspace, M; splinekwargs...),
+            (F[:, :, k], first.(pol), last.(pol))
+        )
     end
 
-    return itps
+    return timesplines
 end
 
 ResultInterpolation = Dict{Symbol, Extrapolation}
 
 "Constructs linear interpolation of results"
-buildinterpolations(result::Result, G; splinekwargs...) = buildinterpolations([result], [G]; splinekwargs...) |> first
-function buildinterpolations(results::AbstractVector{Result}, Gs; splinekwargs...)
-    itps = Dict{Symbol, Extrapolation}[]
+function buildinterpolations(result::Result; splinekwargs...)
+    timespace, F, policy, G = result
 
-    for (k, result) in enumerate(results)
-        G = Gs[k]
-        timespace, F, policy = result
+    Tspace = range(G.domains[1]...; length = size(G, 1))
+    mspace = range(G.domains[2]...; length = size(G, 2))
 
-        Tspace = range(G.domains[1]...; length = size(G, 1))
-        mspace = range(G.domains[2]...; length = size(G, 2))
+    nodes = (Tspace, mspace, timespace)
+    Fitp = linear_interpolation(nodes, F; extrapolation_bc = Line())
+    χitp = linear_interpolation(nodes, first.(policy); extrapolation_bc = Line())
+    αitp = linear_interpolation(nodes, last.(policy); extrapolation_bc = Line())
 
-        nodes = (Tspace, mspace, timespace)
-        Fitp = linear_interpolation(nodes, F; extrapolation_bc = Line())
-        χitp = linear_interpolation(nodes, first.(policy); extrapolation_bc = Line())
-        αitp = linear_interpolation(nodes, last.(policy); extrapolation_bc = Line())
-
-        resitp = Dict(:F => Fitp, :χ => χitp, :α => αitp)
-
-        push!(itps, resitp)
-    end
-
-    return itps
+    Dict{Symbol, typeof(χitp)}(:F => Fitp, :χ => χitp, :α => αitp)
 end

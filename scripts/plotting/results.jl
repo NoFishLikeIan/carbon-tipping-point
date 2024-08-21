@@ -37,7 +37,6 @@ end;
 
 begin # Construct models and grids
     thresholds = [1.5, 2.5];
-	N = 51;
 
 	calibration = load_object(joinpath(DATAPATH, "calibration.jld2"))
 	preferences = EpsteinZin()
@@ -45,25 +44,19 @@ begin # Construct models and grids
     economy = Economy()
     jump = Jump()
     hogg = Hogg()
-
-    jumpmodel = JumpModel(jump, Hogg(), preferences, damages, economy, calibration)
     
 	models = AbstractModel[]
-    Gs = RegularGrid[]
 
 	for Tᶜ ∈ thresholds
 	    albedo = Albedo(Tᶜ = Tᶜ)
 	    model = TippingModel(albedo, hogg, preferences, damages, economy, calibration)
 
-        G = constructdefaultgrid(N, model)
-
 		push!(models, model)
-        push!(Gs, G)
+
 	end
 
     jumpmodel = JumpModel(jump,  hogg, preferences, damages, economy, calibration)
     push!(models, jumpmodel)
-    push!(Gs, constructdefaultgrid(N, jumpmodel))
 end;
 
 begin # Labels, colors and axis
@@ -84,7 +77,7 @@ begin # Labels, colors and axis
 
     temperatureticks = makedeviationtickz(0., ΔTmax, first(models); step = 1, digits = 0)
 
-    Tmin, Tmax = extrema(temperatureticks[1])
+    Tmin, Tmax = (0., ΔTmax) .+ hogg.Tᵖ
 
     X₀ = [hogg.T₀, log(hogg.M₀)]
 
@@ -92,8 +85,8 @@ begin # Labels, colors and axis
 end;
 
 # --- Optimal emissions 
-results = loadtotal(models, Gs; datapath = datapath);
-itps = buildinterpolations(results, Gs);
+results = loadtotal.(models; datapath = datapath);
+itps = buildinterpolations.(results);
 modelmap = Dict(models .=> itps);
 
 function F!(dx, x, p, t)	
@@ -103,7 +96,7 @@ function F!(dx, x, p, t)
     α = αitp(T, m, t)
 	
 	dx[1] = μ(T, m, model) / model.hogg.ϵ
-	dx[2] = γ(t, model.calibration) - α
+	dx[2] = γ(t, model.calibration) # - α
 end;
 
 function G!(Σ, x, p::Tuple{AbstractModel, Any}, t)
@@ -202,9 +195,9 @@ begin
         Tlower = @. first(lowerpath.u)
         Tupper = @. first(upperpath.u)
 
-        βmedian = smoothedβ(medianpath, αitp, model; w = 10)
-        βlower = smoothedβ(lowerpath, αitp, model; w = 10)
-        βupper = smoothedβ(upperpath, αitp, model; w = 10)
+        βmedian = smoothedβ(medianpath, αitp, model; w = 0)
+        βlower = smoothedβ(lowerpath, αitp, model; w = 0)
+        βupper = smoothedβ(upperpath, αitp, model; w = 0)
 
         clamped = clamp.(βmedian, βlower, βupper)
 
@@ -289,14 +282,14 @@ end
 
 # Abatement spending
 begin
-    G = first(Gs)
+    G = last(results[1])
     mspace = range(G.domains[2]...; length = size(G, 2))
     
     bmodel = last(models)
     bitp = modelmap[bmodel]
     bαitp = bitp[:α]  
 
-    model = models[1]
+    model = models[2]
     itp = modelmap[model]
     αitp = itp[:α]
     t = 0.
@@ -304,10 +297,6 @@ begin
     function Δβ(m, T)
         M = exp(m)
         α₁ = αitp(T, m, 0.)
-        α₂ = bαitp(T, m, 0.)
-
-        Model.β(t, Model.ε(t, M, α₁, model), model.economy) -
-        Model.β(t, Model.ε(t, M, α₂, model), model.economy)
     end
 
     surface(mspace, Tspace, Δβ; c = :coolwarm, camera = (45, 45), xflip = true)

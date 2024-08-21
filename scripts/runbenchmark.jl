@@ -30,17 +30,17 @@ allownegative = false
 jumpmodel = JumpModel(jump, hogg, preferences, damages, economy, calibration)
 
 # Construct Grid
-Tdomain = hogg.Tᵖ .+ (0., 9.);
+Tdomain = hogg.Tᵖ .+ (0., 7.);
 mdomain = (mstable(Tdomain[1], hogg), mstable(Tdomain[2], hogg))
 G = RegularGrid([Tdomain, mdomain], N)
 
 VERBOSE && println("\nSolving jump model...")
 if RUNTERMINAL
-    Gterminal = terminalgrid(N, model)
-    computeterminal(jumpmodel, Gterminal; verbose = VERBOSE, datapath = DATAPATH, alternate = true, tol = TOL)
+    Gterminal = terminalgrid(N, jumpmodel)
+    computeterminal(jumpmodel, Gterminal; verbose = VERBOSE, datapath = datapath, alternate = true, tol = TOL)
 end
 
 if RUNBACKWARDS
     VERBOSE && println("Running backward $(ifelse(allownegative, "with", "without")) negative emissions...")
-    computebackward(jumpmodel, G; allownegative, verbose = VERBOSE, datapath = DATAPATH, overwrite = OVERWRITE, tstop = TSTOP, cachestep = CACHESTEP)
+    computebackward(jumpmodel, G; allownegative, verbose = VERBOSE, datapath = datapath, overwrite = OVERWRITE, tstop = TSTOP, cachestep = CACHESTEP)
 end
