@@ -4,10 +4,8 @@ using JLD2, DotEnv, CSV
 using UnPack
 using DataFrames, DataStructures
 
-using FiniteDiff
 using DifferentialEquations, DifferentialEquations.EnsembleAnalysis
 
-using KernelDensity
 using Interpolations
 using Interpolations: Extrapolation
 
@@ -26,6 +24,9 @@ begin # Global variables
     env = DotEnv.config()
     BASELINE_YEAR = 2020
     DATAPATH = get(env, "DATAPATH", "data")
+    SIMPATH = get(env, "SIMULATIONPATH", "simulaton")
+    datapath = joinpath(DATAPATH, SIMPATH)
+
     PLOTPATH = get(env, "PLOTPATH", "plots")
     PRESENTATIONPATH = joinpath(PLOTPATH, "presentation")
 
@@ -46,14 +47,14 @@ begin # Construct models and grids
     jump = Jump()
     hogg = Hogg()
 
-    jumpmodel = JumpModel(jump, preferences, damages, economy, Hogg(), calibration)
+    jumpmodel = JumpModel(jump, Hogg(), preferences, damages, economy, calibration)
     
 	models = AbstractModel[]
     Gs = RegularGrid[]
 
 	for Tᶜ ∈ thresholds
 	    albedo = Albedo(Tᶜ = Tᶜ)
-	    model = TippingModel(albedo, preferences, damages, economy, hogg, calibration)
+	    model = TippingModel(albedo, hogg, preferences, damages, economy, calibration)
 
         G = constructdefaultgrid(N, model)
 
@@ -61,7 +62,7 @@ begin # Construct models and grids
         push!(Gs, G)
 	end
 
-    jumpmodel = JumpModel(jump, preferences, damages, economy, hogg, calibration)
+    jumpmodel = JumpModel(jump,  hogg, preferences, damages, economy, calibration)
     push!(models, jumpmodel)
     push!(Gs, constructdefaultgrid(N, jumpmodel))
 end;
@@ -91,17 +92,8 @@ begin # Labels, colors and axis
     baufn = SDEFunction(Fbau!, G!)
 end;
 
-begin # Load IPCC data
-    IPCCDATAPATH = joinpath(DATAPATH, "climate-data", "proj-median.csv")
-    ipccproj = CSV.read(IPCCDATAPATH, DataFrame)
-
-    getscenario(s::Int64) = filter(:Scenario => isequal("SSP$(s) - Baseline"), ipccproj)
-
-    bauscenario = getscenario(5)
-end;
-
 # --- Optimal emissions 
-results = loadtotal(models, Gs; datapath = DATAPATH);
+results = loadtotal(models, Gs; datapath = datapath);
 itps = buildinterpolations(results, Gs);
 modelmap = Dict(models .=> itps);
 
@@ -133,14 +125,14 @@ begin # Solve an ensemble problem for all models with the bau scenario
     x₀ = [hogg.T₀, log(hogg.M₀)]
 
     for model in models
-        itp = modelmap[model]
-        αitp = itp[:α]
+        itp = modelmap[model];
+        αitp = itp[:α];
 
         p = (model, αitp);
 
         prob = SDEProblem(F!, G!, x₀, (0., 80.), p)
 
-        if typeof(model) <: JumpModel
+        if isa(model, JumpModel)
             jumpprob = JumpProblem(prob, ratejump)
             ensprob = EnsembleProblem(jumpprob)
             abatedsol = solve(ensprob, SRIW1(); trajectories = 1_000)
@@ -195,7 +187,7 @@ begin
     βticks = range(βextrema...; step = 0.01) |> collect
     βticklabels = [@sprintf("%.0f \\%%", 100 * y) for y in βticks]
 
-    Textrema = hogg.Tᵖ .+ (1., 2.)
+    Textrema = hogg.Tᵖ .+ (1., 5.)
     Tticks = makedeviationtickz((Textrema .- hogg.Tᵖ)..., first(models); step = 0.5, digits = 1)
 
     for (k, model) in enumerate(models)
@@ -237,7 +229,7 @@ begin
 
         
 
-        ylabel = if typeof(model) <: TippingModel
+        ylabel = if isa(model, TippingModel)
             if model.albedo.Tᶜ < 2
                 raw"\textit{imminent}"
             else

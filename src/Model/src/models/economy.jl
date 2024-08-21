@@ -52,3 +52,21 @@ end
 function A(t, economy::Economy)
     economy.A₀ * exp(economy.ϱ * t)
 end
+
+function RegionalEconomies(kwargs...)
+    economyhigh = Economy(
+        Y₀ = 47.54,
+        A₀ = 0.13, # Initial TFP
+        ϱ = 5e-4,
+        kwargs...
+    )
+
+    economylow = Economy(
+        Y₀ = 28.25,
+        A₀ = 0.05,
+        ϱ = 1e-3,
+        kwargs...
+    )
+
+    return (economyhigh, economylow)
+end

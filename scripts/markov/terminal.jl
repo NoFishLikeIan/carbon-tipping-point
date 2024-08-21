@@ -113,22 +113,39 @@ function vfi(F₀, model::AbstractModel, G; tol = 1e-3, maxiter = 10_000, verbos
     return Fᵢ₊₁, pᵢ₊₁
 end
 
-function computeterminal(model, G::RegularGrid; verbose = true, withsave = true, datapath = "data", iterkwargs...)    
+function computeterminal(model, G::RegularGrid; verbose = true, withsave = true, datapath = "data", overwrite = false, addpath = "", iterkwargs...)
+
+    if withsave
+        folder = SIMPATHS[typeof(model)]
+        savefolder = joinpath(datapath, folder, "terminal", addpath)
+        if !isdir(savefolder) mkpath(savefolder) end
+        
+        filename = makefilename(model)
+        savepath = joinpath(savefolder, filename)
+
+        if isfile(savepath)
+            if overwrite
+                verbose && @warn "Removing file $savepath.\n"
+
+                rm(savepath)
+            else
+                verbose && @warn "File $savepath already exists. If you want to overwrite it pass overwrite = true. Will copy the results into `F` and `policy`.\n"
+
+                F̄, policy, G = loadterminal(model; datapath, addpath)
+
+                return F̄, policy, G
+            end
+        end
+
+    end
 
     F₀ = ones(size(G))
     F̄, policy = vfi(F₀, model, G; verbose, iterkwargs...)
     
     if withsave
-        folder = SIMPATHS[typeof(model)]
-        savefolder = joinpath(datapath, folder, "terminal")
-        if !isdir(savefolder) mkpath(savefolder) end
-        
-        filename = makefilename(model, G)
-        savepath = joinpath(savefolder, filename)
-
-        println("Saving solution into $savepath...")
+        verbose && println("Saving solution into $savepath...")
         jldsave(savepath; F̄, policy, G)
     end
 
-    return F̄, policy
+    return F̄, policy, G
 end

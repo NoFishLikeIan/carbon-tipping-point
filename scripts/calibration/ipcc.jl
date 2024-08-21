@@ -14,22 +14,41 @@ using Model
 env = DotEnv.config()
 
 BASELINE_YEAR = parse(Int64, get(env, "BASELINE_YEAR", "2020"))
-DATAPATH = get(env, "DATAPATH", "data/") 
-IPCCDATAPATH = joinpath(DATAPATH, "climate-data", "proj-median.csv")
+DATAPATH = get(env, "DATAPATH", "data/")
+SPPNAME = get(env, "SSPNAME", "")
+IPCCDATAPATH = joinpath(DATAPATH, SPPNAME, "$SPPNAME.csv")
+MEDIANPATH = joinpath(DATAPATH, "climate-data", "proj-median.csv")
+
+@assert isfile(IPCCDATAPATH)
+@assert isfile(MEDIANPATH)
 
 # Import IPCC data
-ipccproj = CSV.read(IPCCDATAPATH, DataFrame)
+medianraw = CSV.read(MEDIANPATH, DataFrame)
+rawdata = CSV.read(IPCCDATAPATH, DataFrame); select!(rawdata, Not(:MODEL));
 
-getscenario(s::Int64) = filter(:Scenario => isequal("SSP$(s) - Baseline"), ipccproj)
+filters = (
+    :SCENARIO => ByRow(==("SSP5-85 (Baseline)")), :UNIT => ByRow(==("Mt CO2/yr")),
+    :VARIABLE => ByRow(==("CMIP6 Emissions|CO2"))
+)
 
-bauscenario = getscenario(5)
-ipcctime = bauscenario.Year .- BASELINE_YEAR
-T0 = Float64(first(ipcctime))
-T = Float64(last(ipcctime))
+begin
+    baudata = subset(rawdata, filters...); 
+    select!(baudata, Not(first.(filters)...));
+    baudata = permutedims(baudata, 1);
+    rename!(baudata, :REGION => :YEAR);
+    baudata[!, :YEAR] .= parse.(Int, baudata[!, :YEAR]);
 
-Mᵇ = bauscenario[:, "CO2 concentration"]
-Tᵇ = bauscenario[:, "Temperature"]
-Eᵇ = bauscenario[:, "CO2 emissions"] * 1e-9 # in Gton
+    baudata[!, Not(:YEAR)] .*= 0.001 #Mt to Gt
+end
+
+# World average calibration
+Eᵇ = baudata.World
+time = baudata.YEAR .- BASELINE_YEAR
+
+T0 = Float64(first(time))
+T = Float64(last(time))
+
+Mᵇ = filter(:Scenario => isequal("SSP5 - Baseline"), medianraw)[2:end, "CO2 concentration"]
 
 begin # Calibrate growth rate γᵇ
     growthdata = Array(log.(Mᵇ)')
@@ -40,12 +59,12 @@ begin # Calibrate growth rate γᵇ
     end
 
     p₀ = rand(3)
-    calibrationproblem = ODEProblem{false}(parametricemissions, growthdata[1], extrema(ipcctime); p = p₀)
+    calibrationproblem = ODEProblem{false}(parametricemissions, growthdata[1], extrema(time); p = p₀)
     
     cost = build_loss_objective(
-        calibrationproblem, Tsit5(), L2Loss(ipcctime, growthdata), 
+        calibrationproblem, Tsit5(), L2Loss(time, growthdata), 
         Optimization.AutoForwardDiff();
-        maxiters = 10_000, verbose = false, saveat = ipcctime
+        maxiters = 10_000, verbose = false, saveat = time
     )
 
     optprob = Optimization.OptimizationProblem(cost, p₀)
@@ -59,12 +78,17 @@ end
 
 # Plot solution
 begin
-    solvedprob = ODEProblem{false}(parametricemissions, growthdata[1], extrema(ipcctime); p = γparameters)
+    solvedprob = ODEProblem{false}(parametricemissions, growthdata[1], extrema(time); p = γparameters)
     sol = solve(solvedprob)
 
-    plot(ipcctime, growthdata'; label = "IPCC", marker = :o)
-    plot!(ipcctime, t -> sol(t); label = "Solved", marker = :o)
+    plot(time, growthdata'; label = "IPCC", marker = :o)
+    plot!(time, t -> sol(t); label = "Solved", marker = :o)
 end
 
-calibration = Model.Calibration(bauscenario.Year, Eᵇ, Tuple(γparameters), (T0, T), r)
+calibration = Calibration(time, Eᵇ, Tuple(γparameters), r, (T0, T))
 save_object(joinpath(DATAPATH, "calibration.jld2"), calibration)
+
+# Regional calibration
+oecdfrac = baudata.var"R5.2OECD" ./ Eᵇ
+rc = RegionalCalibration(calibration, oecdfrac)
+save_object(joinpath(DATAPATH, "regionalcalibration.jld2"), rc)
