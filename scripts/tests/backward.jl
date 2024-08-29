@@ -1,8 +1,10 @@
 using Revise
 using Test: @test
-using BenchmarkTools: @btime
+using BenchmarkTools
 using JLD2
 using Plots
+
+using Distributed: nprocs
 
 includet("../utils/saving.jl")
 includet("../markov/terminal.jl")
@@ -11,39 +13,53 @@ includet("../markov/backward.jl")
 println("Startup with $(nprocs()) processes...")
 
 begin
+	env = DotEnv.config()
+	DATAPATH = get(env, "DATAPATH", "data")
+	SIMULATIONPATH = get(env, "SIMULATIONPATH", "sim")
+
+	datapath = joinpath(DATAPATH, SIMULATIONPATH)
+end
+
+begin
 	calibration = load_object(joinpath(DATAPATH, "calibration.jld2"))
 	hogg = Hogg()
 	economy = Economy()
 	damages = GrowthDamages()
 	preferences = EpsteinZin()
-	albedo = Albedo()
+	albedo = Albedo(1.5)
 end
 
-# --- Albedo
-N = 51
-model = TippingModel(albedo, hogg, preferences, damages, economy, calibration);
-G = constructdefaultgrid(N, model);
+begin
+	model = TippingModel(albedo, hogg, preferences, damages, economy, calibration)
+
+	N = 21
+	Tdomain = hogg.Tᵖ .+ (0., 7.);
+	mdomain = (mstable(Tdomain[1], hogg), mstable(Tdomain[2], hogg))
+	G = RegularGrid([Tdomain, mdomain], N)
+end;
 
 # Testing the backward step
 begin
-	F̄, terminalpolicy = loadterminal(model);
-	F = SharedMatrix(F̄);
-	policy = SharedMatrix([Policy(χ, 0.) for χ ∈ terminalpolicy]);
+	F̄, terminalpolicy, Gterm = loadterminal(model; datapath);
+	policy = SharedArray{Float64}(size(G)..., 2)
+	policy[:, :, 1] .= interpolateovergrid(Gterm, G, terminalpolicy)
+	policy[:, :, 2] .= γ(economy.τ, calibration)
 
-	cluster = 1:N^2 .=> 0.
-	Δts = SharedVector(zeros(N^2))
-	i, δt = first(cluster)
+	F = interpolateovergrid(Gterm, G, F̄) |> SharedMatrix
+end; 
+
+begin
+	queue = DiagonalRedBlackQueue(G)
+	Δts = zeros(N^2) |> SharedVector
+	cluster = first(dequeue!(queue))
+
+	@sync backwardstep!(Δts, F, policy, cluster, model, G)
 end;
 
-backwardstep!(Δts, F, policy, cluster, model, G)
-
-F̄, terminalpolicy = loadterminal(model);
-F = SharedMatrix(F̄);
-policy = SharedMatrix([Policy(χ, 0.) for χ ∈ terminalpolicy]);
-
-backwardstep!(Δts, F, policy, cluster, model, G; s = 1.)
-heatmap(last.(policy), clims = (0, Inf), c = :Greens)
-
-# backwardsimulation!(F, policy, model, G; verbose = true, s = 1)
-
-# computebackward(model, G; verbose = true, tstop = economy.τ - 0.1)
+begin
+	b = @benchmark backwardstep!($Δts, $F, $policy, $cluster, $model, $G)
+	io = IOBuffer()
+	show(io, "text/plain", b)
+	s = String(take!(io))
+	println(s)
+end

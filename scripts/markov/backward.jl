@@ -1,4 +1,4 @@
-using Distributed: @everywhere, @distributed, @sync, nprocs
+using Distributed: @everywhere, @distributed, @sync
 using SharedArrays: SharedArray, SharedMatrix, SharedVector
 using DataStructures: PriorityQueue, dequeue!, enqueue!, peek
 
@@ -11,45 +11,50 @@ using Model, Grid
     using ZigZagBoomerang: dequeue!
     using Base: Order
     using FastClosures: @closure
-    using NLopt: Opt, lower_bounds!, upper_bounds!, min_objective!, optimize, xtol_rel!
+    using Optim
 end
 
 @everywhere include("chain.jl")
 
-function backwardstep!(Δts, F, policy, cluster, model::AbstractModel, G; allownegative = false, M = 100)
+@everywhere function updateᾱ!(constraints::TwiceDifferentiableConstraints, ᾱ)
+    constraints.bounds.bx[4] = ᾱ
+end
+
+function backwardstep!(Δts, F, policy, cluster, model::AbstractModel, G)
     indices = CartesianIndices(G)
+    constraints = TwiceDifferentiableConstraints([0., 0.], [1., 1.])
 
     @sync @distributed for (i, δt) in cluster
         idx = indices[i]
         Xᵢ = G.X[idx]
 
         t = model.economy.τ - δt
-        ᾱ = allownegative ? 1. : 
-            γ(t, model.calibration) + δₘ(exp(Xᵢ.m), model.hogg)
+        ᾱ = γ(t, model.calibration) + δₘ(exp(Xᵢ.m), model.hogg)
+        updateᾱ!(constraints, ᾱ)
 
-        objective = @closure (x, grad) -> begin
-            u = Policy(x[1], x[2]) 
+        objectivefn = @closure u -> begin
             F′, Δt = markovstep(t, idx, F, u, model, G)
-            cost(F′, t, Xᵢ, Δt, u, model)
+            c = cost(F′, t, Xᵢ, Δt, u, model)
+            return c
         end
 
-        optimiser = Opt(:LN_SBPLX, 2); xtol_rel!(optimiser, ᾱ / M);
-	    lower_bounds!(optimiser, [0., 0.]); upper_bounds!(optimiser, [1., ᾱ])
-        min_objective!(optimiser, objective)
+        u₀ = clamp.(policy[idx, :], 
+            constraints.bounds.bx[[1, 3]] .+ 1e-5, 
+            constraints.bounds.bx[[2, 4]] .- 1e-5) # Prevents u₀ to close to constraint
 
-        candidate = min.(policy[idx], [1., ᾱ])
-        obj, pol, _ = optimize(optimiser, candidate)
+        diffobj = TwiceDifferentiable(objectivefn, u₀; autodiff = :forward)
+        res = Optim.optimize(diffobj, constraints, u₀, IPNewton())
         
-        policy[idx] = Policy(pol[1], pol[2])
-        timestep = last(markovstep(t, idx, F, policy[idx], model, G))
+        !Optim.converged(res) && @warn "Optim has not converged at t = $t and idx = $idx"
 
-        F[idx] = obj
-        Δts[i] = timestep
+        policy[idx, :] .= Optim.minimizer(res)
+        F[idx] = Optim.minimum(res)
+        Δts[i] = last(markovstep(t, idx, F, policy[idx, :], model, G))
     end
 end
 
 "Backward simulates from F̄ down to F₀, using the albedo model. It assumes that the passed F ≡ F̄"
-function backwardsimulation!(F, policy, model::AbstractModel, G; verbose = false, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = last(model.calibration.tspan), allownegative = false, stepkwargs...)
+function backwardsimulation!(F, policy, model::AbstractModel, G; verbose = false, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = last(model.calibration.tspan), stepkwargs...)
     verbose && println("Starting backward simulation...")
      
     savecache = !isnothing(cachepath)
@@ -62,7 +67,7 @@ function backwardsimulation!(F, policy, model::AbstractModel, G; verbose = false
             else 
                 verbose && @warn "File $cachepath already exists. If you want to overwrite it pass overwrite = true. Will copy the results into `F` and `policy`.\n"
 
-                _, Fcache, policycache = loadtotal(model; datapath, allownegative)
+                _, Fcache, policycache = loadtotal(model; datapath)
 
                 F .= Fcache[:, :, 1]
                 policy .= policycache[:, :, 1]
@@ -77,15 +82,18 @@ function backwardsimulation!(F, policy, model::AbstractModel, G; verbose = false
 
     queue = DiagonalRedBlackQueue(G)
     Δts = SharedVector(zeros(N^2))
+    passcounter = 1
 
     while !isqempty(queue)
         tmin = model.economy.τ - minimum(queue.vals)
-        verbose && print("Cluster minimum time = $tmin...\r")
+        if verbose
+            @printf("Pass %i, cluster minimum time = %.4f...\r", passcounter, tmin)
+        end
 
         clusters = dequeue!(queue)
 
         for cluster in clusters
-            backwardstep!(Δts, F, policy, cluster, model, G; allownegative, stepkwargs...)
+            backwardstep!(Δts, F, policy, cluster, model, G; stepkwargs...)
 
             for i in first.(cluster)
                 if queue[i] ≤ model.economy.τ - tstop
@@ -93,6 +101,8 @@ function backwardsimulation!(F, policy, model::AbstractModel, G; verbose = false
                 end
             end
         end
+
+        passcounter += 1
         
         if savecache && tmin ≤ tcache
             verbose && println("\nSaving cache at $tcache...")
@@ -112,25 +122,24 @@ function computebackward(model::AbstractModel, G; datapath = "data", kwargs...)
     terminalresults = loadterminal(model; datapath)
     computebackward(terminalresults, model, G; datapath, kwargs...)
 end
-function computebackward(terminalresults, model::AbstractModel, G; verbose = false, withsave = true, datapath = "data", allownegative = false, iterkwargs...)
+function computebackward(terminalresults, model::AbstractModel, G; verbose = false, withsave = true, datapath = "data", iterkwargs...)
     F̄, terminalconsumption, terminalG = terminalresults
     F = SharedMatrix(interpolateovergrid(terminalG, G, F̄));
 
-    terminalpolicy = [Policy(χ, 0.) for χ ∈ terminalconsumption]
-
-    policy = SharedMatrix(interpolateovergrid(terminalG, G, terminalpolicy))
+    policy = SharedArray{Float64}(size(G)..., 2)
+    policy[:, :, 1] .= interpolateovergrid(terminalG, G, terminalconsumption)
+    policy[:, :, 2] .= γ(model.economy.τ, model.calibration)
 
     if withsave
         folder = SIMPATHS[typeof(model)]
-        controltype = ifelse(allownegative, "allownegative", "nonnegative")
-        cachefolder = joinpath(datapath, folder, controltype)
+        cachefolder = joinpath(datapath, folder)
         if !isdir(cachefolder) mkpath(cachefolder) end
         
         filename = makefilename(model)
     end
 
     cachepath = ifelse(withsave, joinpath(cachefolder, filename), nothing)
-    backwardsimulation!(F, policy, model, G; verbose, cachepath, allownegative, iterkwargs...)
+    backwardsimulation!(F, policy, model, G; verbose, cachepath, iterkwargs...)
 
     return F, policy
 end

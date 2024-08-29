@@ -25,7 +25,6 @@ economy = Economy()
 hogg = Hogg()
 damages = GrowthDamages()
 jump = Jump()
-allownegative = false
 
 jumpmodel = JumpModel(jump, hogg, preferences, damages, economy, calibration)
 
@@ -41,6 +40,6 @@ if RUNTERMINAL
 end
 
 if RUNBACKWARDS
-    VERBOSE && println("Running backward $(ifelse(allownegative, "with", "without")) negative emissions...")
-    computebackward(jumpmodel, G; allownegative, verbose = VERBOSE, datapath = datapath, overwrite = OVERWRITE, tstop = TSTOP, cachestep = CACHESTEP)
+    VERBOSE && println("Running backward simulation...")
+    computebackward(jumpmodel, G; verbose = VERBOSE, datapath = datapath, overwrite = OVERWRITE, tstop = TSTOP, cachestep = CACHESTEP)
 end

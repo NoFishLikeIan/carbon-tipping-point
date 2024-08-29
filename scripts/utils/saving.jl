@@ -84,10 +84,9 @@ function loadterminal(model::AbstractModel; datapath = "data/simulation", addpat
     return F̄, policy, G
 end
 
-function loadtotal(model::AbstractGameModel; datapath = "data/simulation", allownegative = false)     
+function loadtotal(model::AbstractGameModel; datapath = "data/simulation")     
     folder = SIMPATHS[typeof(model)]
-    controltype = ifelse(allownegative, "allownegative", "nonnegative")
-    cachefolder = joinpath(datapath, folder, controltype)
+    cachefolder = joinpath(datapath, folder)
     filename = makefilename(model)
     savepath = joinpath(cachefolder, filename)
 
@@ -115,10 +114,9 @@ function loadtotal(model::AbstractGameModel; datapath = "data/simulation", allow
     return timesteps, F, policy, G
 end
 
-function loadtotal(model::AbstractPlannerModel; datapath = "data/simulation", allownegative = false)
+function loadtotal(model::AbstractPlannerModel; datapath = "data/simulation")
     folder = SIMPATHS[typeof(model)]
-    controltype = ifelse(allownegative, "allownegative", "nonnegative")
-    cachefolder = joinpath(datapath, folder, controltype)
+    cachefolder = joinpath(datapath, folder)
     filename = makefilename(model)
     savepath = joinpath(cachefolder, filename)
 

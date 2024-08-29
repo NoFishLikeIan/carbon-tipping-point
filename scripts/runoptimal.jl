@@ -2,6 +2,8 @@ include("utils/saving.jl")
 include("markov/terminal.jl")
 include("markov/backward.jl")
 
+using Distributed: nprocs
+
 env = DotEnv.config()
 DATAPATH = get(env, "DATAPATH", "data")
 SIMPATH = get(env, "SIMULATIONPATH", "simulation/planner")
@@ -17,6 +19,7 @@ TSTOP = getnumber(env, "TSTOP", 0.)
 CACHESTEP = getnumber(env, "CACHESTEP", 1 / 4)
 
 OVERWRITE && @warn "Running in overwrite mode!"
+VERBOSE && "Running with $(nprocs()) processor..."
 
 # Parameters
 thresholds = [1.5, 2.5];
@@ -27,17 +30,16 @@ calibration = load_object(joinpath(DATAPATH, "calibration.jld2"));
 economy = Economy()
 hogg = Hogg()
 damages = GrowthDamages()
-allownegative = false
 
 # Construct Grid
 Tdomain = hogg.Tᵖ .+ (0., 7.);
-mdomain = (mstable(Tdomain[1], hogg), mstable(Tdomain[2], hogg))
+mdomain = mstable.(Tdomain, hogg)
 G = RegularGrid([Tdomain, mdomain], N)
 
 for Tᶜ ∈ thresholds
     VERBOSE && println("Solving model with Tᶜ = $Tᶜ...")
     
-    albedo = Albedo(Tᶜ = Tᶜ)
+    albedo = Albedo(Tᶜ)
     model = TippingModel(albedo, hogg, preferences, damages, economy, calibration)
     
     # Terminal simulation
@@ -47,7 +49,7 @@ for Tᶜ ∈ thresholds
     end
 
     if RUNBACKWARDS
-        VERBOSE && println("Running backward $(ifelse(allownegative, "with", "without")) negative emissions...")
-        computebackward(model, G; allownegative, verbose = VERBOSE, datapath = datapath, overwrite = OVERWRITE, tstop = TSTOP, cachestep = CACHESTEP)
+        VERBOSE && println("Running backward...")
+        computebackward(model, G; verbose = VERBOSE, datapath = datapath, overwrite = OVERWRITE, tstop = TSTOP, cachestep = CACHESTEP)
     end
 end
