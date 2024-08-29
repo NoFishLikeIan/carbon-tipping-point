@@ -2,14 +2,14 @@ module Grid
 
 export bisection, gss, gssmin
 
-export Point, Policy, Drift
+export Point, Policy
 export Domain, RegularGrid, I, DiagonalRedBlackQueue
 export interpolateovergrid
 
 using Base.Iterators: product, flatten
 
 using StaticArraysCore: StaticArray
-using StaticArrays: FieldVector
+using StaticArrays: FieldVector, MVector
 
 using Statistics: mean, middle
 using Interpolations: interpolate, extrapolate, scale

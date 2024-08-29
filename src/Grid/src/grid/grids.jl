@@ -12,17 +12,10 @@ struct Point <: FieldVector{2, Float64}
     m::Float64
 end
 
-struct Policy <: FieldVector{2, Float64}
-    χ::Float64
-    α::Float64
+mutable struct Policy{T <: Real} <: FieldVector{2, T} 
+    χ::T
+    α::T
 end
-
-struct Drift <: FieldVector{2, Float64}
-    dT::Float64
-    dm::Float64
-end
-
-Base.abs(d::Drift) = abs.(d)
 
 struct RegularGrid{N}
     X::Array{Point, 2}
