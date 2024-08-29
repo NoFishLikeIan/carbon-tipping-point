@@ -1,12 +1,26 @@
 const secondstoyears = 60 * 60 * 24 * 365.25
 const Gtonoverppm = 1 / 7.821
 
-Base.@kwdef struct Albedo
-	Tᶜ::Float64 = 3.5  # Initiation of Albedo from pre industrial levels
-    ΔT::Float64 = 1.8  # Temperature change until ice loss
+struct Albedo
+	Tᶜ::Float64  # Initiation of Albedo from pre industrial levels
+    ΔT::Float64  # Temperature change until ice loss
      
-    λ₁::Float64 = 0.31 # Pre-transition albedo
-    Δλ::Float64 = 0.05 # Albedo loss
+    λ₁::Float64 # Pre-transition albedo
+    Δλ::Float64 # Albedo loss
+
+    function Albedo(Tᶜ; sensitivity = 4.5, boundaries = [0., 0.1], λ₁ = 0.31, ΔT = 1.8)
+        hogg = Hogg()
+        function deviation(Δλ)
+            albedo = new(Tᶜ, ΔT, λ₁, Δλ)
+            T =  maximum(find_zeros(T -> mstable(T, hogg, albedo) - log(2hogg.Mᵖ), hogg.Tᵖ .+ (0., 12.))) - hogg.Tᵖ
+
+            return T - sensitivity
+        end
+        
+        Δλ = find_zero(deviation, boundaries)
+        
+        return new(Tᶜ, ΔT, λ₁, Δλ)
+    end
 end
 
 Base.@kwdef struct Jump
@@ -48,6 +62,10 @@ Base.@kwdef struct Hogg
     cδ::Float64 = 314.8
 end
 
+Base.broadcastable(m::Albedo) = Ref(m)
+Base.broadcastable(m::Jump) = Ref(m)
+Base.broadcastable(m::Hogg) = Ref(m)
+
 "Obtain an Hogg calibration consistent with the Albedo calibration"
 function equilibriumHogg(albedo::Albedo; b = (330., 380.))::Hogg
     d = Hogg()
@@ -70,8 +88,8 @@ function δₘ⁻¹(δ, hogg::Hogg)
 end
 
 # Albedo functions
-sigmoid(x; speed = 3.5) = inv(1 + exp(-x * speed))
-sigmoid′(x; speed = 3.5) = speed * sigmoid(x; speed) * (1 - sigmoid(x; speed))
+sigmoid(x; β = 3.5) = inv(1 + exp(-x * β))
+sigmoid′(x; β = 3.5) = β * sigmoid(x; β) * (1 - sigmoid(x; β))
 
 function L(T, hogg::Hogg, albedo::Albedo)
     T₁ = albedo.Tᶜ + hogg.Tᵖ

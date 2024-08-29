@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.45
+# v0.19.46
 
 using Markdown
 using InteractiveUtils
@@ -22,7 +22,16 @@ begin # Use local module
 end
 
 # ╔═╡ 2b3c9a7f-8078-415d-b132-999a01aca419
-using JLD2, FastClosures
+using JLD2, FastClosures, Roots
+
+# ╔═╡ 4d074922-3d70-442b-be61-18f99f213d3d
+using DataStructures: dequeue!
+
+# ╔═╡ ee4b57ae-517b-4b3a-9ab0-e328cc97a121
+using DotEnv
+
+# ╔═╡ c7e2f611-07e4-4c39-b101-d20b3f71fedb
+using Distributed
 
 # ╔═╡ bfc6af5e-a261-4d7e-9a16-f4ab54c6e1ca
 using PlutoUI
@@ -30,10 +39,15 @@ using PlutoUI
 # ╔═╡ 9655de0d-73f7-4332-85d9-974a73b4fce1
 using Model, Grid
 
+# ╔═╡ 62a3b757-cf0b-4f8d-bdb8-7edc7ba04d47
+using Optim
+
 # ╔═╡ ddd1a388-76fe-482f-ad8e-fbc1096f2d43
 begin
 	using Plots
 	default(size = 500 .* (√2, 1), dpi = 180, linewidth = 2, cmap = :viridis)
+
+	using LaTeXStrings, Printf
 end
 
 # ╔═╡ e29f796c-c57c-40c3-988a-b7d9295c3dac
@@ -66,124 +80,177 @@ end
 # ╔═╡ e0877f7e-6247-4c22-a1c7-fdc42ad4dec2
 begin
 	Saving = ingredients("../scripts/utils/saving.jl")
-	Terminal = ingredients("../scripts/terminal.jl")
+	Plotting = ingredients("../scripts/plotting/utils.jl")
+	Chain = ingredients("../scripts/markov/chain.jl")
+	Terminal = ingredients("../scripts/markov/terminal.jl")
+	Backward = ingredients("../scripts/markov/backward.jl")
 end;
 
 # ╔═╡ e11493be-9406-4fe8-9c85-ac8deb2d1953
 begin
-	DATAPATH = "../data"
+	reltoroot = path -> joinpath("..", path)
+	env = DotEnv.config(reltoroot(".env"))
+	
+	DATAPATH = get(env, "DATAPATH", "") |> reltoroot
+	SIMULATIONPATH = get(env, "SIMULATIONPATH", "")
+	datapath = joinpath(DATAPATH, SIMULATIONPATH)
+	
 	calibration = load_object(joinpath(DATAPATH, "calibration.jld2"))
 	hogg = Hogg()
-	economy = Economy(τ = 500.)
+	economy = Economy()
 	preferences = EpsteinZin()
-end;
 
-# ╔═╡ 31baffdb-ad83-49a9-a01c-4329626783b2
-begin
-	Δλ = 0.08
 	damages = GrowthDamages()
-	albedo = Albedo(λ₂ = Albedo().λ₁ - Δλ)
+	albedo = Albedo(1.5)
 
-	model = TippingModel(albedo, preferences, damages, economy, hogg, calibration)
+	model = TippingModel(albedo, hogg, preferences, damages, economy, calibration);
 end;
 
 # ╔═╡ b38949ca-4432-4b8f-be02-3d96e5b1fce0
 begin
 	N = 51
-	G = constructdefaultgrid(N, model)
+	Tdev = (0., 7.)
+	Tdomain = hogg.Tᵖ .+ Tdev;
+	mdomain = mstable.(Tdomain, hogg)
+	G = RegularGrid([Tdomain, mdomain], N)
 
-	Tspace = range(G.domains[1]...; length = size(G, 1))
-	mspace = range(G.domains[2]...; length = size(G, 2))
+	Tspace = range(Tdomain...; length = N)
+	mspace = range(mdomain...; length = N)
 	unit = range(1e-3, 1 - 1e-3; step = 1e-3)
 
-	F₀ = ones(size(G)); pol₀ = ones(size(G)) ./ 2;
+	F̄, terminalpolicy = Saving.loadterminal(model; datapath)
+	Gterm = terminalgrid(N, model);
+
+	policy = Array{Float64}(undef, size(G)..., 2)
+	policy[:, :, 1] .= interpolateovergrid(Gterm, G, terminalpolicy)
+	policy[:, :, 2] .= γ(economy.τ, calibration)
+	
+	F = interpolateovergrid(Gterm, G, F̄)
 end;
 
 # ╔═╡ 28f9e438-f800-4fee-a216-6daa4ead8da6
-fromspacetoidx = @closure (T, m) -> begin
-	i = findfirst(≥(T), Tspace)
-	j = findfirst(≥(m), mspace)
+begin # Plotting utilities
+	getbyspace(T, m) = getbyspace(Point(T, m))
+	function getbyspace(x::Point)
+		i = findfirst(≥(x.T), Tspace)
+		j = findfirst(≥(x.m), mspace)
+		return CartesianIndex(i, j)
+	end
 
-	return CartesianIndex(i, j)
+	mticks = range(mdomain...; length=6)
+	Mticks = (mticks, round.(exp.(mticks), digits = 2))
+
+	Tticks = Plotting.makedeviationtickz(Tdev..., model; step = 1)
+
+	satres = Optim.optimize(m -> -δₘ(exp(m[1]), hogg), [log(hogg.:M₀)]);
+
+	αmax = δₘ(exp(first(Optim.minimizer(satres))), hogg) + γ(economy.τ, calibration)
 end;
 
-# ╔═╡ fe1331d2-5ed2-4507-991c-10a23fccbb50
-md"# Markov Chain of Terminal Problem"
-
-# ╔═╡ b852741b-4857-40f1-82b6-52504827e819
+# ╔═╡ 4f53f52a-f3b7-48fb-b63c-9fbc7f9dd65e
 begin
-	F̄, terminalpolicy = Saving.loadterminal(model, G; datapath=DATAPATH)
-	# F̄ = copy(F₀)
-end;
+	Ffig = contourf(mspace, Tspace, log.(F); xticks = Mticks, yticks = Tticks, ylabel = L"T_t - T^p", xlabel = L"M_t", title = L"$F_{\tau}(T, M)$", xlims = mdomain, ylims = Tdomain, cbar = false)
 
-# ╔═╡ cdb1d34f-ff03-49b1-b1d1-75db7aad46c7
-terminalmarkovstep = @closure (T, m) -> begin
-	idx = fromspacetoidx(T, m)
-	Terminal.terminalmarkovstep(idx, F̄, model, G)
-end;
+	Tdense = range(Tdomain...; length = 101)
+	nullcline = mstable.(Tdense, hogg, Albedo(1.5))
 
-# ╔═╡ ac633771-3b7f-4cb4-8f41-210f676883c4
+	plot!(Ffig, nullcline, Tdense; c = :white, label = false)
+end
+
+# ╔═╡ 015922f1-c954-42db-887e-4499e5dbca59
+md"# Backward costs"
+
+# ╔═╡ 5aa075ef-8ad2-4d52-b4da-d99d687a7d4e
 begin
-	terminalcosts(T, m, χ) = terminalcosts(fromspacetoidx(T, m), χ)
-	function terminalcosts(idx, χ)
-		Fᵢ′, Δt = Terminal.terminalmarkovstep(idx, F̄, model, G)
-		Tᵢ = G.X[idx].T
-		Terminal.terminalcost(Fᵢ′, Tᵢ, Δt, χ, model)
+	function makeobjective(T, m; t = economy.τ)
+		idx = getbyspace(T, m)
+		makeobjective(idx; t)
+	end
+	function makeobjective(idx; t = economy.τ)
+		Xᵢ = G.X[idx]
+	
+		objective = @closure u -> begin
+			F′, Δt = Chain.markovstep(t, idx, F, u, model, G)
+			Chain.cost(F′, t, Xᵢ, Δt, u, model)
+		end
+	
+		return objective
 	end
 end;
 
-# ╔═╡ dcf00953-09b5-4cfd-95ce-8a6d882d9174
-let
-	timefig = heatmap(mspace, Tspace, (m, T) -> terminalmarkovstep(T, m) |> last; xlabel = "\$m\$", ylabel = "\$T\$", title = "\$\\Delta t\$", clims = (0, Inf), cmap = :Reds)
-	markovfig = heatmap(mspace, Tspace, (m, T) -> terminalmarkovstep(T, m) |> first |> log; xlabel = "\$m\$", ylabel = "\$T\$", cmap = :coolwarm, title = "\$\\log \\mathbb{E}[F_{t + \\Delta t}]\$")
+# ╔═╡ 0169acc9-2d30-4e80-a38b-a0cbc5af15dc
+md"
+- ``T =`` $(@bind Tfig Slider(Tspace, default = hogg.T₀, show_value = true))
+- ``m =`` $(@bind mfig Slider(mspace, default = log(hogg.M₀), show_value = true))
+- ``t =`` $(@bind tfig Slider(1:economy.τ, default = economy.τ, show_value = true))
+"
 
-	plot(timefig, markovfig; size = 400 .* (2√2, 1), margins = 10Plots.mm)
-end
-
-# ╔═╡ 837f8bac-8f45-443b-8b59-10deb045c4e1
-md"``\chi =`` $(@bind χ Slider(unit, default = 0.5, show_value = true))"
-
-# ╔═╡ 072d27e3-2d6f-43a4-b319-e345631b57ad
-let
-	heatmap(mspace, Tspace, (m, T) -> terminalcosts(T, m, χ) |> log; xlabel = "\$m\$", ylabel = "\$T\$", cmap = :coolwarm, title = "\$\\log \\bar{F} \\mid \\chi = $χ\$", clims = (-6, 6))
-end
-
-# ╔═╡ 30c3dc7a-9b6d-4f94-881a-f29607edbdff
+# ╔═╡ ec33fe87-f4fd-4454-bfa7-e644bb89f344
 begin
-	iterations = 100
-	Fpath = Array{Float64}(undef, size(G, 1), size(G, 2), iterations + 1)
-	χpath = similar(Fpath)
+	ᾱ = γ(tfig, calibration) + δₘ(exp(mfig), hogg)
+	idx = getbyspace(Tfig, mfig)
+	obj = makeobjective(Tfig, mfig; t = tfig)
 
-	Fₖ = copy(F₀); χₖ = copy(pol₀)
-	Fpath[:, :, 1] .= F₀
-	χpath[:, :, 1] .= pol₀
+	χ = terminalpolicy[first(idx.I)]
+	u₀ = [χ, 1e-3]
+	od = TwiceDifferentiable(obj, u₀; autodiff = :forward)
+	cons = TwiceDifferentiableConstraints([0., 0.], [1., ᾱ])
+
+	resminimisation = Optim.optimize(od, cons, u₀, IPNewton())
+	u = Optim.minimizer(resminimisation)
+
+	!Optim.converged(resminimisation) && @warn "Not converged"
+end;
+
+# ╔═╡ fb36873a-3db7-439e-955f-24e0725bd6b3
+begin
+	cspace = range(0.4, 0.7; length = 51)
+	aspace = range(0., αmax; length = 51)
+
+	Fobjfig = deepcopy(Ffig)
+	scatter!(Fobjfig, [mfig], [Tfig], c = :white, label = false, markersize = 5)
+
+	objfig = contourf(cspace, aspace, (χ, α) -> log(obj([χ, α])); 
+		ylims = (0, αmax), xlims = extrema(cspace),
+		xlabel = L"\chi", ylabel = L"\alpha", c = :Reds, linewidth = 1, cbar = false
+	)
+
+	hline!(objfig, [ᾱ]; linestyle = :dash, label = false, color = :white)
+	scatter!(objfig, u[[1]], u[[2]]; label = false, c = :green)
 	
-	for k in 1:iterations
-		Terminal.terminaljacobi!(Fₖ, χₖ, model, G)
-		Fpath[:, :, k + 1] = Fₖ
-		χpath[:, :, k + 1] = χₖ
+	plot(objfig, Fobjfig; size = 410 .* (2√2, 1), margins = 5Plots.mm)
+end
+
+# ╔═╡ b8b54945-ab69-4bfc-862f-9498aa0c30fc
+function updateᾱ!(constraints::TwiceDifferentiableConstraints, ᾱ)
+    constraints.bounds.bx[4] = ᾱ
+end;
+
+# ╔═╡ 78a46a5e-7420-4e74-acb1-693ba5664f3b
+begin
+	abatement = similar(F)
+	constraints = TwiceDifferentiableConstraints([0., 0.], [1., 1.])
+	
+	for idx in CartesianIndices(G)
+		χ = terminalpolicy[first(idx.I)]
+		u₀ = [χ, 1e-3]
+
+		obj = makeobjective(idx)
+		od = TwiceDifferentiable(obj, u₀; autodiff = :forward)
+		updateᾱ!(constraints, γ(economy.τ, calibration) + δₘ(exp(G.X[idx].m), hogg))
+
+		resminimisation = Optim.optimize(od, cons, u₀, IPNewton())
+		u = Optim.minimizer(resminimisation)
+
+		abatement[idx] = u[2] 
 	end
-end
+end;
 
-# ╔═╡ 0fd33a23-b2ec-4857-9a13-4e06d43b9d24
-md"Iteration ``k =`` $(@bind k Slider(0:iterations, default = 0, show_value = true))"
+# ╔═╡ 1d27e09e-e3dd-4793-9059-1587835a3885
+begin
+	abatfig = heatmap(mspace, Tspace, abatement; xticks = Mticks, yticks = Tticks, ylabel = L"T_t - T^p", xlabel = L"M_t", title = L"$F_{\tau}(T, M)$", xlims = mdomain, ylims = Tdomain)
 
-# ╔═╡ d21ccdc8-f43d-45bc-9409-8008b2b2db17
-let
-	Fₖ = @view Fpath[:, :, k + 1]
-	χₖ = @view χpath[:, :, k + 1]
-	
-	Ffig = heatmap(mspace, Tspace, (m, T) -> Fₖ[fromspacetoidx(T, m)] |> log; xlabel = "\$m\$", ylabel = "\$T\$", cmap = :coolwarm, title = "\$\\log F_{$k}\$");
-	χfig = heatmap(mspace, Tspace, (m, T) -> χₖ[fromspacetoidx(T, m)]; xlabel = "\$m\$", ylabel = "\$T\$", cmap = :Greens, title = "\$χ_{$k}\$");
-
-	plot(Ffig, χfig; size = 400 .* (2√2, 1), margins = 10Plots.mm)
-end
-
-# ╔═╡ ebff6eea-2014-470f-a3ee-fffbb7603cfd
-let
-	plot(Tspace, T -> χₖ[fromspacetoidx(T, mstable(T, hogg, albedo))]; xlabel = "\$T\$", label = "\$\\chi(T, \\bar{m}(T)) \$", c = :black)
-	plot!(Tspace[5:(N - 5)], T -> χₖ[fromspacetoidx(T, min(0.5 + mstable(T, hogg, albedo), maximum(mspace)))]; xlabel = "\$T\$", label = "\$\\chi(T, \\bar{m}(T) + 0.5) \$", c = :darkred)
-	plot!(Tspace[5:(N - 5)], T -> χₖ[fromspacetoidx(T, max(-0.5 + mstable(T, hogg, albedo), minimum(mspace)))]; xlabel = "\$T\$", label = "\$\\chi(T, \\bar{m}(T) - 0.5) \$", c = :darkgreen)
+	plot!(abatfig, nullcline, Tdense; c = :white, label = false)
 end
 
 # ╔═╡ Cell order:
@@ -191,22 +258,23 @@ end
 # ╟─c4befece-4e47-11ef-36e3-a97f8e06d12b
 # ╟─fd94250f-950c-4d37-94ad-ca7d73637d08
 # ╠═2b3c9a7f-8078-415d-b132-999a01aca419
+# ╠═4d074922-3d70-442b-be61-18f99f213d3d
+# ╠═ee4b57ae-517b-4b3a-9ab0-e328cc97a121
+# ╠═c7e2f611-07e4-4c39-b101-d20b3f71fedb
 # ╠═bfc6af5e-a261-4d7e-9a16-f4ab54c6e1ca
 # ╠═9655de0d-73f7-4332-85d9-974a73b4fce1
+# ╠═62a3b757-cf0b-4f8d-bdb8-7edc7ba04d47
 # ╠═ddd1a388-76fe-482f-ad8e-fbc1096f2d43
 # ╠═e0877f7e-6247-4c22-a1c7-fdc42ad4dec2
 # ╠═e11493be-9406-4fe8-9c85-ac8deb2d1953
-# ╠═31baffdb-ad83-49a9-a01c-4329626783b2
 # ╠═b38949ca-4432-4b8f-be02-3d96e5b1fce0
 # ╠═28f9e438-f800-4fee-a216-6daa4ead8da6
-# ╟─fe1331d2-5ed2-4507-991c-10a23fccbb50
-# ╠═b852741b-4857-40f1-82b6-52504827e819
-# ╠═cdb1d34f-ff03-49b1-b1d1-75db7aad46c7
-# ╠═ac633771-3b7f-4cb4-8f41-210f676883c4
-# ╟─dcf00953-09b5-4cfd-95ce-8a6d882d9174
-# ╟─837f8bac-8f45-443b-8b59-10deb045c4e1
-# ╠═072d27e3-2d6f-43a4-b319-e345631b57ad
-# ╠═30c3dc7a-9b6d-4f94-881a-f29607edbdff
-# ╟─0fd33a23-b2ec-4857-9a13-4e06d43b9d24
-# ╠═d21ccdc8-f43d-45bc-9409-8008b2b2db17
-# ╠═ebff6eea-2014-470f-a3ee-fffbb7603cfd
+# ╟─4f53f52a-f3b7-48fb-b63c-9fbc7f9dd65e
+# ╟─015922f1-c954-42db-887e-4499e5dbca59
+# ╠═5aa075ef-8ad2-4d52-b4da-d99d687a7d4e
+# ╟─0169acc9-2d30-4e80-a38b-a0cbc5af15dc
+# ╟─ec33fe87-f4fd-4454-bfa7-e644bb89f344
+# ╠═fb36873a-3db7-439e-955f-24e0725bd6b3
+# ╠═b8b54945-ab69-4bfc-862f-9498aa0c30fc
+# ╠═78a46a5e-7420-4e74-acb1-693ba5664f3b
+# ╠═1d27e09e-e3dd-4793-9059-1587835a3885

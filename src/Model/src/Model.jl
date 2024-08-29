@@ -20,9 +20,9 @@ export terminalgrid
 export RegionalEconomies, breakgamemodel
 
 # Packages
-using Grid: Point, Policy, Drift, RegularGrid, gss
+using Grid: Point, Policy, RegularGrid, gss
 using UnPack: @unpack
-using Roots: find_zero
+using Roots: find_zero, find_zeros
 using FastClosures: @closure
 
 include("models/calibration.jl")

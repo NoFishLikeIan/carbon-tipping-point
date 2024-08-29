@@ -9,12 +9,16 @@ includet("../utils/saving.jl")
 includet("../markov/terminal.jl")
 
 begin
-	DATAPATH = "data"
+	env = DotEnv.config()
+	DATAPATH = get(env, "DATAPATH", "")
+	SIMULATIONPATH = get(env, "SIMULATIONPATH", "")
+	datapath = joinpath(DATAPATH, SIMULATIONPATH)
+
 	calibration = load_object(joinpath(DATAPATH, "calibration.jld2"))
 	hogg = Hogg()
 	economy = Economy()
 	preferences = EpsteinZin()
-	albedo = Albedo()
+	albedo = Albedo(Tᶜ = 1.5)
 end;
 
 # --- Albedo
@@ -29,7 +33,7 @@ begin
 	mspace = range(G.domains[2]...; length = size(G, 2))
 end
 
-F̄, terminalpolicy = loadterminal(model)
+F̄, terminalpolicy = loadterminal(model; datapath)
 
 F₀ = ones(size(G)); F̄ = copy(F₀);
 terminalpolicy = similar(F̄);

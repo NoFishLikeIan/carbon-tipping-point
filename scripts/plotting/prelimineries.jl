@@ -45,7 +45,7 @@ begin # Construct models and grids
     
 	models = TippingModel[]
 	for Tᶜ ∈ thresholds
-	    albedo = Albedo(Tᶜ = Tᶜ)
+	    albedo = Albedo(Tᶜ)
 	    model = TippingModel(albedo, hogg, preferences, damages, economy, calibration)
 
 		push!(models, model)
@@ -88,7 +88,7 @@ end;
 begin # Albedo plot
     albedovariation = [[Model.λ(T, model.hogg, model.albedo) for T in Tspace] for model in models]
 
-    ytick = 0.26:0.02:0.32
+    ytick = 0.28:0.02:0.32
 
     albedofig = @pgf Axis(
         {
@@ -282,9 +282,9 @@ begin # Growth of carbon concentration
     }, curve, markers)
 
 
-    mbaumedian = timeseries_point_median(msims, yearlytime)
-    mlower = timeseries_point_quantile(msims, 0.05, yearlytime)
-    mupper  = timeseries_point_quantile(msims, 0.95, yearlytime)
+    mbaumedian = timeseries_point_median(mbausims, yearlytime)
+    mlower = timeseries_point_quantile(mbausims, 0.05, yearlytime)
+    mupper  = timeseries_point_quantile(mbausims, 0.95, yearlytime)
 
     mfig = @pgf Axis()
 

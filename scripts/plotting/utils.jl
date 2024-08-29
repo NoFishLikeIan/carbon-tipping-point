@@ -1,11 +1,13 @@
+using Printf: format, Format
+
 function stringifydeviation(ΔT; digits = 2)
     fsign = ΔT > 0 ? "+" : ""
-    fmt = Printf.Format("$fsign%0.$(digits)f°")
-    return Printf.format(fmt, ΔT)
+    fmt = Format("$fsign%0.$(digits)f°")
+    return format(fmt, ΔT)
 end
 
 
-function makedeviationtickz(from, to, model::AbstractModel; step = 0.5, withcurrent = false, digits = 2)
+function makedeviationtickz(from, to, model; step = 0.5, withcurrent = false, digits = 2)
 
     preindustrialdev = range(from, to; step = step)
     ticks = model.hogg.Tᵖ .+ preindustrialdev

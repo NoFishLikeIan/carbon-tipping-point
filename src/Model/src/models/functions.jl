@@ -35,26 +35,29 @@ function ε(t, M, α::NTuple{2, Float64}, model::AbstractGameModel)
 end
 
 "Drift of log output y for `t < τ`" # TODO: Combine the two drifts
-function b(t, Xᵢ::Point, u::Policy, model::AbstractModel{GrowthDamages, P}) where P <: Preferences 
-    εₜ = ε(t, exp(Xᵢ.m), u.α, model)
+function b(t, Xᵢ::Point, u, model::AbstractModel{GrowthDamages, P}) where P <: Preferences 
+    χ, α = u
+    εₜ = ε(t, exp(Xᵢ.m), α, model)
     Aₜ = A(t, model.economy)
 
     abatement = Aₜ * β(t, εₜ, model.economy)
 
     growth = model.economy.ϱ - model.economy.δₖᵖ
-    investments = ϕ(t, u.χ, model.economy)
+    investments = ϕ(t, χ, model.economy)
     damage = d(Xᵢ.T, model.damages, model.hogg)
 
     return growth + investments - abatement - damage
 end
-function b(t, Xᵢ::Point, u::Policy, model::AbstractModel{LevelDamages, P}) where P <: Preferences
-    εₜ = ε(t, exp(Xᵢ.m), u.α, model)
+function b(t, Xᵢ::Point, u, model::AbstractModel{LevelDamages, P}) where P <: Preferences
+    χ, α = u
+
+    εₜ = ε(t, exp(Xᵢ.m), α, model)
     Aₜ = A(t, model.economy)
 
     abatement = Aₜ * β(t, εₜ, model.economy)
 
     growth = model.economy.ϱ - model.economy.δₖᵖ
-    investments = ϕ(t, u.χ, model.economy)
+    investments = ϕ(t, χ, model.economy)
 
     return growth + investments - abatement
 end
@@ -92,7 +95,7 @@ function terminaloutputfct(Tᵢ, Δt, χs, model::AbstractGameModel)
     @. max(1 + adj, 0.)
 end
 
-function outputfct(t, Xᵢ::Point, Δt, u::Policy, model::AbstractPlannerModel)
+function outputfct(t, Xᵢ::Point, Δt, u, model::AbstractPlannerModel)
     drift = b(t, Xᵢ, u, model) - model.preferences.θ * model.economy.σₖ^2 / 2
 
     adj = Δt * (1 - model.preferences.θ) * drift

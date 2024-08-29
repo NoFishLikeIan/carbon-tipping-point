@@ -27,7 +27,7 @@ model = TippingGameModel(albedo, hogg, preferences, damages, economy, rc);
 begin
 	N = 31
 	M = 10
-	G = constructdefaultgrid(N, model)
+	G = terminalgrid(N, model)
 
 	Tspace = range(G.domains[1]...; length = size(G, 1))
 	mspace = range(G.domains[2]...; length = size(G, 2))
