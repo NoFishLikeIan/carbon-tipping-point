@@ -24,7 +24,7 @@ function backwardstep!(Δts, F, policy, cluster, model::AbstractModel, G)
     indices = CartesianIndices(G)
     constraints = TwiceDifferentiableConstraints([0., 0.], [1., 1.])
 
-    @sync @distributed for (i, δt) in cluster
+    for (i, δt) in cluster
         idx = indices[i]
         Xᵢ = G.X[idx]
 
@@ -32,31 +32,31 @@ function backwardstep!(Δts, F, policy, cluster, model::AbstractModel, G)
         ᾱ = γ(t, model.calibration) + δₘ(exp(Xᵢ.m), model.hogg)
         updateᾱ!(constraints, ᾱ)
 
-        objectivefn = @closure u -> begin
+        logobjective = @closure u -> begin
             F′, Δt = markovstep(t, idx, F, u, model, G)
             c = cost(F′, t, Xᵢ, Δt, u, model)
-            return c
+
+            return log(c)
         end
 
-        u₀ = clamp.(policy[idx, :], 
-            constraints.bounds.bx[[1, 3]] .+ 1e-5, 
-            constraints.bounds.bx[[2, 4]] .- 1e-5) # Prevents u₀ to close to constraint
+        u₀ = Optim.isinterior(constraints, policy[idx, :]) ? policy[idx, :] : [0.5, ᾱ / 2]
 
-        diffobj = TwiceDifferentiable(objectivefn, u₀; autodiff = :forward)
+        diffobj = TwiceDifferentiable(logobjective, u₀; autodiff = :forward)
         res = Optim.optimize(diffobj, constraints, u₀, IPNewton())
         
         !Optim.converged(res) && @warn "Optim has not converged at t = $t and idx = $idx"
 
+        u = Optim.minimizer(res)
+        u[2] = ifelse(u[2] < 1e-10, 0., u[2]) # Round smallest numbers down
+
         policy[idx, :] .= Optim.minimizer(res)
-        F[idx] = Optim.minimum(res)
+        F[idx] = exp(Optim.minimum(res))
         Δts[i] = last(markovstep(t, idx, F, policy[idx, :], model, G))
     end
 end
 
 "Backward simulates from F̄ down to F₀, using the albedo model. It assumes that the passed F ≡ F̄"
-function backwardsimulation!(F, policy, model::AbstractModel, G; verbose = false, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = last(model.calibration.tspan), stepkwargs...)
-    verbose && println("Starting backward simulation...")
-     
+function backwardsimulation!(F, policy, model::AbstractModel, G; verbose = false, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = last(model.calibration.tspan), stepkwargs...)     
     savecache = !isnothing(cachepath)
     if savecache
         if isfile(cachepath) 

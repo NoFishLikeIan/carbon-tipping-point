@@ -30,13 +30,13 @@ jumpmodel = JumpModel(jump, hogg, preferences, damages, economy, calibration)
 
 # Construct Grid
 Tdomain = hogg.Tᵖ .+ (0., 7.);
-mdomain = (mstable(Tdomain[1], hogg), mstable(Tdomain[2], hogg))
+mdomain = mstable.(Tdomain, hogg)
 G = RegularGrid([Tdomain, mdomain], N)
 
 VERBOSE && println("\nSolving jump model...")
 if RUNTERMINAL
     Gterminal = terminalgrid(N, jumpmodel)
-    computeterminal(jumpmodel, Gterminal; verbose = VERBOSE, datapath = datapath, alternate = true, tol = TOL)
+    computeterminal(jumpmodel, Gterminal; verbose = VERBOSE, datapath = datapath, alternate = true, tol = TOL, overwrite = OVERWRITE)
 end
 
 if RUNBACKWARDS

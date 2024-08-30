@@ -20,7 +20,7 @@ function affect!(integrator)
     integrator.u[1] += q
 end
 
-Result = Tuple{Vector{Float64}, Array{Float64, 3}, Array{Policy, 3}, RegularGrid}
+Result = Tuple{Vector{Float64}, Array{Float64, 3}, Array{Float64, 4}, RegularGrid}
 
 "Constructs spline of results"
 function buildsplines(result::Result; splinekwargs...)
@@ -54,8 +54,8 @@ function buildinterpolations(result::Result; splinekwargs...)
 
     nodes = (Tspace, mspace, timespace)
     Fitp = linear_interpolation(nodes, F; extrapolation_bc = Line())
-    χitp = linear_interpolation(nodes, first.(policy); extrapolation_bc = Line())
-    αitp = linear_interpolation(nodes, last.(policy); extrapolation_bc = Line())
+    χitp = linear_interpolation(nodes, policy[:, :, 1, :]; extrapolation_bc = Line())
+    αitp = linear_interpolation(nodes, policy[:, :, 2, :]; extrapolation_bc = Line())
 
     Dict{Symbol, typeof(χitp)}(:F => Fitp, :χ => χitp, :α => αitp)
 end

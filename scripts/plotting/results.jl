@@ -48,7 +48,7 @@ begin # Construct models and grids
 	models = AbstractModel[]
 
 	for Tᶜ ∈ thresholds
-	    albedo = Albedo(Tᶜ = Tᶜ)
+	    albedo = Albedo(Tᶜ)
 	    model = TippingModel(albedo, hogg, preferences, damages, economy, calibration)
 
 		push!(models, model)
@@ -56,7 +56,7 @@ begin # Construct models and grids
 	end
 
     jumpmodel = JumpModel(jump,  hogg, preferences, damages, economy, calibration)
-    push!(models, jumpmodel)
+    # push!(models, jumpmodel)
 end;
 
 begin # Labels, colors and axis
@@ -85,18 +85,16 @@ begin # Labels, colors and axis
 end;
 
 # --- Optimal emissions 
-results = loadtotal.(models; datapath = datapath);
+results = loadtotal.(models; datapath);
 itps = buildinterpolations.(results);
 modelmap = Dict(models .=> itps);
 
 function F!(dx, x, p, t)	
 	model, αitp = p
 	T, m = x
-
-    α = αitp(T, m, t)
 	
 	dx[1] = μ(T, m, model) / model.hogg.ϵ
-	dx[2] = γ(t, model.calibration) # - α
+	dx[2] = γ(t, model.calibration) - αitp(T, m, t)
 end;
 
 function G!(Σ, x, p::Tuple{AbstractModel, Any}, t)
@@ -278,27 +276,4 @@ begin
     end
 
     simfig
-end
-
-# Abatement spending
-begin
-    G = last(results[1])
-    mspace = range(G.domains[2]...; length = size(G, 2))
-    
-    bmodel = last(models)
-    bitp = modelmap[bmodel]
-    bαitp = bitp[:α]  
-
-    model = models[2]
-    itp = modelmap[model]
-    αitp = itp[:α]
-    t = 0.
-
-    function Δβ(m, T)
-        M = exp(m)
-        α₁ = αitp(T, m, 0.)
-    end
-
-    surface(mspace, Tspace, Δβ; c = :coolwarm, camera = (45, 45), xflip = true)
-
 end

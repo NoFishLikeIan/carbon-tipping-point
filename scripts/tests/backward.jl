@@ -1,5 +1,6 @@
 using Revise
 using Test: @test
+using UnPack: @unpack
 using BenchmarkTools
 using JLD2
 using Plots
@@ -27,14 +28,14 @@ begin
 	damages = GrowthDamages()
 	preferences = EpsteinZin()
 	albedo = Albedo(1.5)
+	model = TippingModel(albedo, hogg, preferences, damages, economy, calibration)
 end
 
 begin
-	model = TippingModel(albedo, hogg, preferences, damages, economy, calibration)
 
-	N = 21
+	N = 41
 	Tdomain = hogg.Tᵖ .+ (0., 7.);
-	mdomain = (mstable(Tdomain[1], hogg), mstable(Tdomain[2], hogg))
+	mdomain = mstable.(Tdomain, hogg)
 	G = RegularGrid([Tdomain, mdomain], N)
 end;
 
@@ -46,20 +47,25 @@ begin
 	policy[:, :, 2] .= γ(economy.τ, calibration)
 
 	F = interpolateovergrid(Gterm, G, F̄) |> SharedMatrix
-end; 
+end;
 
 begin
 	queue = DiagonalRedBlackQueue(G)
 	Δts = zeros(N^2) |> SharedVector
 	cluster = first(dequeue!(queue))
 
-	@sync backwardstep!(Δts, F, policy, cluster, model, G)
+	backwardstep!(Δts, F, policy, cluster, model, G)
 end;
 
-begin
+if false
 	b = @benchmark backwardstep!($Δts, $F, $policy, $cluster, $model, $G)
 	io = IOBuffer()
 	show(io, "text/plain", b)
 	s = String(take!(io))
 	println(s)
 end
+
+# Jump model
+begin
+	error = jldopen("error.jld2")
+end;

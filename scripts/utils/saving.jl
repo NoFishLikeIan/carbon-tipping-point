@@ -130,12 +130,12 @@ function loadtotal(model::AbstractPlannerModel; datapath = "data/simulation")
     timekeys = timekeys[ix]
 
     T = length(timesteps)
-    F = Array{Float64, 3}(undef, size(G, 1), size(G, 2), T)
-    policy = Array{Policy, 3}(undef, size(G, 1), size(G, 2), T)
+    F = Array{Float64, 3}(undef, size(G)..., T)
+    policy = Array{Float64, 4}(undef, size(G)..., 2, T)
 
     for (k, key) ∈ enumerate(timekeys)
         F[:, :, k] .= cachefile[key]["F"]
-        policy[:, :, k] .= cachefile[key]["policy"]
+        policy[:, :, :, k] .= cachefile[key]["policy"]
     end
 
     close(cachefile)

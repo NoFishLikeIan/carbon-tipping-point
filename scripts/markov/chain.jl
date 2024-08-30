@@ -10,7 +10,7 @@ function driftstep(t, idx, F, u, αⱼ, model::AbstractModel, G)
 
     Xᵢ = G.X[idx]
     dT = μ(Xᵢ.T, Xᵢ.m, model) / (model.hogg.ϵ * G.Δ.T)
-    dm = γ(t, model.calibration) - α - αⱼ
+    dm = (γ(t, model.calibration) - α - αⱼ) / G.Δ.m
 
     # -- Temperature
     FᵢT₊ = F[min(idx + I[1], R)]
