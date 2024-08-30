@@ -49,9 +49,9 @@ function backwardstep!(Δts, F, policy, cluster, model::AbstractModel, G)
         u = Optim.minimizer(res)
         u[2] = ifelse(u[2] < 1e-10, 0., u[2]) # Round smallest numbers down
 
-        policy[idx, :] .= Optim.minimizer(res)
+        policy[idx, :] .= u
         F[idx] = exp(Optim.minimum(res))
-        Δts[i] = last(markovstep(t, idx, F, policy[idx, :], model, G))
+        Δts[i] = last(markovstep(t, idx, F, u, model, G))
     end
 end
 
