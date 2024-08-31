@@ -451,4 +451,3 @@ papers/presentations/figures
 *.code-workspace
 .env
 .envgame
-.env.example
