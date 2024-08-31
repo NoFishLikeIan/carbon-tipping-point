@@ -87,7 +87,8 @@ end;
 # --- Optimal emissions 
 results = loadtotal.(models; datapath);
 itps = buildinterpolations.(results);
-modelmap = Dict(models .=> itps);
+modelmap = Dict{AbstractModel, typeof(first(itps))}(models .=> itps);
+abatementmap = Dict{AbstractModel, Extrapolation}(model => itp[:α] for (model, itp) in modelmap);
 
 ratejump = VariableRateJump(rate, tippingopt!);
 
@@ -99,7 +100,7 @@ begin # Solve an ensemble problem for all models with the bau scenario
         itp = modelmap[model];
         αitp = itp[:α];
 
-        prob = SDEProblem(Fopt!, G!, X₀, (0., horizon), (model, αitp))
+        prob = SDEProblem(F!, G!, X₀, (0., horizon), (model, αitp))
 
         if isa(model, JumpModel)
             jumpprob = JumpProblem(prob, ratejump)
@@ -141,10 +142,41 @@ begin
         itp = modelmap[model]
         αitp = itp[:α]
 
+        # Abatement expenditure figure
+        βM = computeonsim(abatedsol, 
+        (T, m, t) -> β(t, ε(t, exp(m), αitp(T, m, t), model), model.economy), yearlytime)
+       
+       βquantiles = timequantiles(βM, [0.05, 0.5, 0.95])
+       smoothquantile!.(eachcol(βquantiles), 10)
+
+       βmedianplot = @pgf Plot(defopts, Coordinates(yearlytime, βquantiles[:, 2]))
+       βlowerplot = @pgf Plot({ defopts..., confidenceopts... }, Coordinates(yearlytime, βquantiles[:, 1]))
+       βupperplot = @pgf Plot({ defopts..., confidenceopts... }, Coordinates(yearlytime, βquantiles[:, 3]))
+
+
+       βoptionfirst = @pgf k > 1 ? {} : { title = L"Abatement as \% of $Y_t$" }
+       βoptionlast = @pgf k < length(models) ?
+           { 
+               xticklabels = raw"\empty"
+           } : {
+               xtick = yearticks,
+               xticklabels = BASELINE_YEAR .+ yearticks,
+               xticklabel_style = { rotate = 45 }
+           }
+
+       @pgf push!(simfig, {figopts...,
+           ymin = βextrema[1], ymax = βextrema[2],
+           ytick = βticks,
+           scaled_y_ticks = false,
+           yticklabels = βticklabels,
+           ylabel = labels[model],
+           βoptionlast..., βoptionfirst...
+       }, βmedianplot, βlowerplot, βupperplot)
+
+        # Temperature figure
         paths = EnsembleAnalysis.timeseries_point_quantile(abatedsol, [0.05, 0.5, 0.95], yearlytime)
         Tpaths = first.(paths.u)
 
-        # Temperature figure
         Tmedianplot = @pgf Plot(defopts, Coordinates(yearlytime, getindex.(Tpaths, 2)))
         Tlowerplot = @pgf Plot({ defopts..., confidenceopts... }, Coordinates(yearlytime, getindex.(Tpaths, 1)))
         Tupperplot = @pgf Plot({ defopts..., confidenceopts... }, Coordinates(yearlytime, getindex.(Tpaths, 3)))
@@ -165,37 +197,6 @@ begin
             ytick = Tticks[1], yticklabels = Tticks[2],
             Ttickoptions..., Ttitleoptions...
         }, Tmedianplot, Tlowerplot, Tupperplot)
-
-        # Abatement expenditure figure
-        βM = computeonsim(abatedsol, 
-            (T, m, t) -> β(t, ε(t, exp(m), αitp(T, m, t), model), model.economy), yearlytime)
-        
-        βquantiles = timequantiles(βM, [0.05, 0.5, 0.95])
-        smoothquantile!.(eachcol(βquantiles), 10)
-
-        βmedianplot = @pgf Plot(defopts, Coordinates(yearlytime, βquantiles[:, 2]))
-        βlowerplot = @pgf Plot({ defopts..., confidenceopts... }, Coordinates(yearlytime, βquantiles[:, 1]))
-        βupperplot = @pgf Plot({ defopts..., confidenceopts... }, Coordinates(yearlytime, βquantiles[:, 3]))
-
-
-        βoptionfirst = @pgf k > 1 ? {} : { title = L"Abatement as \% of $Y_t$" }
-        βoptionlast = @pgf k < length(models) ?
-            { 
-                xticklabels = raw"\empty"
-            } : {
-                xtick = yearticks,
-                xticklabels = BASELINE_YEAR .+ yearticks,
-                xticklabel_style = { rotate = 45 }
-            }
-
-        @pgf push!(simfig, {figopts...,
-            ymin = βextrema[1], ymax = βextrema[2],
-            ytick = βticks,
-            scaled_y_ticks = false,
-            yticklabels = βticklabels,
-            ylabel = labels[model],
-            βoptionlast..., βoptionfirst...
-        }, βmedianplot, βlowerplot, βupperplot)
     end;
 
     if SAVEFIG
@@ -204,3 +205,17 @@ begin
 
     simfig
 end
+
+# Regret plot
+function αregret(T, m, t)
+    model = ifelse(T - hogg.Tᵖ > 1.5, models[2], models[1]) # 
+    αitp = modelmap[model][:α]
+
+    return αitp(T, m, t)
+end
+
+begin # Solve an ensemble problem for all models with the bau scenario
+    regretprob = SDEProblem(F!, G!, X₀, (0., horizon), (model, αregret)) |> EnsembleProblem
+
+    regretsol = solve(regretprob; trajectories)
+end;

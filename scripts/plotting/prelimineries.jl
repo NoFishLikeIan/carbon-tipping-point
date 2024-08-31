@@ -507,7 +507,7 @@ begin # Carbon decay path
 
 
     if SAVEFIG
-        PGFPlotsX.save(joinpath(PLOTPATH, "decaypathfig.tikz"), decaypathfig; include_preamble = true) 
+        PGFPlotsX.save(joinpath(PLOTPATH, "decaypathfig.tikz"), decaypathfig; include_preamble = true)
     end
 
     decaypathfig

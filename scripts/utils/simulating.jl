@@ -4,8 +4,9 @@ using Interpolations
 using DifferentialEquations
 using Statistics
 
-function Fopt!(du, u, model::Tuple{AbstractModel, Extrapolation}, t)
-    model, αitp = model
+
+function F!(du, u, parameters::Tuple{AbstractModel, Union{Extrapolation, Function}}, t)
+    model, αitp = parameters
     T, m = u
 
     du[1] = μ(T, m, model) / model.hogg.ϵ

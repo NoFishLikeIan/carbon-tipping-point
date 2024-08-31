@@ -39,7 +39,7 @@ Base.@kwdef struct Hogg
     # Current and pre-industrial data temperature and carbon concentration
     T₀::Float64 = 288.29 # [K]
     Tᵖ::Float64 = 287.15 # [K]
-    M₀::Float64 = 410 # [p.p.m.]
+    M₀::Float64 = 412.21 # [p.p.m.]
     Mᵖ::Float64 = 280 # [p.p.m.]
 
     N₀::Float64 = 286.65543 # [p.p.m.]
@@ -128,6 +128,9 @@ mstable(T, hogg::Hogg, albedo::Albedo) = ghgforcing⁻¹(-radiativeforcing(T, ho
 mstable(T, hogg::Hogg) = ghgforcing⁻¹(-radiativeforcing(T, hogg), hogg)
 Mstable(T, args...) = exp(mstable(T, args...))
 
+function Tstable(m, hogg::Hogg, albedo::Albedo)
+    find_zeros(T -> mstable(T, hogg, albedo) - m, hogg.Tᵖ, 1.2hogg.Tᵖ)
+end
 
 function potential(T, m, hogg::Hogg, albedo::Albedo)
 	@unpack λ₁, Δλ = albedo
