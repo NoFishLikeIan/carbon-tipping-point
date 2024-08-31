@@ -1,27 +1,21 @@
 \documentclass[../../main.tex]{subfiles}
 
 \begin{document}
-\section{Steady State Density derivation} \label{appendix:density}
+\section{Distribution of temperature} \label{appendix:density}
 
-The Fokker-Planck equation for the density of temperature $p$ is \begin{equation}
-    \partial_T \left\{ \frac{1}{\epsilon} \mu(T, m) p(T) + \frac{\sigma^2_T}{2\varepsilon^2} p^\prime(T) \right\} = 0,
-\end{equation} such that, the steady state temperature $\overline{p}$ satisfies the ODE \begin{equation}
-    \frac{1}{\epsilon} \mu(T, m) \overline{p}(T) + \frac{\sigma^2_T}{2\varepsilon^2} \overline{p}^\prime(T) = 0,
-\end{equation} which has solutions \begin{equation}
-    \overline{p}(T) \propto exp\left( -\frac{V(T, m)}{\sigma^2_T / 2\epsilon^2} \right), 
+This section derives the steady state density of temperature given a fixed carbon concentration. The density is then use to calibrate the climate sensitivity and the initial conditions.
+
+The Fokker-Planck equation for the density of temperature $p_t$ is \begin{equation}
+    \partial_T \left\{ \frac{\mu(T, m)}{\epsilon} \; p_t(T) + \frac{1}{2} \left(\frac{\sigma_T}{\epsilon}\right)^2 p_t^\prime(T) \right\} = 0.
+\end{equation} The steady state temperature $\overline{p}$ then satisfies the differential equation \begin{equation}
+    \frac{\mu(T, m)}{\epsilon} \; \overline{p}(T) + \frac{1}{2} \left(\frac{\sigma_T}{\epsilon}\right)^2 \overline{p}^\prime(T) = 0.
+\end{equation} One can readily checked that this is solved by  \begin{equation}
+    \overline{p}(T) \propto \exp\left( -\frac{V(T, m)}{\sigma^2_T / 2\epsilon^2} \right), 
 \end{equation} where \begin{equation}
     \begin{split}
-        V(T, m) = &(\mu_m(m) + (1 - \lambda_1)S_0) T - \frac{\eta}{5} T^5 + \\
-        &S_0 (\lambda_1 - \lambda_2) \log(1 + \exp(T - T_i)).
+        V(T, m) &\coloneqq  g(m) T + \int r(T) \dd{T} \\
+        &= g(m) T + S_0 (1 - \lambda_1) T - \frac{\eta}{5} T^5 + S_0 \Delta\lambda \log(1 + \exp(T - T_i)).
     \end{split}
 \end{equation}
-
-
-\subsection{Abatement Costs}
-
-To abate a fraction $e$ of emissions vis-a-vis the BAU scenario requires a fraction \begin{equation}
-    \beta(\varepsilon) = \varepsilon^2 
-    ; \omega_0 e^{-\omega_r t}
-\end{equation} of GDP. Following \citep{nordhaus_revisiting_2017}, we assume that abating all emissions ($e = 1$) in 2020 costs 11\% of GDP while doing so in 2100 costs 2.7\% of GDP. This yields the calibrated $\omega_0$ and $\omega_r$
 
 \end{document}

@@ -33,8 +33,8 @@ Earth's radiating balance, in its simplest form, prescribes that an equilibrium 
 \end{equation} I introduce a feedback in the temperature by assuming that the absorbed incoming solar radiation is increasing in temperature. This choice can be seen as a stylised model of the ice-albedo feedback \citep{mcguffie_climate_2005, ashwin_tipping_2012}, yet, any positive feedback in temperature dynamics would yield similar interpretations. 
 The incoming solar radiation $S$ can be then decomposed into $S_0 \left(1 - \lambda(T_t)\right)$ where the function $\lambda(T_t)$ transitions from a higher $\lambda_1$ to a lower level $\lambda_1 - \Delta \lambda$ via a smooth transition function $L(T_t)$. To control at which level of temperature the transition occurs the transition functions take the form \begin{subequations} \label{eq:albedo-specification}
     \begin{align}
-        \lambda(T_t) &\coloneqq \lambda_1 - \Delta \lambda \big(1 - L(T_t)\big) \text{ where } \label{eq:lambda} \\
-        L(T_t) &\coloneqq \left(1 + \exp \left(-L_1 \left(T_t - T^p - T^c - \frac{\Delta T}{2}\right)\right)\right)^{-1}
+        \lambda(T_t) &\coloneqq \lambda_1 - \Delta \lambda \big(1 - L(T_t)\big) \text{ with } \label{eq:lambda} \\
+        L(T_t) &\coloneqq \frac{1}{1 + \exp \left(-L_1 \left(T_t - T^p - T^c - \frac{\Delta T}{2}\right)\right)}
     \end{align} 
 \end{subequations} where $T^p$ is the pre-industrial level of temperature, $T^c$ is the level of temperature at which the feedback effect begins, $\Delta T$ is the duration of the transition, and $L_1$ is a speed parameter. 
 
