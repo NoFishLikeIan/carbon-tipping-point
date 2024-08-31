@@ -9,7 +9,7 @@ using Interpolations
 using Interpolations: Extrapolation
 
 using Plots, Printf, PGFPlotsX, Colors, ColorSchemes
-using Statistics
+using Statistics, LaTeXStrings
 
 push!(PGFPlotsX.CUSTOM_PREAMBLE, raw"\usepgfplotslibrary{fillbetween}")
 
@@ -29,7 +29,7 @@ begin # Global variables
     PLOTPATH = get(env, "PLOTPATH", "plots")
     PRESENTATIONPATH = joinpath(PLOTPATH, "presentation")
 
-    SAVEFIG = false 
+    SAVEFIG = false
     kelvintocelsius = 273.15
     LINE_WIDTH = 2.5
     SEED = 11148705
@@ -56,28 +56,28 @@ begin # Construct models and grids
 	end
 
     jumpmodel = JumpModel(jump,  hogg, preferences, damages, economy, calibration)
-    # push!(models, jumpmodel)
+    push!(models, jumpmodel)
 end;
 
 begin # Labels, colors and axis
     PALETTE = colorschemes[:grays]
-    graypalette = n -> n > 1 ? 
-        get(PALETTE, range(0.1, 0.8; length = n)) : 0.8
+    graypalette = n -> n > 1 ? get(PALETTE, range(0.1, 0.8; length = n)) : 0.8
 
     thresholdcolor = Dict(thresholds .=> graypalette(length(thresholds)))
+    labels = Dict{AbstractModel, LaTeXString}(models .=> [L"\textit{remote}", L"\textit{imminent}", L"\textit{benchmark}"])
 
-    TEMPLABEL = "Temperature deviations \$T_t - T^{p}\$"
+    TEMPLABEL = L"Temperature deviations $T_t - T^{p}$"
+    defopts = @pgf { line_width = LINE_WIDTH }
 
     ΔTmax = 8.
     ΔTspace = range(0., ΔTmax; length = 51)
     Tspace = ΔTspace .+ Hogg().Tᵖ
+    Tmin, Tmax = extrema(Tspace)
 
-    horizon = round(Int64, calibration.tspan[2])
-    yearlytime = 0:1:horizon
+    horizon = round(Int64, last(calibration.tspan))
+    yearlytime = collect(0:horizon)
 
     temperatureticks = makedeviationtickz(0., ΔTmax, first(models); step = 1, digits = 0)
-
-    Tmin, Tmax = (0., ΔTmax) .+ hogg.Tᵖ
 
     X₀ = [hogg.T₀, log(hogg.M₀)]
 
@@ -89,76 +89,30 @@ results = loadtotal.(models; datapath);
 itps = buildinterpolations.(results);
 modelmap = Dict(models .=> itps);
 
-function F!(dx, x, p, t)	
-	model, αitp = p
-	T, m = x
-	
-	dx[1] = μ(T, m, model) / model.hogg.ϵ
-	dx[2] = γ(t, model.calibration) - αitp(T, m, t)
-end;
-
-function G!(Σ, x, p::Tuple{AbstractModel, Any}, t)
-    G!(Σ, x, first(p), t)
-end;
-
-rate(u, p::Tuple{JumpModel, Any}, t) = rate(u, first(p), t)
-function tippingaffect!(integrator)
-    model = first(integrator.p)
-    q = increase(integrator.u[1], model.hogg, model.jump)
-    integrator.u[1] += q
-end
-
-ratejump = VariableRateJump(rate, tippingaffect!);
+ratejump = VariableRateJump(rate, tippingopt!);
 
 begin # Solve an ensemble problem for all models with the bau scenario
+    trajectories = 10_000
     sols = Dict{AbstractModel, EnsembleSolution}()
-    x₀ = [hogg.T₀, log(hogg.M₀)]
 
     for model in models
         itp = modelmap[model];
         αitp = itp[:α];
 
-        p = (model, αitp);
-
-        prob = SDEProblem(F!, G!, x₀, (0., 80.), p)
+        prob = SDEProblem(Fopt!, G!, X₀, (0., horizon), (model, αitp))
 
         if isa(model, JumpModel)
             jumpprob = JumpProblem(prob, ratejump)
             ensprob = EnsembleProblem(jumpprob)
-            abatedsol = solve(ensprob, SRIW1(); trajectories = 1_000)
+            abatedsol = solve(ensprob, SRIW1(); trajectories)
         else
             ensprob = EnsembleProblem(prob)
-            abatedsol = solve(ensprob; trajectories = 10_000)
+            abatedsol = solve(ensprob; trajectories)
         end
 
         sols[model] = abatedsol
     end
 end;
-
-function smoothedβ(path, αitp, model; w = 2)
-    n = length(path)
-    raw = Vector{Float64}(undef, n)
-    
-    for j in 1:n
-        t = path.t[j]
-        T, m = path.u[j]
-        M = exp(m)
-
-        α = αitp(T, m, t)
-
-        raw[j] = Model.β(t, Model.ε(t, M, α, model), model.economy)
-    end
-
-    ma = copy(raw)
-
-    for j in 1:n
-        from = max(j - w, 1)
-        to = min(j + w, n)        
-        ma[j] = mean(raw[from:to])
-    end
-    
-    return ma
-end
 
 # Constructs a Group plot, one for the path of T and one for M
 begin
@@ -167,85 +121,33 @@ begin
             group_size = "2 by $(length(models))",
             horizontal_sep = raw"0.15\textwidth",
             vertical_sep = raw"0.1\textwidth"
-        },
-        width = raw"\textwidth", height = raw"\textwidth",
+        }, width = raw"\textwidth", height = raw"\textwidth",
     });
 
     yearticks = 0:20:horizon
 
-    βextrema = (0., 0.04)
+    βextrema = (0., 0.03)
     βticks = range(βextrema...; step = 0.01) |> collect
     βticklabels = [@sprintf("%.0f \\%%", 100 * y) for y in βticks]
 
-    Textrema = hogg.Tᵖ .+ (1., 5.)
-    Tticks = makedeviationtickz((Textrema .- hogg.Tᵖ)..., first(models); step = 0.5, digits = 1)
+    Textrema = (1., 2.5)
+    Tticks = makedeviationtickz(Textrema..., first(models); step = 0.5, digits = 1)
+
+    confidenceopts = @pgf { dotted, opacity = 0.5 }
+    figopts = @pgf { width = raw"0.42\textwidth", height = raw"0.3\textwidth", grid = "both", xmin = 0, xmax = horizon }
 
     for (k, model) in enumerate(models)
         abatedsol = sols[model]
         itp = modelmap[model]
         αitp = itp[:α]
 
-        medianpath = timeseries_point_median(abatedsol, yearlytime)
-        lowerpath = timeseries_point_quantile(abatedsol, 0.1, yearlytime)
-        upperpath  = timeseries_point_quantile(abatedsol, 0.9, yearlytime)
+        paths = EnsembleAnalysis.timeseries_point_quantile(abatedsol, [0.05, 0.5, 0.95], yearlytime)
+        Tpaths = first.(paths.u)
 
-        Tmedian = @. first(medianpath.u)
-        Tlower = @. first(lowerpath.u)
-        Tupper = @. first(upperpath.u)
-
-        βmedian = smoothedβ(medianpath, αitp, model; w = 0)
-        βlower = smoothedβ(lowerpath, αitp, model; w = 0)
-        βupper = smoothedβ(upperpath, αitp, model; w = 0)
-
-        clamped = clamp.(βmedian, βlower, βupper)
-
-        # β figure
-        βmedianplot = @pgf Plot({ line_width = LINE_WIDTH }, Coordinates(zip(yearlytime, clamped)))
-        βlowerplot = @pgf Plot({ line_width = LINE_WIDTH, dotted, opacity = 0.5 }, Coordinates(zip(yearlytime, βlower)))
-        βupperplot = @pgf Plot({ line_width = LINE_WIDTH, dotted, opacity = 0.5 }, Coordinates(zip(yearlytime, βupper)))
-
-        βoptionfirst = @pgf k > 1 ? {} : {
-            title = raw"Abatement as \% of $Y_t$",
-        }
-
-        βoptionlast = @pgf k < length(models) ?
-            { 
-                xticklabels = raw"\empty"
-            } : {
-                xtick = yearticks,
-                xticklabels = BASELINE_YEAR .+ yearticks,
-                xticklabel_style = { rotate = 45 }
-            }
-
-        
-
-        ylabel = if isa(model, TippingModel)
-            if model.albedo.Tᶜ < 2
-                raw"\textit{imminent}"
-            else
-                raw"\textit{far}"
-            end
-        else
-            raw"\textit{benchmark}"
-        end
-
-        @pgf push!(simfig, {
-            width = raw"0.42\textwidth",
-            height = raw"0.3\textwidth",
-            grid = "both",
-            ymin = βextrema[1], ymax = βextrema[2],
-            ytick = βticks,
-            xmin = 0, xmax = horizon,
-            scaled_y_ticks=false,
-            yticklabels = βticklabels,
-            ylabel = ylabel,
-            βoptionlast..., βoptionfirst...
-        }, βmedianplot, βlowerplot, βupperplot)
-
-        # T figure
-        Tmedianplot = @pgf Plot({ line_width = LINE_WIDTH }, Coordinates(zip(yearlytime, Tmedian)))
-        Tlowerplot = @pgf Plot({ line_width = LINE_WIDTH, dotted, opacity = 0.5 }, Coordinates(zip(yearlytime, Tlower)))
-        Tupperplot = @pgf Plot({ line_width = LINE_WIDTH, dotted, opacity = 0.5 }, Coordinates(zip(yearlytime, Tupper)))
+        # Temperature figure
+        Tmedianplot = @pgf Plot(defopts, Coordinates(yearlytime, getindex.(Tpaths, 2)))
+        Tlowerplot = @pgf Plot({ defopts..., confidenceopts... }, Coordinates(yearlytime, getindex.(Tpaths, 1)))
+        Tupperplot = @pgf Plot({ defopts..., confidenceopts... }, Coordinates(yearlytime, getindex.(Tpaths, 3)))
 
         Ttickoptions = @pgf k < length(models) ?
             { 
@@ -256,19 +158,44 @@ begin
                 xticklabel_style = { rotate = 45 }
             }
 
-        Ttitleoptions = @pgf k > 1 ? {} : {
-                title = raw"Temperature $T_t$"
-            }
+        Ttitleoptions = @pgf k > 1 ? {} : { title = raw"Temperature $T_t$" }
 
-        @pgf push!(simfig, {
-            width = raw"0.42\textwidth",
-            height = raw"0.3\textwidth",
-            grid = "both",
-            xmin = 0, xmax = horizon,
-            ymin = Textrema[1], ymax = Textrema[2],
+        @pgf push!(simfig, {figopts...,
+            ymin = Textrema[1] + hogg.Tᵖ, ymax = Textrema[2] + hogg.Tᵖ,
             ytick = Tticks[1], yticklabels = Tticks[2],
             Ttickoptions..., Ttitleoptions...
         }, Tmedianplot, Tlowerplot, Tupperplot)
+
+        # Abatement expenditure figure
+        βM = computeonsim(abatedsol, 
+            (T, m, t) -> β(t, ε(t, exp(m), αitp(T, m, t), model), model.economy), yearlytime)
+        
+        βquantiles = timequantiles(βM, [0.05, 0.5, 0.95])
+        smoothquantile!.(eachcol(βquantiles), 10)
+
+        βmedianplot = @pgf Plot(defopts, Coordinates(yearlytime, βquantiles[:, 2]))
+        βlowerplot = @pgf Plot({ defopts..., confidenceopts... }, Coordinates(yearlytime, βquantiles[:, 1]))
+        βupperplot = @pgf Plot({ defopts..., confidenceopts... }, Coordinates(yearlytime, βquantiles[:, 3]))
+
+
+        βoptionfirst = @pgf k > 1 ? {} : { title = L"Abatement as \% of $Y_t$" }
+        βoptionlast = @pgf k < length(models) ?
+            { 
+                xticklabels = raw"\empty"
+            } : {
+                xtick = yearticks,
+                xticklabels = BASELINE_YEAR .+ yearticks,
+                xticklabel_style = { rotate = 45 }
+            }
+
+        @pgf push!(simfig, {figopts...,
+            ymin = βextrema[1], ymax = βextrema[2],
+            ytick = βticks,
+            scaled_y_ticks = false,
+            yticklabels = βticklabels,
+            ylabel = labels[model],
+            βoptionlast..., βoptionfirst...
+        }, βmedianplot, βlowerplot, βupperplot)
     end;
 
     if SAVEFIG

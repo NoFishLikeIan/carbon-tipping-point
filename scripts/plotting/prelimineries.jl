@@ -531,7 +531,8 @@ begin # Damage fig
             xtick = temperatureticks[1],
             xmin = Tmin, xmax = Tmax,
             xticklabel_style = {rotate = 45},
-            yticklabels = yticklabels, ytick = ytick, ymin = -0.01
+            yticklabels = yticklabels, ytick = ytick, ymin = -0.01,
+            scaled_y_ticks = false,
         }
     )
 
