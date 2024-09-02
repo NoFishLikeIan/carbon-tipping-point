@@ -14,6 +14,7 @@ VERBOSE = getbool(env, "VERBOSE", false)
 RUNTERMINAL = getbool(env, "RUNTERMINAL", false)
 RUNBACKWARDS = getbool(env, "RUNBACKWARDS", false)
 OVERWRITE = getbool(env, "OVERWRITE", false)
+ALLOWNEGATIVE = getbool(env, "ALLOWNEGATIVE", false)
 TOL = getnumber(env, "TOL", 1e-3)
 TSTOP = getnumber(env, "TSTOP", 0.)
 CACHESTEP = getnumber(env, "CACHESTEP", 1 / 4)
@@ -50,6 +51,6 @@ for Tᶜ ∈ thresholds
 
     if RUNBACKWARDS
         VERBOSE && println("Running backward...")
-        computebackward(model, G; verbose = VERBOSE, datapath = datapath, overwrite = OVERWRITE, tstop = TSTOP, cachestep = CACHESTEP)
+        computebackward(model, G; verbose = VERBOSE, datapath = datapath, overwrite = OVERWRITE, tstop = TSTOP, cachestep = CACHESTEP, allownegative = ALLOWNEGATIVE)
     end
 end

@@ -20,7 +20,7 @@ end
     constraints.bounds.bx[4] = ᾱ
 end
 
-function backwardstep!(Δts, F, policy, cluster, model::AbstractModel, G)
+function backwardstep!(Δts, F, policy, cluster, model::AbstractModel, G; allownegative = false)
     indices = CartesianIndices(G)
     constraints = TwiceDifferentiableConstraints([0., 0.], [1., 1.])
 
@@ -29,8 +29,15 @@ function backwardstep!(Δts, F, policy, cluster, model::AbstractModel, G)
         Xᵢ = G.X[idx]
 
         t = model.economy.τ - δt
-        ᾱ = γ(t, model.calibration) + δₘ(exp(Xᵢ.m), model.hogg)
-        updateᾱ!(constraints, ᾱ)
+        u₀ = policy[idx, :]
+
+        if !allownegative
+            ᾱ = γ(t, model.calibration) + δₘ(exp(Xᵢ.m), model.hogg)
+            updateᾱ!(constraints, ᾱ)
+            u₀ = Optim.isinterior(constraints, u₀) ? u₀ : [0.5, ᾱ / 2]
+        else
+            u₀ = Optim.isinterior(constraints, u₀) ? u₀ : [0.5, 0.5]
+        end
 
         logobjective = @closure u -> begin
             F′, Δt = markovstep(t, idx, F, u, model, G)
@@ -38,8 +45,6 @@ function backwardstep!(Δts, F, policy, cluster, model::AbstractModel, G)
 
             return log(c)
         end
-
-        u₀ = Optim.isinterior(constraints, policy[idx, :]) ? policy[idx, :] : [0.5, ᾱ / 2]
 
         diffobj = TwiceDifferentiable(logobjective, u₀; autodiff = :forward)
         res = Optim.optimize(diffobj, constraints, u₀, IPNewton())
@@ -62,7 +67,6 @@ function backwardsimulation!(F, policy, model::AbstractModel, G; verbose = false
         if isfile(cachepath) 
             if overwrite 
                 verbose && @warn "Removing file $cachepath.\n"
-
                 rm(cachepath)
             else 
                 verbose && @warn "File $cachepath already exists. If you want to overwrite it pass overwrite = true. Will copy the results into `F` and `policy`.\n"
