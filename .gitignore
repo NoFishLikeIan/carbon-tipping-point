@@ -450,4 +450,5 @@ papers/presentations/figures
 **/*.mem
 *.code-workspace
 .env
-.envgame
+.env.game
+.env.negative

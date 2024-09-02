@@ -2,6 +2,7 @@ using Revise
 using JLD2, DotEnv, CSV
 using UnPack
 using DataFrames, DataStructures
+using FastClosures
 
 using DifferentialEquations, DifferentialEquations.EnsembleAnalysis
 
@@ -20,11 +21,14 @@ includet("../utils/simulating.jl")
 includet("utils.jl")
 
 begin # Global variables
-    env = DotEnv.config()
+    env = DotEnv.config(".env")
+    envneg = DotEnv.config(".env.negative")
     BASELINE_YEAR = 2020
+
     DATAPATH = get(env, "DATAPATH", "data")
-    SIMPATH = get(env, "SIMULATIONPATH", "simulaton")
-    datapath = joinpath(DATAPATH, SIMPATH)
+    datapath = joinpath(DATAPATH, get(env, "SIMULATIONPATH", "simulaton"))
+
+    negdatapath = joinpath(DATAPATH, get(envneg, "SIMULATIONPATH", "simulaton"))
 
     PLOTPATH = get(env, "PLOTPATH", "plots")
     PRESENTATIONPATH = joinpath(PLOTPATH, "presentation")
@@ -206,16 +210,81 @@ begin
     simfig
 end
 
-# Regret plot
-function αregret(T, m, t)
-    model = ifelse(T - hogg.Tᵖ > 1.5, models[2], models[1]) # 
-    αitp = modelmap[model][:α]
+begin # Solve the regret solution. Discover tipping point only after T ≥ Tᶜ.
+    modelimminent, modelremote, modelstochastic = models
+    αimminent = abatementmap[modelimminent]
+    αremote = abatementmap[modelremote]
 
-    return αitp(T, m, t)
-end
+    parameters = ((modelimminent, αimminent), (modelremote, αremote));
 
-begin # Solve an ensemble problem for all models with the bau scenario
-    regretprob = SDEProblem(F!, G!, X₀, (0., horizon), (model, αregret)) |> EnsembleProblem
+    regretprob = SDEProblem(Fregret!, G!, X₀, (0., horizon), parameters) |> EnsembleProblem
 
     regretsol = solve(regretprob; trajectories)
 end;
+
+begin
+    regretfig = @pgf GroupPlot({
+        group_style = { 
+            group_size = "2 by 1",
+            horizontal_sep = raw"0.15\textwidth",
+            vertical_sep = raw"0.1\textwidth"
+        }, width = raw"\textwidth", height = raw"\textwidth",
+    });
+
+    βextrema = (0., 0.06)
+    βticks = range(βextrema...; step = 0.01) |> collect
+    βticklabels = [@sprintf("%.0f \\%%", 100 * y) for y in βticks]
+
+    βregret = @closure (T, m, t) -> begin
+        model = ifelse(T - hogg.Tᵖ > modelimminent.albedo.Tᶜ, modelimminent, modelremote)
+
+        αitp = abatementmap[model]
+
+        return β(t, ε(t, exp(m), αitp(T, m, t), model), model.economy)
+    end
+
+    # Abatement expenditure figure
+    βM = computeonsim(regretsol, βregret, yearlytime)
+    
+    βquantiles = timequantiles(βM, [0.05, 0.5, 0.95])
+    smoothquantile!.(eachcol(βquantiles), 10)
+
+    βmedianplot = @pgf Plot(defopts, Coordinates(yearlytime, βquantiles[:, 2]))
+    βlowerplot = @pgf Plot({ defopts..., confidenceopts... }, Coordinates(yearlytime, βquantiles[:, 1]))
+    βupperplot = @pgf Plot({ defopts..., confidenceopts... }, Coordinates(yearlytime, βquantiles[:, 3]))
+
+
+    @pgf push!(regretfig, {figopts...,
+        ymin = βextrema[1], ymax = βextrema[2],
+        ytick = βticks,
+        scaled_y_ticks = false,
+        yticklabels = βticklabels,
+        title = L"Abatement as \% of $Y_t$",
+        xtick = yearticks,
+        xticklabels = BASELINE_YEAR .+ yearticks,
+        xticklabel_style = { rotate = 45 }
+    }, βmedianplot, βlowerplot, βupperplot)
+
+    # Temperature figure
+    paths = EnsembleAnalysis.timeseries_point_quantile(regretsol, [0.05, 0.5, 0.95], yearlytime)
+    Tpaths = first.(paths.u)
+
+    Tmedianplot = @pgf Plot(defopts, Coordinates(yearlytime, getindex.(Tpaths, 2)))
+    Tlowerplot = @pgf Plot({ defopts..., confidenceopts... }, Coordinates(yearlytime, getindex.(Tpaths, 1)))
+    Tupperplot = @pgf Plot({ defopts..., confidenceopts... }, Coordinates(yearlytime, getindex.(Tpaths, 3)))
+
+    @pgf push!(regretfig, {figopts...,
+        ymin = Textrema[1] + hogg.Tᵖ, ymax = Textrema[2] + hogg.Tᵖ,
+        ytick = Tticks[1], yticklabels = Tticks[2],
+        title = raw"Temperature $T_t$",
+        xtick = yearticks,
+        xticklabels = BASELINE_YEAR .+ yearticks,
+        xticklabel_style = { rotate = 45 }
+    }, Tmedianplot, Tlowerplot, Tupperplot)
+
+    if SAVEFIG
+        PGFPlotsX.save(joinpath(PLOTPATH, "regretfig.tikz"), regretfig; include_preamble = true)
+    end
+
+    regretfig
+end

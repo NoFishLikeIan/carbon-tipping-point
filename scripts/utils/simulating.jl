@@ -4,6 +4,14 @@ using Interpolations
 using DifferentialEquations
 using Statistics
 
+function Fregret!(du, u, parameters, t)
+    paramimminent, paramremote = parameters
+    modelimminent = first(paramimminent)
+
+    params = ifelse(u[1] - modelimminent.hogg.Tᵖ > modelimminent.albedo.Tᶜ, paramimminent, paramremote)
+
+    F!(du, u, params, t)
+end
 
 function F!(du, u, parameters::Tuple{AbstractModel, Union{Extrapolation, Function}}, t)
     model, αitp = parameters
