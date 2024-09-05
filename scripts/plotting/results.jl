@@ -1,40 +1,41 @@
 using Revise
+using Distributed
 using JLD2, DotEnv, CSV
 using UnPack
 using DataFrames, DataStructures
-using FastClosures
-
-using DifferentialEquations, DifferentialEquations.EnsembleAnalysis
-
-using Interpolations
-using Interpolations: Extrapolation
 
 using Plots, Printf, PGFPlotsX, Colors, ColorSchemes
 using Statistics, LaTeXStrings
 
 push!(PGFPlotsX.CUSTOM_PREAMBLE, raw"\usepgfplotslibrary{fillbetween}")
 
-using Model, Grid
+@everywhere begin
+    using FastClosures
 
-includet("../utils/saving.jl")
-includet("../utils/simulating.jl")
-includet("utils.jl")
+    using DifferentialEquations, DifferentialEquations.EnsembleAnalysis
+    using Interpolations
+
+    using Model, Grid
+
+    include("../utils/saving.jl")
+    include("../utils/simulating.jl")
+    include("utils.jl")
+end
+
+println("Simulating with $(nprocs()) processes...")
 
 begin # Global variables
     env = DotEnv.config(".env")
-    envneg = DotEnv.config(".env.negative")
     BASELINE_YEAR = 2020
 
     DATAPATH = get(env, "DATAPATH", "data")
-    datapath = joinpath(DATAPATH, get(env, "SIMULATIONPATH", "simulaton"))
-
-    negdatapath = joinpath(DATAPATH, get(envneg, "SIMULATIONPATH", "simulaton"))
+    
+    datapath = joinpath(DATAPATH, get(env, "SIMULATIONPATH", "simulaton"), "")
 
     PLOTPATH = get(env, "PLOTPATH", "plots")
     PRESENTATIONPATH = joinpath(PLOTPATH, "presentation")
 
     SAVEFIG = false
-    kelvintocelsius = 273.15
     LINE_WIDTH = 2.5
     SEED = 11148705
 end;
@@ -68,7 +69,10 @@ begin # Labels, colors and axis
     graypalette = n -> n > 1 ? get(PALETTE, range(0.1, 0.8; length = n)) : 0.8
 
     thresholdcolor = Dict(thresholds .=> graypalette(length(thresholds)))
-    labels = Dict{AbstractModel, LaTeXString}(models .=> [L"\textit{remote}", L"\textit{imminent}", L"\textit{benchmark}"])
+
+    rawlabels = [ L"\textit{imminent}", L"\textit{remote}", L"\textit{benchmark}"]
+
+    labels = Dict{AbstractModel, LaTeXString}(models .=> rawlabels[eachindex(models)])
 
     TEMPLABEL = L"Temperature deviations $T_t - T^{p}$"
     defopts = @pgf { line_width = LINE_WIDTH }
@@ -79,7 +83,7 @@ begin # Labels, colors and axis
     Tmin, Tmax = extrema(Tspace)
 
     horizon = round(Int64, last(calibration.tspan))
-    yearlytime = collect(0:horizon)
+    yearlytime = range(0., horizon; step = 1 / 3) |> collect
 
     temperatureticks = makedeviationtickz(0., ΔTmax, first(models); step = 1, digits = 0)
 
@@ -89,15 +93,16 @@ begin # Labels, colors and axis
 end;
 
 # --- Optimal emissions 
-results = loadtotal.(models; datapath);
-itps = buildinterpolations.(results);
-modelmap = Dict{AbstractModel, typeof(first(itps))}(models .=> itps);
-abatementmap = Dict{AbstractModel, Extrapolation}(model => itp[:α] for (model, itp) in modelmap);
-
-ratejump = VariableRateJump(rate, tippingopt!);
+begin
+    results = loadtotal.(models; datapath);
+    itps = buildinterpolations.(results);
+    modelmap = Dict{AbstractModel, typeof(first(itps))}(models .=> itps);
+    abatementmap = Dict{AbstractModel, Interpolations.Extrapolation}(model => itp[:α] for (model, itp) in modelmap)
+end;
 
 begin # Solve an ensemble problem for all models with the bau scenario
     trajectories = 10_000
+    ratejump = VariableRateJump(rate, tippingopt!);
     sols = Dict{AbstractModel, EnsembleSolution}()
 
     for model in models
@@ -109,17 +114,17 @@ begin # Solve an ensemble problem for all models with the bau scenario
         if isa(model, JumpModel)
             jumpprob = JumpProblem(prob, ratejump)
             ensprob = EnsembleProblem(jumpprob)
-            abatedsol = solve(ensprob, SRIW1(); trajectories)
+            abatedsol = solve(ensprob, SRIW1(), EnsembleDistributed(); trajectories)
         else
             ensprob = EnsembleProblem(prob)
-            abatedsol = solve(ensprob; trajectories)
+            abatedsol = solve(ensprob, EnsembleDistributed(); trajectories)
         end
 
         sols[model] = abatedsol
     end
 end;
 
-# Constructs a Group plot, one for the path of T and one for M
+# Constructs a Group plot, one for the path of T and one for β
 begin
     simfig = @pgf GroupPlot({
         group_style = { 
@@ -135,11 +140,11 @@ begin
     βticks = range(βextrema...; step = 0.01) |> collect
     βticklabels = [@sprintf("%.0f \\%%", 100 * y) for y in βticks]
 
-    Textrema = (1., 2.5)
+    Textrema = (1., 2.)
     Tticks = makedeviationtickz(Textrema..., first(models); step = 0.5, digits = 1)
 
     confidenceopts = @pgf { dotted, opacity = 0.5 }
-    figopts = @pgf { width = raw"0.42\textwidth", height = raw"0.3\textwidth", grid = "both", xmin = 0, xmax = horizon }
+    figopts = @pgf { width = raw"0.45\textwidth", height = raw"0.3\textwidth", grid = "both", xmin = 0, xmax = horizon }
 
     for (k, model) in enumerate(models)
         abatedsol = sols[model]
@@ -150,8 +155,8 @@ begin
         βM = computeonsim(abatedsol, 
         (T, m, t) -> β(t, ε(t, exp(m), αitp(T, m, t), model), model.economy), yearlytime)
        
-       βquantiles = timequantiles(βM, [0.05, 0.5, 0.95])
-       smoothquantile!.(eachcol(βquantiles), 10)
+        βquantiles = timequantiles(βM, [0.1, 0.5, 0.9])
+        smoothquantile!.(eachcol(βquantiles), 30)
 
        βmedianplot = @pgf Plot(defopts, Coordinates(yearlytime, βquantiles[:, 2]))
        βlowerplot = @pgf Plot({ defopts..., confidenceopts... }, Coordinates(yearlytime, βquantiles[:, 1]))
@@ -210,8 +215,8 @@ begin
     simfig
 end
 
-begin # Solve the regret solution. Discover tipping point only after T ≥ Tᶜ.
-    modelimminent, modelremote, modelstochastic = models
+begin # Solve the regret problem. Discover tipping point only after T ≥ Tᶜ.
+    modelimminent, modelremote = models[[1, 2]]
     αimminent = abatementmap[modelimminent]
     αremote = abatementmap[modelremote]
 
@@ -219,7 +224,7 @@ begin # Solve the regret solution. Discover tipping point only after T ≥ Tᶜ.
 
     regretprob = SDEProblem(Fregret!, G!, X₀, (0., horizon), parameters) |> EnsembleProblem
 
-    regretsol = solve(regretprob; trajectories)
+    regretsol = solve(regretprob, EnsembleDistributed(); trajectories)
 end;
 
 begin
@@ -231,9 +236,6 @@ begin
         }, width = raw"\textwidth", height = raw"\textwidth",
     });
 
-    βextrema = (0., 0.06)
-    βticks = range(βextrema...; step = 0.01) |> collect
-    βticklabels = [@sprintf("%.0f \\%%", 100 * y) for y in βticks]
 
     βregret = @closure (T, m, t) -> begin
         model = ifelse(T - hogg.Tᵖ > modelimminent.albedo.Tᶜ, modelimminent, modelremote)
@@ -243,11 +245,15 @@ begin
         return β(t, ε(t, exp(m), αitp(T, m, t), model), model.economy)
     end
 
+    βregextrema = (0., 0.08)
+    βregticks = range(βregextrema...; step = 0.02) |> collect
+    βregtickslabels = [@sprintf("%.0f \\%%", 100 * y) for y in βregticks]
+
     # Abatement expenditure figure
     βM = computeonsim(regretsol, βregret, yearlytime)
     
-    βquantiles = timequantiles(βM, [0.05, 0.5, 0.95])
-    smoothquantile!.(eachcol(βquantiles), 10)
+    βquantiles = timequantiles(βM, [0.1, 0.5, 0.9])
+    smoothquantile!.(eachcol(βquantiles), 30)
 
     βmedianplot = @pgf Plot(defopts, Coordinates(yearlytime, βquantiles[:, 2]))
     βlowerplot = @pgf Plot({ defopts..., confidenceopts... }, Coordinates(yearlytime, βquantiles[:, 1]))
@@ -255,10 +261,10 @@ begin
 
 
     @pgf push!(regretfig, {figopts...,
-        ymin = βextrema[1], ymax = βextrema[2],
-        ytick = βticks,
+        ymin = βregextrema[1], ymax = βregextrema[2],
+        ytick = βregticks,
         scaled_y_ticks = false,
-        yticklabels = βticklabels,
+        yticklabels = βregtickslabels,
         title = L"Abatement as \% of $Y_t$",
         xtick = yearticks,
         xticklabels = BASELINE_YEAR .+ yearticks,
@@ -266,7 +272,7 @@ begin
     }, βmedianplot, βlowerplot, βupperplot)
 
     # Temperature figure
-    paths = EnsembleAnalysis.timeseries_point_quantile(regretsol, [0.05, 0.5, 0.95], yearlytime)
+    paths = EnsembleAnalysis.timeseries_point_quantile(regretsol, [0.01, 0.5, 0.99], yearlytime)
     Tpaths = first.(paths.u)
 
     Tmedianplot = @pgf Plot(defopts, Coordinates(yearlytime, getindex.(Tpaths, 2)))

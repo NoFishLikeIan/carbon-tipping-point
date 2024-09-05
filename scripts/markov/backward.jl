@@ -24,7 +24,7 @@ function backwardstep!(Δts, F, policy, cluster, model::AbstractModel, G; allown
     indices = CartesianIndices(G)
     constraints = TwiceDifferentiableConstraints([0., 0.], [1., 1.])
 
-    for (i, δt) in cluster
+    @sync @distributed for (i, δt) in cluster
         idx = indices[i]
         Xᵢ = G.X[idx]
 

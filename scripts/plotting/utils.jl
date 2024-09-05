@@ -1,11 +1,12 @@
 using Printf: format, Format
 
+const kelvintocelsius = 273.15
+
 function stringifydeviation(ΔT; digits = 2)
     fsign = ΔT > 0 ? "+" : ""
     fmt = Format("$fsign%0.$(digits)f°")
     return format(fmt, ΔT)
 end
-
 
 function makedeviationtickz(from, to, model; step = 0.5, withcurrent = false, digits = 2)
 

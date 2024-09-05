@@ -7,14 +7,15 @@ using Distributed: nprocs
 env = DotEnv.config()
 DATAPATH = get(env, "DATAPATH", "data")
 SIMPATH = get(env, "SIMULATIONPATH", "simulation/planner")
-datapath = joinpath(DATAPATH, SIMPATH)
+ALLOWNEGATIVE = getbool(env, "ALLOWNEGATIVE", false)
+
+datapath = joinpath(DATAPATH, SIMPATH, ALLOWNEGATIVE ? "negative" : "")
 
 N = getnumber(env, "N", 31; type = Int)
 VERBOSE = getbool(env, "VERBOSE", false)
 RUNTERMINAL = getbool(env, "RUNTERMINAL", false)
 RUNBACKWARDS = getbool(env, "RUNBACKWARDS", false)
 OVERWRITE = getbool(env, "OVERWRITE", false)
-ALLOWNEGATIVE = getbool(env, "ALLOWNEGATIVE", false)
 TOL = getnumber(env, "TOL", 1e-3)
 TSTOP = getnumber(env, "TSTOP", 0.)
 CACHESTEP = getnumber(env, "CACHESTEP", 1 / 4)
@@ -38,7 +39,7 @@ mdomain = mstable.(Tdomain, hogg)
 G = RegularGrid([Tdomain, mdomain], N)
 
 for Tᶜ ∈ thresholds
-    VERBOSE && println("Solving model with Tᶜ = $Tᶜ...")
+    VERBOSE && println("Solving model with Tᶜ = $Tᶜ and $(ALLOWNEGATIVE ? "with" : "without") negative emission...")
     
     albedo = Albedo(Tᶜ)
     model = TippingModel(albedo, hogg, preferences, damages, economy, calibration)

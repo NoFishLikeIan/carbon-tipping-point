@@ -8,12 +8,12 @@ function Fregret!(du, u, parameters, t)
     paramimminent, paramremote = parameters
     modelimminent = first(paramimminent)
 
-    params = ifelse(u[1] - modelimminent.hogg.Tᵖ > modelimminent.albedo.Tᶜ, paramimminent, paramremote)
+    params = ifelse(u[1] - modelimminent.hogg.Tᵖ > modelimminent.albedo.Tᶜ + modelimminent.albedo.ΔT / 2, paramimminent, paramremote)
 
     F!(du, u, params, t)
 end
 
-function F!(du, u, parameters::Tuple{AbstractModel, Union{Extrapolation, Function}}, t)
+function F!(du, u, parameters::Tuple{AbstractModel, Union{Interpolations.Extrapolation, Function}}, t)
     model, αitp = parameters
     T, m = u
 
@@ -67,7 +67,7 @@ function buildsplines(result::Result; splinekwargs...)
     return timesplines
 end
 
-ResultInterpolation = Dict{Symbol, Extrapolation}
+ResultInterpolation = Dict{Symbol, Interpolations.Extrapolation}
 "Constructs linear interpolation of results"
 function buildinterpolations(result::Result; splinekwargs...)
     timespace, F, policy, G = result
@@ -132,3 +132,4 @@ function smoothquantile!(v, window)
         v[j] = mean(vo[l:r])
     end
 end
+

@@ -24,7 +24,6 @@ begin # Global variables
     PRESENTATIONPATH = joinpath(PLOTPATH, "presentation")
 
     SAVEFIG = false
-    kelvintocelsius = 273.15
     LINE_WIDTH = 2.5
     SEED = 11148705
 end;

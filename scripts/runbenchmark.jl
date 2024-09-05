@@ -5,7 +5,9 @@ include("markov/backward.jl")
 env = DotEnv.config()
 DATAPATH = get(env, "DATAPATH", "data")
 SIMPATH = get(env, "SIMULATIONPATH", "simulation/planner")
-datapath = joinpath(DATAPATH, SIMPATH)
+ALLOWNEGATIVE = getbool(env, "ALLOWNEGATIVE", false)
+
+datapath = joinpath(DATAPATH, SIMPATH, ALLOWNEGATIVE ? "negative" : "")
 
 N = getnumber(env, "N", 31; type = Int)
 VERBOSE = getbool(env, "VERBOSE", false)
@@ -33,7 +35,7 @@ Tdomain = hogg.Tᵖ .+ (0., 7.);
 mdomain = mstable.(Tdomain, hogg)
 G = RegularGrid([Tdomain, mdomain], N)
 
-VERBOSE && println("\nSolving jump model...")
+VERBOSE && println("\nSolving jump model $(ALLOWNEGATIVE ? "with" : "without") negative emission...")
 if RUNTERMINAL
     Gterminal = terminalgrid(N, jumpmodel)
     computeterminal(jumpmodel, Gterminal; verbose = VERBOSE, datapath = datapath, alternate = true, tol = TOL, overwrite = OVERWRITE)
