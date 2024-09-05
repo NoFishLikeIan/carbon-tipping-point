@@ -27,10 +27,15 @@ println("Simulating with $(nprocs()) processes...")
 begin # Global variables
     env = DotEnv.config(".env")
     BASELINE_YEAR = 2020
+    ALLOWNEGATIVE = true
 
     DATAPATH = get(env, "DATAPATH", "data")
     
-    datapath = joinpath(DATAPATH, get(env, "SIMULATIONPATH", "simulaton"), "")
+    datapath = joinpath(
+        DATAPATH, 
+        get(env, "SIMULATIONPATH", "simulaton"), 
+        ALLOWNEGATIVE ? "negative" : ""
+    )
 
     PLOTPATH = get(env, "PLOTPATH", "plots")
     PRESENTATIONPATH = joinpath(PLOTPATH, "presentation")

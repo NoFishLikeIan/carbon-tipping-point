@@ -12,6 +12,7 @@ using Model, Grid
     using Base: Order
     using FastClosures: @closure
     using Optim
+    using Printf: @printf
 end
 
 @everywhere include("chain.jl")
@@ -31,12 +32,12 @@ function backwardstep!(Δts, F, policy, cluster, model::AbstractModel, G; allown
         t = model.economy.τ - δt
         u₀ = policy[idx, :]
 
-        if !allownegative
+        if allownegative
+            u₀ = Optim.isinterior(constraints, u₀) ? u₀ : [0.5, 0.5]
+        else
             ᾱ = γ(t, model.calibration) + δₘ(exp(Xᵢ.m), model.hogg)
             updateᾱ!(constraints, ᾱ)
             u₀ = Optim.isinterior(constraints, u₀) ? u₀ : [0.5, ᾱ / 2]
-        else
-            u₀ = Optim.isinterior(constraints, u₀) ? u₀ : [0.5, 0.5]
         end
 
         logobjective = @closure u -> begin

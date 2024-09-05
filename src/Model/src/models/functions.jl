@@ -131,7 +131,7 @@ function terminalgrid(N, model::AbstractModel{GrowthDamages, P}) where P <: Pref
     T̄ = criticaltemperature(model)
 
     Tdomain = (model.hogg.Tᵖ, T̄)
-    mdomain = (mstable(model.hogg.Tᵖ, model), mstable(T̄, model))
+    mdomain = mstable.(Tdomain, model)
 
     RegularGrid([Tdomain, mdomain], N)
 end
@@ -148,7 +148,7 @@ function breakgamemodel(model::AbstractGameModel)
     calibration = model.regionalcalibration.calibration
     eh, el = model.economy
 
-    OutModel = ifelse(isa(model, TippingGameModel), TippingModel, JumpModel)
+    OutModel = isa(model, TippingGameModel) ? TippingModel : JumpModel
 
     modelh = OutModel(model.albedo, model.hogg, ph, dh, eh, calibration)
     modell = OutModel(model.albedo, model.hogg, pl, dl, el, calibration)

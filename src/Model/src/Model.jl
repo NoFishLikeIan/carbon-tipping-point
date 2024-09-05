@@ -96,6 +96,8 @@ AbstractModel{D, P} = Union{
     TippingGameModel{D, P}, JumpGameModel{D, P}
 } where {D <: Damages, P <: Preferences}
 
+Base.broadcastable(m::AbstractModel) = Ref(m)
+
 include("models/functions.jl")
 
 end # module Model
