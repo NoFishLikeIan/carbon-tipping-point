@@ -16,17 +16,21 @@
     \newcommand{\control}[1]{#1}
 
     % Title page
-    \author{Andrea Titton}
-    \title{Tipping Points Wrong}
-    
+    \author{Andrea Titton\thanks{CeNDEF, Faculty of Economics and Business, University of Amsterdam
+    \href{mailto:a.titton@uva.nl}{\texttt{a.titton@uva.nl}}}}
+    \title{Regret and Climate Tipping Points\thanks{
+      I thank my supervisors Florian Wagener and Cees Diks for the patient guidance on this paper. I also thank Rick van der Ploeg, Christoph Hambel, and Frank Venmans for the insightful discussions. Finally, I thank attendees of the EEA-ESESM conference, Rotterdam, 2024 for the constructive comments.
+    }}
 
 \begin{document}
 
 \maketitle
 
+\iffalse
 \begin{abstract}
-  This paper investigates the role of non-linear tipping points in determining optimal abatement policies. To do so, I introduce a stylised ice-albedo tipping point in the climate dynamics and study the consequences this has in determining optimal emissions in a dynamic stochastic general equilibrium model. In line with recent evidence, I assume that climate change hinders economic growth. I show that the presence of a tipping point prescribes ambitious abatement policies, not only in scope but, crucially, in timing.
+  Climate tipping points can lead to abrupt climate change and the costs associated with it.
 \end{abstract}
+\fi
 
 \newpage
 \subfile{sections/introduction/introduction.tex}
@@ -53,6 +57,7 @@ This section introduces the climate model and the economy.
 This section presents the optimal policies and the regret under three different scenarios. First, the case of an \textit{imminent} tipping point, $T^c = 1.5^{\circ}$. Second, the case of a \textit{remote} tipping point, $T^c = 2.5^{\circ}$. Third, the case of the literature \textit{benchmark} stochastic tipping model (as described in Appendix \ref{appendix:benchmark}).
 
 \subfile{sections/results/optimal-abatement.tex}
+\subfile{sections/results/regret.tex}
 
 
 \newpage

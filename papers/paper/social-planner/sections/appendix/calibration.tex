@@ -24,10 +24,10 @@ The following Table \ref{table:preferences} illustrates the preferences paramete
 
 Table \ref{table:economy} summarises the parameters of the economy model. 
 
-To abate a fraction $e$ of emissions vis-a-vis the BAU scenario requires a fraction \begin{equation}
+To abate a fraction $\epsilon$ of emissions vis-a-vis the BAU scenario requires a fraction \begin{equation}
     \beta(\varepsilon) = \varepsilon^2 
     \omega_0 e^{-\omega_r t}
-\end{equation} of GDP. Following \citep{nordhaus_revisiting_2017}, we assume that abating all emissions ($e = 1$) in 2020 costs 11\% of GDP while doing so in 2100 costs 2.7\% of GDP. This yields the calibrated $\omega_0$ and $\omega_r$. % TODO: Write this out
+\end{equation} of GDP. Following \citep{nordhaus_revisiting_2017}, we assume that abating all emissions ($\epsilon = 1$) in 2020 costs 11\% of GDP while doing so in 2100 costs 2.7\% of GDP. This yields the calibrated $\omega_0$ and $\omega_r$. % TODO: Write this out
 
 \begin{table}[htbp] 
     \centering
@@ -81,9 +81,11 @@ Table \ref{table:climate} summarises the parameters of the climate model.
     \centering
     \begin{tabular}{|p{1cm}||p{4cm}|p{7cm}|}
         \hline
-        \multicolumn{3}{|c|}{Albedo} \\
+        \multicolumn{3}{|c|}{Non-linearity} \\
         \hline 
-        $T_i$ & $292.75$ [K] & temperature inflection point \\
+        $\Delta T$ & $1.8$ [K] & temperature inflection point \\
+        $\lambda_1$ & $31\%$ & Initial radiation reflected \\
+        $\Delta\lambda$ & . & . \\
         \hline
     \end{tabular}
 \end{table}

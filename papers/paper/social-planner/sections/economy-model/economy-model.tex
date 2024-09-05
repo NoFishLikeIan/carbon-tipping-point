@@ -24,6 +24,8 @@ Putting the endogenous growth of capital and the climate damages together, the g
     \frac{\dd{K}_t}{K_t} = \left(\frac{I_t}{K_t} - \delta_k - \frac{\kappa}{2} \left( \frac{I_t + B_t}{K_t} \right)^2 \right) \dd{t} - d(T_t) \dd{t} + \sigma_k \dd{W}_k,
 \end{equation} where $W_k$ is a Weiner process.
 
+% TODO: Talk about marginal abatement curves
+
 In the following, I link the abatement costs $B_t$ with the abatement rate $\alpha_t$, introduced in the previous section. Introduce $\beta \coloneqq B_t / Y_t$ the fraction of output devoted to abatement. As in \cite{nordhaus_optimal_1992}, I assume this to be quadratic function of the fraction of abated emissions $\varepsilon(\alpha_t)$ (\ref{eq:emissivity}), namely, \begin{equation} \label{eq:abatement-costs}
     \beta_t(\varepsilon(\alpha_t)) = \frac{\omega_t}{2} \; \varepsilon(\alpha_t)^2.
 \end{equation} Under this assumption, no abatement is free, as $\beta_t(0) = 0$. At a fixed time $t$, higher abatement rates $\alpha_t$ and hence higher emission reduction $\varepsilon(\alpha_t)$ vis-a-vis the business as usual scenario, become increasingly costly at a rate $\omega_t \varepsilon(\alpha_t)$. As time progresses, so does abatement technology and a given abatement objective becomes cheaper. This is modelled by letting the exogenous technological parameter $\omega_t$ decrease over time. There is large uncertainty around the path of $\omega_t$. % TODO: Talk about this
@@ -31,10 +33,10 @@ In the following, I link the abatement costs $B_t$ with the abatement rate $\alp
 Let \begin{equation}
     \chi_t \coloneqq \frac{C_t}{Y_t}
 \end{equation} be the fraction of output devoted to consumption. Using the budget constraint (\ref{eq:nominal-budget}) and the two controls $\alpha_t$ and $\chi_t$, the growth rate of capital (\ref{eq:growth-capital:nominal}) can be rewritten as \begin{equation}
-    \frac{\dd{K_t}}{K_t} = \Big(\phi_t(\chi_t) - A_t \beta_t(\varepsilon(\alpha_t)) - d(T_t) \Big) \dd{t} + \sigma_k \dd{W}_k
+    \frac{\dd{K_t}}{K_t} = \Big(\phi_t(\chi_t) - A_t \beta_t(\varepsilon(\alpha_t)) - d(T_t) \Big) \dd{t} + \sigma_k \dd{W}_{k, t}
 \end{equation} where \begin{equation}
     \phi_t(\chi_t) \coloneqq A_t (1 - \chi_t) - \frac{\kappa}{2} A_t^2 (1 - \chi_t)^2 - \delta_k
-\end{equation} is an endogenous growth component, $\beta_t(\varepsilon(\alpha_t))$ is the cost associated with an abatement rate $\alpha_t$, and $d(T_t)$ are the damages from climate change. This formulation makes the trade-off between climate abatement and economic growth apparent. Devoting fewer resources to abatement to pursue higher capital, and hence, output growth, yields higher future temperature and can put the economy in a lower growth path altogether.
+\end{equation} is an endogenous growth component, $\beta_t(\varepsilon(\alpha_t))$ is the fraction of output allocated to abatement for an abatement rate  $\alpha_t$, and $d(T_t)$ are the damages from climate change. This formulation makes the trade-off between climate abatement and economic growth apparent. Devoting fewer resources to abatement to pursue higher capital, and hence, output growth, yields higher future temperature and can put the economy in a lower growth path altogether.
 
 Finally, as output $Y_t$ is just the product of capital $K_t$ and productivity $A_t$, its growth rate differs from that of capital just by the growth rate of productivity, hence it satisfies \begin{equation}
     \frac{\dd{Y}_t}{Y_t} = \varrho + \frac{\dd{K}_t}{K_t}. 
