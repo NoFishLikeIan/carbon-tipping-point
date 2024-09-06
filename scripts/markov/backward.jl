@@ -40,14 +40,12 @@ function backwardstep!(Δts, F, policy, cluster, model::AbstractModel, G; allown
             u₀ = Optim.isinterior(constraints, u₀) ? u₀ : [0.5, ᾱ / 2]
         end
 
-        logobjective = @closure u -> begin
+        objective = @closure u -> begin
             F′, Δt = markovstep(t, idx, F, u, model, G)
-            c = cost(F′, t, Xᵢ, Δt, u, model)
-
-            return log(c)
+            logcost(F′, t, Xᵢ, Δt, u, model)
         end
 
-        diffobj = TwiceDifferentiable(logobjective, u₀; autodiff = :forward)
+        diffobj = TwiceDifferentiable(objective, u₀; autodiff = :forward)
         res = Optim.optimize(diffobj, constraints, u₀, IPNewton())
         
         !Optim.converged(res) && @warn "Optim has not converged at t = $t and idx = $idx"

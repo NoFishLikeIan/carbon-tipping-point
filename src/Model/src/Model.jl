@@ -12,7 +12,7 @@ export criticaltemperature
 export potential, density
 export terminaloutputfct, outputfct
 export Preferences, EpsteinZin, LogSeparable, CRRA, LogUtility
-export f, g
+export f, g, logg
 export TippingModel, JumpModel, AbstractPlannerModel
 export TippingGameModel, JumpGameModel, AbstractGameModel
 export AbstractJumpModel, AbstractTippingModel

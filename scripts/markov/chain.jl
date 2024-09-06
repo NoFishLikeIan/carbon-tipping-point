@@ -57,6 +57,12 @@ function markovstep(t, idx, F, u, model::AbstractJumpModel, G)
     markovstep(t, idx, F, u, 0., model, G)
 end
 
+function logcost(F′, t, Xᵢ::Point, Δt, u, model::AbstractModel{GrowthDamages, P}) where P
+    χ = u[1]
+    δ = outputfct(t, Xᵢ, Δt, u, model)
+    logg(χ, δ * F′, Δt, model.preferences)
+end
+
 function cost(F′, t, Xᵢ::Point, Δt, u, model::AbstractModel{GrowthDamages, P}) where P
     χ = u[1]
     δ = outputfct(t, Xᵢ, Δt, u, model)
