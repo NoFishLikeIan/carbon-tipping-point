@@ -1,19 +1,23 @@
 using Model, Grid
 using Dierckx: Spline2D
 using Interpolations
+using FiniteDiff
 using DifferentialEquations
 using Statistics
 
-function Fregret!(du, u, parameters, t)
-    paramimminent, paramremote = parameters
-    modelimminent = first(paramimminent)
+PolicyFunction = Union{Interpolations.Extrapolation, Function};
+PoliciesFunctions = NTuple{2, PolicyFunction};
 
-    params = ifelse(u[1] - modelimminent.hogg.Tᵖ > modelimminent.albedo.Tᶜ + modelimminent.albedo.ΔT / 2, paramimminent, paramremote)
+function F!(du, u, parameters::Tuple{AbstractPlannerModel{GrowthDamages, P}, PoliciesFunctions}, t) where P <: Preferences
+    model, pols = parameters
+    χitp, αitp = pols
+    T, m = @view u[1:2]
 
-    F!(du, u, params, t)
+    du[1] = μ(T, m, model) / model.hogg.ϵ
+	du[2] = γ(t, model.calibration) - αitp(T, m, t)
+    du[3] = b(t, Point(T, m), (χitp(T, m, t), αitp(T, m, t)), model)
 end
-
-function F!(du, u, parameters::Tuple{AbstractModel, Union{Interpolations.Extrapolation, Function}}, t)
+function F!(du, u, parameters::Tuple{AbstractModel, PolicyFunction}, t)
     model, αitp = parameters
     T, m = u
 
@@ -56,11 +60,13 @@ function buildsplines(result::Result; splinekwargs...)
     timesplines = Dict{Float64, NTuple{3, Spline2D}}()
 
     for (k, t) in enumerate(timespace)
-        pol = policy[:, :, k]
+        χ = policy[:, :, 1, k]
+        α = policy[:, :, 2, k]
+
 
         timesplines[t] = map(
             M -> Spline2D(Tspace, mspace, M; splinekwargs...),
-            (F[:, :, k], first.(pol), last.(pol))
+            (F[:, :, k], χ, α)
         )
     end
 
@@ -89,9 +95,11 @@ computeonsim(sim::RODESolution, f) = computeonsim(sim, f, sim.t)
 function computeonsim!(outvec, sim::RODESolution, f, timesteps)
     for i in eachindex(outvec)
         t = timesteps[i]
-        T, m = sim(t)
+        simₜ = sim(t)
 
-        outvec[i] = f(T, m, t)
+        xᵢ = isa(simₜ, DifferentialEquations.ExtendedJumpArray) ? simₜ.u : simₜ
+
+        outvec[i] = f(xᵢ..., t)
     end
 
     return outvec
@@ -133,3 +141,13 @@ function smoothquantile!(v, window)
     end
 end
 
+"Computes the social cost of carbon at a given point Xᵢ"
+function scc(t, Y, Xᵢ::Point, itp, model::AbstractModel)
+    Fₘ = FiniteDiff.finite_difference_derivative(m -> itp[:F](Xᵢ.T, m, t), Xᵢ.m)
+    Fᵢ = itp[:F](Xᵢ.T, Xᵢ.m, t)
+    dm = γ(t, model.calibration) + δₘ(exp(Xᵢ.m), model.hogg) - itp[:α](T, m, t)
+
+    outputfactor = Y / (1 - model.preferences.θ)
+
+    return -outputfactor * (Fₘ / Fᵢ) * Model.Gtonoverppm / dm
+end

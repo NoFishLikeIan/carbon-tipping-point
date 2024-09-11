@@ -2,6 +2,8 @@ using Revise
 using JLD2, DotEnv, CSV
 using UnPack
 using DataFrames, DataStructures
+using FastClosures
+using StatsBase
 
 using DifferentialEquations, DifferentialEquations.EnsembleAnalysis
 
@@ -315,6 +317,33 @@ begin # Growth of carbon concentration
 
     gfig
 end
+
+# TODO: Finish the comparison of density plots between jump and tipping models.
+let model = first(models)
+    dT = @closure (T, param, t) -> begin
+        model, m = param
+        drift = isa(model, JumpModel) ? μ(T, m, model.hogg) : μ(T, m, model.hogg, model.albedo)
+
+        return model.hogg.ϵ * drift
+    end
+
+    ΣT = @closure (T, param, t) -> first(param).hogg.σₜ / model.hogg.ϵ
+
+    m₀ = log(1.3model.hogg.M₀)
+    T₀ = minimum(Model.Tstable(m₀, model.hogg, model.albedo))
+
+    Tstableprob = SDEProblem(dT, ΣT, T₀, (0.0, 500.0), (model, m₀))
+
+    simulation = solve(Tstableprob)
+end
+
+@pgf Axis({
+        "ybar interval",
+        xmajorgrids = false,
+        x_tick_label_as_interval=false,
+        xtick=-50:25:50
+    }, Plot(Table(fit(Histogram, simulation.u; nbins = 50)))
+)
 
 
 begin # Density plots
