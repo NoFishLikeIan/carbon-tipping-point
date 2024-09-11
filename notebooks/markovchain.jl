@@ -211,7 +211,7 @@ begin
 	scatter!(Fobjfig, [mfig], [Tfig], c = :white, label = false, markersize = 5)
 
 	objfig = contourf(cspace, aspace, (χ, α) -> log(obj([χ, α])); 
-		ylims = (0, αmax), xlims = extrema(cspace),
+		ylims = extrema(aspace), xlims = extrema(cspace),
 		xlabel = L"\chi", ylabel = L"\alpha", c = :Reds, linewidth = 1, cbar = false
 	)
 
@@ -227,6 +227,8 @@ function updateᾱ!(constraints::TwiceDifferentiableConstraints, ᾱ)
 end;
 
 # ╔═╡ 78a46a5e-7420-4e74-acb1-693ba5664f3b
+# ╠═╡ disabled = true
+#=╠═╡
 begin
 	abatement = similar(F)
 	constraints = TwiceDifferentiableConstraints([0., 0.], [1., 1.])
@@ -245,13 +247,16 @@ begin
 		abatement[idx] = u[2] 
 	end
 end;
+  ╠═╡ =#
 
 # ╔═╡ 1d27e09e-e3dd-4793-9059-1587835a3885
+#=╠═╡
 begin
 	abatfig = heatmap(mspace, Tspace, abatement; xticks = Mticks, yticks = Tticks, ylabel = L"T_t - T^p", xlabel = L"M_t", title = L"$F_{\tau}(T, M)$", xlims = mdomain, ylims = Tdomain)
 
 	plot!(abatfig, nullcline, Tdense; c = :white, label = false)
 end
+  ╠═╡ =#
 
 # ╔═╡ Cell order:
 # ╟─e29f796c-c57c-40c3-988a-b7d9295c3dac
@@ -273,7 +278,7 @@ end
 # ╟─015922f1-c954-42db-887e-4499e5dbca59
 # ╠═5aa075ef-8ad2-4d52-b4da-d99d687a7d4e
 # ╟─0169acc9-2d30-4e80-a38b-a0cbc5af15dc
-# ╟─ec33fe87-f4fd-4454-bfa7-e644bb89f344
+# ╠═ec33fe87-f4fd-4454-bfa7-e644bb89f344
 # ╠═fb36873a-3db7-439e-955f-24e0725bd6b3
 # ╠═b8b54945-ab69-4bfc-862f-9498aa0c30fc
 # ╠═78a46a5e-7420-4e74-acb1-693ba5664f3b

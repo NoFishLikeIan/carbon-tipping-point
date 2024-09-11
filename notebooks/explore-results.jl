@@ -78,10 +78,15 @@ md"# Setup"
 begin # Global variables
     env = DotEnv.config("../.env")
     BASELINE_YEAR = 2020
+	ALLOWNEGATIVE = true
 
     DATAPATH = joinpath("..", get(env, "DATAPATH", "data"))
     
-    datapath = joinpath(DATAPATH, get(env, "SIMULATIONPATH", "simulaton"), "")
+    datapath = joinpath(
+		DATAPATH, 
+		get(env, "SIMULATIONPATH", "simulaton"), 
+		ALLOWNEGATIVE ? "negative" : ""
+	)
 
     PLOTPATH = get(env, "PLOTPATH", "plots")
     PRESENTATIONPATH = joinpath(PLOTPATH, "presentation")
@@ -99,11 +104,6 @@ end;
 
 # ╔═╡ abc6d59d-6b20-4193-ab50-53facae969e1
 begin # Default parameters
-	preferences = EpsteinZin();
-	calibration = load_object(joinpath(DATAPATH, "calibration.jld2"));
-	economy = Economy()
-	hogg = Hogg()
-
 	# Construct models and grids
     thresholds = [1.5, 2.5];
 
@@ -173,14 +173,14 @@ let
 	@unpack α, χ = itp
 	
 	χₜ = @closure (m, T) -> χ(T, m, tfigpol)
-	dm = @closure (m, T) -> β(tfigpol, ε(tfigpol, exp(m), α(T, m, tfigpol), plotmodel), plotmodel.economy)
+	dm = @closure (m, T) -> 1 - ε(tfigpol, exp(m), α(T, m, tfigpol), plotmodel)
 
 	nullcline = [mstable(T, plotmodel) for T in Tspace]
 	
 	consfig = contourf(mspace, Tspace, χₜ; ylabel = "\$T\$", xlabel = "\$m\$", title = "Time \$t = $tfigpol\$; \$\\chi\$", xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
 	plot!(consfig, nullcline, Tspace; linestyle = :dash, c = :white, label = false, linewidth = 3)
 
-	abatfig = contourf(mspace, Tspace, dm; ylabel = "\$T\$", xlabel = "\$m\$", title = "\$E / E^b\$", xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0., c = :Greens, clims = (0, 0.12))
+	abatfig = contourf(mspace, Tspace, dm; ylabel = "\$T\$", xlabel = "\$m\$", title = "\$E / E^b\$", xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0., c = :coolwarm, levels = 200)
 	plot!(abatfig , nullcline, Tspace; linestyle = :dash, c = :white, label = false, linewidth = 3)
 
 	plot(consfig, abatfig; size = 500 .* (2√2, 1), margins = 10Plots.mm)
@@ -240,11 +240,11 @@ begin
 	yearlytime = 0:80
     yearticks = 0:20:80
 
-    βextrema = (0., 0.03)
+    βextrema = (0., 0.035)
     βticks = range(βextrema...; step = 0.01) |> collect
     βticklabels = [@sprintf("%.0f %%", 100 * y) for y in βticks]
 
-    Textrema = (1., 2.)
+    Textrema = (1., 2.1)
     Tticks = Plotting.makedeviationtickz(Textrema..., first(models); step = 0.5, digits = 1)
 
 	simfigs = []
@@ -257,13 +257,15 @@ begin
 		# Abatement expenditure figure
 		βM = Simulating.computeonsim(abatedsol, (T, m, t) -> β(t, ε(t, exp(m), αitp(T, m, t), model), model.economy), yearlytime)
 	   
-		βquantiles = Simulating.timequantiles(βM, [0.1, 0.5, 0.9])
+		βquantiles = Simulating.timequantiles(βM, [0.05, 0.5, 0.95])
 		Simulating.smoothquantile!.(eachcol(βquantiles), 10)
 
        	βoptionfirst = k > 1 ? Dict() : Dict(:title => L"Abatement as % of $Y_t$" )
-       	βoptionlast = k < length(models) ? Dict() : Dict(:xticks => (yearticks, BASELINE_YEAR .+ yearticks))
+       	lastxticks = Dict(
+			:xticks => k < length(models) ? (yearticks, repeat([""], length(yearticks))) : (yearticks, BASELINE_YEAR .+ yearticks)
+		)
 
-		βfig = plot(yearlytime, βquantiles[:, 2]; c = :darkgreen, ylims = βextrema, yticks = (βticks, βticklabels), βoptionfirst..., βoptionlast...)
+		βfig = plot(yearlytime, βquantiles[:, 2]; c = :darkgreen, ylims = βextrema, yticks = (βticks, βticklabels), βoptionfirst..., lastxticks...)
 		plot!(βfig, yearlytime, βquantiles[:, 1]; fillrange = βquantiles[:, 3], alpha = 0.3, c = :darkgreen, linewidth = 0.)
 
        	push!(simfigs, βfig)
@@ -272,15 +274,15 @@ begin
 		paths = EnsembleAnalysis.timeseries_point_quantile(abatedsol, [0.05, 0.5, 0.95], yearlytime)
 		Tpaths = first.(paths.u)
 
-		Tfig = plot()
-		Tmedianplot = plot!(Tfig, yearlytime, getindex.(Tpaths, 2); c = :black)
-		Tlowerplot = plot!(Tfig, yearlytime, getindex.(Tpaths, 1); c = :black, linestyle = :dash)
-		Tupperplot = plot!(Tfig, yearlytime, getindex.(Tpaths, 3); c = :black, linestyle = :dash)
+		Toptionfirst = k > 1 ? Dict() : Dict(:title => L"Temperature $T_t$" )
+		Tfig = plot(yearlytime, getindex.(Tpaths, 2); c = :darkred, yticks = Tticks, ylims = Textrema .+ hogg.Tᵖ, Toptionfirst..., lastxticks...)
+		plot!(Tfig, yearlytime, getindex.(Tpaths, 1); fillrange = getindex.(Tpaths, 3), alpha = 0.3, c = :darkred, linewidth = 0.)
+
 
 		push!(simfigs, Tfig)
     end;
 
-    plot(simfigs...; link = :x, layout = (3, 2))
+    plot(simfigs...; link = :x, layout = (3, 2), size = 300 .* (2√2, 2))
 end
 
 # ╔═╡ 32955af4-fa47-43dd-b6a8-7545e1398f25
@@ -337,9 +339,9 @@ end
 # ╟─cfad70a3-73d0-4d2f-9180-3f2c6322b17d
 # ╠═891cac99-6427-47f2-8956-d4eb7817ea54
 # ╟─78c11f3a-1325-46e5-974b-ae67b9637834
-# ╠═d7df916d-cf45-4564-86ad-5b64e309cb11
+# ╟─d7df916d-cf45-4564-86ad-5b64e309cb11
 # ╟─80bfe18d-8d06-4957-a4ad-dd80bf8c42b1
-# ╟─033b0310-2df1-4613-81f8-39274d2318ba
+# ╠═033b0310-2df1-4613-81f8-39274d2318ba
 # ╟─28c7e9d4-d34a-4bcb-87a2-1c568ec8c669
 # ╟─78a476ce-788c-428d-b6bf-da39f92f4035
 # ╟─497f0b6b-e7ac-4176-81b3-f8df4050d338
