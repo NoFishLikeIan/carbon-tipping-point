@@ -97,11 +97,11 @@ thresholds = [1.5, 2.5];
 const hogg = Hogg();
 
 function deviation(Δλ, Tᶜ)
-    maximum(find_zeros(T -> mstable(T, hogg, Albedo(Δλ = Δλ, Tᶜ = Tᶜ)) - log(2hogg.Mᵖ), hogg.Tᵖ .+ (0., 12.))) - hogg.Tᵖ
+    maximum(find_zeros(T -> mstable(T, hogg, Albedo(Tᶜ, 1.8, 0.31, Δλ)) - log(2hogg.Mᵖ), hogg.Tᵖ .+ (0., 12.))) - hogg.Tᵖ
 end
 
 sols = Albedo[]
 for Tᶜ in thresholds
     Δλ = find_zero(Δλ -> deviation(Δλ, Tᶜ) - 4.5, [0., 0.1])
-    albedo = Albedo(Δλ = Δλ, )
+    albedo = Albedo(Tᶜ, 1.8, 0.31, Δλ)
 end
