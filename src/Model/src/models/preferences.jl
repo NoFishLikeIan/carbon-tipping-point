@@ -62,6 +62,18 @@ function g(χ, F′, Δt, p::EpsteinZin)
     return ((1 -  β) * consumption + β * value)^inv(agg)
 end
 
+function logg(χ, F′, Δt, p::EpsteinZin)
+    ψ⁻¹ = inv(p.ψ)
+    agg = (1 - ψ⁻¹) / (1 - p.θ)
+
+    consumption = χ^(1 - ψ⁻¹)
+
+    β = exp(-p.ρ * Δt)
+    value = F′^agg
+
+    return inv(agg) * log((1 -  β) * consumption + β * value)
+end
+
 function f(c, v, Δt, p::CRRA)
     u = (c^(1 - p.θ)) / (1 - p.θ)
 
