@@ -66,8 +66,10 @@ end;
 # ╔═╡ d0693c70-c6f1-4b78-b50f-0de2c4e096f5
 begin
 	baseline = filter(:Scenario => isequal("SSP5 - Baseline"), ipccproj)
-	Mᵇ = linear_interpolation(calibration.years .- 2020, baseline[:, "CO2 concentration"]; extrapolation_bc = Line())
-	Tᵇ = linear_interpolation(calibration.years .- 2020, baseline[:, "Temperature"]; extrapolation_bc = Line())
+	times = calibration.years
+	
+	Mᵇ = linear_interpolation(times, baseline[2:end, "CO2 concentration"]; extrapolation_bc = Line())
+	Tᵇ = linear_interpolation(times, baseline[2:end, "Temperature"]; extrapolation_bc = Line())
 end;
 
 # ╔═╡ 544d662d-8a48-47cf-9fd3-bada252ee18d
@@ -102,7 +104,7 @@ md"
 
 # ╔═╡ d837589f-25a6-4500-b1ac-b20db496b485
 begin
-	albedo = Albedo(Tᶜ = Tᶜ, ΔT = ΔT, Δλ = Δλ)
+	albedo = Albedo(Tᶜ, ΔT, 0.31, Δλ)
 
 	Tspace = range(hogg.Tᵖ, hogg.Tᵖ + 8.; length = 101)
 	nullcline = [Model.mstable(T, hogg, albedo) for T ∈ Tspace]
@@ -115,7 +117,7 @@ begin
 end
 
 # ╔═╡ 7e67776d-ac49-4a29-a601-d9418ce91e2e
-solution = solve(EnsembleProblem(prob); trajectories = 6);
+solution = solve(EnsembleProblem(prob); trajectories = 10);
 
 # ╔═╡ 1507326b-eab2-43c0-b981-ca0ca5aad997
 begin
@@ -137,6 +139,43 @@ begin
 	simfig
 	
 end
+
+# ╔═╡ ddf33de1-635f-48cd-98e9-17040f8239e0
+md"
+## Sinks
+
+- a: $(@bind a Slider(range(0., 0.05; length = 101), show_value = true, default = hogg.aδ))
+- b: $(@bind b Slider(range(-30, 30; length = 101), show_value = true, default = hogg.bδ))
+- c: $(@bind c Slider(range(200, 400; length = 101), show_value = true, default = hogg.cδ))
+
+"
+
+# ╔═╡ bbbdc897-ced8-411c-ba34-70e039b213f4
+Mspace = exp.(range(5.5, 7.; length = 101));
+
+# ╔═╡ 3d3db300-51bb-41b8-bf0e-f2356c66aa09
+plot(Mspace, M -> δₘ(M, Hogg(aδ = a, bδ = b, cδ = c)), ylims = (0, Inf))
+
+# ╔═╡ 61a8bfdd-c7d2-49ff-b23d-e4b7cf7c35c9
+md"## CO$_2$ decay"
+
+# ╔═╡ 70b8bf79-a954-4559-a630-d2c0812cbfb1
+begin
+	function carbondecay(m, hogg, t)
+		-δₘ(exp(m), hogg)
+	end
+
+	function carbonnoise(m, hogg, t)
+		hogg.σₘ
+	end
+
+	decayprob = SDEProblem(carbondecay, carbonnoise, log(hogg.M₀), (0., 80.), hogg)
+
+	decaysol = solve(decayprob)
+end
+
+# ╔═╡ c70e9cba-b8d9-41fd-8b00-c94f4d0624eb
+plot(exp.(decaysol))
 
 # ╔═╡ 31c8af20-05e0-4355-937e-f0a0b3fc72d7
 md"## Equivalent jump process"
@@ -210,7 +249,13 @@ end
 # ╟─8a38caf4-c79d-4dfb-aef6-c723495b483d
 # ╟─d837589f-25a6-4500-b1ac-b20db496b485
 # ╠═7e67776d-ac49-4a29-a601-d9418ce91e2e
-# ╠═1507326b-eab2-43c0-b981-ca0ca5aad997
+# ╟─1507326b-eab2-43c0-b981-ca0ca5aad997
+# ╟─ddf33de1-635f-48cd-98e9-17040f8239e0
+# ╠═bbbdc897-ced8-411c-ba34-70e039b213f4
+# ╠═3d3db300-51bb-41b8-bf0e-f2356c66aa09
+# ╟─61a8bfdd-c7d2-49ff-b23d-e4b7cf7c35c9
+# ╠═70b8bf79-a954-4559-a630-d2c0812cbfb1
+# ╠═c70e9cba-b8d9-41fd-8b00-c94f4d0624eb
 # ╟─31c8af20-05e0-4355-937e-f0a0b3fc72d7
 # ╠═b6795842-7e9f-44eb-8768-b6065f6cbda1
 # ╠═6ec0461e-a901-4bc6-8f0e-a4b1e7f89f67

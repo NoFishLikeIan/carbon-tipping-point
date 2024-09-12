@@ -8,7 +8,7 @@ function stringifydeviation(ΔT; digits = 2)
     return format(fmt, ΔT)
 end
 
-function makedeviationtickz(from, to, model; step = 0.5, digits = 2, addedlabels = NTuple{String, Float64}[])
+function makedeviationtickz(from, to, model; step = 0.5, digits = 2, addedlabels = Tuple{String, Float64}[])
 
     preindustrialdev = range(from, to; step = step)
     ticks = model.hogg.Tᵖ .+ preindustrialdev

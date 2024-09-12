@@ -71,9 +71,17 @@ Figure \ref{fig:nullclines} displays how this mechanism impacts the dynamics of 
 
 % TODO: Cite the Dietz - Keen debate
 
-Previous literature in climate economics has, in large part, modelled tipping points by assuming that, at each moment in time, with some instantaneous probabilities $\pi(T_t)$ there is a temperature shock of size $q(T_t)$, both of which are increasing in temperature. This approach is also known as state-distributed catastrophe \citep{li_economics_2024}. Formally, under this modelling, equation (\ref{eq:dynamics:temperature}) would be modified into \begin{equation}
+Previous literature in climate economics has, in large part, modelled tipping points by assuming that, at each moment in time, with some instantaneous probabilities $\pi(T_t)$ there is a temperature shock of size $q(T_t)$, both of which are increasing in temperature. This approach is also known as state-distributed catastrophe \citep{li_economics_2024}. Formally, under this modelling, equation (\ref{eq:dynamics:temperature}) would be modified into \begin{equation} \label{eq:dynamics:temperature:benchmark}
     \epsilon \dd{T}_t = r_l(T_t) \dd{t} + g(m_t) \dd{t} + \sigma_T \dd{W}_{T, t} + q(T_t) \dd{N}_{t}(T_t)
-\end{equation} where $N_t$ is a Poisson process with arrival rate $\pi(T_t)$ and $r_l$, unlike $r$ (\ref{eq:forcing}), is linear. This approach has been employed, among many others, by \cite{hambel_optimal_2021}, \cite{van_der_ploeg_climate_2018}, and \cite{lemoine_ambiguous_2016}. This choice captures a key feature of tipping points: as carbon concentration rises, we expect warmer shocks to be more persistent and hence a skewed distribution of steady state temperatures \citep{intergovernmental_panel_on_climate_change_climate_2023}.
+\end{equation} where $N_t$ is a Poisson process with arrival rate $\pi(T_t)$ and $r_l$, unlike $r$ (\ref{eq:forcing}), is linear. This approach has been employed, among many others, by \cite{hambel_optimal_2021}, \cite{van_der_ploeg_climate_2018}, and \cite{lemoine_ambiguous_2016}. This choice captures a key feature of tipping points: as carbon concentration rises, we expect warmer shocks to be more persistent and hence a skewed distribution of steady state temperatures \citep{intergovernmental_panel_on_climate_change_climate_2023}. Yet, it is not suited to 
+
+\begin{figure}[htbp]
+    \centering
+    \input{\plotpath/densfig.tikz}
+    \caption{Distribution of temperature $T_t$ obtained from simulation $dT_t$ from (\ref{eq:dynamics:temperature}) (imminent) and (\ref{eq:dynamics:temperature:benchmark}) (Benchmark) for 1000 years at a constant carbon concentration level $M = 420$ p.p.m. starting at $T_0$.}
+    \label{fig:density-comparison}
+\end{figure} 
+
 
 % TODO: Talk about the limitations of stochastic tipping
 \iffalse

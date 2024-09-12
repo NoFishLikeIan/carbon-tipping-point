@@ -13,9 +13,9 @@ using Model, Grid
 using SciMLBase, DifferentialEquations, DiffEqBase
 using Interpolations: Extrapolation
 
-include("utils.jl")
-include("../utils/saving.jl")
-include("../utils/simulating.jl")
+includet("utils.jl")
+includet("../utils/saving.jl")
+includet("../utils/simulating.jl")
 
 begin # Environment variables
     env = DotEnv.config()
@@ -60,7 +60,9 @@ begin # Labels, colors and axis
     thresholdscolors = Dict(thresholds .=> graypalette(length(thresholds)))
 
     rawlabels = [ "Imminent", "Remote", "Benchmark"]
-    labels = Dict{AbstractModel, String}(models .=> rawlabels)
+    labelsbymodel = Dict{AbstractModel, String}(models .=> rawlabels)
+    labelsbythreshold = Dict(thresholds .=> rawlabels[1:2])
+
 
     TEMPLABEL = L"Temperature deviations $T_t - T^{p}$"
     defopts = @pgf { line_width = 2.5 }
@@ -74,6 +76,8 @@ begin # Labels, colors and axis
     yearlytime = range(0., horizon; step = 1 / 3) |> collect
 
     temperatureticks = makedeviationtickz(0., ΔTmax, first(models); step = 1, digits = 0)
+
+    LINE_WIDTH = 2.5
 end;
 
 # Constructs a Group plot, one for the path of T and β
@@ -131,7 +135,7 @@ begin
 
         @pgf push!(simfig, {figopts...,
             ymin = βextrema[1], ymax = βextrema[2],
-            title = labels[model], xticklabel = raw"\empty",
+            title = labelsbymodel[model], xticklabel = raw"\empty",
             scaled_y_ticks = false, βoptionfirst...,
         }, βmedianplot, βlowerplot, βupperplot)
     end;
@@ -171,9 +175,8 @@ end
 # --- Plotting the regret problem. Discover tipping point only after T ≥ Tᶜ.
 @load regretpath regretsolution;
 
-begin
-    
-    Tmin, Tmax = (1., 2.5)
+begin    
+    Tmin, Tmax = (1., 5)
     Tregretticks = makedeviationtickz(Tmin, Tmax, first(models); step = 1, digits = 0)
 
     regretfig = @pgf GroupPlot({
@@ -195,8 +198,8 @@ begin
         return β(t, ε(t, exp(m), αitp(T, m, t), model), model.economy)
     end
 
-    βregextrema = (0., 0.06)
-    βregticks = range(βregextrema...; step = 0.01) |> collect
+    βregextrema = (0., 0.08)
+    βregticks = range(βregextrema...; step = 0.02) |> collect
     βregtickslabels = [@sprintf("%.0f \\%%", 100 * y) for y in βregticks]
 
     # Abatement expenditure figure
@@ -242,4 +245,84 @@ begin
     end
 
     regretfig
+end
+
+# --- Plot of highest path in regret
+yearlyregrets = regretsolution(yearlytime);
+_, maxidx = findmax(v -> maximum(first.(v.u)), yearlyregrets);
+maxsim = yearlyregrets[maxidx];
+
+_, minidx = findmin(v -> maximum(first.(v.u)), yearlyregrets);
+minsim = yearlyregrets[minidx];
+
+begin # Computes the nullclines
+    nullclinevariation = Dict{Float64,Vector{Vector{NTuple{2,Float64}}}}()
+    for model in reverse(tippingmodels)
+        nullclines = Vector{NTuple{2,Float64}}[]
+
+        currentM = NTuple{2,Float64}[]
+        currentlystable = true
+
+        for T in Tspace
+            M = Model.Mstable(T, model.hogg, model.albedo)
+            isstable = Model.radiativeforcing′(T, model.hogg, model.albedo) < 0
+            if isstable == currentlystable
+                push!(currentM, (M, T))
+            else
+                currentlystable = !currentlystable
+                push!(nullclines, currentM)
+                currentM = [(M, T)]
+            end
+        end
+
+        push!(nullclines, currentM)
+        nullclinevariation[model.albedo.Tᶜ] = nullclines
+    end
+end
+
+begin # Plot of breaking regret
+    Mmax = 600.
+
+    breakfig = @pgf Axis({
+        width = raw"0.9\textwidth",
+        height = raw"0.7\textwidth",
+        grid = "both",
+        ylabel = TEMPLABEL,
+        xlabel = raw"Carbon concentration $M_t$",
+        xmin = tippingmodels[1].hogg.Mᵖ, xmax = Mmax,
+        xtick = 200:100:Mmax,
+        yticklabels = temperatureticks[2],
+        ytick = temperatureticks[1],
+        ymin = Tmin + hogg.Tᵖ, ymax = Tmax + hogg.Tᵖ,
+        legend_cell_align = "left"
+    })
+
+    for model in reverse(tippingmodels) # Nullcline plots
+        Tᶜ = model.albedo.Tᶜ
+        color = thresholdscolors[Tᶜ]
+
+        stableleft, unstable, stableright = nullclinevariation[Tᶜ]
+
+        leftcurve = @pgf Plot({color = color, line_width = LINE_WIDTH}, Coordinates(stableleft))
+        unstablecurve = @pgf Plot({color = color, line_width = LINE_WIDTH, forget_plot, dotted}, Coordinates(unstable))
+        rightcurve = @pgf Plot({color = color, line_width = LINE_WIDTH, forget_plot}, Coordinates(stableright))
+
+        label = labelsbythreshold[Tᶜ]
+        legend = LegendEntry(label)
+
+        push!(breakfig, leftcurve, legend, unstablecurve, rightcurve)
+    end
+
+    colors = ["red", "blue"]
+
+    for (k, sim) in enumerate([maxsim, minsim])
+
+        simcoords = Coordinates(exp.(getindex.(sim.u, 2)), getindex.(sim.u, 1))
+        curve = @pgf Plot({line_width = LINE_WIDTH / 2, opacity = 0.7, color = colors[k]}, simcoords)
+        markers = @pgf Plot({only_marks, mark_options = {fill = "black", scale = 1.5, draw_opacity = 0, opacity = 0.7, color = colors[k]}, mark_repeat = 20}, simcoords)
+
+        push!(breakfig, curve, markers)
+    end
+
+    breakfig
 end

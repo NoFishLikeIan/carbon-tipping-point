@@ -19,18 +19,19 @@ for (sym, label) in [(:constrained, "constrained"), (:negative, "negative")]
     αimminent = itps[modelimminent][:α];
     αremote = itps[modelremote][:α];
 
-    initparams = (modelremote, αremote);
+    initparams = (modelimminent, αremote); # The tipping point is imminent, yet the strategy is remote
+
     regretprob = SDEProblem(F!, G!, x₀, (0., 80.), initparams) |> EnsembleProblem
     
     function hittipping(u, t, integrator)
         model = first(integrator.p)
-        Thit = model.albedo.Tᶜ + model.hogg.Tᵖ
+        Thit = model.albedo.Tᶜ + model.hogg.Tᵖ + (model.albedo.ΔT / 4)
 
         return Thit - u[1]
     end
 
     function changepolicy!(integrator)
-        integrator.p = (modelimminent, αimminent)
+        integrator.p = (modelimminent, αimminent) # Realises that the tipping point is imminent and switch strategy
     end
 
     callback = ContinuousCallback(hittipping, changepolicy!);

@@ -61,7 +61,7 @@ begin # Labels, colors and axis
     PALETTE = colorschemes[:grays]
     graypalette = n -> reverse(get(PALETTE, range(0.1, 0.8; length=n)))
 
-    thresholdcolor = Dict(thresholds .=> reverse(graypalette(length(thresholds))))
+    thresholdcolors = Dict(thresholds .=> reverse(graypalette(length(thresholds))))
 
     TEMPLABEL = "Temperature deviations \$T_t - T^{p}\$"
 
@@ -119,7 +119,7 @@ begin # Albedo plot
     @pgf for (model, loss) in zip(tippingmodels, albedovariation)
         Tᶜ = model.albedo.Tᶜ
         curve = Plot(
-            {color = thresholdcolor[Tᶜ], line_width = LINE_WIDTH, opacity = 0.8},
+            {color = thresholdcolors[Tᶜ], line_width = LINE_WIDTH, opacity = 0.8},
             Coordinates(zip(Tspace, loss))
         )
 
@@ -198,7 +198,7 @@ begin # Nullcline plot
 
     for model in reverse(tippingmodels) # Nullcline plots
         Tᶜ = model.albedo.Tᶜ
-        color = thresholdcolor[Tᶜ]
+        color = thresholdcolors[Tᶜ]
 
         stableleft, unstable, stableright = nullclinevariation[Tᶜ]
 
@@ -213,7 +213,7 @@ begin # Nullcline plot
     end
 
     for model in reverse(tippingmodels) # Simulation plots
-        color = thresholdcolor[model.albedo.Tᶜ]
+        color = thresholdcolors[model.albedo.Tᶜ]
         simpath = sims[model.albedo.Tᶜ]
         simcoords = Coordinates(zip(exp.(last.(simpath.u)), first.(simpath.u)))
 
@@ -447,7 +447,6 @@ end
 
 bautime = 0:80
 
-
 begin # Side by side BAU Δλ = 0.8
     baumodels = tippingmodels
 
@@ -457,7 +456,7 @@ begin # Side by side BAU Δλ = 0.8
         {
         group_style = {
             group_size = "1 by $(length(baumodels))",
-            w = "1pt",
+            horizontal_sep = "1pt",
             xticklabels_at = "edge bottom"
         },
         width = raw"\textwidth",
@@ -553,19 +552,18 @@ end
 
 begin # Carbon decay path
     bausim = simulatebau(tippingmodel)
-    bauM = exp.(last.(timeseries_point_median(bausim, bautime).u))
+    bauM = exp.(getindex.(timeseries_point_median(bausim, bautime).u, 2))
     mediandecay = [Model.δₘ(M, tippingmodel.hogg) for M in bauM]
 
-    decaypathfig = @pgf Axis(
-        {
+    decaypathfig = @pgf Axis({
         width = raw"0.7\textwidth",
         height = raw"0.5\textwidth",
         grid = "both",
         xlabel = raw"Carbon concentration $M$",
         ylabel = raw"Decay of CO$_2$ in the atmosphere $\delta_m$",
-        xmin = tippingmodel.hogg.M₀, xmax = 600
-    }
-    )
+        xmin = tippingmodel.hogg.M₀, xmax = 800,
+        scaled_y_ticks = false
+    })
 
     @pgf push!(decaypathfig,
         Plot({line_width = LINE_WIDTH}, Coordinates(bauM, mediandecay))
@@ -586,8 +584,7 @@ begin # Damage fig
     ytick = 0:0.02:maxpercentage
     yticklabels = [@sprintf("%.0f \\%%", 100 * y) for y in ytick]
 
-    damagefig = @pgf Axis(
-        {
+    damagefig = @pgf Axis({
         width = raw"0.5\textwidth",
         height = raw"0.5\textwidth",
         grid = "both",
@@ -595,12 +592,11 @@ begin # Damage fig
         ylabel = raw"Damage function $d(T_t)$",
         xticklabels = temperatureticks[2],
         xtick = temperatureticks[1],
-        xmin = Tmin, xmax = Tmax,
+        xmin = Tmin, xmax = maximum(Tspace),
         xticklabel_style = {rotate = 45},
-        yticklabels = yticklabels, ytick = ytick, ymin = -0.01,
+        yticklabels = yticklabels, ytick = ytick, ymin = 0.,
         scaled_y_ticks = false,
-    }
-    )
+    })
 
     @pgf damagecurve = Plot({line_width = LINE_WIDTH},
         Coordinates(Tspace, ds)

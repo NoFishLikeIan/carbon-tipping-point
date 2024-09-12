@@ -21,6 +21,8 @@ struct Albedo
         
         return new(Tᶜ, ΔT, λ₁, Δλ)
     end
+
+    Albedo(Tᶜ, ΔT, λ₁, Δλ) = new(Tᶜ, ΔT, λ₁, Δλ)
 end
 
 Base.@kwdef struct Jump
@@ -57,9 +59,9 @@ Base.@kwdef struct Hogg
     G₀::Float64 = 150 # [W / m²] Pre-industrial GHG radiation budget
     
     # Decay rate of carbon concentration
-    aδ::Float64 = 0.0176
-    bδ::Float64 = -27.36
-    cδ::Float64 = 314.8
+    aδ::Float64 = 0.0076
+    bδ::Float64 = -27.63
+    cδ::Float64 = 384.8
 end
 
 Base.broadcastable(m::Albedo) = Ref(m)
@@ -122,8 +124,6 @@ ghgforcing⁻¹(r, hogg::Hogg) = log(hogg.Mᵖ) + (r - hogg.G₀) / hogg.G₁
 "Drift temperature dynamics"
 μ(T, m, hogg::Hogg, albedo::Albedo) = radiativeforcing(T, hogg, albedo) + ghgforcing(m, hogg)
 μ(T, m, hogg::Hogg) = radiativeforcing(T, hogg) + ghgforcing(m, hogg)
-μ(T, m, model::TippingModel) = μ(T, m, model.hogg, model.albedo)
-μ(T, m, model::JumpModel) = μ(T, m, model.hogg)
 
 "Compute CO₂ concentration consistent with temperature T"
 mstable(T, hogg::Hogg, albedo::Albedo) = ghgforcing⁻¹(-radiativeforcing(T, hogg, albedo), hogg)
@@ -137,8 +137,6 @@ end
 function Tstable(m, hogg::Hogg)
     find_zeros(T -> mstable(T, hogg) - m, hogg.Tᵖ, 1.2hogg.Tᵖ)
 end
-Tstable(m, model::TippingModel) = Tstable(m, model.hogg, model.albedo)
-Tstable(m, model::JumpModel) = Tstable(m, model.hogg)
 
 function potential(T, m, hogg::Hogg, albedo::Albedo)
 	@unpack λ₁, Δλ = albedo

@@ -78,7 +78,7 @@ md"# Setup"
 begin # Global variables
     env = DotEnv.config("../.env")
     BASELINE_YEAR = 2020
-	ALLOWNEGATIVE = true
+	ALLOWNEGATIVE = false
 
     DATAPATH = joinpath("..", get(env, "DATAPATH", "data"))
     
@@ -177,10 +177,13 @@ let
 
 	nullcline = [mstable(T, plotmodel) for T in Tspace]
 	
-	consfig = contourf(mspace, Tspace, χₜ; ylabel = "\$T\$", xlabel = "\$m\$", title = "Time \$t = $tfigpol\$; \$\\chi\$", xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
+	consfig = heatmap(mspace, Tspace, χₜ; ylabel = "\$T\$", xlabel = "\$m\$", title = "Time \$t = $tfigpol\$; \$\\chi\$", xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
 	plot!(consfig, nullcline, Tspace; linestyle = :dash, c = :white, label = false, linewidth = 3)
 
-	abatfig = contourf(mspace, Tspace, dm; ylabel = "\$T\$", xlabel = "\$m\$", title = "\$E / E^b\$", xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0., c = :coolwarm, levels = 200)
+	cmap = ALLOWNEGATIVE ? :coolwarm : :coolwarm
+	clims = ALLOWNEGATIVE ? (-1., 1.) : (-1., 1.)
+
+	abatfig = heatmap(mspace, Tspace, dm; ylabel = "\$T\$", xlabel = "\$m\$", title = "\$E / E^b\$", xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0., c = :coolwarm, clims = (-1., 1.))
 	plot!(abatfig , nullcline, Tspace; linestyle = :dash, c = :white, label = false, linewidth = 3)
 
 	plot(consfig, abatfig; size = 500 .* (2√2, 1), margins = 10Plots.mm)
@@ -294,12 +297,32 @@ begin # Solve the regret problem. Discover tipping point only after T ≥ Tᶜ.
     αimminent = abatementmap[modelimminent]
     αremote = abatementmap[modelremote]
 
-    parameters = ((modelimminent, αimminent), (modelremote, αremote));
+    initparams = (modelimminent, αremote)
 
-    regretprob = SDEProblem(Simulating.Fregret!, Simulating.G!, x₀, (0., 80.), parameters) |> EnsembleProblem
+	function hittipping(u, t, integrator)
+    	model, α = integrator.p
+        Tupper = model.albedo.Tᶜ + model.hogg.Tᵖ + (model.albedo.ΔT / 2)
 
-    regretsol = solve(regretprob, EnsembleDistributed(); trajectories)
+		ΔT = Tupper - u[1]
+    	
+		return ΔT
+    end
+
+	function changepolicy!(integrator)
+        integrator.p = (modelimminent, αimminent)
+    end
+
+	callback = ContinuousCallback(hittipping, changepolicy!);
+    regretprob = SDEProblem(Simulating.F!, Simulating.G!, x₀, (0., 80.), initparams) |> EnsembleProblem
+
+    regretsol = solve(regretprob; trajectories, callback)
 end;
+
+# ╔═╡ 9283bc5d-f5be-4b39-bc02-aeb942f1db79
+plot(regretsol; idxs = 1, linewidth = 0.5, c = :black, opacity = 0.1)
+
+# ╔═╡ 68d51817-7f7e-4ebb-b986-67280479a999
+plot(regretsol; idxs = 2, linewidth = 0.5, c = :black, opacity = 0.1)
 
 # ╔═╡ 498bf7bf-4812-4525-864e-db5454c53211
 βregret = @closure (T, m, t) -> begin
@@ -316,8 +339,8 @@ end;
 # ╔═╡ 9c1452bc-611f-4e17-a9f5-89a80acf9568
 let
 	βM = Simulating.computeonsim(regretsol, βregret, yearlytime)
-	βquantiles = Simulating.timequantiles(βM, [0.01, 0.5, 0.99])
-    Simulating.smoothquantile!.(eachcol(βquantiles), 30)
+	βquantiles = Simulating.timequantiles(βM, [0.1, 0.5, 0.9])
+    Simulating.smoothquantile!.(eachcol(βquantiles), 0)
 
 	regretfig = plot(yearlytime, βquantiles[:, 2])
 end
@@ -349,6 +372,8 @@ end
 # ╟─963b5d26-1f93-4cd9-8a9b-989e22c16143
 # ╟─32955af4-fa47-43dd-b6a8-7545e1398f25
 # ╠═39409585-662d-4915-ae42-653e35a2b975
+# ╠═9283bc5d-f5be-4b39-bc02-aeb942f1db79
+# ╠═68d51817-7f7e-4ebb-b986-67280479a999
 # ╠═498bf7bf-4812-4525-864e-db5454c53211
 # ╠═f5584590-689c-4ddb-8e64-40c5c22e34ed
 # ╠═9c1452bc-611f-4e17-a9f5-89a80acf9568

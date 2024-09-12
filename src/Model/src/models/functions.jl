@@ -3,6 +3,9 @@
 μ(T, m, model::AbstractJumpModel) = μ(T, m, model.hogg)
 mstable(T, model::AbstractTippingModel) = mstable(T, model.hogg, model.albedo)
 mstable(T, model::AbstractJumpModel) = mstable(T, model.hogg)
+Tstable(m, model::AbstractTippingModel) = Tstable(m, model.hogg, model.albedo)
+Tstable(m, model::AbstractJumpModel) = Tstable(m, model.hogg)
+
 
 function bterminal(χ::Float64, economy::Economy)
     growth = economy.ϱ - economy.δₖᵖ
