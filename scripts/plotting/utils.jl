@@ -8,19 +8,19 @@ function stringifydeviation(ΔT; digits = 2)
     return format(fmt, ΔT)
 end
 
-function makedeviationtickz(from, to, model; step = 0.5, withcurrent = false, digits = 2)
+function makedeviationtickz(from, to, model; step = 0.5, digits = 2, addedlabels = NTuple{String, Float64}[])
 
     preindustrialdev = range(from, to; step = step)
     ticks = model.hogg.Tᵖ .+ preindustrialdev
 
     labels = [stringifydeviation(x; digits = digits) for x in preindustrialdev]
 
-    if !withcurrent
+    if isempty(addedlabels)
         return (ticks, labels)
     end
 
-    labels = [labels..., "\$x_0\$"]
-    ticks = [ticks..., first(climate).x₀]
+    ticks = [ticks..., last.(addedlabels)...]
+    labels = [labels..., first.(addedlabels)...]
     idxs = sortperm(ticks)
     
     return (ticks[idxs], labels[idxs])

@@ -122,6 +122,8 @@ ghgforcing⁻¹(r, hogg::Hogg) = log(hogg.Mᵖ) + (r - hogg.G₀) / hogg.G₁
 "Drift temperature dynamics"
 μ(T, m, hogg::Hogg, albedo::Albedo) = radiativeforcing(T, hogg, albedo) + ghgforcing(m, hogg)
 μ(T, m, hogg::Hogg) = radiativeforcing(T, hogg) + ghgforcing(m, hogg)
+μ(T, m, model::TippingModel) = μ(T, m, model.hogg, model.albedo)
+μ(T, m, model::JumpModel) = μ(T, m, model.hogg)
 
 "Compute CO₂ concentration consistent with temperature T"
 mstable(T, hogg::Hogg, albedo::Albedo) = ghgforcing⁻¹(-radiativeforcing(T, hogg, albedo), hogg)
@@ -131,6 +133,12 @@ Mstable(T, args...) = exp(mstable(T, args...))
 function Tstable(m, hogg::Hogg, albedo::Albedo)
     find_zeros(T -> mstable(T, hogg, albedo) - m, hogg.Tᵖ, 1.2hogg.Tᵖ)
 end
+
+function Tstable(m, hogg::Hogg)
+    find_zeros(T -> mstable(T, hogg) - m, hogg.Tᵖ, 1.2hogg.Tᵖ)
+end
+Tstable(m, model::TippingModel) = Tstable(m, model.hogg, model.albedo)
+Tstable(m, model::JumpModel) = Tstable(m, model.hogg)
 
 function potential(T, m, hogg::Hogg, albedo::Albedo)
 	@unpack λ₁, Δλ = albedo

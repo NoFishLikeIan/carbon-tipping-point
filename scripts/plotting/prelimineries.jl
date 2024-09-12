@@ -7,7 +7,7 @@ using StatsBase
 
 using DifferentialEquations, DifferentialEquations.EnsembleAnalysis
 
-using Plots, Printf, PGFPlotsX, Colors, ColorSchemes
+using Plots, Printf, PGFPlotsX, Colors, ColorSchemes, LaTeXStrings
 using Statistics
 
 push!(PGFPlotsX.CUSTOM_PREAMBLE, raw"\usepgfplotslibrary{fillbetween}")
@@ -31,9 +31,10 @@ begin # Global variables
 end;
 
 begin # Construct models and grids
-    thresholds = [2.5, 1.5]
-    labels = Dict(thresholds .=> ["remote", "imminent"])
-    N = 51
+    thresholds = [1.5, 2.5]
+
+    labels = ["Imminent", "Remote", "Benchmark"]
+    labelsbythreshold = Dict(thresholds .=> labels[1:2])
 
     calibration = load_object(joinpath(DATAPATH, "calibration.jld2"))
     preferences = EpsteinZin()
@@ -42,20 +43,23 @@ begin # Construct models and grids
     jump = Jump()
     hogg = Hogg()
 
-    jumpmodel = JumpModel(jump, Hogg(), preferences, damages, economy, calibration)
+    jumpmodel = JumpModel(jump, hogg, preferences, damages, economy, calibration)
 
-    models = TippingModel[]
+    tippingmodels = TippingModel[]
     for Tᶜ ∈ thresholds
         albedo = Albedo(Tᶜ)
         model = TippingModel(albedo, hogg, preferences, damages, economy, calibration)
 
-        push!(models, model)
+        push!(tippingmodels, model)
     end
+
+    models = AbstractModel[tippingmodels..., jumpmodel]
+    labelsbymodel = Dict(models .=> labels)
 end;
 
 begin # Labels, colors and axis
     PALETTE = colorschemes[:grays]
-    graypalette = n -> get(PALETTE, range(0.1, 0.8; length=n))
+    graypalette = n -> reverse(get(PALETTE, range(0.1, 0.8; length=n)))
 
     thresholdcolor = Dict(thresholds .=> reverse(graypalette(length(thresholds))))
 
@@ -68,7 +72,7 @@ begin # Labels, colors and axis
     horizon = round(Int64, calibration.tspan[2])
     yearlytime = 0:1:horizon
 
-    temperatureticks = collect.(makedeviationtickz(0.0, ΔTmax, first(models); step=1, digits=0))
+    temperatureticks = collect.(makedeviationtickz(0.0, ΔTmax, first(tippingmodels); step=1, digits=0))
 
     Tmin, Tmax = extrema(temperatureticks[1])
 
@@ -87,7 +91,7 @@ begin # Load IPCC data
 end;
 
 begin # Albedo plot
-    albedovariation = [[Model.λ(T, model.hogg, model.albedo) for T in Tspace] for model in models]
+    albedovariation = [[Model.λ(T, model.hogg, model.albedo) for T in Tspace] for model in tippingmodels]
 
     ytick = 0.28:0.02:0.32
 
@@ -112,14 +116,14 @@ begin # Albedo plot
         PGFPlotsX.save(joinpath(PLOTPATH, "skeleton-albedo.tikz"), albedofig; include_preamble=true)
     end
 
-    @pgf for (model, loss) in zip(models, albedovariation)
+    @pgf for (model, loss) in zip(tippingmodels, albedovariation)
         Tᶜ = model.albedo.Tᶜ
         curve = Plot(
             {color = thresholdcolor[Tᶜ], line_width = LINE_WIDTH, opacity = 0.8},
             Coordinates(zip(Tspace, loss))
         )
 
-        label = labels[Tᶜ]
+        label = labelsbythreshold[Tᶜ]
         legend = LegendEntry(label)
 
         push!(albedofig, curve, legend)
@@ -137,7 +141,7 @@ end
 begin
     sims = Dict{Float64,DiffEqArray}()
 
-    for model in models
+    for model in tippingmodels
         prob = SDEProblem(baufn, X₀, (0.0, 80.0), model)
         sol = solve(prob; seed=SEED)
 
@@ -149,7 +153,7 @@ end;
 
 begin # Nullcline plot
     nullclinevariation = Dict{Float64,Vector{Vector{NTuple{2,Float64}}}}()
-    for model ∈ models
+    for model in reverse(tippingmodels)
         nullclines = Vector{NTuple{2,Float64}}[]
 
         currentM = NTuple{2,Float64}[]
@@ -180,20 +184,19 @@ begin # Nullcline plot
         grid = "both",
         ylabel = TEMPLABEL,
         xlabel = raw"Carbon concentration $M_t$",
-        xmin = models[1].hogg.Mᵖ, xmax = Mmax,
+        xmin = tippingmodels[1].hogg.Mᵖ, xmax = Mmax,
         xtick = 200:100:Mmax,
         yticklabels = temperatureticks[2],
         ytick = temperatureticks[1],
         ymin = Tmin, ymax = Tmax,
         legend_cell_align = "left"
-    }
-    )
+    })
 
     if SAVEFIG
         PGFPlotsX.save(joinpath(PLOTPATH, "skeleton-nullcline.tikz"), nullclinefig; include_preamble=true)
     end
 
-    for model in models # Nullcline plots
+    for model in reverse(tippingmodels) # Nullcline plots
         Tᶜ = model.albedo.Tᶜ
         color = thresholdcolor[Tᶜ]
 
@@ -203,13 +206,13 @@ begin # Nullcline plot
         unstablecurve = @pgf Plot({color = color, line_width = LINE_WIDTH, forget_plot, dotted}, Coordinates(unstable))
         rightcurve = @pgf Plot({color = color, line_width = LINE_WIDTH, forget_plot}, Coordinates(stableright))
 
-        label = labels[Tᶜ]
+        label = labelsbythreshold[Tᶜ]
         legend = LegendEntry(label)
 
         push!(nullclinefig, leftcurve, legend, unstablecurve, rightcurve)
     end
 
-    for model in models # Simulation plots
+    for model in reverse(tippingmodels) # Simulation plots
         color = thresholdcolor[model.albedo.Tᶜ]
         simpath = sims[model.albedo.Tᶜ]
         simcoords = Coordinates(zip(exp.(last.(simpath.u)), first.(simpath.u)))
@@ -237,14 +240,12 @@ begin # Simulate carbon concentrations
 
     mfn = SDEFunction(mbau, σₘbau)
 
-    mbauprob = SDEProblem(mfn, log(hogg.M₀), (0.0, 80.0), first(models))
+    mbauprob = SDEProblem(mfn, log(hogg.M₀), (0.0, 80.0), first(tippingmodels))
     mensemble = EnsembleProblem(mbauprob)
     mbausims = solve(mensemble; trajectories=10_000)
 end
 
-begin # Growth of carbon concentration
-
-    # Growth rate figure    
+begin # Growth of carbon concentration 
     horizon = Int(last(yearlytime))
 
     figsize = @pgf {
@@ -319,70 +320,103 @@ begin # Growth of carbon concentration
 end
 
 # TODO: Finish the comparison of density plots between jump and tipping models.
-let model = first(models)
-    dT = @closure (T, param, t) -> begin
-        model, m = param
-        drift = isa(model, JumpModel) ? μ(T, m, model.hogg) : μ(T, m, model.hogg, model.albedo)
+densmodels = AbstractModel[first(tippingmodels), jumpmodel];
 
-        return model.hogg.ϵ * drift
+begin
+    m₀ = log(418.)
+    
+    temperaturedrift! = @closure (du, u, model, t) -> begin
+        du[1] = μ(u[1], m₀, model) / model.hogg.ϵ
     end
 
-    ΣT = @closure (T, param, t) -> first(param).hogg.σₜ / model.hogg.ϵ
+    temperaturenoise! = @closure (Σ, u, model, t) -> begin
+        Σ[1] = model.hogg.σₜ / model.hogg.ϵ
+    end
 
-    m₀ = log(1.3model.hogg.M₀)
-    T₀ = minimum(Model.Tstable(m₀, model.hogg, model.albedo))
+    T₀ = minimum(Model.Tstable(m₀, jumpmodel))
 
-    Tstableprob = SDEProblem(dT, ΣT, T₀, (0.0, 500.0), (model, m₀))
+    simulations = Dict{AbstractModel, RODESolution}()
+    
+    for model in densmodels
+        isjump = model isa JumpModel
+        fn = SDEFunction(temperaturedrift!, temperaturenoise!)
+        densprob = SDEProblem(fn, [T₀], (0., 50_000.), model)
+        
+        if !isjump
+            simulation = solve(densprob)
+        else
+            onedrate(u, model, t) = intensity(u[1], model.hogg, model.jump)
+            
+            function onedtipping!(integrator)
+                model = integrator.p
+                q = increase(integrator.u[1], model.hogg, model.jump)
+                integrator.u += q
+            end
 
-    simulation = solve(Tstableprob)
+            ratejump = VariableRateJump(onedrate, onedtipping!);
+            jumpprob = JumpProblem(densprob, ratejump)
+
+            simulation = solve(densprob, SRIW1())
+        end
+        
+        simulation = solve(densprob)
+        simulations[model] = simulation
+    end
 end
 
-@pgf Axis({
-        "ybar interval",
-        xmajorgrids = false,
-        x_tick_label_as_interval=false,
-        xtick=-50:25:50
-    }, Plot(Table(fit(Histogram, simulation.u; nbins = 50)))
-)
+begin # Construct histograms
+    Textrema = map(sim -> extrema(first.(sim.u)), values(simulations))
+    Tmin = minimum(first.(Textrema)) - 0.1
+    Tmax = maximum(last.(Textrema)) + 0.1
 
+    Tbins = range(Tmin, Tmax; length = 31)
 
-begin # Density plots
-    # ytick = range(2.505674517612567, 2.509962798461946; length = 10) # A bit ugly but I do not know how to remove the ticks
+    histograms = Dict{AbstractModel, Histogram}()
 
-    densfig = @pgf Axis({
-        width = raw"0.4\textwidth",
-        height = raw"0.4\textwidth",
-        grid = "both",
-        ylabel = "Density",
-        # ytick = ytick, 
-        yticklabels = ["" for y ∈ ytick],
-        xlabel = TEMPLABEL,
-        xmin = Tmin, xmax = Tmax,
-        xtick = temperatureticks[1],
-        xticklabels = temperatureticks[2],
-        ultra_thick, xticklabel_style = {rotate = 45}
-    })
+    for model in densmodels
+        simulation = simulations[model]
+        T = first.(simulation.u)
 
-    for model in models
-        d = [Model.density(T, log(1.5model.hogg.M₀), model.hogg, model.albedo) for T in Tspace]
-
-        l, u = extrema(d)
-        d = @. (d - l) / (u - l)
-
-        Tᶜ = model.albedo.Tᶜ
-
-        label = "\$$(Tᶜ)^{\\circ}\$"
-        legend = LegendEntry(label)
-        @pgf push!(densfig,
-            Plot({
-                    color = thresholdcolor[Tᶜ],
-                    line_width = "0.1cm",
-                }, Coordinates(zip(Tspace, d))),
-            legend
-        )
+        histogram = fit(Histogram, T, Tbins)
+        histograms[model] = histogram
     end
+end
 
-    @pgf densfig["legend style"] = raw"at = {(0.4, 0.4)}"
+begin
+    denstemperatureticks = makedeviationtickz(0.0, ceil(Tmax - hogg.Tᵖ), first(tippingmodels); step=1, digits=0, addedlabels = [(L"$T_0$", T₀[1])])
+
+    densfig = @pgf GroupPlot({
+        group_style = {
+            group_size = "1 by 2",
+            xticklabels_at = "edge bottom",
+            vertical_sep = "2pt"
+        }
+    })
+    
+
+    for (k, model) in enumerate(densmodels)
+        histogram = histograms[model]
+
+        densityplot = @pgf Plot({
+            "ybar interval",
+            "xticklabel interval boundaries",
+            xmajorgrids = false,
+            ylabel = labelsbymodel[model],
+            fill = "gray", opacity = 0.5
+        }, Table(histogram))
+
+
+        @pgf lastplotopt = k < length(densmodels) ? {} : { xlabel = TEMPLABEL, xticklabels = denstemperatureticks[2] }
+
+        @pgf push!(densfig, {lastplotopt...,
+            xmin = Tmin, xmax = Tmax, 
+            xtick = denstemperatureticks[1],
+            ymin = 0, ymax = 5000,
+            grid = "both", yticklabels = raw"\empty",
+            width = raw"0.7\textwidth", height = raw"0.4\textwidth",
+            ylabel = "$(labelsbymodel[model])"
+        }, densityplot)
+    end
 
     if SAVEFIG
         PGFPlotsX.save(joinpath(PLOTPATH, "densfig.tikz"), densfig; include_preamble=true)
@@ -390,6 +424,7 @@ begin # Density plots
 
     densfig
 end
+
 
 function simulatebau(model::TippingModel; trajectories=100, X₀=[model.hogg.T₀, log(model.hogg.M₀)])
     prob = SDEProblem(baufn, X₀, (0.0, 80.0), model)
@@ -414,7 +449,7 @@ bautime = 0:80
 
 
 begin # Side by side BAU Δλ = 0.8
-    baumodels = models
+    baumodels = tippingmodels
 
     yeartickstep = 10
 
@@ -489,7 +524,7 @@ begin # Side by side BAU Δλ = 0.8
 end
 
 begin # Carbon decay calibration
-    tippingmodel = last(models)
+    tippingmodel = last(tippingmodels)
 
     sinkspace = range(tippingmodel.hogg.N₀, 1.2 * tippingmodel.hogg.N₀; length=51)
     decay = [Model.δₘ(n, tippingmodel.hogg) for n in sinkspace]
