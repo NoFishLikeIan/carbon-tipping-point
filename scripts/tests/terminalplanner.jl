@@ -18,7 +18,7 @@ begin
 	hogg = Hogg()
 	economy = Economy()
 	preferences = EpsteinZin()
-	albedo = Albedo(Tᶜ = 1.5)
+	albedo = Albedo(1.5)
 end;
 
 # --- Albedo
@@ -35,10 +35,12 @@ end
 
 F̄, terminalpolicy = loadterminal(model; datapath)
 
-F₀ = ones(size(G)); F̄ = copy(F₀);
-terminalpolicy = similar(F̄);
+F₀ = ones(size(G)); 
+F̄ = copy(F₀) |> SharedMatrix;
+terminalpolicy = similar(F̄) |> SharedMatrix;
+errors = Inf .* ones(size(G)) |> SharedMatrix;
 
-terminaljacobi!(F̄, terminalpolicy, model, G)
+terminaljacobi!(F̄, terminalpolicy, errors, model, G)
 F̄, policy = vfi(F₀, model, G; maxiter = 10_000, verbose = true)
 
 begin

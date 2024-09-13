@@ -1,25 +1,27 @@
-using Model, Grid
+using Distributed: @everywhere, @distributed, @sync
+using SharedArrays
 
-using JLD2, DotEnv
-using UnPack: @unpack
-using Polyester: @batch
-using FastClosures: @closure
-using Roots: find_zero
-using Printf: @printf, @sprintf
+@everywhere begin
+    using Model, Grid
+    using JLD2, DotEnv
 
-function terminalcost(Fᵢ′, Tᵢ, Δt, χ, model::AbstractModel{GrowthDamages, P}) where P
+    using FastClosures: @closure
+    using Printf: @printf, @sprintf
+end
+
+@everywhere function terminalcost(Fᵢ′, Tᵢ, Δt, χ, model::AbstractModel{GrowthDamages, P}) where P
     δ = terminaloutputfct(Tᵢ, Δt, χ, model)
 
     g(χ, δ * Fᵢ′, Δt, model.preferences)
 end
-function terminalcost(Fᵢ′, Tᵢ, Δt, χ, model::AbstractModel{LevelDamages, P}) where P
+@everywhere function terminalcost(Fᵢ′, Tᵢ, Δt, χ, model::AbstractModel{LevelDamages, P}) where P
     δ = terminaloutputfct(Tᵢ, Δt, χ, model)
     damage = d(Tᵢ, model.damages, model.hogg)
 
     g(damage * χ, δ * Fᵢ′, Δt, model.preferences)
 end
 
-function terminaldriftstep(idx, F̄, model::AbstractModel, G)
+@everywhere function terminaldriftstep(idx, F̄, model::AbstractModel, G)
     L, R = extrema(CartesianIndices(F̄))
 
     σₜ² = (model.hogg.σₜ / (model.hogg.ϵ * G.Δ.T))^2
@@ -42,8 +44,8 @@ function terminaldriftstep(idx, F̄, model::AbstractModel, G)
     return F′, Δt
 end
 
-terminalmarkovstep(idx, F̄, model::TippingModel, G) = terminaldriftstep(idx, F̄, model, G)
-function terminalmarkovstep(idx, F̄, model::JumpModel, G)
+@everywhere terminalmarkovstep(idx, F̄, model::TippingModel, G) = terminaldriftstep(idx, F̄, model, G)
+@everywhere function terminalmarkovstep(idx, F̄, model::JumpModel, G)
     Fᵈ, Δt = terminaldriftstep(idx, F̄, model, G)
 
     # Update with jump
@@ -63,9 +65,9 @@ function terminalmarkovstep(idx, F̄, model::JumpModel, G)
     return F′, Δt
 end
 
-function terminaljacobi!(F̄, policy, model::AbstractModel, G; indices = CartesianIndices(F̄))
+function terminaljacobi!(F̄, policy, errors, model::AbstractModel, G; indices = CartesianIndices(F̄))
 
-    for idx in indices
+    @sync @distributed for idx in indices
         Fᵢ′, Δt = terminalmarkovstep(idx, F̄, model, G)
         Tᵢ = G.X[idx].T
 
@@ -73,6 +75,8 @@ function terminaljacobi!(F̄, policy, model::AbstractModel, G; indices = Cartesi
         objective = @closure χ -> terminalcost(Fᵢ′, Tᵢ, Δt, χ, model)
         Fᵢ, χ = gssmin(objective, 0., 1.; tol = eps(Float64))
         
+        errors[idx] = abs(Fᵢ - F̄[idx]) / F̄[idx]
+
         F̄[idx] = Fᵢ
         policy[idx] = χ
     end
@@ -80,37 +84,32 @@ function terminaljacobi!(F̄, policy, model::AbstractModel, G; indices = Cartesi
 end
 
 function vfi(F₀, model::AbstractModel, G; tol = 1e-3, maxiter = 10_000, verbose = false, indices = CartesianIndices(G), alternate = false)
-    pᵢ, pᵢ₊₁ = similar(F₀), similar(F₀)
-    Fᵢ, Fᵢ₊₁ = copy(F₀), copy(F₀)
+    Fᵢ = deepcopy(F₀) |> SharedMatrix
+    pᵢ = similar(F₀) |> SharedMatrix
 
+    errors = (Inf .* ones(size(F₀))) |> SharedMatrix
+    
     verbose && println("Starting iterations...")
-
-    ε, α = Inf, Inf
 
     for iter in 1:maxiter
         iterindices = (alternate && isodd(iter)) ? indices : reverse(indices)
 
+        terminaljacobi!(Fᵢ, pᵢ, errors, model, G; indices = iterindices)
 
-        terminaljacobi!(Fᵢ₊₁, pᵢ₊₁, model, G; indices = iterindices)
+        max_error = maximum(errors)
 
-        ε = maximum(abs.((Fᵢ₊₁ .- Fᵢ) ./ Fᵢ))
-        α = maximum(abs.((pᵢ₊₁ .- pᵢ) ./ pᵢ))
-
-        if ε < tol
-            verbose && @printf("Converged in %i iterations, ε = %.8f, α = %.8f.\n", iter, ε, α)
-            return Fᵢ₊₁, pᵢ₊₁
+        if max_error < tol
+            verbose && @printf("Converged in %i iterations, ε = %.8f \n", iter, max_error)
+            return Fᵢ, pᵢ
         end
 
         if verbose && (!alternate || isodd(iter))
-            @printf("Iteration %i / %i, ε = %.8f, α = %.8f...\r", iter, maxiter, ε, α)
+            @printf("Iteration %i / %i, ε = %.8f...\r", iter, maxiter, max_error)
         end
-        
-        Fᵢ .= Fᵢ₊₁
-        pᵢ .= pᵢ₊₁
     end
 
     verbose && @warn "Convergence failed."
-    return Fᵢ₊₁, pᵢ₊₁
+    return Fᵢ, pᵢ
 end
 
 function computeterminal(model, G::RegularGrid; verbose = true, withsave = true, datapath = "data", overwrite = false, addpath = "", iterkwargs...)
