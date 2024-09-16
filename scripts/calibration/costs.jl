@@ -4,7 +4,7 @@ using Model
 using Plots
 
 β₈₀ = 2.7 / 100
-ω₀ = 11 / 100
+ω₀ = 22 / 100
 ωᵣ = log(ω₀ / β₈₀) / 80.
 
 economy = Economy(ω₀ = ω₀, ωᵣ = ωᵣ)

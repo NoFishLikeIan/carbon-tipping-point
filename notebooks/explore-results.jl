@@ -243,7 +243,7 @@ begin
 	yearlytime = 0:80
     yearticks = 0:20:80
 
-    βextrema = (0., 0.135)
+    βextrema = (0., 0.015)
     βticks = range(βextrema...; step = 0.01) |> collect
     βticklabels = [@sprintf("%.0f %%", 100 * y) for y in βticks]
 

@@ -629,7 +629,7 @@ begin # Marginal abatement curve
         height = raw"0.5\textwidth",
         grid = "both",
         xlabel = L"Abated percentage $\varepsilon(\alpha_t)$",
-        ylabel = L"Marginal abatement costs $\omega_t \varepsilon(\alpha_t)$",
+        ylabel = L"Abatement costs $\beta_t\big(\varepsilon(\alpha_t)\big)$",
         xmin = 0., xmax = 1.,
         xtick = xticks, xticklabels = xticklabels,
         ymin = 0., ymax = maximum(ytick),
@@ -638,7 +638,7 @@ begin # Marginal abatement curve
     })
 
     for (k, t) in enumerate(times)
-        mac = [economy.ω₀ * exp(-economy.ωᵣ * t) * ε for ε in emissivity]
+        mac = [β(t, ε, economy) for ε in emissivity]
 
         abatementcurve = @pgf Plot({line_width = LINE_WIDTH, color = yearcolors[k]}, Coordinates(emissivity, mac))
 
