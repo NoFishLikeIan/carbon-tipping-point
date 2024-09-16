@@ -8,3 +8,4 @@ Some bash and julia scripts to speed up multiple versioning. This is needed to r
 
 ## Time estimation
 
+For `N = 11` the procedure takes approx. 5 minutes and 6 seconds. Worst scaling is `O(N^2)` and the target is `N = 201`. So, the total time is estimated to be `5.1 * 201^2 = 205,000` seconds or `57` hours. Adding 20% for safety, the total time is estimated to be `68` hours.
