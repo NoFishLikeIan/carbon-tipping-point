@@ -13,10 +13,10 @@ addprocs(procs; exeflags="--project") # A bit sad that I have to do this
 (verbose ≥ 1) && "Running with $(nprocs()) processor..."
 
 include("utils/saving.jl")
-include("markov/terminal.jl")
-include("markov/backward.jl")
 
-env = DotEnv.config()
+# Setup environment via .env
+env = config()
+
 DATAPATH = get(env, "DATAPATH", "data")
 SIMPATH = get(env, "SIMULATIONPATH", "simulation/planner")
 ALLOWNEGATIVE = getbool(env, "ALLOWNEGATIVE", false)
@@ -34,11 +34,15 @@ CACHESTEP = getnumber(env, "CACHESTEP", 1 / 4)
 
 OVERWRITE && @warn "Running in overwrite mode!"
 
-# Parameters
-Ψ = [0.75, 1.5]
-Θ = [2., 10.]
-Ρ = [1e-7, 1e-3]
-Ωᵣ = [0., 0.017558043747351086]
+# Distributed processing
+using Distributed: nprocs, addprocs
+ADDPROCS = getnumber(env, "ADDPROCS", 0; type = Int)
+addprocs(ADDPROCS; exeflags="--project") # A bit sad that I have to do this
+
+VERBOSE && "Running with $(nprocs()) processor..."
+
+include("markov/terminal.jl")
+include("markov/backward.jl")
 
 # Construct model
 calibration = load_object(joinpath(DATAPATH, "calibration.jld2"));

@@ -15,8 +15,6 @@ addprocs(procs; exeflags="--project") # A bit sad that I have to do this
 (verbose ≥ 1) && println("Running with $(nprocs()) processor...")
 
 include("utils/saving.jl")
-include("markov/terminal.jl")
-include("markov/backward.jl")
 
 # Default parameters
 thresholds = [1.5, 2.5];
