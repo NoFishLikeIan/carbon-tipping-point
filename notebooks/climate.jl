@@ -154,7 +154,7 @@ md"
 Mspace = exp.(range(5.5, 7.; length = 101));
 
 # ╔═╡ 3d3db300-51bb-41b8-bf0e-f2356c66aa09
-plot(Mspace, M -> δₘ(M, Hogg(aδ = a, bδ = b, cδ = c)), ylims = (0, Inf))
+plot(Mspace, M -> δₘ(M, Hogg(aδ = a, bδ = b, cδ = c)), ylims = (0, 0.015))
 
 # ╔═╡ 61a8bfdd-c7d2-49ff-b23d-e4b7cf7c35c9
 md"## CO$_2$ decay"
@@ -174,11 +174,22 @@ begin
 	decaysol = solve(decayprob)
 end
 
-# ╔═╡ c70e9cba-b8d9-41fd-8b00-c94f4d0624eb
-plot(exp.(decaysol))
-
 # ╔═╡ 31c8af20-05e0-4355-937e-f0a0b3fc72d7
 md"## Equivalent jump process"
+
+# ╔═╡ 058a5194-092a-4624-afd9-529c193b6269
+function Fjump!(du, u, hogg, t)
+	T, m = u
+
+	du[1] = μ(T, m, hogg) / hogg.ϵ
+	du[2] = γ(t, calibration)
+end;
+
+# ╔═╡ b6441215-7c10-4c2a-afde-10e829c61625
+function Gjump!(Σ, u, hogg, t)
+	Σ[1] = hogg.σₜ / hogg.ϵ
+	Σ[2] = hogg.σₘ
+end;
 
 # ╔═╡ b6795842-7e9f-44eb-8768-b6065f6cbda1
 function jump(T)
@@ -207,27 +218,15 @@ end
 # ╔═╡ b1dff2b6-766a-4751-a4c5-ef2e84ec2bae
 begin
 	jumprate = VariableRateJump(intensity, affect!)
-	jumpprob = JumpProblem(
-		ODEProblem(F!, u₀, tspan, (hogg, Albedo(Δλ = 0.))),
-		Direct(), jumprate
-	)
+	diffusion = SDEProblem(Fjump!, Gjump!, u₀, tspan, hogg);
+	
+	jumpprob = JumpProblem(diffusion, Direct(), jumprate)
 
-	jumpsolution = solve(jumpprob, Tsit5())
+	jumpsolution = solve(jumpprob, SRIW1())
 end;
 
 # ╔═╡ b2267725-c605-4100-bc31-29e04b8dc393
-begin
-	jumpfig = deepcopy(simfig)
-
-
-	for simulation in jumpsolution
-		path = simulation(timespan)
-
-		plot!(jumpfig, path[2, :], path[1, :]; c = :darkblue, label = false, alpha = 0.2)
-	end
- 
-	jumpfig
-end
+plot(jumpsolution; idxs = 1)
 
 # ╔═╡ Cell order:
 # ╟─bdf4a3ab-d52a-4dc8-8c4a-3e009ec7e5cd
@@ -255,8 +254,9 @@ end
 # ╠═3d3db300-51bb-41b8-bf0e-f2356c66aa09
 # ╟─61a8bfdd-c7d2-49ff-b23d-e4b7cf7c35c9
 # ╠═70b8bf79-a954-4559-a630-d2c0812cbfb1
-# ╠═c70e9cba-b8d9-41fd-8b00-c94f4d0624eb
 # ╟─31c8af20-05e0-4355-937e-f0a0b3fc72d7
+# ╠═058a5194-092a-4624-afd9-529c193b6269
+# ╠═b6441215-7c10-4c2a-afde-10e829c61625
 # ╠═b6795842-7e9f-44eb-8768-b6065f6cbda1
 # ╠═6ec0461e-a901-4bc6-8f0e-a4b1e7f89f67
 # ╠═2ab85406-9736-43a2-b562-4e1c76f32feb

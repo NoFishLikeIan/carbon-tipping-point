@@ -108,7 +108,7 @@ end;
 
 # ╔═╡ b38949ca-4432-4b8f-be02-3d96e5b1fce0
 begin
-	N = 51
+	N = 41
 	Tdev = (0., 7.)
 	Tdomain = hogg.Tᵖ .+ Tdev;
 	mdomain = mstable.(Tdomain, hogg)
@@ -144,12 +144,12 @@ begin # Plotting utilities
 
 	satres = Optim.optimize(m -> -δₘ(exp(m[1]), hogg), [log(hogg.:M₀)]);
 
-	αmax = δₘ(exp(first(Optim.minimizer(satres))), hogg) + γ(economy.τ, calibration)
+	αmax = 0.05
 end;
 
 # ╔═╡ 4f53f52a-f3b7-48fb-b63c-9fbc7f9dd65e
 begin
-	Ffig = contourf(mspace, Tspace, log.(F); xticks = Mticks, yticks = Tticks, ylabel = L"T_t - T^p", xlabel = L"M_t", title = L"$F_{\tau}(T, M)$", xlims = mdomain, ylims = Tdomain, cbar = false)
+	Ffig = contourf(mspace, Tspace, log.(F); xticks = Mticks, yticks = Tticks, ylabel = L"T_t - T^p", xlabel = L"M_t", title = L"$F_{\tau}(T, M)$", xlims = mdomain, ylims = Tdomain, cbar = false, linewidth = 0)
 
 	Tdense = range(Tdomain...; length = 101)
 	nullcline = mstable.(Tdense, hogg, Albedo(1.5))
@@ -196,11 +196,16 @@ begin
 	od = TwiceDifferentiable(obj, u₀; autodiff = :forward)
 	cons = TwiceDifferentiableConstraints([0., 0.], [1., ᾱ])
 
-	resminimisation = Optim.optimize(od, cons, u₀, IPNewton())
+	options = Optim.Options(g_tol = 1e-12, allow_f_increases = true, iterations = 10_000)
+
+	resminimisation = Optim.optimize(od, cons, u₀, IPNewton(), options)
 	u = Optim.minimizer(resminimisation)
 
 	!Optim.converged(resminimisation) && @warn "Not converged"
 end;
+
+# ╔═╡ 9b3c23fa-18f2-4b90-a192-9904216a6d2b
+typeof(options)
 
 # ╔═╡ fb36873a-3db7-439e-955f-24e0725bd6b3
 begin
@@ -279,6 +284,7 @@ end
 # ╠═5aa075ef-8ad2-4d52-b4da-d99d687a7d4e
 # ╟─0169acc9-2d30-4e80-a38b-a0cbc5af15dc
 # ╠═ec33fe87-f4fd-4454-bfa7-e644bb89f344
+# ╠═9b3c23fa-18f2-4b90-a192-9904216a6d2b
 # ╠═fb36873a-3db7-439e-955f-24e0725bd6b3
 # ╠═b8b54945-ab69-4bfc-862f-9498aa0c30fc
 # ╠═78a46a5e-7420-4e74-acb1-693ba5664f3b

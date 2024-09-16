@@ -243,11 +243,11 @@ begin
 	yearlytime = 0:80
     yearticks = 0:20:80
 
-    βextrema = (0., 0.035)
+    βextrema = (0., 0.135)
     βticks = range(βextrema...; step = 0.01) |> collect
     βticklabels = [@sprintf("%.0f %%", 100 * y) for y in βticks]
 
-    Textrema = (1., 2.1)
+    Textrema = (1., 5.)
     Tticks = Plotting.makedeviationtickz(Textrema..., first(models); step = 0.5, digits = 1)
 
 	simfigs = []
@@ -261,14 +261,14 @@ begin
 		βM = Simulating.computeonsim(abatedsol, (T, m, t) -> β(t, ε(t, exp(m), αitp(T, m, t), model), model.economy), yearlytime)
 	   
 		βquantiles = Simulating.timequantiles(βM, [0.05, 0.5, 0.95])
-		Simulating.smoothquantile!.(eachcol(βquantiles), 10)
+		Simulating.smoothquantile!.(eachcol(βquantiles), 0)
 
        	βoptionfirst = k > 1 ? Dict() : Dict(:title => L"Abatement as % of $Y_t$" )
        	lastxticks = Dict(
 			:xticks => k < length(models) ? (yearticks, repeat([""], length(yearticks))) : (yearticks, BASELINE_YEAR .+ yearticks)
 		)
 
-		βfig = plot(yearlytime, βquantiles[:, 2]; c = :darkgreen, ylims = βextrema, yticks = (βticks, βticklabels), βoptionfirst..., lastxticks...)
+		βfig = plot(yearlytime, βquantiles[:, 2]; c = :darkgreen, ylims = βextrema, yticks = (βticks, βticklabels), ylabel = labels[model], βoptionfirst..., lastxticks...)
 		plot!(βfig, yearlytime, βquantiles[:, 1]; fillrange = βquantiles[:, 3], alpha = 0.3, c = :darkgreen, linewidth = 0.)
 
        	push!(simfigs, βfig)
@@ -369,7 +369,7 @@ end
 # ╟─78a476ce-788c-428d-b6bf-da39f92f4035
 # ╟─497f0b6b-e7ac-4176-81b3-f8df4050d338
 # ╠═baa07798-cd01-49cb-8d33-eafd0c92505b
-# ╟─963b5d26-1f93-4cd9-8a9b-989e22c16143
+# ╠═963b5d26-1f93-4cd9-8a9b-989e22c16143
 # ╟─32955af4-fa47-43dd-b6a8-7545e1398f25
 # ╠═39409585-662d-4915-ae42-653e35a2b975
 # ╠═9283bc5d-f5be-4b39-bc02-aeb942f1db79
