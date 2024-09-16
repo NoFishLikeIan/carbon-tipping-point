@@ -610,3 +610,46 @@ begin # Damage fig
 
     damagefig
 end
+
+begin # Marginal abatement curve
+    emissivity = range(0.0, 1.0; length = 51)
+
+    times = [0., 40., 80.] |> reverse
+
+    yearcolors = graypalette(length(times))
+
+    xticks = 0:0.2:1
+    xticklabels = [@sprintf("%.0f\\%%", 100 * x) for x in xticks]
+
+    ytick = 0.02:0.02:0.12
+    yticklabels = [@sprintf("%.f\\%%", 100 * y) for y in ytick]
+
+    abatementfig = @pgf Axis({
+        width = raw"0.71\textwidth",
+        height = raw"0.5\textwidth",
+        grid = "both",
+        xlabel = L"Abated percentage $\varepsilon(\alpha_t)$",
+        ylabel = L"Marginal abatement costs $\omega_t \varepsilon(\alpha_t)$",
+        xmin = 0., xmax = 1.,
+        xtick = xticks, xticklabels = xticklabels,
+        ymin = 0., ymax = maximum(ytick),
+        ytick = ytick, yticklabels = yticklabels,
+        scaled_y_ticks = false
+    })
+
+    for (k, t) in enumerate(times)
+        mac = [economy.ω₀ * exp(-economy.ωᵣ * t) * ε for ε in emissivity]
+
+        abatementcurve = @pgf Plot({line_width = LINE_WIDTH, color = yearcolors[k]}, Coordinates(emissivity, mac))
+
+        push!(abatementfig, abatementcurve, LegendEntry(@sprintf("%d", 2020 + t)))
+    end
+
+    @pgf abatementfig["legend style"] = raw"at = {(0.3, 0.95)}"
+
+    if SAVEFIG
+        PGFPlotsX.save(joinpath(PLOTPATH, "abatementfig.tikz"), abatementfig; include_preamble=true)
+    end
+    
+    abatementfig
+end

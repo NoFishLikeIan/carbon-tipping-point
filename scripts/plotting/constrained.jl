@@ -120,7 +120,7 @@ begin
         βM = computeonsim(abatedsol, βfn, yearlytime)
        
         βquantiles = timequantiles(βM, qs)
-        smoothquantile!.(eachcol(βquantiles), 30)
+        smoothquantile!.(eachcol(βquantiles), 0)
 
         βmedianplot = @pgf Plot(defopts, Coordinates(yearlytime, βquantiles[:, 2]))
         βlowerplot = @pgf Plot({ defopts..., confidenceopts... }, Coordinates(yearlytime, βquantiles[:, 1]))

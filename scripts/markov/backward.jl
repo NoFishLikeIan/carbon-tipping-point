@@ -21,7 +21,7 @@ end
     constraints.bounds.bx[4] = ᾱ
 end
 
-function backwardstep!(Δts, F, policy, cluster, model::AbstractModel, G; allownegative = false)
+function backwardstep!(Δts, F, policy, cluster, model::AbstractModel, G; allownegative = false, options = Optim.Options(g_tol = 1e-12, allow_f_increases = true, iterations = 10_000))
     indices = CartesianIndices(G)
     constraints = TwiceDifferentiableConstraints([0., 0.], [1., 1.])
 
@@ -46,12 +46,12 @@ function backwardstep!(Δts, F, policy, cluster, model::AbstractModel, G; allown
         end
 
         diffobj = TwiceDifferentiable(objective, u₀; autodiff = :forward)
-        res = Optim.optimize(diffobj, constraints, u₀, IPNewton())
+        res = Optim.optimize(diffobj, constraints, u₀, IPNewton(), options)
         
         !Optim.converged(res) && @warn "Optim has not converged at t = $t and idx = $idx"
 
         u = Optim.minimizer(res)
-        u[2] = ifelse(u[2] < 1e-10, 0., u[2]) # Round smallest numbers down
+        u[2] = ifelse(abs(u[2]) < 1e-10, 0., u[2]) # Round smallest numbers down
 
         policy[idx, :] .= u
         F[idx] = exp(Optim.minimum(res))

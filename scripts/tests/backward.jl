@@ -32,8 +32,7 @@ begin
 end
 
 begin
-
-	N = 41
+	N = 61
 	Tdomain = hogg.Tᵖ .+ (0., 7.);
 	mdomain = mstable.(Tdomain, hogg)
 	G = RegularGrid([Tdomain, mdomain], N)
