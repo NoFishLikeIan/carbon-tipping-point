@@ -144,10 +144,11 @@ function loadtotal(model::AbstractPlannerModel; datapath = "data/simulation")
 end
 
 function getbool(env, key, fallback)
-    key ∈ keys(env) ? env[key] == "true" : fallback
+    key ∈ keys(env.dict) ? env[key] == "true" : fallback
 end
+
 function getnumber(env, key, fallback; type = Float64)
-    if key ∈ keys(env)
+    if key ∈ keys(env.dict)
         v = env[key]
         tol = parse(type, v)
         return tol

@@ -1,10 +1,9 @@
+using DotEnv: config
 include("utils/saving.jl")
-include("markov/terminal.jl")
-include("markov/backward.jl")
 
-using Distributed: nprocs
+# Setup environment via .env
+env = config()
 
-env = DotEnv.config()
 DATAPATH = get(env, "DATAPATH", "data")
 SIMPATH = get(env, "SIMULATIONPATH", "simulation/planner")
 ALLOWNEGATIVE = getbool(env, "ALLOWNEGATIVE", false)
@@ -21,7 +20,16 @@ TSTOP = getnumber(env, "TSTOP", 0.)
 CACHESTEP = getnumber(env, "CACHESTEP", 1 / 4)
 
 OVERWRITE && @warn "Running in overwrite mode!"
+
+# Distributed processing
+using Distributed: nprocs, addprocs
+ADDPROCS = getnumber(env, "ADDPROCS", 0; type = Int)
+addprocs(ADDPROCS; exeflags="--project") # A bit sad that I have to do this
+
 VERBOSE && "Running with $(nprocs()) processor..."
+
+include("markov/terminal.jl")
+include("markov/backward.jl")
 
 # Parameters
 thresholds = [1.5, 2.5];
