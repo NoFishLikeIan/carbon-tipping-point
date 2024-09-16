@@ -2,8 +2,6 @@ using Distributed: @everywhere, @distributed, @sync
 using SharedArrays: SharedArray, SharedMatrix, SharedVector
 using DataStructures: PriorityQueue, dequeue!, enqueue!, peek
 
-using Model, Grid
-
 @everywhere begin
     using Model, Grid
     using JLD2, DotEnv
