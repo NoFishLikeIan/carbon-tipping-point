@@ -6,8 +6,6 @@ parsedargs = ArgParse.parse_args(argtable)
 
 @unpack overwrite, datapath, simulationpath, N, cachestep, tol, verbose, stopat, procs = parsedargs
 
-(verbose ≥ 1) && println("Running with $(nprocs()) processor...")
-
 # Distributed processing
 using Distributed: nprocs, addprocs
 addprocs(procs; exeflags="--project") # A bit sad that I have to do this
