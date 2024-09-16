@@ -1,10 +1,10 @@
 name = "Model"
-uuid = "ebb5134a-1fc6-4c02-8565-8fd54b17f0b5"
+uuid = "224c9c6b-c6d8-4a1c-a83c-4244ffc3d9ae"
 authors = ["NoFishLikeIan <andreatitton96@gmail.com>"]
 version = "0.1.0"
 
 [deps]
 FastClosures = "9aa1b823-49e4-5ca5-8b0f-3971ec8bab6a"
-Grid = "10b7b9de-b9da-4441-8fc4-f1f11170349d"
+Grid = "5b109459-d7f8-4d72-be29-a06ad992825f"
 Roots = "f2b01f46-fcfa-551c-844a-d8ac1e96c665"
 UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
