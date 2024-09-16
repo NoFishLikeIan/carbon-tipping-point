@@ -1,7 +1,7 @@
 \documentclass[../../main.tex]{subfiles}
 \begin{document}
 
-This section introduces the objective of the social planner and the resulting maximisation problem. Societal utility at time $t$ given a state $X_t \coloneqq (T_t, M_t, N_t, Y_t)$ is recursively defined as \begin{equation} \label{eq:social-objective}
+Given the climate and economic dynamics described in the previous section, in the following I introduce the objective of the social planner and the resulting maximisation problem. At time $t$ given the state of temperature, carbon concentration, carbon in sinks, and output $X_t \coloneqq (T_t, M_t, N_t, Y_t)$, societal utility is recursively defined as \begin{equation} \label{eq:social-objective}
     V_t(X_t) = \sup_{\chi, \alpha} \mathbb{E}_t 
     \int_{t}^{\infty} f(\chi_s(X_s) Y_s, V_s(X_s)) \dd{s}
 \end{equation} where $\chi$ and $\alpha$ are continuous functions over time and the state space, and $f$ is an Epstein-Zin aggregator \begin{equation} \label{eq:aggregator}
