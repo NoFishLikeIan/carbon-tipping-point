@@ -27,7 +27,7 @@ end
 
 "Cost of abatement as a fraction of GDP"
 function β(t, e, economy::Economy)
-    economy.ω₀ * exp(-economy.ωᵣ * t) * e^2
+    economy.ω₀ * exp(-economy.ωᵣ * t) * e^2 / 2.
 end
 
 function β′(t, e, economy::Economy)

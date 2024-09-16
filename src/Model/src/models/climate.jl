@@ -59,7 +59,7 @@ Base.@kwdef struct Hogg
     G₀::Float64 = 150 # [W / m²] Pre-industrial GHG radiation budget
     
     # Decay rate of carbon concentration
-    aδ::Float64 = 0.0076
+    aδ::Float64 = 0.0176
     bδ::Float64 = -27.63
     cδ::Float64 = 384.8
 end
