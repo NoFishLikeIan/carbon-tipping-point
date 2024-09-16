@@ -1,37 +1,24 @@
-using DotEnv: config
-include("utils/saving.jl")
+using UnPack: @unpack
 
-# Setup environment via .env
-env = config()
+include("arguments.jl") # Import argument parser
 
-DATAPATH = get(env, "DATAPATH", "data")
-SIMPATH = get(env, "SIMULATIONPATH", "simulation/planner")
-ALLOWNEGATIVE = getbool(env, "ALLOWNEGATIVE", false)
+parsedargs = ArgParse.parse_args(argtable)
 
-datapath = joinpath(DATAPATH, SIMPATH, ALLOWNEGATIVE ? "negative" : "")
+@unpack overwrite, datapath, simulationpath, N, cachestep, tol, verbose, stopat, procs = parsedargs
 
-N = getnumber(env, "N", 31; type = Int)
-VERBOSE = getbool(env, "VERBOSE", false)
-RUNTERMINAL = getbool(env, "RUNTERMINAL", false)
-RUNBACKWARDS = getbool(env, "RUNBACKWARDS", false)
-OVERWRITE = getbool(env, "OVERWRITE", false)
-TOL = getnumber(env, "TOL", 1e-3)
-TSTOP = getnumber(env, "TSTOP", 0.)
-CACHESTEP = getnumber(env, "CACHESTEP", 1 / 4)
-
-OVERWRITE && @warn "Running in overwrite mode!"
+overwrite && (verbose ≥ 1) && @warn "Running in overwrite mode!"
 
 # Distributed processing
 using Distributed: nprocs, addprocs
-ADDPROCS = getnumber(env, "ADDPROCS", 0; type = Int)
-addprocs(ADDPROCS; exeflags="--project") # A bit sad that I have to do this
+addprocs(procs; exeflags="--project") # A bit sad that I have to do this
 
-VERBOSE && "Running with $(nprocs()) processor..."
+(verbose ≥ 1) && "Running with $(nprocs()) processor..."
 
+include("utils/saving.jl")
 include("markov/terminal.jl")
 include("markov/backward.jl")
 
-# Parameters
+# Default parameters
 thresholds = [1.5, 2.5];
 Ψ = [0.75, 1.5]
 Θ = [10.]
@@ -39,7 +26,11 @@ thresholds = [1.5, 2.5];
 Ωᵣ = [0., 0.017558043747351086]
 
 # Construct model
-calibration = load_object(joinpath(DATAPATH, "calibration.jld2"));
+calibrationdirectory = joinpath(datapath, "calibration.jld2")
+calibration = load_object(calibrationdirectory);
+
+preferences = EpsteinZin();
+economy = Economy()
 hogg = Hogg()
 damages = GrowthDamages()
 
@@ -48,23 +39,20 @@ Tdomain = hogg.Tᵖ .+ (0., 9.);
 mdomain = mstable.(Tdomain, hogg)
 G = RegularGrid([Tdomain, mdomain], N)
 
-for Tᶜ ∈ thresholds, ψ ∈ Ψ, θ ∈ Θ, ϱ ∈ Ρ, ωᵣ ∈ Ωᵣ
-    preferences = EpsteinZin(θ = θ, ψ = ψ);
-    economy = Economy(ϱ = ϱ, ωᵣ = ωᵣ)
+for Tᶜ ∈ thresholds, allownegative in [false, true]
+    (verbose ≥ 1) && println("Solving model with Tᶜ = $Tᶜ and $(allownegative ? "with" : "without") negative emission...")
 
-    VERBOSE && println("Solving model with Tᶜ = $Tᶜ, ψ = $ψ, θ = $θ, ϱ = $ϱ, ωᵣ = $ωᵣ, and $(ALLOWNEGATIVE ? "with" : "without") negative emission...")
+    outdir = joinpath(datapath, simulationpath, 
+        allownegative ? "negative" : "constrained")
     
     albedo = Albedo(Tᶜ)
     model = TippingModel(albedo, hogg, preferences, damages, economy, calibration)
     
     # Terminal simulation
-    if RUNTERMINAL
-        Gterminal = terminalgrid(N, model)
-        computeterminal(model, Gterminal; verbose = VERBOSE, datapath = datapath, alternate = true, tol = TOL, overwrite = OVERWRITE)
-    end
+    (verbose ≥ 1) && println("Running terminal...")
+    Gterminal = terminalgrid(N, model)
+    computeterminal(model, Gterminal; verbose, outdir, alternate = true, tol, overwrite)
 
-    if RUNBACKWARDS
-        VERBOSE && println("Running backward...")
-        computebackward(model, G; verbose = VERBOSE, datapath = datapath, overwrite = OVERWRITE, tstop = TSTOP, cachestep = CACHESTEP, allownegative = ALLOWNEGATIVE)
-    end
+    (verbose ≥ 1) && println("Running backward...")
+    computebackward(model, G; verbose, outdir, overwrite, tstop = stopat, cachestep, allownegative)
 end

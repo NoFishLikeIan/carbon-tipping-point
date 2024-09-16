@@ -3,7 +3,7 @@ using SharedArrays
 
 @everywhere begin
     using Model, Grid
-    using JLD2, DotEnv
+    using JLD2
 
     using FastClosures: @closure
     using Printf: @printf, @sprintf
@@ -83,13 +83,13 @@ function terminaljacobi!(F̄, policy, errors, model::AbstractModel, G; indices =
 
 end
 
-function vfi(F₀, model::AbstractModel, G; tol = 1e-3, maxiter = 10_000, verbose = false, indices = CartesianIndices(G), alternate = false)
+function vfi(F₀, model::AbstractModel, G; tol = 1e-3, maxiter = 10_000, verbose = 0, indices = CartesianIndices(G), alternate = false)
     Fᵢ = deepcopy(F₀) |> SharedMatrix
     pᵢ = similar(F₀) |> SharedMatrix
 
     errors = (Inf .* ones(size(F₀))) |> SharedMatrix
     
-    verbose && println("Starting iterations...")
+    (verbose ≥ 1) && println("Starting iterations...")
 
     for iter in 1:maxiter
         iterindices = (alternate && isodd(iter)) ? indices : reverse(indices)
@@ -99,24 +99,24 @@ function vfi(F₀, model::AbstractModel, G; tol = 1e-3, maxiter = 10_000, verbos
         max_error = maximum(errors)
 
         if max_error < tol
-            verbose && @printf("Converged in %i iterations, ε = %.8f \n", iter, max_error)
+            (verbose ≥ 1) && @printf("Converged in %i iterations, ε = %.8f \n", iter, max_error)
             return Fᵢ, pᵢ
         end
 
-        if verbose && (!alternate || isodd(iter))
+        if (verbose ≥ 2) && (!alternate || isodd(iter))
             @printf("Iteration %i / %i, ε = %.8f...\r", iter, maxiter, max_error)
         end
     end
 
-    verbose && @warn "Convergence failed."
+    (verbose ≥ 1) && @warn "Convergence failed."
     return Fᵢ, pᵢ
 end
 
-function computeterminal(model, G::RegularGrid; verbose = true, withsave = true, datapath = "data", overwrite = false, addpath = "", iterkwargs...)
+function computeterminal(model, G::RegularGrid; verbose = 0, withsave = true, outdir = "data", overwrite = false, addpath = "", iterkwargs...)
 
     if withsave
         folder = SIMPATHS[typeof(model)]
-        savefolder = joinpath(datapath, folder, "terminal", addpath)
+        savefolder = joinpath(outdir, folder, "terminal", addpath)
         if !isdir(savefolder) mkpath(savefolder) end
         
         filename = makefilename(model)
@@ -124,13 +124,13 @@ function computeterminal(model, G::RegularGrid; verbose = true, withsave = true,
 
         if isfile(savepath)
             if overwrite
-                verbose && @warn "Removing file $savepath.\n"
+                (verbose ≥ 1) && @warn "Removing file $savepath.\n"
 
                 rm(savepath)
             else
-                verbose && @warn "File $savepath already exists. If you want to overwrite it pass overwrite = true. Will copy the results into `F` and `policy`.\n"
+                (verbose ≥ 1) && @warn "File $savepath already exists. If you want to overwrite it pass overwrite = true. Will copy the results into `F` and `policy`.\n"
 
-                F̄, policy, G = loadterminal(model; datapath, addpath)
+                F̄, policy, G = loadterminal(model; outdir, addpath)
 
                 return F̄, policy, G
             end
@@ -142,7 +142,7 @@ function computeterminal(model, G::RegularGrid; verbose = true, withsave = true,
     F̄, policy = vfi(F₀, model, G; verbose, iterkwargs...)
     
     if withsave
-        verbose && println("Saving solution into $savepath...")
+        (verbose ≥ 1) && println("Saving solution into $savepath...")
         jldsave(savepath; F̄, policy, G)
     end
 

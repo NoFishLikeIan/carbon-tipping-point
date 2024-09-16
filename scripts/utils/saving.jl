@@ -73,10 +73,10 @@ function makefilename(model::JumpModel{LevelDamages, EpsteinZin})
     return "$(replace(filename, "." => ",")).jld2"
 end
 
-function loadterminal(model::AbstractModel; datapath = "data/simulation", addpath = "")
+function loadterminal(model::AbstractModel; outdir = "data/simulation", addpath = "")
     folder = SIMPATHS[typeof(model)]
     filename = makefilename(model)
-    savepath = joinpath(datapath, folder, "terminal", addpath, filename)
+    savepath = joinpath(outdir, folder, "terminal", addpath, filename)
     F̄ = load(savepath, "F̄")
     policy = load(savepath, "policy")
     G = load(savepath, "G")
@@ -84,9 +84,9 @@ function loadterminal(model::AbstractModel; datapath = "data/simulation", addpat
     return F̄, policy, G
 end
 
-function loadtotal(model::AbstractGameModel; datapath = "data/simulation")     
+function loadtotal(model::AbstractGameModel; outdir = "data/simulation")     
     folder = SIMPATHS[typeof(model)]
-    cachefolder = joinpath(datapath, folder)
+    cachefolder = joinpath(outdir, folder)
     filename = makefilename(model)
     savepath = joinpath(cachefolder, filename)
 
@@ -114,9 +114,9 @@ function loadtotal(model::AbstractGameModel; datapath = "data/simulation")
     return timesteps, F, policy, G
 end
 
-function loadtotal(model::AbstractPlannerModel; datapath = "data/simulation")
+function loadtotal(model::AbstractPlannerModel; outdir = "data/simulation")
     folder = SIMPATHS[typeof(model)]
-    cachefolder = joinpath(datapath, folder)
+    cachefolder = joinpath(outdir, folder)
     filename = makefilename(model)
     savepath = joinpath(cachefolder, filename)
 
@@ -141,18 +141,4 @@ function loadtotal(model::AbstractPlannerModel; datapath = "data/simulation")
     close(cachefile)
 
     return timesteps, F, policy, G
-end
-
-function getbool(env, key, fallback)
-    key ∈ keys(env.dict) ? env[key] == "true" : fallback
-end
-
-function getnumber(env, key, fallback; type = Float64)
-    if key ∈ keys(env.dict)
-        v = env[key]
-        tol = parse(type, v)
-        return tol
-    end
-
-    return fallback
 end

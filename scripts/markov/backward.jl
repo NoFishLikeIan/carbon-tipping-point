@@ -4,7 +4,7 @@ using DataStructures: PriorityQueue, dequeue!, enqueue!, peek
 
 @everywhere begin
     using Model, Grid
-    using JLD2, DotEnv
+    using JLD2
     using UnPack: @unpack
     using ZigZagBoomerang: dequeue!
     using Base: Order
@@ -58,17 +58,17 @@ function backwardstep!(Δts, F, policy, cluster, model::AbstractModel, G; allown
 end
 
 "Backward simulates from F̄ down to F₀, using the albedo model. It assumes that the passed F ≡ F̄"
-function backwardsimulation!(F, policy, model::AbstractModel, G; verbose = false, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = last(model.calibration.tspan), stepkwargs...)     
+function backwardsimulation!(F, policy, model::AbstractModel, G; verbose = 0, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = last(model.calibration.tspan), stepkwargs...)     
     savecache = !isnothing(cachepath)
     if savecache
         if isfile(cachepath) 
             if overwrite 
-                verbose && @warn "Removing file $cachepath.\n"
+                (verbose ≥ 1) && @warn "Removing file $cachepath.\n"
                 rm(cachepath)
             else 
-                verbose && @warn "File $cachepath already exists. If you want to overwrite it pass overwrite = true. Will copy the results into `F` and `policy`.\n"
+                (verbose ≥ 1) && @warn "File $cachepath already exists. If you want to overwrite it pass overwrite = true. Will copy the results into `F` and `policy`.\n"
 
-                _, Fcache, policycache = loadtotal(model; datapath)
+                _, Fcache, policycache = loadtotal(model; outdir)
 
                 F .= Fcache[:, :, 1]
                 policy .= policycache[:, :, 1]
@@ -87,9 +87,7 @@ function backwardsimulation!(F, policy, model::AbstractModel, G; verbose = false
 
     while !isqempty(queue)
         tmin = model.economy.τ - minimum(queue.vals)
-        if verbose
-            @printf("Pass %i, cluster minimum time = %.4f...\r", passcounter, tmin)
-        end
+        (verbose ≥ 2) && @printf("Pass %i, cluster minimum time = %.4f...\r", passcounter, tmin)
 
         clusters = dequeue!(queue)
 
@@ -106,7 +104,7 @@ function backwardsimulation!(F, policy, model::AbstractModel, G; verbose = false
         passcounter += 1
         
         if savecache && tmin ≤ tcache
-            verbose && println("\nSaving cache at $tcache...")
+            (verbose ≥ 2) && println("\nSaving cache at $tcache...")
             group = JLD2.Group(cachefile, "$tcache")
             group["F"] = F
             group["policy"] = policy
@@ -114,16 +112,19 @@ function backwardsimulation!(F, policy, model::AbstractModel, G; verbose = false
         end
     end
 
-    if savecache close(cachefile) end
+    if savecache 
+        close(cachefile) 
+        (verbose ≥ 1) && println("\nSaved cached file into $cachepath")
+    end
 
     return F, policy
 end
 
-function computebackward(model::AbstractModel, G; datapath = "data", kwargs...)
-    terminalresults = loadterminal(model; datapath)
-    computebackward(terminalresults, model, G; datapath, kwargs...)
+function computebackward(model::AbstractModel, G; outdir = "data", kwargs...)
+    terminalresults = loadterminal(model; outdir)
+    computebackward(terminalresults, model, G; outdir, kwargs...)
 end
-function computebackward(terminalresults, model::AbstractModel, G; verbose = false, withsave = true, datapath = "data", iterkwargs...)
+function computebackward(terminalresults, model::AbstractModel, G; verbose = 0, withsave = true, outdir = "data", iterkwargs...)
     F̄, terminalconsumption, terminalG = terminalresults
     F = SharedMatrix(interpolateovergrid(terminalG, G, F̄));
 
@@ -133,7 +134,7 @@ function computebackward(terminalresults, model::AbstractModel, G; verbose = fal
 
     if withsave
         folder = SIMPATHS[typeof(model)]
-        cachefolder = joinpath(datapath, folder)
+        cachefolder = joinpath(outdir, folder)
         if !isdir(cachefolder) mkpath(cachefolder) end
         
         filename = makefilename(model)
