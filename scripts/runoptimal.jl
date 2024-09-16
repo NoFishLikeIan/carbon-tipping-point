@@ -48,7 +48,6 @@ for Tᶜ ∈ thresholds, allownegative in [false, true]
     albedo = Albedo(Tᶜ)
     model = TippingModel(albedo, hogg, preferences, damages, economy, calibration)
     
-    # Terminal simulation
     (verbose ≥ 1) && println("Running terminal...")
     Gterminal = terminalgrid(N, model)
     computeterminal(model, Gterminal; verbose, outdir, alternate = true, tol, overwrite)

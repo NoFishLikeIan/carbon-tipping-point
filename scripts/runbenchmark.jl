@@ -1,41 +1,50 @@
-using DotEnv: config
-include("utils/saving.jl")
+using UnPack: @unpack
+
+include("arguments.jl") # Import argument parser
+
+parsedargs = ArgParse.parse_args(argtable)
+
+@unpack overwrite, datapath, simulationpath, N, cachestep, tol, verbose, stopat, procs = parsedargs
+
+overwrite && (verbose ≥ 1) && @warn "Running in overwrite mode!"
 
 # Distributed processing
 using Distributed: nprocs, addprocs
-ADDPROCS = getnumber(env, "ADDPROCS", 0; type = Int)
-addprocs(ADDPROCS; exeflags="--project") # A bit sad that I have to do this
+addprocs(procs; exeflags="--project") # A bit sad that I have to do this
 
-VERBOSE && "Running with $(nprocs()) processor..."
+(verbose ≥ 1) && "Running with $(nprocs()) processor..."
 
+include("utils/saving.jl")
 include("markov/terminal.jl")
 include("markov/backward.jl")
 
 # Construct model
-calibration = load_object(joinpath(DATAPATH, "calibration.jld2"));
+calibrationdirectory = joinpath(datapath, "calibration.jld2")
+calibration = load_object(calibrationdirectory);
+
+preferences = EpsteinZin();
+economy = Economy()
 hogg = Hogg()
 damages = GrowthDamages()
 jump = Jump()
+
+model = JumpModel(jump, hogg, preferences, damages, economy, calibration)
 
 # Construct Grid
 Tdomain = hogg.Tᵖ .+ (0., 9.);
 mdomain = mstable.(Tdomain, hogg)
 G = RegularGrid([Tdomain, mdomain], N)
 
-for ψ ∈ Ψ, θ ∈ Θ, ϱ ∈ Ρ, ωᵣ ∈ Ωᵣ
-    preferences = EpsteinZin(θ = θ, ψ = ψ);
-    economy = Economy(ϱ = ϱ, ωᵣ = ωᵣ)
-    jumpmodel = JumpModel(jump, hogg, preferences, damages, economy, calibration)
+for allownegative in [false, true]
+    (verbose ≥ 1) && println("Solving model $(allownegative ? "with" : "without") negative emission...")
 
+    outdir = joinpath(datapath, simulationpath, 
+    allownegative ? "negative" : "constrained")
 
-    VERBOSE && println("\nSolving jump model $(ALLOWNEGATIVE ? "with" : "without") negative emission...")
-    if RUNTERMINAL
-        Gterminal = terminalgrid(N, jumpmodel)
-        computeterminal(jumpmodel, Gterminal; verbose = VERBOSE, datapath = datapath, alternate = true, tol = TOL, overwrite = OVERWRITE)
-    end
+    (verbose ≥ 1) && println("Running terminal...")
+    Gterminal = terminalgrid(N, model)
+    computeterminal(model, Gterminal; verbose, outdir, alternate = true, tol, overwrite)
 
-    if RUNBACKWARDS
-        VERBOSE && println("Running backward simulation...")
-        computebackward(jumpmodel, G; verbose = VERBOSE, datapath = datapath, overwrite = OVERWRITE, tstop = TSTOP, cachestep = CACHESTEP)
-    end
+    (verbose ≥ 1) && println("Running backward...")
+    computebackward(model, G; verbose, outdir, overwrite, tstop = stopat, cachestep, allownegative)
 end

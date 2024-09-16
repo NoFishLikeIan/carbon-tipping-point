@@ -37,7 +37,7 @@ argtable = ArgParseSettings()
         arg_type = Float64
         default = 0.25
 
-    "--procs"
+    "--procs", "-p"
         arg_type = Int
         default = 0
 end
