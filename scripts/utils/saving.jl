@@ -102,7 +102,7 @@ function loadtotal(model::AbstractGameModel; outdir = "data/simulation")
     T = length(timesteps)
     M = size(cachefile[first(timekeys)]["F"], 3)
     F = Array{Float64, 5}(undef, size(G, 1), size(G, 2), M, 2, T)
-    policy = Array{Policy, 5}(undef, size(G, 1), size(G, 2), M, 2, T)
+    policy = Array{Float64, 5}(undef, size(G, 1), size(G, 2), M, 2, T)
 
     for (k, key) ∈ enumerate(timekeys)
         F[:, :, :, :, k] .= cachefile[key]["F"]
@@ -118,9 +118,13 @@ function loadtotal(model::AbstractPlannerModel; outdir = "data/simulation")
     folder = SIMPATHS[typeof(model)]
     cachefolder = joinpath(outdir, folder)
     filename = makefilename(model)
-    savepath = joinpath(cachefolder, filename)
+    cachepath = joinpath(cachefolder, filename)
 
-    cachefile = jldopen(savepath, "r")
+    return loadtotal(cachepath)
+end
+
+function loadtotal(cachepath::String)
+    cachefile = jldopen(cachepath, "r")
     G = cachefile["G"]
     timekeys = filter(!=("G"), keys(cachefile))
     timesteps = round.(parse.(Float64, timekeys), digits = 4)

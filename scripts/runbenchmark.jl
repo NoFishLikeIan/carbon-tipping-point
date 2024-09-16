@@ -6,7 +6,7 @@ parsedargs = ArgParse.parse_args(argtable)
 
 @unpack overwrite, datapath, simulationpath, N, cachestep, tol, verbose, stopat, procs = parsedargs
 
-overwrite && (verbose ≥ 1) && @warn "Running in overwrite mode!"
+(verbose ≥ 1) && println("Running with $(nprocs()) processor...")
 
 # Distributed processing
 using Distributed: nprocs, addprocs

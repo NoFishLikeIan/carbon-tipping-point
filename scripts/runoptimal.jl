@@ -12,7 +12,7 @@ overwrite && (verbose ≥ 1) && @warn "Running in overwrite mode!"
 using Distributed: nprocs, addprocs
 addprocs(procs; exeflags="--project") # A bit sad that I have to do this
 
-(verbose ≥ 1) && "Running with $(nprocs()) processor..."
+(verbose ≥ 1) && println("Running with $(nprocs()) processor...")
 
 include("utils/saving.jl")
 include("markov/terminal.jl")

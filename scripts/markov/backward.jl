@@ -65,20 +65,25 @@ function backwardsimulation!(F, policy, model::AbstractModel, G; verbose = 0, ca
             if overwrite 
                 (verbose ≥ 1) && @warn "Removing file $cachepath.\n"
                 rm(cachepath)
+
+                cachefile = jldopen(cachepath, "w+")
+                cachefile["G"] = G
             else 
                 (verbose ≥ 1) && @warn "File $cachepath already exists. If you want to overwrite it pass overwrite = true. Will copy the results into `F` and `policy`.\n"
 
-                _, Fcache, policycache = loadtotal(model; outdir)
+                _, Fcache, policycache, Gcache = loadtotal(cachepath)
 
-                F .= Fcache[:, :, 1]
-                policy .= policycache[:, :, 1]
+                F .= interpolateovergrid(Gcache, G, Fcache[:, :, 1])
+
+                policy[:, :, 1] = interpolateovergrid(Gcache, G, policycache[:, :, 1, 1])
+                policy[:, :, 2] = interpolateovergrid(Gcache, G, policycache[:, :, 2, 1])
 
                 return F, policy
             end
+        else
+            cachefile = jldopen(cachepath, "w+")
+            cachefile["G"] = G
         end
-
-        cachefile = jldopen(cachepath, "w+")
-        cachefile["G"] = G
     end
 
     queue = DiagonalRedBlackQueue(G)
