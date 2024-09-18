@@ -1,3 +1,4 @@
+using Model: AbstractModel, JumpModel, TippingModel
 using Printf: format, Format
 
 const kelvintocelsius = 273.15
@@ -24,4 +25,14 @@ function makedeviationtickz(from, to, model; step = 0.5, digits = 2, addedlabels
     idxs = sortperm(ticks)
     
     return (ticks[idxs], labels[idxs])
+end
+
+function labelofmodel(model::AbstractModel)
+    if model isa JumpModel
+        return "Benchmark"
+    elseif model isa TippingModel
+        return model.albedo.Tᶜ < 2. ? "Imminent" : "Remote"
+    end
+
+    throw("Not found label for model $model")
 end

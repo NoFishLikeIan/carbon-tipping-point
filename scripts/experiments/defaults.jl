@@ -8,7 +8,6 @@ include("../utils/simulating.jl")
 
 begin # Global variables
     env = DotEnv.config(".env")
-    BASELINE_YEAR = 2020
 
     DATAPATH = get(env, "DATAPATH", "data")
     
@@ -19,40 +18,49 @@ begin # Global variables
     PLOTPATH = get(env, "PLOTPATH", "plots")
     PRESENTATIONPATH = joinpath(PLOTPATH, "presentation")
 
-    SAVEFIG = false
-    LINE_WIDTH = 2.5
     SEED = 11148705
 end;
 
 begin # Construct models and grids
     thresholds = [1.5, 2.5];
+    Ψ = [0.75, 1.5]
+    Θ = [10.]
+    Ρ = [0., 1e-3]
+    Ωᵣ = [0., 0.017558043747351086]
 
 	calibration = load_object(joinpath(DATAPATH, "calibration.jld2"))
-	preferences = EpsteinZin()
     damages = GrowthDamages()
-    economy = Economy()
     hogg = Hogg()
+
+    tippingmodels = TippingModel[]
+    jumpmodels = JumpModel[]
+
+    for ψ ∈ Ψ, θ ∈ Θ, ϱ ∈ Ρ, ωᵣ ∈ Ωᵣ    
+        preferences = EpsteinZin(θ = θ, ψ = ψ);
+        economy = Economy(ϱ = ϱ, ωᵣ = ωᵣ)
+
+        for Tᶜ ∈ thresholds
+            albedo = Albedo(Tᶜ)
+            model = TippingModel(albedo, hogg, preferences, damages, economy, calibration)
+        
+            push!(tippingmodels, model)
+        end
+
+        jump = Jump()
+        jumpmodel = JumpModel(jump, hogg, preferences, damages, economy, calibration)
+
+        push!(jumpmodels, jumpmodel)
+    end
     
-	tippingmodels = TippingModel[]
-
-	for Tᶜ ∈ thresholds
-	    albedo = Albedo(Tᶜ)
-	    model = TippingModel(albedo, hogg, preferences, damages, economy, calibration)
-
-		push!(tippingmodels, model)
-	end
-
-    jumpmodel = JumpModel(Jump(), hogg, preferences, damages, economy, calibration)
-
-    models = AbstractModel[tippingmodels..., jumpmodel]
-
-    modellabels = Dict{AbstractModel, String}(models .=> ["Imminent", "Remote", "Benchmark"])
+    models = AbstractModel[tippingmodels...] # jumpmodels...]
 end;
 
 begin # Interpolated policies and values
     itpmap = Dict{Symbol, Dict{AbstractModel, Dict{Symbol, Extrapolation}}}()
 
-    for (path, symb) in [(datapath, :constrained), (negdatapath, :negative)]
+    paths = [(datapath, :constrained)] # FIXME: Do the negative interpolation; [(datapath, :constrained), (negdatapath, :negative)]
+
+    for (path, symb) in paths
         results = loadtotal.(models; datapath = path)
         interpolations = buildinterpolations.(results)
 

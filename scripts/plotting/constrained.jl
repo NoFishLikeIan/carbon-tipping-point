@@ -1,9 +1,9 @@
 using Revise
+using Suppressor: @suppress
 using JLD2, DotEnv, CSV, UnPack
 using FastClosures
 
-using Plots
-using PGFPlotsX
+using Plots, PGFPlotsX
 using LaTeXStrings, Printf, Colors, ColorSchemes
 
 push!(PGFPlotsX.CUSTOM_PREAMBLE, raw"\usepgfplotslibrary{fillbetween}")
@@ -14,60 +14,52 @@ using SciMLBase, DifferentialEquations, DiffEqBase
 using Interpolations: Extrapolation
 
 includet("utils.jl")
-includet("../utils/saving.jl")
-includet("../utils/simulating.jl")
+includet("../experiments/defaults.jl")
 
-begin # Environment variables
-    env = DotEnv.config()
-    datapath = get(env, "DATAPATH", "data")
-    simulationpath = get(env, "SIMULATIONPATH", "simulations")
+begin # Load experiments results
+    N = getnumber(env, "N", 51; type = Int)
+    
+    experimentfilepath = joinpath(experimentpath, "experiment_$N.jld2")
+    @assert isfile(experimentfilepath)
 
-    plotpath = get(env, "PLOTPATH", "plots")
+    experimentfile = jldopen(experimentfilepath, "r")
+    simulationgroup = experimentfile["constrained"]
 
-    BASELINE_YEAR = 2020
-    SAVEFIG = false
+    simulations = Dict{AbstractModel, EnsembleSolution}(model => @suppress JLD2.load_data_or_dict(simulationgroup, modellabels[model]) for model in models);
 
-    calibration = load_object(joinpath(datapath, "calibration.jld2"))
+    close(experimentfile)
 
-    experimentpath = joinpath(datapath, "experiments", "constrained.jld2")
-    @assert ispath(experimentpath)
+    regretfilepath = joinpath(experimentpath, "regret_$N.jld2")
+    @assert isfile(regretfilepath)
 
-    regretpath = joinpath(datapath, "experiments", "regret-constrained.jld2")
-    @assert ispath(regretpath)
+    regretfile = jldopen(regretfilepath, "r")
+    regretgroup = regretfile["constrained"]
+    
+    regretsolution = @suppress JLD2.load_data_or_dict(regretgroup, "solution")
+
+    close(regretfile)
 end;
 
-begin # Load simulations and interpolations 
-    @load experimentpath solutions;
-    allmodels = collect(keys(solutions));
-    tippingmodels = filter(model -> model isa TippingModel, allmodels);
-    sort!(tippingmodels; by = model -> model.albedo.Tᶜ);
-
-    jumpmodels = filter(model -> model isa JumpModel, allmodels);
-    models = AbstractModel[tippingmodels..., jumpmodels...];
-
-    results = loadtotal.(models; datapath = joinpath(datapath, simulationpath))
+begin # Load interpolations
+    results = loadtotal.(models; datapath)
     
-    interpolations = buildinterpolations.(results)
-    itpsmap = Dict{AbstractModel, Dict{Symbol, Extrapolation}}(models .=> interpolations)
+    interpolations = buildinterpolations.(results);
+    itpsmap = Dict{AbstractModel, Dict{Symbol, Extrapolation}}(models .=> interpolations);
 end;
 
 begin # Labels, colors and axis
-    thresholds = sort([model.albedo.Tᶜ for model in tippingmodels])
-
     PALETTE = colorschemes[:grays]
     graypalette = n -> n > 1 ? get(PALETTE, range(0.1, 0.8; length = n)) : 0.8
 
     thresholdscolors = Dict(thresholds .=> graypalette(length(thresholds)))
-
-    rawlabels = [ "Imminent", "Remote", "Benchmark"]
-    labelsbymodel = Dict{AbstractModel, String}(models .=> rawlabels)
-    labelsbythreshold = Dict(thresholds .=> rawlabels[1:2])
+    labelsbythreshold = Dict(thresholds .=> collect(values(modellabels))[1:2])
 
 
     TEMPLABEL = L"Temperature deviations $T_t - T^{p}$"
-    defopts = @pgf { line_width = 2.5 }
+    LINE_WIDTH = 2.5
+    defopts = @pgf { line_width = LINE_WIDTH }
 
-    ΔTmax = 8.
+    ΔTmax = 5.
     ΔTspace = range(0., ΔTmax; length = 51)
     Tspace = ΔTspace .+ Hogg().Tᵖ
     Tmin, Tmax = extrema(Tspace)
@@ -76,8 +68,6 @@ begin # Labels, colors and axis
     yearlytime = range(0., horizon; step = 1 / 3) |> collect
 
     temperatureticks = makedeviationtickz(0., ΔTmax, first(models); step = 1, digits = 0)
-
-    LINE_WIDTH = 2.5
 end;
 
 # Constructs a Group plot, one for the path of T and β
@@ -93,7 +83,7 @@ begin
     yearticks = 0:20:horizon
 
     βextrema = (0., 0.03)
-    βticks = range(βextrema...; step = 0.01) |> collect
+    βticks = range(βextrema...; step = 0.01)
     βticklabels = [@sprintf("%.0f \\%%", 100 * y) for y in βticks]
 
     Textrema = (1., 2.5)
@@ -106,9 +96,9 @@ begin
 
     # Makes the β plots in the first row
     for (k, model) in enumerate(models)
-        abatedsol = solutions[model]
-        itp = itpsmap[model]
-        αitp = itp[:α]
+        abatedsol = simulations[model];
+        itp = itpsmap[model];
+        αitp = itp[:α];
 
         # Abatement expenditure figure
         βfn = @closure (T, m, y, t) -> begin
@@ -117,9 +107,9 @@ begin
             return β(t, emissivity, model.economy)
         end
 
-        βM = computeonsim(abatedsol, βfn, yearlytime)
+        βM = computeonsim(abatedsol, βfn, yearlytime);
        
-        βquantiles = timequantiles(βM, qs)
+        βquantiles = timequantiles(βM, qs);
         smoothquantile!.(eachcol(βquantiles), 0)
 
         βmedianplot = @pgf Plot(defopts, Coordinates(yearlytime, βquantiles[:, 2]))
@@ -135,14 +125,14 @@ begin
 
         @pgf push!(simfig, {figopts...,
             ymin = βextrema[1], ymax = βextrema[2],
-            title = labelsbymodel[model], xticklabel = raw"\empty",
+            title = modellabels[model], xticklabel = raw"\empty",
             scaled_y_ticks = false, βoptionfirst...,
         }, βmedianplot, βlowerplot, βupperplot)
     end;
 
     # Makes the T plots in the second row
     for (k, model) in enumerate(models)
-        abatedsol = solutions[model]
+        abatedsol = simulations[model]
         paths = EnsembleAnalysis.timeseries_point_quantile(abatedsol, qs, yearlytime)
         Tpaths = first.(paths.u)
 
@@ -173,8 +163,6 @@ begin
 end
 
 # --- Plotting the regret problem. Discover tipping point only after T ≥ Tᶜ.
-@load regretpath regretsolution;
-
 begin    
     Tmin, Tmax = (1., 5)
     Tregretticks = makedeviationtickz(Tmin, Tmax, first(models); step = 1, digits = 0)
