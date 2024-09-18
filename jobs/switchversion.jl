@@ -31,6 +31,7 @@ for (k, dir) in enumerate(modulesdir)
         Pkg.develop(path = deps)
     end
 
+    Pkg.resolve()
     Pkg.instantiate()
     Pkg.precompile()
 end
