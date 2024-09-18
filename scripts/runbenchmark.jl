@@ -46,14 +46,12 @@ hogg = Hogg()
 damages = GrowthDamages()
 jump = Jump()
 
-model = JumpModel(jump, hogg, preferences, damages, economy, calibration)
-
 # Construct Grid
 Tdomain = hogg.Tᵖ .+ (0., 9.);
 mdomain = mstable.(Tdomain, hogg)
 G = RegularGrid([Tdomain, mdomain], N)
 
-for Tᶜ ∈ thresholds, ψ ∈ Ψ, θ ∈ Θ, ϱ ∈ Ρ, ωᵣ ∈ Ωᵣ
+for ψ ∈ Ψ, θ ∈ Θ, ϱ ∈ Ρ, ωᵣ ∈ Ωᵣ
     preferences = EpsteinZin(θ = θ, ψ = ψ);
     economy = Economy(ϱ = ϱ, ωᵣ = ωᵣ)
     jumpmodel = JumpModel(jump, hogg, preferences, damages, economy, calibration)
