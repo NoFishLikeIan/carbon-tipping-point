@@ -1,28 +1,39 @@
-includet("defaults.jl")
+include("defaults.jl")
+using Suppressor: @suppress
 
 using Distributed
 println("Simulating with $(nprocs()) processes.")
 
-using DifferentialEquations
+using DifferentialEquations, SciMLBase
 
 @everywhere include("../utils/simulating.jl")
 
-trajectories = 50_000;
+trajectories = 10_000;
 x₀ = [hogg.T₀, log(hogg.M₀), log(economy.Y₀)];
+
+N = getnumber(env, "N", 51; type = Int);
+
+if !isdir(experimentpath) mkdir(experimentpath) end
+
+filepath = joinpath(experimentpath, "regret_$N.jld2")
+experimentfile = jldopen(filepath, "w")
 
 for (sym, label) in [(:constrained, "constrained"), (:negative, "negative")]
     println("Simulating $(label)...")
 
+    group = JLD2.Group(experimentfile, label);
+
     itps = itpmap[:constrained];
-
     modelimminent, modelremote = tippingmodels;
-    αimminent = itps[modelimminent][:α];
-    αremote = itps[modelremote][:α];
 
-    initparams = (modelimminent, αremote); # The tipping point is imminent, yet the strategy is remote
+    policiesimminent = (itps[modelimminent][:χ], itps[modelimminent][:α]);
+    policiesremote = (itps[modelremote][:χ], itps[modelremote][:α]);
 
-    regretprob = SDEProblem(F!, G!, x₀, (0., 80.), initparams) |> EnsembleProblem
-    
+    initparams = (modelimminent, policiesremote); # The tipping point is imminent, yet the strategy is remote
+
+    regretprob = SDEProblem(F!, G!, x₀, (0., 80.), initparams)
+    regretensemble = EnsembleProblem(regretprob)
+
     function hittipping(u, t, integrator)
         model = first(integrator.p)
         Thit = model.albedo.Tᶜ + model.hogg.Tᵖ + (model.albedo.ΔT / 4)
@@ -31,15 +42,18 @@ for (sym, label) in [(:constrained, "constrained"), (:negative, "negative")]
     end
 
     function changepolicy!(integrator)
-        integrator.p = (modelimminent, αimminent) # Realises that the tipping point is imminent and switch strategy
+        integrator.p = (modelimminent, policiesimminent) # Realises that the tipping point is imminent and switch strategy
     end
 
     callback = ContinuousCallback(hittipping, changepolicy!);
 
-    regretsolution = solve(regretprob; trajectories, callback);
-    
-    filepath = joinpath(experimentpath, "regret-$label.jld2")
-    @save filepath regretsolution
+    regretsolution = solve(regretensemble; trajectories, callback);
 
-    println("...saved in $(filepath).")
+    strippedsolution = SciMLBase.strip_solution(regretsolution)
+    
+    @suppress group["solution"] = strippedsolution
+
+    println("...saved in $(filepath) in group $label.")
 end
+
+close(experimentfile)

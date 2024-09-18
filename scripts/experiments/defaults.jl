@@ -45,6 +45,8 @@ begin # Construct models and grids
     jumpmodel = JumpModel(Jump(), hogg, preferences, damages, economy, calibration)
 
     models = AbstractModel[tippingmodels..., jumpmodel]
+
+    modellabels = Dict{AbstractModel, String}(models .=> ["Imminent", "Remote", "Benchmark"])
 end;
 
 begin # Interpolated policies and values
