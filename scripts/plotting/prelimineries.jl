@@ -77,8 +77,6 @@ begin # Labels, colors and axis
     Tmin, Tmax = extrema(temperatureticks[1])
 
     X₀ = [hogg.T₀, log(hogg.M₀)]
-
-    baufn = SDEFunction(Fbau!, G!)
 end;
 
 begin # Load IPCC data
@@ -142,7 +140,7 @@ begin
     sims = Dict{Float64,DiffEqArray}()
 
     for model in tippingmodels
-        prob = SDEProblem(baufn, X₀, (0.0, 80.0), model)
+        prob = SDEProblem(Fbau!, G!, X₀, (0.0, 80.0), model)
         sol = solve(prob; seed=SEED)
 
         simpath = sol(0:1:80)
