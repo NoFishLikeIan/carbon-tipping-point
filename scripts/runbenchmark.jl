@@ -20,10 +20,14 @@ CACHESTEP = getnumber(env, "CACHESTEP", 1 / 4)
 
 OVERWRITE && @warn "Running in overwrite mode!"
 
+# Parameters
+Ψ = [0.75, 1.5]
+Θ = [2., 10.]
+Ρ = [1e-7, 1e-3]
+Ωᵣ = [0., 0.017558043747351086]
+
 # Construct model
-preferences = EpsteinZin();
 calibration = load_object(joinpath(DATAPATH, "calibration.jld2"));
-economy = Economy()
 hogg = Hogg()
 damages = GrowthDamages()
 jump = Jump()
@@ -31,17 +35,24 @@ jump = Jump()
 jumpmodel = JumpModel(jump, hogg, preferences, damages, economy, calibration)
 
 # Construct Grid
-Tdomain = hogg.Tᵖ .+ (0., 7.);
+Tdomain = hogg.Tᵖ .+ (0., 9.);
 mdomain = mstable.(Tdomain, hogg)
 G = RegularGrid([Tdomain, mdomain], N)
 
-VERBOSE && println("\nSolving jump model $(ALLOWNEGATIVE ? "with" : "without") negative emission...")
-if RUNTERMINAL
-    Gterminal = terminalgrid(N, jumpmodel)
-    computeterminal(jumpmodel, Gterminal; verbose = VERBOSE, datapath = datapath, alternate = true, tol = TOL, overwrite = OVERWRITE)
-end
+for Tᶜ ∈ thresholds, ψ ∈ Ψ, θ ∈ Θ, ϱ ∈ Ρ, ωᵣ ∈ Ωᵣ
+    preferences = EpsteinZin(θ = θ, ψ = ψ);
+    economy = Economy(ϱ = ϱ, ωᵣ = ωᵣ)
+    jumpmodel = JumpModel(jump, hogg, preferences, damages, economy, calibration)
 
-if RUNBACKWARDS
-    VERBOSE && println("Running backward simulation...")
-    computebackward(jumpmodel, G; verbose = VERBOSE, datapath = datapath, overwrite = OVERWRITE, tstop = TSTOP, cachestep = CACHESTEP)
+
+    VERBOSE && println("\nSolving jump model $(ALLOWNEGATIVE ? "with" : "without") negative emission...")
+    if RUNTERMINAL
+        Gterminal = terminalgrid(N, jumpmodel)
+        computeterminal(jumpmodel, Gterminal; verbose = VERBOSE, datapath = datapath, alternate = true, tol = TOL, overwrite = OVERWRITE)
+    end
+
+    if RUNBACKWARDS
+        VERBOSE && println("Running backward simulation...")
+        computebackward(jumpmodel, G; verbose = VERBOSE, datapath = datapath, overwrite = OVERWRITE, tstop = TSTOP, cachestep = CACHESTEP)
+    end
 end

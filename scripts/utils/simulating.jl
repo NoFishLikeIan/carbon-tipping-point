@@ -29,10 +29,16 @@ function Fbau!(du, u, model::AbstractModel, t)
 	du[2] = γ(t, model.calibration)
 end
 
-G!(du, u, parameters::Tuple, t) = G!(du, u, first(parameters), t) # Assumes parameters = (model, ...)
-function G!(Σ, u, model::AbstractModel, t)    
+function G!(Σ, _, model::AbstractModel, t)    
 	Σ[1] = model.hogg.σₜ / model.hogg.ϵ
 	Σ[2] = model.hogg.σₘ
+end
+function G!(Σ, _, parameters::Tuple{AbstractPlannerModel{GrowthDamages, P}, PoliciesFunctions}, t) where P <: Preferences
+    model = first(parameters)
+
+    Σ[1] = model.hogg.σₜ / model.hogg.ϵ
+	Σ[2] = model.hogg.σₘ
+    Σ[3] = model.economy.σₖ
 end
 
 rate(u, parameters::Tuple, t) = rate(u, first(parameters), t)

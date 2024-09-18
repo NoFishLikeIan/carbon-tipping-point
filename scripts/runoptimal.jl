@@ -25,11 +25,13 @@ VERBOSE && "Running with $(nprocs()) processor..."
 
 # Parameters
 thresholds = [1.5, 2.5];
+Ψ = [0.75, 1.5]
+Θ = [10.]
+Ρ = [0., 1e-3]
+Ωᵣ = [0., 0.017558043747351086]
 
 # Construct model
-preferences = EpsteinZin();
 calibration = load_object(joinpath(DATAPATH, "calibration.jld2"));
-economy = Economy()
 hogg = Hogg()
 damages = GrowthDamages()
 
@@ -38,8 +40,11 @@ Tdomain = hogg.Tᵖ .+ (0., 9.);
 mdomain = mstable.(Tdomain, hogg)
 G = RegularGrid([Tdomain, mdomain], N)
 
-for Tᶜ ∈ thresholds
-    VERBOSE && println("Solving model with Tᶜ = $Tᶜ and $(ALLOWNEGATIVE ? "with" : "without") negative emission...")
+for Tᶜ ∈ thresholds, ψ ∈ Ψ, θ ∈ Θ, ϱ ∈ Ρ, ωᵣ ∈ Ωᵣ
+    preferences = EpsteinZin(θ = θ, ψ = ψ);
+    economy = Economy(ϱ = ϱ, ωᵣ = ωᵣ)
+
+    VERBOSE && println("Solving model with Tᶜ = $Tᶜ, ψ = $ψ, θ = $θ, ϱ = $ϱ, ωᵣ = $ωᵣ, and $(ALLOWNEGATIVE ? "with" : "without") negative emission...")
     
     albedo = Albedo(Tᶜ)
     model = TippingModel(albedo, hogg, preferences, damages, economy, calibration)
