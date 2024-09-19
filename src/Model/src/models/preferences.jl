@@ -69,7 +69,7 @@ function logg(χ, F′, Δt, p::EpsteinZin)
     consumption = χ^(1 - ψ⁻¹)
 
     β = exp(-p.ρ * Δt)
-    value = F′^agg
+    value = max(F′, 0.)^agg
 
     return inv(agg) * log((1 -  β) * consumption + β * value)
 end
