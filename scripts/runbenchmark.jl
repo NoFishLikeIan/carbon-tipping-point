@@ -7,19 +7,7 @@ include("arguments.jl") # Import argument parser
 
 parsedargs = ArgParse.parse_args(argtable)
 
-@unpack overwrite, datapath, simulationpath, N, cachestep, tol, verbose, stopat, procs = parsedargs
-
-# Distributed processing
-using Distributed: nprocs, addprocs
-addprocs(procs; exeflags="--project") # A bit sad that I have to do this
-
-(verbose ≥ 1) && "Running with $(nprocs()) processor..."
-
-include("arguments.jl") # Import argument parser
-
-parsedargs = ArgParse.parse_args(argtable)
-
-@unpack overwrite, datapath, simulationpath, N, cachestep, tol, verbose, stopat, procs, threshold, leveldamages, eis, rra, allownegative = parsedargs
+@unpack overwrite, datapath, simulationpath, N, cachestep, tol, verbose, stopat, procs, leveldamages, eis, rra, allownegative = parsedargs
 
 overwrite && (verbose ≥ 1) && @warn "Running in overwrite mode!"
 
@@ -50,7 +38,7 @@ Tdomain = hogg.Tᵖ .+ (0., 9.);
 mdomain = mstable.(Tdomain, hogg)
 G = RegularGrid([Tdomain, mdomain], N)
 
-(verbose ≥ 1) && println("Solving model with Tᶜ = $threshold, ψ = $eis, θ = $rra, and $(allownegative ? "with" : "without") negative emission...")
+(verbose ≥ 1) && println("Solving jump model with ψ = $eis, θ = $rra, and $(allownegative ? "with" : "without") negative emission...")
 
 outdir = joinpath(datapath, simulationpath, 
 allownegative ? "negative" : "constrained")

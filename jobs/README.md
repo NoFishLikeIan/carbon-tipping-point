@@ -8,5 +8,4 @@ Some bash and julia scripts to speed up multiple versioning. This is needed to r
 
 ## Time estimation
 
-For `N = 11` the procedure takes approx. 5 minutes and 6 seconds. Worst scaling is `O(N^2)` and the target is `N = 201`. So, the total time is estimated to be `5.1 * 201^2 = 205,000` seconds or `57` hours. Adding 20% for safety, the total time is estimated to be `68` hours.
-Some bash and julia scripts to speed up multiple versioning. This is needed to run scripts on Snellius since I locally use `julia 1.10` and remotely `julia 1.7`.
+For `N = 31` and `p = 11` processors the procedure takes approx. 13 minutes and 7 seconds. Worst scaling is `O(N^2)` and the target is `N = 201` and `p = 110`. So, the total time is estimated to be `13.07 * (11 / 110) * (201^2 / 31^2) = 55` minutes. Adding 20% for safety, the total time is estimated to be `1` hour and `6` minutes.

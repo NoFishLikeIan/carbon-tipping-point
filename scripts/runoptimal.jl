@@ -43,7 +43,7 @@ Tdomain = hogg.Tᵖ .+ (0., 9.);
 mdomain = mstable.(Tdomain, hogg)
 G = RegularGrid([Tdomain, mdomain], N)
 
-(verbose ≥ 1) && println("Solving model with Tᶜ = $threshold, ψ = $eis, θ = $rra, and $(allownegative ? "with" : "without") negative emission...")
+(verbose ≥ 1) && println("Solving tipping model with Tᶜ = $threshold, ψ = $eis, θ = $rra, and $(allownegative ? "with" : "without") negative emission...")
 
 outdir = joinpath(datapath, simulationpath, allownegative ? "negative" : "constrained")
 
