@@ -26,4 +26,4 @@ julia --project scripts/runoptimal.jl \
     --rra 10 --eis 0.75 --threshold 2.5
 
 # Copy results back to home
-rsync -avzu $TMPDIR/data/simulation $HOME/scc-tipping-points/data
+rsync -avzu $TMPDIR/data $HOME/scc-tipping-points
