@@ -3,7 +3,7 @@
 #SBATCH --job-name=tipping-test
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=20
+#SBATCH --cpus-per-task=9
 #SBATCH --time=00:10:00
 #SBATCH --partition=rome
 #SBATCH --mail-type=BEGIN,END,FAIL,TIME_LIMIT_80
@@ -16,14 +16,14 @@ module load 2023
 module load Julia/1.9.2-linux-x86_64
 
 cd $HOME/scc-tipping-points # Move to base directory
-mkdir -p $TMPDIR/data # Create scratch directory with user name
-rsync data/calibration.jld2 $TMPDIR/data # Copy calibration data to scratch
+mkdir -p "$TMPDIR"/data # Create scratch directory with user name
+rsync data/calibration.jld2 "$TMPDIR"/data # Copy calibration data to scratch
 
 # Run script 
 julia --project scripts/runoptimal.jl \
-    -d "data" -s "simulation" --verbose 1 --overwrite \
-    -N 31 -p 19 \
+    -d "data" -s "test-simulation" --verbose 1 --overwrite \
+    -N 11 -p 8 \
     --rra 10 --eis 0.75 --threshold 2.5
 
 # Copy results back to home
-rsync -ru $TMPDIR/data/simulation $HOME/scc-tipping-points/data
+rsync -avzu "$TMPDIR"/data $HOME/scc-tipping-points
