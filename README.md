@@ -2,10 +2,10 @@
 
 ## Running simulations
 
-Running simulations requires `Julia 1.7.0`. The simulations are run using the `scripts/runoptimal.jl` or `scripts/runbenchmark.jl` script as follows 
+Running simulations requires `Julia 1.9.2`. The simulations are run using the `scripts/runoptimal.jl` or `scripts/runbenchmark.jl` script as follows 
 
 ```bash
-julia +1.7.2~x64 --project scripts/runoptimal.jl
+julia +1.9.2 --project scripts/runbenchmark.jl -N 11 -s simulation/test-small --overwrite -v 2 -p 8
 ```
 
 It takes the following command line arguments
