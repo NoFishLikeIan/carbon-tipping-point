@@ -12,8 +12,6 @@ addprocs(procs; exeflags="--project") # A bit sad that I have to do this
 
 (verbose ≥ 1) && "Running with $(nprocs()) processor..."
 
-include("utils/saving.jl")
-
 include("arguments.jl") # Import argument parser
 
 parsedargs = ArgParse.parse_args(argtable)
