@@ -75,7 +75,7 @@ function terminaljacobi!(F̄, policy, errors, model::AbstractModel, G; indices =
         objective = @closure χ -> terminalcost(Fᵢ′, Tᵢ, Δt, χ, model)
         Fᵢ, χ = gssmin(objective, 0., 1.; tol = eps(Float64))
         
-        errors[idx] = abs(Fᵢ - F̄[idx]) / F̄[idx]
+        errors[idx] = Fᵢ ≈ F̄[idx] ? 0. : abs(Fᵢ - F̄[idx]) / F̄[idx]
 
         F̄[idx] = Fᵢ
         policy[idx] = χ
