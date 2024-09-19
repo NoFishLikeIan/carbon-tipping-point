@@ -98,6 +98,11 @@ function vfi(F₀, model::AbstractModel, G; tol = 1e-3, maxiter = 10_000, verbos
 
         max_error = maximum(errors)
 
+        if isnan(max_error)
+            @warn "NaN error detected. Exiting."
+            return Fᵢ, pᵢ
+        end
+
         if max_error < tol
             (verbose ≥ 1) && @printf("Converged in %i iterations, ε = %.8f \n", iter, max_error)
             return Fᵢ, pᵢ
