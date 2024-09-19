@@ -57,7 +57,7 @@ function g(χ, F′, Δt, p::EpsteinZin)
     consumption = χ^(1 - ψ⁻¹)
 
     β = exp(-p.ρ * Δt)
-    value = F′^agg
+    value = max(F′, 0.)^agg
 
     return ((1 -  β) * consumption + β * value)^inv(agg)
 end
