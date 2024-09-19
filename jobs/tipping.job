@@ -1,12 +1,14 @@
 #!/bin/bash
 
+#SBATCH --job-name=tipping
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=110
 #SBATCH --time=01:10:00
 #SBATCH --partition=rome
-#SBATCH --job-name=tipping-points-test
-#SBATCH --mail-type=BEGIN,END,FAIL,TIME_LIMIT_50,TIME_LIMIT_80,TIME_LIMIT_90
+#SBATCH --mail-type=BEGIN,END,FAIL,TIME_LIMIT_80
+#SBATCH -o ./logs/out/JOB%j.out 
+#SBATCH -e ./logs/error/JOB%j.out
 #SBATCH --mail-user=a.titton@uva.nl
 
 module purge
