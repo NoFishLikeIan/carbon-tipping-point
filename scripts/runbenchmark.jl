@@ -1,3 +1,6 @@
+using Pkg
+Pkg.instantiate(); Pkg.precompile();
+
 using UnPack: @unpack
 
 include("arguments.jl") # Import argument parser

@@ -1,7 +1,27 @@
 #!/bin/bash
 
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=110
+#SBATCH --time=00:10:00
+#SBATCH --partition=rome
+#SBATCH --job-name=tipping-points-test
+#SBATCH --mail-type=BEGIN,END,FAIL,TIME_LIMIT_50,TIME_LIMIT_80,TIME_LIMIT_90
+#SBATCH --mail-user=a.titton@uva.nl
+
 module purge
-module load 2022
-module load julia
+module load 2023
+module load Julia/1.9.2-linux-x86_64
 
+cd $HOME/scc-tipping-points # Move to base directory
+mkdir -p "$TMPDIR" # Create scratch directory with user name
+cp -r data "$TMPDIR"/data # Copy data to scratch
 
+# Run script 
+julia --project scripts/runoptimal.jl \
+    -N 201 -p 109 \
+    -d "data" -s "test-simulation" \
+    --verbose 1 --overwrite
+
+# Copy results back to home
+cp -r "$TMPDIR"/data $HOME/scc-tipping-points/data

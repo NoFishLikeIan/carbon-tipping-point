@@ -24,4 +24,4 @@ julia --project scripts/runbenchmark.jl \
     --verbose 1 --overwrite
 
 # Copy results back to home
-cp -r "$TMPDIR"/data/test-simulation $HOME/scc-tipping-points/data/test-simulation
+cp -r "$TMPDIR"/data $HOME/scc-tipping-points/data
