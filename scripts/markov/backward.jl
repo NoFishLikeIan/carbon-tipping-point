@@ -19,9 +19,8 @@ end
     constraints.bounds.bx[4] = ᾱ
 end
 
-function backwardstep!(Δts, F, policy, cluster, model::AbstractModel, G; allownegative = false, options = Optim.Options(g_tol = 1e-12, allow_f_increases = true, iterations = 10_000))
+function backwardstep!(Δts, F, policy, cluster, model::AbstractModel, G; allownegative = false, options = Optim.Options(g_tol = 1e-12, allow_f_increases = true, iterations = 100_000), constraints = TwiceDifferentiableConstraints([0., 0.], [1., 1.]))
     indices = CartesianIndices(G)
-    constraints = TwiceDifferentiableConstraints([0., 0.], [1., 1.])
 
     @sync @distributed for (i, δt) in cluster
         idx = indices[i]

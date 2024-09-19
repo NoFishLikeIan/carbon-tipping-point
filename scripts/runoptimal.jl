@@ -14,16 +14,17 @@ addprocs(procs; exeflags="--project") # A bit sad that I have to do this
 
 (verbose ≥ 1) && println("Running with $(nprocs()) processor...")
 
-include("utils/saving.jl")
+# Begin script
+using JLD2
+using Model, Grid
 
-# Default parameters
-thresholds = [1.5, 2.5];
-Ψ = [0.75, 1.5]
-Θ = [10.]
-Ρ = [0., 1e-3]
-Ωᵣ = [0., 0.017558043747351086]
+include("utils/saving.jl")
+include("markov/terminal.jl")
+include("markov/backward.jl")
+
 
 # Construct model
+thresholds = [1.5, 2.5];
 calibrationdirectory = joinpath(datapath, "calibration.jld2")
 calibration = load_object(calibrationdirectory);
 
