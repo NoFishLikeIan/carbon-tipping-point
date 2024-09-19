@@ -8,13 +8,20 @@ Given the climate and economic dynamics described in the previous section, in th
     f(c, u) \coloneqq \frac{\rho}{1 - 1 / \psi} (1 - \theta) u  \left( \left(\frac{c}{((1 - \theta) u)^{\frac{1}{1 - \theta}}}\right)^{1 - 1 / \psi} - 1 \right).
 \end{equation} Consumption is integrated into a utility index by means of the Epstein-Zin integrator \citep{duffie_asset_1992}. This aggregator plays a dual role. First, it allows to disentangle the role of relative risk aversion $\theta$, elasticity of intertemporal substitution $\psi$, and the discount rate $\rho$ in determining optimal abatement paths. Second, it circumvents the known paradoxical result that abatement policies becomes less ambitious as society becomes more risk averse \citep{pindyck_economic_2013}. Details on the solution of problem (\ref{eq:social-objective}) are given in Appendix \ref{appendix:solution}. 
 
-Using the optimal policy, I then focus on the unpredictability of tipping points and the regret this might cause. More concretely, let $\alpha^{i}$ and $\alpha^{r}$ be the optimal abatement policies in the case of an imminent $T^c = 1.5^\circ$ and remote $T^c = 2.5^\circ$ tipping point, respectively. The regret associated with the tipping point derives from the social planner assuming the tipping point is remote until the critical threshold $T^c$ is crossed, if it is crossed. Thereafter, the social planner discovers the tipping point is imminent and switches to the optimal strategy. Letting $t^c \coloneqq \inf\{t \; \mid \; T_t \geq T^c \}$ be the discovery time, the policy used in this case by the social planner is \begin{equation}
-    \alpha^{d}_t(X_t) \coloneqq \begin{cases}
+Using the optimal policy, I then focus on the unpredictability of tipping points and the regret this might cause. More concretely, let $\alpha^{i}$ and $\alpha^{r}$ be the optimal abatement policies in the case of an imminent $T^c = 1.5^\circ$ and remote $T^c = 2.5^\circ$ tipping point, respectively. The regret associated with the tipping point derives from the social planner assuming the tipping point is remote until the critical threshold $T^c$ is crossed, if it is crossed. Thereafter, the social planner discovers the tipping point is imminent and switches to the optimal strategy. I denote this reckless planner with $rec$. Letting $t^c \coloneqq \inf\{t \; \mid \; T_t \geq T^c \}$ be the discovery time, the policy used in this case by the social planner is \begin{equation}
+    \alpha^{rec}_t(X_t) \coloneqq \begin{cases}
         \alpha_t^r(X_t) &\text{ if } t < t^c \text{ and } \\
         \alpha_t^i(X_t) &\text{ if } t \geq t^c,
     \end{cases}
-\end{equation} and similarly the consumption policy $\chi^d$. The resulting social welfare is given by \begin{equation}
-    a = 2
+\end{equation} and similarly the consumption policy $\chi^{rec}$. The resulting social welfare is given by  $W^{rec}_t(X_t; \chi^{rec}, \alpha^d) \coloneqq \mathbb{E}_t \int_{t}^{\infty} f(\chi^{rec}_s(X_s) Y_s, V_s(X_s)) \dd{s}$ which yields a regret \begin{equation}
+    R^{rec} \coloneqq V_0(X_0) - W^{rec}_0(X_0; \chi^{rec}, \alpha^{rec}).
+\end{equation} Clearly, $R^d \geq 0$. 
+
+Similarly, in the case of a remote tipping point $T^c$, we can define the regret associated with a prudent social planner $R^{pru}$, who uses a policy \begin{equation}
+    \alpha^{pru}_t(X_t) \coloneqq \begin{cases}
+        \alpha_t^i(X_t) &\text{ if } t < t^c \text{ and } \\
+        \alpha_t^r(X_t) &\text{ if } t \geq t^c.
+    \end{cases}
 \end{equation}
 
 \end{document}
