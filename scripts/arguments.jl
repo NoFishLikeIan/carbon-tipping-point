@@ -40,4 +40,22 @@ argtable = ArgParseSettings()
     "--procs", "-p"
         arg_type = Int
         default = 0
+
+    "--threshold"
+        arg_type = Float64
+        default = 1.5
+
+    "--leveldamages"
+        action = :store_true
+    
+    "--eis"
+        arg_type = Float64
+        default = 0.75
+
+    "--rra"
+        arg_type = Float64
+        default = 10.
+
+    "--allownegative"
+        action = :store_true
 end
