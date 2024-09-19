@@ -11,17 +11,17 @@
 
 module purge
 module load 2023
-module load julia
+module load Julia/1.9.2-linux-x86_64
 
 cd $HOME/scc-tipping-points # Move to base directory
-mkdir -p /scratch-shared/$USER # Create scratch directory with user name
-cp -r data /scratch-shared/$USER/data # Copy data to scratch
+mkdir -p "$TMPDIR" # Create scratch directory with user name
+cp -r data "$TMPDIR"/data # Copy data to scratch
 
 # Run script 
 julia --project scripts/runbenchmark.jl \
-    -N 11 -p 95 \
+    -N 11 -p 63 \
     -d "data" -s "test-simulation" \
     --verbose 1 --overwrite
 
 # Copy results back to home
-cp -r /scratch-shared/$USER/data $HOME/scc-tipping-points/data
+cp -r "$TMPDIR"/data/test-simulation $HOME/scc-tipping-points/data/test-simulation
