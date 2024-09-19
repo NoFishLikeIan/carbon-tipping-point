@@ -108,7 +108,7 @@ begin # Default parameters
     thresholds = [1.5, 2.5];
 
 	calibration = load_object(joinpath(DATAPATH, "calibration.jld2"))
-	preferences = EpsteinZin()
+	preferences = EpsteinZin(ψ = 0.75)
     damages = GrowthDamages()
     economy = Economy()
     jump = Jump()
@@ -173,7 +173,7 @@ let
 	@unpack α, χ = itp
 	
 	χₜ = @closure (m, T) -> χ(T, m, tfigpol)
-	dm = @closure (m, T) -> 1 - ε(tfigpol, exp(m), α(T, m, tfigpol), plotmodel)
+	αₜ = @closure (m, T) -> α(T, m, tfigpol)
 
 	nullcline = [mstable(T, plotmodel) for T in Tspace]
 	
@@ -183,7 +183,7 @@ let
 	cmap = ALLOWNEGATIVE ? :coolwarm : :coolwarm
 	clims = ALLOWNEGATIVE ? (-1., 1.) : (-1., 1.)
 
-	abatfig = heatmap(mspace, Tspace, dm; ylabel = "\$T\$", xlabel = "\$m\$", title = "\$E / E^b\$", xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0., c = :coolwarm, clims = (-1., 1.))
+	abatfig = heatmap(mspace, Tspace, αₜ; ylabel = "\$T\$", xlabel = "\$m\$", title = L"$\alpha_t$", xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
 	plot!(abatfig , nullcline, Tspace; linestyle = :dash, c = :white, label = false, linewidth = 3)
 
 	plot(consfig, abatfig; size = 500 .* (2√2, 1), margins = 10Plots.mm)
@@ -204,7 +204,7 @@ let
 
 	nullcline = [mstable(T, plotmodel) for T in Tspace]
 	
-	consfig = contourf(mspace, Tspace, Fₜ; ylabel = "\$T\$", xlabel = "\$m\$", title = L"Time $t = %$(tfigval)$; $\log F_t(T, m)$", xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0., clims = (-10., 20.), c = :Reds)
+	consfig = contourf(mspace, Tspace, Fₜ; ylabel = "\$T\$", xlabel = "\$m\$", title = L"Time $t = %$(tfigval)$; $\log F_t(T, m)$", xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0., c = :Reds)
 	plot!(consfig, nullcline, Tspace; linestyle = :dash, c = :white, label = false, linewidth = 3)
 end
 
@@ -217,13 +217,13 @@ begin # Solve an ensemble problem for all models with the bau scenario
     ratejump = VariableRateJump(Simulating.rate, Simulating.tippingopt!);
     sols = Dict{AbstractModel, EnsembleSolution}()
 
-	x₀ = [hogg.T₀, log(hogg.M₀)]
+	x₀ = [hogg.T₀, log(hogg.M₀), log(economy.Y₀)]
 
     for model in models
         itp = itpsmap[model];
-        αitp = itp[:α];
-
-        prob = SDEProblem(Simulating.F!, Simulating.G!, x₀, (0., 80.), (model, αitp))
+		parameters = (model, (itp[:χ], itp[:α]))
+		
+        prob = SDEProblem(Simulating.F!, Simulating.G!, x₀, (0., 80.), parameters)
 
         if isa(model, JumpModel)
             jumpprob = JumpProblem(prob, ratejump)
@@ -243,25 +243,28 @@ begin
 	yearlytime = 0:80
     yearticks = 0:20:80
 
-    βextrema = (0., 0.015)
-    βticks = range(βextrema...; step = 0.01) |> collect
-    βticklabels = [@sprintf("%.0f %%", 100 * y) for y in βticks]
-
     Textrema = (1., 5.)
     Tticks = Plotting.makedeviationtickz(Textrema..., first(models); step = 0.5, digits = 1)
 
 	simfigs = []
 	
     for (k, model) in enumerate(models)
+		
 		abatedsol = sols[model]
 		itp = itpsmap[model]
 		αitp = itp[:α]
 	
 		# Abatement expenditure figure
-		βM = Simulating.computeonsim(abatedsol, (T, m, t) -> β(t, ε(t, exp(m), αitp(T, m, t), model), model.economy), yearlytime)
+		βfn = @closure (T, m, y, t) -> β(t, ε(t, exp(m), αitp(T, m, t), model), model.economy)
+		
+		βM = Simulating.computeonsim(abatedsol, βfn, yearlytime)
 	   
 		βquantiles = Simulating.timequantiles(βM, [0.05, 0.5, 0.95])
-		Simulating.smoothquantile!.(eachcol(βquantiles), 0)
+		Simulating.smoothquantile!.(eachcol(βquantiles), 15)
+
+		βextrema = (0., maximum(βquantiles))
+	    βticks = range(βextrema...; step = 0.01) |> collect
+	    βticklabels = [@sprintf("%.0f %%", 100 * y) for y in βticks]
 
        	βoptionfirst = k > 1 ? Dict() : Dict(:title => L"Abatement as % of $Y_t$" )
        	lastxticks = Dict(
@@ -294,10 +297,10 @@ md"# Regret"
 # ╔═╡ 39409585-662d-4915-ae42-653e35a2b975
 begin # Solve the regret problem. Discover tipping point only after T ≥ Tᶜ.
     modelimminent, modelremote = models[[1, 2]]
-    αimminent = abatementmap[modelimminent]
-    αremote = abatementmap[modelremote]
+    policyimminent = (itpsmap[modelimminent][:χ], itpsmap[modelimminent][:α])
+    policyremote = (itpsmap[modelremote][:χ], itpsmap[modelremote][:α])
 
-    initparams = (modelimminent, αremote)
+    initparams = (modelimminent, policyremote)
 
 	function hittipping(u, t, integrator)
     	model, α = integrator.p
@@ -309,7 +312,7 @@ begin # Solve the regret problem. Discover tipping point only after T ≥ Tᶜ.
     end
 
 	function changepolicy!(integrator)
-        integrator.p = (modelimminent, αimminent)
+        integrator.p = (modelimminent, policyimminent)
     end
 
 	callback = ContinuousCallback(hittipping, changepolicy!);
@@ -333,18 +336,6 @@ plot(regretsol; idxs = 2, linewidth = 0.5, c = :black, opacity = 0.1)
 	return β(t, ε(t, exp(m), αitp(T, m, t), model), model.economy)
 end;
 
-# ╔═╡ f5584590-689c-4ddb-8e64-40c5c22e34ed
-βM = Simulating.computeonsim(regretsol, βregret, yearlytime)
-
-# ╔═╡ 9c1452bc-611f-4e17-a9f5-89a80acf9568
-let
-	βM = Simulating.computeonsim(regretsol, βregret, yearlytime)
-	βquantiles = Simulating.timequantiles(βM, [0.1, 0.5, 0.9])
-    Simulating.smoothquantile!.(eachcol(βquantiles), 0)
-
-	regretfig = plot(yearlytime, βquantiles[:, 2])
-end
-
 # ╔═╡ Cell order:
 # ╟─35f99656-f68a-455c-9042-b5afc5e7a4a8
 # ╟─44eee19a-595a-42fe-9302-0f19df42388a
@@ -366,7 +357,7 @@ end
 # ╟─80bfe18d-8d06-4957-a4ad-dd80bf8c42b1
 # ╠═033b0310-2df1-4613-81f8-39274d2318ba
 # ╟─28c7e9d4-d34a-4bcb-87a2-1c568ec8c669
-# ╟─78a476ce-788c-428d-b6bf-da39f92f4035
+# ╠═78a476ce-788c-428d-b6bf-da39f92f4035
 # ╟─497f0b6b-e7ac-4176-81b3-f8df4050d338
 # ╠═baa07798-cd01-49cb-8d33-eafd0c92505b
 # ╠═963b5d26-1f93-4cd9-8a9b-989e22c16143
@@ -375,5 +366,3 @@ end
 # ╠═9283bc5d-f5be-4b39-bc02-aeb942f1db79
 # ╠═68d51817-7f7e-4ebb-b986-67280479a999
 # ╠═498bf7bf-4812-4525-864e-db5454c53211
-# ╠═f5584590-689c-4ddb-8e64-40c5c22e34ed
-# ╠═9c1452bc-611f-4e17-a9f5-89a80acf9568
