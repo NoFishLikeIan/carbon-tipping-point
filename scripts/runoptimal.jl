@@ -37,13 +37,24 @@ Tdomain = hogg.Tᵖ .+ (0., 9.);
 mdomain = mstable.(Tdomain, hogg)
 G = RegularGrid([Tdomain, mdomain], N)
 
-(verbose ≥ 1) && println("Solving tipping model with Tᶜ = $threshold, ψ = $eis, θ = $rra, and $(allownegative ? "with" : "without") negative emission...")
+if (verbose ≥ 1)
+    println("Solving tipping model with Tᶜ = $threshold, ψ = $eis, θ = $rra, and $(allownegative ? "with" : "without") negative emission...")
+    flush(stdout)
+end
 
 outdir = joinpath(datapath, simulationpath, allownegative ? "negative" : "constrained")
 
-(verbose ≥ 1) && println("Running terminal...")
+if (verbose ≥ 1)
+    println("Running terminal...")
+    flush(stdout)
+end
+
 Gterminal = terminalgrid(N, model)
 computeterminal(model, Gterminal; verbose, outdir, alternate = true, tol, overwrite)
 
-(verbose ≥ 1) && println("Running backward...")
+if (verbose ≥ 1)
+    println("Running backward...")
+    flush(stdout)
+end
+
 computebackward(model, G; verbose, outdir, overwrite, tstop = stopat, cachestep, allownegative)
