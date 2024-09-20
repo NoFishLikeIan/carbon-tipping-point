@@ -5,66 +5,42 @@ using BenchmarkTools
 using JLD2
 using Plots
 
-using Distributed: nprocs
-
 includet("../utils/saving.jl")
 includet("../markov/terminal.jl")
 includet("../markov/backward.jl")
 
-println("Startup with $(nprocs()) processes...")
-
 begin
-	env = DotEnv.config()
-	DATAPATH = get(env, "DATAPATH", "data")
-	SIMULATIONPATH = get(env, "SIMULATIONPATH", "sim")
+    calibration = load_object("data/calibration.jld2")
+    damages = GrowthDamages()
+    hogg = Hogg()
+    preferences = EpsteinZin(θ = 10., ψ = 0.75)
+    economy = Economy()
+    albedo = Albedo(2.5)
 
-	datapath = joinpath(DATAPATH, SIMULATIONPATH)
+    model = TippingModel(albedo, hogg, preferences, damages, economy, calibration)
 end
 
 begin
-	calibration = load_object(joinpath(DATAPATH, "calibration.jld2"))
-	hogg = Hogg()
-	economy = Economy()
-	damages = GrowthDamages()
-	preferences = EpsteinZin()
-	albedo = Albedo(1.5)
-	model = TippingModel(albedo, hogg, preferences, damages, economy, calibration)
-end
-
-begin
-	N = 61
-	Tdomain = hogg.Tᵖ .+ (0., 7.);
+	N = 101
+	Tdomain = hogg.Tᵖ .+ (0., 9.);
 	mdomain = mstable.(Tdomain, hogg)
 	G = RegularGrid([Tdomain, mdomain], N)
 end;
 
 # Testing the backward step
 begin
-	F̄, terminalpolicy, Gterm = loadterminal(model; datapath);
+	F̄, terminalpolicy, Gterm = loadterminal(model; outdir = "data/simulation/constrained");
 	policy = SharedArray{Float64}(size(G)..., 2)
 	policy[:, :, 1] .= interpolateovergrid(Gterm, G, terminalpolicy)
 	policy[:, :, 2] .= γ(economy.τ, calibration)
 
-	F = interpolateovergrid(Gterm, G, F̄) |> SharedMatrix
+	F = interpolateovergrid(Gterm, G, F̄);
 end;
 
 begin
 	queue = DiagonalRedBlackQueue(G)
-	Δts = zeros(N^2) |> SharedVector
+	Δts = zeros(N^2)
 	cluster = first(dequeue!(queue))
 
 	backwardstep!(Δts, F, policy, cluster, model, G)
-end;
-
-if false
-	b = @benchmark backwardstep!($Δts, $F, $policy, $cluster, $model, $G)
-	io = IOBuffer()
-	show(io, "text/plain", b)
-	s = String(take!(io))
-	println(s)
-end
-
-# Jump model
-begin
-	error = jldopen("error.jld2")
 end;

@@ -1,28 +1,27 @@
-using Distributed: @everywhere, @distributed, @sync
-using SharedArrays: SharedArray, SharedMatrix, SharedVector
+using Model, Grid
+using JLD2
+using UnPack: @unpack
+using ZigZagBoomerang: dequeue!
 using DataStructures: PriorityQueue, dequeue!, enqueue!, peek
+using Base: Order
+using FastClosures: @closure
+using Optim
+using Printf: @printf
 
-@everywhere begin
-    using Model, Grid
-    using JLD2
-    using UnPack: @unpack
-    using ZigZagBoomerang: dequeue!
-    using Base: Order
-    using FastClosures: @closure
-    using Optim
-    using Printf: @printf
-end
+include("chain.jl")
 
-@everywhere include("chain.jl")
-
-@everywhere function updateᾱ!(constraints::TwiceDifferentiableConstraints, ᾱ)
+function updateᾱ!(constraints::TwiceDifferentiableConstraints, ᾱ)
     constraints.bounds.bx[4] = ᾱ
 end
 
-function backwardstep!(Δts, F, policy, cluster, model::AbstractModel, G; allownegative = false, options = Optim.Options(g_tol = 1e-12, allow_f_increases = true, iterations = 100_000), constraints = TwiceDifferentiableConstraints([0., 0.], [1., 1.]))
-    indices = CartesianIndices(G)
+const defaultoptim = Optim.Options(
+    g_tol = 1e-12, 
+    allow_f_increases = true, 
+    iterations = 100_000);
 
-    @sync @distributed for (i, δt) in cluster
+function backwardstep!(Δts, F, policy, cluster, model::AbstractModel, G; allownegative = false, options = defaultoptim)
+    for (i, δt) in cluster
+        indices = CartesianIndices(G)
         idx = indices[i]
         Xᵢ = G.X[idx]
 
@@ -30,10 +29,11 @@ function backwardstep!(Δts, F, policy, cluster, model::AbstractModel, G; allown
         u₀ = policy[idx, :]
 
         if allownegative
+            constraints = TwiceDifferentiableConstraints([0., 0.], [1., 1.])
             u₀ = Optim.isinterior(constraints, u₀) ? u₀ : [0.5, 0.5]
         else
             ᾱ = γ(t, model.calibration) + δₘ(exp(Xᵢ.m), model.hogg)
-            updateᾱ!(constraints, ᾱ)
+            constraints = TwiceDifferentiableConstraints([0., 0.], [1., ᾱ])
             u₀ = Optim.isinterior(constraints, u₀) ? u₀ : [0.5, ᾱ / 2]
         end
 

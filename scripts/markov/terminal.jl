@@ -1,27 +1,22 @@
-using Distributed: @everywhere, @distributed, @sync
-using SharedArrays
+using Model, Grid
+using JLD2
 
-@everywhere begin
-    using Model, Grid
-    using JLD2
+using FastClosures: @closure
+using Printf: @printf, @sprintf
 
-    using FastClosures: @closure
-    using Printf: @printf, @sprintf
-end
-
-@everywhere function terminalcost(Fᵢ′, Tᵢ, Δt, χ, model::AbstractModel{GrowthDamages, P}) where P
+function terminalcost(Fᵢ′, Tᵢ, Δt, χ, model::AbstractModel{GrowthDamages, P}) where P
     δ = terminaloutputfct(Tᵢ, Δt, χ, model)
 
     g(χ, δ * Fᵢ′, Δt, model.preferences)
 end
-@everywhere function terminalcost(Fᵢ′, Tᵢ, Δt, χ, model::AbstractModel{LevelDamages, P}) where P
+function terminalcost(Fᵢ′, Tᵢ, Δt, χ, model::AbstractModel{LevelDamages, P}) where P
     δ = terminaloutputfct(Tᵢ, Δt, χ, model)
     damage = d(Tᵢ, model.damages, model.hogg)
 
     g(damage * χ, δ * Fᵢ′, Δt, model.preferences)
 end
 
-@everywhere function terminaldriftstep(idx, F̄, model::AbstractModel, G)
+function terminaldriftstep(idx, F̄, model::AbstractModel, G)
     L, R = extrema(CartesianIndices(F̄))
 
     σₜ² = (model.hogg.σₜ / (model.hogg.ϵ * G.Δ.T))^2
@@ -44,8 +39,8 @@ end
     return F′, Δt
 end
 
-@everywhere terminalmarkovstep(idx, F̄, model::TippingModel, G) = terminaldriftstep(idx, F̄, model, G)
-@everywhere function terminalmarkovstep(idx, F̄, model::JumpModel, G)
+terminalmarkovstep(idx, F̄, model::TippingModel, G) = terminaldriftstep(idx, F̄, model, G)
+function terminalmarkovstep(idx, F̄, model::JumpModel, G)
     Fᵈ, Δt = terminaldriftstep(idx, F̄, model, G)
 
     # Update with jump
@@ -67,7 +62,7 @@ end
 
 function terminaljacobi!(F̄, policy, errors, model::AbstractModel, G; indices = CartesianIndices(F̄))
 
-    @sync @distributed for idx in indices
+    for idx in indices
         Fᵢ′, Δt = terminalmarkovstep(idx, F̄, model, G)
         Tᵢ = G.X[idx].T
 
