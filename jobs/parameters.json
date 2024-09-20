@@ -1,0 +1,228 @@
+{
+  "parameters": [
+    {
+      "threshold": 1.5,
+      "eis": 0.75,
+      "negative": true,
+      "rra": 2.0,
+      "leveldamages": true
+    },
+    {
+      "threshold": 1.5,
+      "eis": 0.75,
+      "negative": true,
+      "rra": 2.0,
+      "leveldamages": false
+    },
+    {
+      "threshold": 1.5,
+      "eis": 0.75,
+      "negative": false,
+      "rra": 2.0,
+      "leveldamages": true
+    },
+    {
+      "threshold": 1.5,
+      "eis": 0.75,
+      "negative": false,
+      "rra": 2.0,
+      "leveldamages": false
+    },
+    {
+      "threshold": 1.5,
+      "eis": 1.5,
+      "negative": true,
+      "rra": 2.0,
+      "leveldamages": true
+    },
+    {
+      "threshold": 1.5,
+      "eis": 1.5,
+      "negative": true,
+      "rra": 2.0,
+      "leveldamages": false
+    },
+    {
+      "threshold": 1.5,
+      "eis": 1.5,
+      "negative": false,
+      "rra": 2.0,
+      "leveldamages": true
+    },
+    {
+      "threshold": 1.5,
+      "eis": 1.5,
+      "negative": false,
+      "rra": 2.0,
+      "leveldamages": false
+    },
+    {
+      "threshold": 1.5,
+      "eis": 0.75,
+      "negative": true,
+      "rra": 10.0,
+      "leveldamages": true
+    },
+    {
+      "threshold": 1.5,
+      "eis": 0.75,
+      "negative": true,
+      "rra": 10.0,
+      "leveldamages": false
+    },
+    {
+      "threshold": 1.5,
+      "eis": 0.75,
+      "negative": false,
+      "rra": 10.0,
+      "leveldamages": true
+    },
+    {
+      "threshold": 1.5,
+      "eis": 0.75,
+      "negative": false,
+      "rra": 10.0,
+      "leveldamages": false
+    },
+    {
+      "threshold": 1.5,
+      "eis": 1.5,
+      "negative": true,
+      "rra": 10.0,
+      "leveldamages": true
+    },
+    {
+      "threshold": 1.5,
+      "eis": 1.5,
+      "negative": true,
+      "rra": 10.0,
+      "leveldamages": false
+    },
+    {
+      "threshold": 1.5,
+      "eis": 1.5,
+      "negative": false,
+      "rra": 10.0,
+      "leveldamages": true
+    },
+    {
+      "threshold": 1.5,
+      "eis": 1.5,
+      "negative": false,
+      "rra": 10.0,
+      "leveldamages": false
+    },
+    {
+      "threshold": 2.5,
+      "eis": 0.75,
+      "negative": true,
+      "rra": 2.0,
+      "leveldamages": true
+    },
+    {
+      "threshold": 2.5,
+      "eis": 0.75,
+      "negative": true,
+      "rra": 2.0,
+      "leveldamages": false
+    },
+    {
+      "threshold": 2.5,
+      "eis": 0.75,
+      "negative": false,
+      "rra": 2.0,
+      "leveldamages": true
+    },
+    {
+      "threshold": 2.5,
+      "eis": 0.75,
+      "negative": false,
+      "rra": 2.0,
+      "leveldamages": false
+    },
+    {
+      "threshold": 2.5,
+      "eis": 1.5,
+      "negative": true,
+      "rra": 2.0,
+      "leveldamages": true
+    },
+    {
+      "threshold": 2.5,
+      "eis": 1.5,
+      "negative": true,
+      "rra": 2.0,
+      "leveldamages": false
+    },
+    {
+      "threshold": 2.5,
+      "eis": 1.5,
+      "negative": false,
+      "rra": 2.0,
+      "leveldamages": true
+    },
+    {
+      "threshold": 2.5,
+      "eis": 1.5,
+      "negative": false,
+      "rra": 2.0,
+      "leveldamages": false
+    },
+    {
+      "threshold": 2.5,
+      "eis": 0.75,
+      "negative": true,
+      "rra": 10.0,
+      "leveldamages": true
+    },
+    {
+      "threshold": 2.5,
+      "eis": 0.75,
+      "negative": true,
+      "rra": 10.0,
+      "leveldamages": false
+    },
+    {
+      "threshold": 2.5,
+      "eis": 0.75,
+      "negative": false,
+      "rra": 10.0,
+      "leveldamages": true
+    },
+    {
+      "threshold": 2.5,
+      "eis": 0.75,
+      "negative": false,
+      "rra": 10.0,
+      "leveldamages": false
+    },
+    {
+      "threshold": 2.5,
+      "eis": 1.5,
+      "negative": true,
+      "rra": 10.0,
+      "leveldamages": true
+    },
+    {
+      "threshold": 2.5,
+      "eis": 1.5,
+      "negative": true,
+      "rra": 10.0,
+      "leveldamages": false
+    },
+    {
+      "threshold": 2.5,
+      "eis": 1.5,
+      "negative": false,
+      "rra": 10.0,
+      "leveldamages": true
+    },
+    {
+      "threshold": 2.5,
+      "eis": 1.5,
+      "negative": false,
+      "rra": 10.0,
+      "leveldamages": false
+    }
+  ]
+}
