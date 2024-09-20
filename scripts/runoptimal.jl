@@ -38,7 +38,7 @@ mdomain = mstable.(Tdomain, hogg)
 G = RegularGrid([Tdomain, mdomain], N)
 
 if (verbose ≥ 1)
-    println("Solving tipping model with Tᶜ = $threshold, ψ = $eis, θ = $rra, and $(allownegative ? "with" : "without") negative emission...")
+    println("Solving tipping model with Tᶜ = $threshold, ψ = $eis, θ = $rra, and $(allownegative ? "with" : "without") negative emission and $(leveldamages ? "level" : "growth") damages...")
     flush(stdout)
 end
 
