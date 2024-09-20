@@ -4,7 +4,7 @@ rras = [2.0, 10.0];
 eiss = [0.75, 1.5];
 thresholds = [1.5, 2.5];
 allownegatives = [false, true];
-withleveldamages = [false];
+withleveldamages = [false, true];
 
 parameters = Dict{String, Union{Float64, Bool}}[]
 

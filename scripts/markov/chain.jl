@@ -63,6 +63,13 @@ function logcost(F′, t, Xᵢ::Point, Δt, u, model::AbstractModel{GrowthDamage
     logg(χ, δ * F′, Δt, model.preferences)
 end
 
+function logcost(F′, t, Xᵢ::Point, Δt, u, model::AbstractModel{LevelDamages, P}) where P
+    χ = u[1]
+    δ = outputfct(t, Xᵢ, Δt, u, model)
+    damage = d(Xᵢ.T, model.damages, model.hogg)
+    logg(χ * damage, δ * F′, Δt, model.preferences)
+end
+
 function cost(F′, t, Xᵢ::Point, Δt, u, model::AbstractModel{GrowthDamages, P}) where P
     χ = u[1]
     δ = outputfct(t, Xᵢ, Δt, u, model)
