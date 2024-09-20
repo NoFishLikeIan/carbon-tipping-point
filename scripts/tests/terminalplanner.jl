@@ -24,9 +24,9 @@ G = terminalgrid(N, model)
 # F̄, terminalpolicy = loadterminal(model; outdir = "data/simulation/planner")
 
 F₀ = ones(size(G)); 
-F̄ = copy(F₀) |> SharedMatrix;
-terminalpolicy = similar(F̄) |> SharedMatrix;
-errors = Inf .* ones(size(G)) |> SharedMatrix;
+F̄ = copy(F₀);
+terminalpolicy = similar(F̄);
+errors = Inf .* ones(size(G));
 
 terminaljacobi!(F̄, terminalpolicy, errors, model, G)
 F̄, policy = vfi(F₀, model, G; maxiter = 10_000, verbose = 2)

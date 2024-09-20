@@ -30,7 +30,7 @@ end;
 # Testing the backward step
 begin
 	F̄, terminalpolicy, Gterm = loadterminal(model; outdir = "data/simulation/constrained");
-	policy = SharedArray{Float64}(size(G)..., 2)
+	policy = Array{Float64}(undef, size(G)..., 2)
 	policy[:, :, 1] .= interpolateovergrid(Gterm, G, terminalpolicy)
 	policy[:, :, 2] .= γ(economy.τ, calibration)
 

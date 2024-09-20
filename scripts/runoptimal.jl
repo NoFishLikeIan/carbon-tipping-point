@@ -7,7 +7,7 @@ include("arguments.jl") # Import argument parser
 
 parsedargs = ArgParse.parse_args(argtable)
 
-@unpack overwrite, datapath, simulationpath, N, cachestep, tol, verbose, stopat, procs, threshold, leveldamages, eis, rra, allownegative = parsedargs
+@unpack overwrite, datapath, simulationpath, N, cachestep, tol, verbose, stopat, threshold, leveldamages, eis, rra, allownegative = parsedargs
 
 overwrite && (verbose ≥ 1) && @warn "Running in overwrite mode!"
 

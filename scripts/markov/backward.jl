@@ -82,7 +82,7 @@ function backwardsimulation!(F, policy, model::AbstractModel, G; verbose = 0, ca
     end
 
     queue = DiagonalRedBlackQueue(G)
-    Δts = SharedVector(zeros(N^2))
+    Δts = zeros(N^2)
     passcounter = 1
 
     while !isqempty(queue)
