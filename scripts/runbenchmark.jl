@@ -1,5 +1,5 @@
 using Pkg
-Pkg.instantiate(); Pkg.precompile();
+Pkg.resolve(); Pkg.instantiate();
 
 using UnPack: @unpack
 
