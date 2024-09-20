@@ -10,10 +10,6 @@ using Printf: @printf
 
 include("chain.jl")
 
-function updateᾱ!(constraints::TwiceDifferentiableConstraints, ᾱ)
-    constraints.bounds.bx[4] = ᾱ
-end
-
 const defaultoptim = Optim.Options(
     g_tol = 1e-12, 
     allow_f_increases = true, 
@@ -130,9 +126,9 @@ function computebackward(model::AbstractModel, G; outdir = "data", kwargs...)
 end
 function computebackward(terminalresults, model::AbstractModel, G; verbose = 0, withsave = true, outdir = "data", iterkwargs...)
     F̄, terminalconsumption, terminalG = terminalresults
-    F = SharedMatrix(interpolateovergrid(terminalG, G, F̄));
+    F = interpolateovergrid(terminalG, G, F̄);
 
-    policy = SharedArray{Float64}(size(G)..., 2)
+    policy = Array{Float64}(undef, size(G)..., 2)
     policy[:, :, 1] .= interpolateovergrid(terminalG, G, terminalconsumption)
     policy[:, :, 2] .= γ(model.economy.τ, model.calibration)
 

@@ -79,10 +79,10 @@ function terminaljacobi!(F̄, policy, errors, model::AbstractModel, G; indices =
 end
 
 function vfi(F₀, model::AbstractModel, G; tol = 1e-3, maxiter = 10_000, verbose = 0, indices = CartesianIndices(G), alternate = false)
-    Fᵢ = deepcopy(F₀) |> SharedMatrix
-    pᵢ = similar(F₀) |> SharedMatrix
+    Fᵢ = deepcopy(F₀)
+    pᵢ = similar(F₀)
 
-    errors = (Inf .* ones(size(F₀))) |> SharedMatrix
+    errors = (Inf .* ones(size(F₀)))
     
     (verbose ≥ 1) && println("Starting iterations...")
 

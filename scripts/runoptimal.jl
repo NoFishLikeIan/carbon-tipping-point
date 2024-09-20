@@ -11,12 +11,6 @@ parsedargs = ArgParse.parse_args(argtable)
 
 overwrite && (verbose ≥ 1) && @warn "Running in overwrite mode!"
 
-# Distributed processing
-using Distributed: nprocs, addprocs
-addprocs(procs; exeflags="--project") # A bit sad that I have to do this
-
-(verbose ≥ 1) && println("Running with $(nprocs()) processor...")
-
 # Begin script
 using JLD2
 using Model, Grid
