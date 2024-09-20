@@ -147,3 +147,20 @@ function loadtotal(cachepath::String)
 
     return timesteps, F, policy, G, model
 end
+
+function listfiles(simpath::String)
+    if !isdir(simpath)
+        error("Directory does not exist: $simpath")
+    end
+
+    files = String[]
+    for (root, _, file_names) in walkdir(simpath)
+        if !occursin("terminal", root)
+            for file_name in file_names
+                push!(files, joinpath(root, file_name))
+            end
+        end
+    end
+
+    return files
+end
