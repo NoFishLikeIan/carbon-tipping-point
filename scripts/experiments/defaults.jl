@@ -1,10 +1,11 @@
-using DotEnv, JLD2
+using JLD2
 using Model, Grid
 
 using Interpolations: Extrapolation
 
 include("../utils/saving.jl")
 include("../utils/simulating.jl")
+
 
 begin # Global variables
     env = DotEnv.config(".env")
