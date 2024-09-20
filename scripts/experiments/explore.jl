@@ -16,4 +16,4 @@ begin # Test model
     model = TippingModel(albedo, hogg, preferences, damages, economy, calibration)
 end
 
-timesteps, F, policy, G = loadtotal(model; outdir = "data/simulation/constrained");
+timesteps, F, policy, G, _ = loadtotal(model; outdir = "data/simulation/constrained");

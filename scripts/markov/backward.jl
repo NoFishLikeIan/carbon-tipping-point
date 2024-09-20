@@ -63,10 +63,11 @@ function backwardsimulation!(F, policy, model::AbstractModel, G; verbose = 0, ca
 
                 cachefile = jldopen(cachepath, "w+")
                 cachefile["G"] = G
+                cachefile["model"] = model
             else 
                 (verbose ≥ 1) && @warn "File $cachepath already exists. If you want to overwrite it pass overwrite = true. Will copy the results into `F` and `policy`.\n"
 
-                _, Fcache, policycache, Gcache = loadtotal(cachepath)
+                _, Fcache, policycache, Gcache, _ = loadtotal(cachepath)
 
                 F .= interpolateovergrid(Gcache, G, Fcache[:, :, 1])
 
@@ -78,6 +79,7 @@ function backwardsimulation!(F, policy, model::AbstractModel, G; verbose = 0, ca
         else
             cachefile = jldopen(cachepath, "w+")
             cachefile["G"] = G
+            cachefile["model"] = model
         end
     end
 

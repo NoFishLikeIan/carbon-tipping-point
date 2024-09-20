@@ -126,7 +126,8 @@ end
 function loadtotal(cachepath::String)
     cachefile = jldopen(cachepath, "r")
     G = cachefile["G"]
-    timekeys = filter(!=("G"), keys(cachefile))
+    model = cachefile["model"]
+    timekeys = filter(key -> key ∉ ["G", "model"], keys(cachefile))
     timesteps = round.(parse.(Float64, timekeys), digits = 4)
 
     ix = sortperm(timesteps)
@@ -144,5 +145,5 @@ function loadtotal(cachepath::String)
 
     close(cachefile)
 
-    return timesteps, F, policy, G
+    return timesteps, F, policy, G, model
 end
