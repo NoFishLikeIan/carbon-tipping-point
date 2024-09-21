@@ -2,6 +2,7 @@ using Pkg
 Pkg.resolve(); Pkg.instantiate();
 
 using UnPack: @unpack
+using Dates: now
 
 include("arguments.jl") # Import argument parser
 
@@ -9,7 +10,10 @@ parsedargs = ArgParse.parse_args(argtable)
 
 @unpack overwrite, datapath, simulationpath, N, cachestep, tol, verbose, stopat, threshold, leveldamages, eis, rra, allownegative = parsedargs
 
-overwrite && (verbose ≥ 1) && @warn "Running in overwrite mode!"
+if overwrite && (verbose ≥ 1)
+    println("$(now()): ", "Running in overwrite mode!")
+    flush(stdout)
+end
 
 # Begin script
 using JLD2
@@ -38,14 +42,14 @@ mdomain = mstable.(Tdomain, hogg)
 G = RegularGrid([Tdomain, mdomain], N)
 
 if (verbose ≥ 1)
-    println("Solving tipping model with Tᶜ = $threshold, ψ = $eis, θ = $rra, and $(allownegative ? "with" : "without") negative emission and $(leveldamages ? "level" : "growth") damages...")
+    println("$(now()): ","Solving tipping model with Tᶜ = $threshold, ψ = $eis, θ = $rra, and $(allownegative ? "with" : "without") negative emission and $(leveldamages ? "level" : "growth") damages...")
     flush(stdout)
 end
 
 outdir = joinpath(datapath, simulationpath, allownegative ? "negative" : "constrained")
 
 if (verbose ≥ 1)
-    println("Running terminal...")
+    println("$(now()): ","Running terminal...")
     flush(stdout)
 end
 
@@ -53,7 +57,7 @@ Gterminal = terminalgrid(N, model)
 computeterminal(model, Gterminal; verbose, outdir, alternate = true, tol, overwrite)
 
 if (verbose ≥ 1)
-    println("Running backward...")
+    println("$(now()): ","Running backward...")
     flush(stdout)
 end
 

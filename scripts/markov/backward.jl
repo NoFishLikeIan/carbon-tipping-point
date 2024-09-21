@@ -89,7 +89,11 @@ function backwardsimulation!(F, policy, model::AbstractModel, G; verbose = 0, ca
 
     while !isqempty(queue)
         tmin = model.economy.τ - minimum(queue.vals)
-        (verbose ≥ 2) && @printf("Pass %i, cluster minimum time = %.4f...\r", passcounter, tmin)
+
+        if (verbose ≥ 2) 
+            @printf("%s: pass %i, cluster minimum time = %.4f\n", now(), passcounter, tmin)
+            flush(stdout)
+        end
 
         clusters = dequeue!(queue)
 
@@ -106,7 +110,10 @@ function backwardsimulation!(F, policy, model::AbstractModel, G; verbose = 0, ca
         passcounter += 1
         
         if savecache && tmin ≤ tcache
-            (verbose ≥ 2) && println("\nSaving cache at $tcache...")
+            if (verbose ≥ 2)
+                println("--Saving cache at $tcache")
+            end
+
             group = JLD2.Group(cachefile, "$tcache")
             group["F"] = F
             group["policy"] = policy
@@ -116,7 +123,9 @@ function backwardsimulation!(F, policy, model::AbstractModel, G; verbose = 0, ca
 
     if savecache 
         close(cachefile) 
-        (verbose ≥ 1) && println("\nSaved cached file into $cachepath")
+        if (verbose ≥ 1)
+            println("$(now()): ", "Saved cached file into $cachepath")
+        end
     end
 
     return F, policy

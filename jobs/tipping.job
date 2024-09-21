@@ -5,7 +5,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --array=0-31
-#SBATCH --time=06:30:00
+#SBATCH --time=10:00:00
 #SBATCH --partition=rome
 #SBATCH --mail-type=BEGIN,END,FAIL,TIME_LIMIT_80
 #SBATCH -o ./logs/out/JOB%A_%a.out 
@@ -31,8 +31,8 @@ params=$(jq -r --arg id "$SLURM_ARRAY_TASK_ID" "$jq_command" jobs/parameters.jso
 
 # Run script 
 julia --project scripts/runoptimal.jl \
-    -d "data" -s "test-simulation" --verbose 1 --overwrite \
-    -N 151 $params
+    -d "data" -s "simulation-small" --verbose 2 --overwrite \
+    -N 51 $params
 
 # Copy results back to home
 rsync -avzu "$TMPDIR"/data $HOME/scc-tipping-points
