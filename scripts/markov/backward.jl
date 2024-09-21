@@ -111,7 +111,7 @@ function backwardsimulation!(F, policy, model::AbstractModel, G; verbose = 0, ca
         
         if savecache && tmin ≤ tcache
             if (verbose ≥ 2)
-                println("--Saving cache at $tcache")
+                println("-- Saving cache at $tcache")
             end
 
             group = JLD2.Group(cachefile, "$tcache")

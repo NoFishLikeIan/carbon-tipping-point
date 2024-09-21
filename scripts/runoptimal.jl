@@ -61,4 +61,5 @@ if (verbose ≥ 1)
     flush(stdout)
 end
 
+# TODO: Test parallelisation
 computebackward(model, G; verbose, outdir, overwrite, tstop = stopat, cachestep, allownegative)
