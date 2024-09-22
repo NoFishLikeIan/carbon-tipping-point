@@ -6,12 +6,23 @@ thresholds = [1.5, 2.5];
 allownegatives = [false, true];
 withleveldamages = [false, true];
 
-parameters = Dict{String, Union{Float64, Bool}}[]
+tippingparameters = Dict{String, Union{Float64, Bool}}[];
+benchmarkparameters = Dict{String, Union{Float64, Bool}}[];
 
-for threshold in thresholds, rra in rras, eis in eiss, negative in allownegatives, leveldamages in withleveldamages
-    push!(parameters, Dict("threshold" => threshold, "rra" => rra, "eis" => eis, "allownegative" => negative, "leveldamages" => leveldamages))
+
+for rra in rras, eis in eiss, negative in allownegatives, leveldamages in withleveldamages
+    push!(benchmarkparameters, Dict("rra" => rra, "eis" => eis, "allownegative" => negative, "leveldamages" => leveldamages))
+
+    for threshold in thresholds
+        push!(tippingparameters, Dict("threshold" => threshold, "rra" => rra, "eis" => eis, "allownegative" => negative, "leveldamages" => leveldamages))
+    end
 end
 
+obj = Dict(
+    "benchmarkparameters" => benchmarkparameters,
+    "tippingparameters" => tippingparameters
+)
+
 open("jobs/parameters.json", "w") do f
-    JSON.print(f, Dict("parameters" => parameters), 2)
+    JSON.print(f, obj, 2)
 end
