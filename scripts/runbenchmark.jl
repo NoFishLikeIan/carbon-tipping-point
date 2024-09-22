@@ -2,6 +2,7 @@ using Pkg
 Pkg.resolve(); Pkg.instantiate();
 
 using UnPack: @unpack
+using Dates: now
 
 include("arguments.jl") # Import argument parser
 
@@ -36,7 +37,7 @@ mdomain = mstable.(Tdomain, hogg)
 G = RegularGrid([Tdomain, mdomain], N)
 
 if (verbose ≥ 1)
-    println("$(now()): ","Solving tipping model with Tᶜ = $threshold, ψ = $eis, θ = $rra, and $(allownegative ? "with" : "without") negative emission and $(leveldamages ? "level" : "growth") damages...")
+    println("$(now()): ","Solving benchmark model with ψ = $eis, θ = $rra, and $(allownegative ? "with" : "without") negative emission and $(leveldamages ? "level" : "growth") damages...")
     flush(stdout)
 end
 
