@@ -3,7 +3,6 @@ using Test: @test
 using UnPack: @unpack
 using BenchmarkTools
 using JLD2
-using Plots
 
 includet("../utils/saving.jl")
 includet("../markov/terminal.jl")
@@ -13,9 +12,9 @@ begin
     calibration = load_object("data/calibration.jld2")
     damages = GrowthDamages()
     hogg = Hogg()
-    preferences = EpsteinZin(θ = 10., ψ = 0.75)
+    preferences = EpsteinZin(θ = 2., ψ = 0.75)
     economy = Economy()
-    albedo = Albedo(2.5)
+    albedo = Albedo(1.5)
 
     model = TippingModel(albedo, hogg, preferences, damages, economy, calibration)
 end
@@ -29,7 +28,7 @@ end;
 
 # Testing the backward step
 begin
-	F̄, terminalpolicy, Gterm = loadterminal(model; outdir = "data/simulation/constrained");
+	F̄, terminalpolicy, Gterm = loadterminal(model; outdir = "data/test-simulation/constrained");
 	policy = Array{Float64}(undef, size(G)..., 2)
 	policy[:, :, 1] .= interpolateovergrid(Gterm, G, terminalpolicy)
 	policy[:, :, 2] .= γ(economy.τ, calibration)
@@ -41,6 +40,14 @@ begin
 	queue = DiagonalRedBlackQueue(G)
 	Δts = zeros(N^2)
 	cluster = first(dequeue!(queue))
-
-	backwardstep!(Δts, F, policy, cluster, model, G)
 end;
+
+begin
+	b = BenchmarkTools.@benchmark backwardstep!($Δts, $F, $policy, $cluster, $model, $G)
+
+	io = IOBuffer()
+	show(io, "text/plain", b)
+	s = String(take!(io))
+
+	println(s)
+end

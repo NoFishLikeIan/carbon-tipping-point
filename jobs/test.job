@@ -21,17 +21,17 @@ rsync data/calibration.jld2 "$TMPDIR"/data # Copy calibration data to scratch
 
 # Extract parameters at the SLURM_ARRAY_TASK_ID from parameters.json
 jq_command='
-.parameters[$id | tonumber] | 
-"--rra \(.rra) --eis \(.eis) --threshold \(.threshold)" +
+.benchmarkparameters[$id | tonumber] | 
+"--rra \(.rra) --eis \(.eis)" +
 (if .leveldamages then " --leveldamages" else "" end) +
 (if .allownegative then " --allownegative" else "" end)
 '
 
-params=$(jq -r --arg id "$SLURM_ARRAY_TASK_ID" "$jq_command" jobs/parameters.json)
+params=$(jq -r --arg id "$SLURM_ARRAY_TASK_ID" "$jq_command" jobs/.json)
 
-# Run script 
-julia --project scripts/runoptimal.jl \
-    -d "data" -s "test-simulation" --verbose 1 --overwrite \
+# Run script
+julia --project scripts/runbenchmark.jl \
+    -d "data" -s "simulation-small" --verbose 2 --overwrite \
     -N 3 $params
 
 # Copy results back to home
