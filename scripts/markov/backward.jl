@@ -53,7 +53,7 @@ function backwardstep!(Δts, F, policy, cluster, model::AbstractModel, G; allown
 end
 
 "Backward simulates from F̄ down to F₀, using the albedo model. It assumes that the passed F ≡ F̄"
-function backwardsimulation!(F, policy, model::AbstractModel, G; verbose = 0, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = last(model.calibration.tspan), stepkwargs...)     
+function backwardsimulation!(F, policy, model::AbstractModel, G; verbose = 0, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = 150., stepkwargs...)     
     savecache = !isnothing(cachepath)
     if savecache
         if isfile(cachepath) 
