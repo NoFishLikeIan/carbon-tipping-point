@@ -4,11 +4,12 @@ using Interpolations
 using FiniteDiff
 using DifferentialEquations
 using Statistics
+using Random: default_rng
 
 PolicyFunction = Union{Interpolations.Extrapolation, Function};
 PoliciesFunctions = NTuple{2, PolicyFunction};
 
-function F!(du, u, parameters::Tuple{AbstractPlannerModel{GrowthDamages, P}, PoliciesFunctions}, t) where P <: Preferences
+function F!(du, u, parameters::Tuple{AbstractModel, PoliciesFunctions}, t)
     model, pols = parameters
     χitp, αitp = pols
     T, m = @view u[1:2]
@@ -29,11 +30,11 @@ function Fbau!(du, u, model::AbstractModel, t)
 	du[2] = γ(t, model.calibration)
 end
 
-function G!(Σ, _, model::AbstractModel, t)    
+function G!(Σ, u, model::AbstractModel, t)    
 	Σ[1] = model.hogg.σₜ / model.hogg.ϵ
 	Σ[2] = model.hogg.σₘ
 end
-function G!(Σ, _, parameters::Tuple{AbstractPlannerModel{GrowthDamages, P}, PoliciesFunctions}, t) where P <: Preferences
+function G!(Σ, u, parameters::Tuple{AbstractPlannerModel, PoliciesFunctions}, t)
     model = first(parameters)
 
     Σ[1] = model.hogg.σₜ / model.hogg.ϵ
@@ -55,10 +56,10 @@ function tipping!(integrator)
     integrator.u[1] += q
 end
 
-Result = Tuple{Vector{Float64}, Array{Float64, 3}, Array{Float64, 4}, RegularGrid}
+Result = Tuple{Vector{Float64}, Array{Float64, 3}, Array{Float64, 4}, RegularGrid, AbstractModel}
 "Constructs spline of results"
 function buildsplines(result::Result; splinekwargs...)
-    timespace, F, policy, G = result
+    timespace, F, policy, G, _ = result
 
     Tspace = range(G.domains[1]...; length = size(G, 1))
     mspace = range(G.domains[2]...; length = size(G, 2))
@@ -82,7 +83,7 @@ end
 ResultInterpolation = Dict{Symbol, Interpolations.Extrapolation}
 "Constructs linear interpolation of results"
 function buildinterpolations(result::Result; splinekwargs...)
-    timespace, F, policy, G = result
+    timespace, F, policy, G, _ = result
 
     Tspace = range(G.domains[1]...; length = size(G, 1))
     mspace = range(G.domains[2]...; length = size(G, 2))
@@ -156,4 +157,12 @@ function scc(t, Y, Xᵢ::Point, itp, model::AbstractModel)
     outputfactor = Y / (1 - model.preferences.θ)
 
     return -outputfactor * (Fₘ / Fᵢ) * Model.Gtonoverppm / dm
+end
+
+sampletemperature(model::AbstractModel, trajectories) = sampletemperature(default_rng(), model, trajectories)
+function sampletemperature(rng, model::AbstractModel, trajectories; σ = 0.15)
+    T̄ = minimum(Model.Tstable(log(model.hogg.M₀), model))
+    z = randn(trajectories)
+
+    return @. T̄ + z * σ
 end

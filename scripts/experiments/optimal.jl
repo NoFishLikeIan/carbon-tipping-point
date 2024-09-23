@@ -1,50 +1,84 @@
-include("defaults.jl")
+using JLD2
+using Model, Grid
+using Random
 
-using Suppressor: @suppress
-using SciMLBase: strip_solution
+using Interpolations: Extrapolation
+using SciMLBase
 using DifferentialEquations
+using FastClosures
+using Dates
 
-include("../utils/simulating.jl")
+includet("../utils/saving.jl")
+includet("../utils/simulating.jl")
 
-trajectories = 5_000;
-x₀ = [hogg.T₀, log(hogg.M₀), log(Economy().Y₀)];
+ALLOWNEGATIVE = false;
+SEED = 1148705;
+rng = MersenneTwister(SEED);
+trajectories = 10_000;
+datapath = "data/simulation-small";
 
-N = getnumber(env, "N", 51; type = Int);
+begin
+    filepaths = joinpath(datapath, ALLOWNEGATIVE ? "negative" : "constrained")
 
-optimalpath = joinpath(experimentpath, "optimal"); 
-if !isdir(optimalpath) mkdir(optimalpath) end
+    simulationfiles = listfiles(filepaths)
 
-for problemtype in keys(itpmap)
-    itps = itpmap[problemtype];
+    itpmap = Dict{AbstractModel, Dict{Symbol, Extrapolation}}();
+    models = AbstractModel[];
 
-    label = String(problemtype)
-    println("Simulating $(label)...")
+    for filepath in simulationfiles
+        result = loadtotal(filepath)
+        interpolations = buildinterpolations(result)
+        model = last(result)
 
-    sympath = joinpath(optimalpath, label)
-    if !isdir(sympath) mkdir(sympath) end
-    
-    for (k, model) in enumerate(models)
-        println("...model $(k)/$(length(models))...")
-
-        interpolations = itps[model];
-        policies = (interpolations[:χ], interpolations[:α]);
-    
-        problem = SDEProblem(F!, G!, x₀, (0., 80.), (model, policies))
-
-        if model isa JumpModel
-            ratejump = VariableRateJump(rate, tippingopt!)
-            jumpprobroblem = JumpProblem(problem, ratejump)
-            solution = solve(EnsembleProblem(jumpprobroblem), SRIW1(); trajectories)
-        else
-            solution = solve(EnsembleProblem(problem); trajectories)
-        end
-    
-        strippedsolution = strip_solution(solution)
-        filepath = joinpath(sympath, makefilename(model))
-        JLD2.save_object(filepath, strippedsolution)
+        itpmap[model] = interpolations
+        push!(models, model)
     end
-    
-    println("...saved in $(filepath) in group $label.")
+end;
+
+experimentdir = joinpath(filepaths, "experiments")
+if !isdir(experimentdir)
+    mkdir(experimentdir)
 end
 
-close(experimentfile)
+experimentpath = joinpath(experimentdir, ALLOWNEGATIVE ? "negative.jld2" : "constrained.jld2");
+if isfile(experimentpath)
+    unix = round(Int, time())
+    newfilepath = joinpath(experimentdir, ALLOWNEGATIVE ? "negative_$unix.jld2" : "constrained_$unix.jld2")
+
+    mv(experimentpath, newfilepath)
+end
+
+jldopen(experimentpath, "w") do experimentfile
+    for (k, model) in enumerate(models)
+        println("Simulation $(k)/$(length(models))...")
+        
+        group = JLD2.Group(experimentfile, string(k))
+    
+        interpolations = itpmap[model];
+        policies = (interpolations[:χ], interpolations[:α]);
+        parameters = (model, policies);
+    
+        initialpoints = [[T₀, log(model.hogg.M₀), log(model.economy.Y₀)] for T₀ in sampletemperature(rng, model, trajectories)];
+    
+        resample = (prob, id, _) -> begin
+            prob.u0 .= initialpoints[id]
+            return prob
+        end
+    
+        problem = SDEProblem(F!, G!, first(initialpoints), (0., 80.), (model, policies))
+    
+        ensembleprob, solver = if model isa JumpModel
+            ratejump = VariableRateJump(rate, tippingopt!)
+            problem = JumpProblem(problem, ratejump)
+    
+            EnsembleProblem(problem; prob_func = resample), ImplicitEM() 
+        else
+            EnsembleProblem(problem; prob_func = resample), SRIW1()
+        end
+    
+        simulation = solve(ensembleprob, solver; trajectories = trajectories, seed = SEED)
+    
+        group["model"] = model
+        group["simulation"] = SciMLBase.strip_solution(simulation)
+    end
+end

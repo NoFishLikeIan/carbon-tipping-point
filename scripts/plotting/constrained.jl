@@ -1,7 +1,9 @@
 using Revise
 using Suppressor: @suppress
-using JLD2, DotEnv, CSV, UnPack
+using JLD2, UnPack
 using FastClosures
+
+using Random
 
 using Plots, PGFPlotsX
 using LaTeXStrings, Printf, Colors, ColorSchemes
@@ -14,46 +16,37 @@ using SciMLBase, DifferentialEquations, DiffEqBase
 using Interpolations: Extrapolation
 
 includet("utils.jl")
-includet("../experiments/defaults.jl")
+includet("../utils/saving.jl")
+includet("../utils/simulating.jl")
 
-begin # Load experiments results
-    N = getnumber(env, "N", 51; type = Int)
-    
-    experimentfilepath = joinpath(experimentpath, "experiment_$N.jld2")
-    @assert isfile(experimentfilepath)
+SAVEFIG = false;
+ALLOWNEGATIVE = false;
+trajectories = 10;
+datapath = "data/simulation-small";
+PLOT_HORIZON = 70.
 
-    experimentfile = jldopen(experimentfilepath, "r")
-    simulationgroup = experimentfile["constrained"]
+begin # Import results and interpolations
+    filepaths = joinpath(datapath, ALLOWNEGATIVE ? "negative" : "constrained")
 
-    simulations = Dict{AbstractModel, EnsembleSolution}(model => @suppress JLD2.load_data_or_dict(simulationgroup, modellabels[model]) for model in models);
+    simulationfiles = listfiles(filepaths)
 
-    close(experimentfile)
+    itpmap = Dict{AbstractModel, Dict{Symbol, Extrapolation}}(); 
+    models = AbstractModel[];
 
-    regretfilepath = joinpath(experimentpath, "regret_$N.jld2")
-    @assert isfile(regretfilepath)
+    for filepath in simulationfiles
+        result = loadtotal(filepath)
+        interpolations = buildinterpolations(result)
+        model = last(result)
 
-    regretfile = jldopen(regretfilepath, "r")
-    regretgroup = regretfile["constrained"]
-    
-    regretsolution = @suppress JLD2.load_data_or_dict(regretgroup, "solution")
-
-    close(regretfile)
-end;
-
-begin # Load interpolations
-    results = loadtotal.(models; datapath)
-    
-    interpolations = buildinterpolations.(results);
-    itpsmap = Dict{AbstractModel, Dict{Symbol, Extrapolation}}(models .=> interpolations);
+        itpmap[model] = interpolations
+        push!(models, model)
+    end
 end;
 
 begin # Labels, colors and axis
+    thresholds = [1.5, 2.5];
     PALETTE = colorschemes[:grays]
     graypalette = n -> n > 1 ? get(PALETTE, range(0.1, 0.8; length = n)) : 0.8
-
-    thresholdscolors = Dict(thresholds .=> graypalette(length(thresholds)))
-    labelsbythreshold = Dict(thresholds .=> collect(values(modellabels))[1:2])
-
 
     TEMPLABEL = L"Temperature deviations $T_t - T^{p}$"
     LINE_WIDTH = 2.5
@@ -64,6 +57,8 @@ begin # Labels, colors and axis
     Tspace = ΔTspace .+ Hogg().Tᵖ
     Tmin, Tmax = extrema(Tspace)
 
+    calibration = JLD2.load_object("data/calibration.jld2")
+
     horizon = round(Int64, last(calibration.tspan))
     yearlytime = range(0., horizon; step = 1 / 3) |> collect
 
@@ -71,23 +66,80 @@ begin # Labels, colors and axis
 end;
 
 # Constructs a Group plot, one for the path of T and β
+begin # Extract relevant models
+    θ = 10.
+    ψ = 0.75
+    DamageType = Model.GrowthDamages
+
+    simmodels = filter(
+        model -> begin
+            model.damages isa DamageType &&
+            model.preferences.θ == θ &&
+            model.preferences.ψ == ψ
+        end, models)
+
+    tippingmodels = filter(model -> model isa TippingModel, simmodels)
+    sort!(tippingmodels; by = model -> model.albedo.Tᶜ)
+
+    jumpmodel = filter(model -> model isa JumpModel, simmodels) |> first
+
+    labels = ["Imminent", "Remote", "Benchmark"]
+    labelsbymodel = Dict{AbstractModel, String}(simmodels .=> labels)
+end
+
+begin # Run simulations
+    simulations = Dict{AbstractModel, EnsembleSolution}()
+    
+    for (k, model) in enumerate(simmodels)
+        print("Simulating model $k / $(length(simmodels))...\r")
+
+        interpolations = itpmap[model];
+        policies = (interpolations[:χ], interpolations[:α]);
+        parameters = (model, policies);
+    
+        initialpoints = [[T₀, log(model.hogg.M₀), log(model.economy.Y₀)] for T₀ in sampletemperature(model, trajectories)];
+    
+        resample = @closure (prob, id, _) -> begin
+            if prob isa JumpProblem
+                prob.prob.u0[1:3] .= initialpoints[id]
+                return prob
+            else
+                prob.u0 .= initialpoints[id]
+                return prob
+            end
+        end
+    
+        problem = SDEProblem(F!, G!, first(initialpoints), (0., PLOT_HORIZON), (model, policies))
+    
+        if model isa JumpModel
+            ratejump = VariableRateJump(rate, tippingopt!)
+            problem = JumpProblem(problem, ratejump)
+        end
+
+        ensembleproblem = EnsembleProblem(problem; prob_func = resample)
+
+        simulations[model] = solve(ensembleproblem, SRIW1(), trajectories = trajectories)
+    end
+    print("\nDone!\n")
+end
+
 begin
     simfig = @pgf GroupPlot({
         group_style = { 
-            group_size = "$(length(models)) by 3",
+            group_size = "$(length(simmodels)) by 3",
             horizontal_sep = raw"1em",
             vertical_sep = raw"2em"
         }
     });
 
-    yearticks = 0:20:horizon
+    yearticks = 0:20:PLOT_HORIZON
 
-    βextrema = (0., 0.03)
+    βextrema = (0., 0.02)
     βticks = range(βextrema...; step = 0.01)
     βticklabels = [@sprintf("%.0f \\%%", 100 * y) for y in βticks]
 
-    Textrema = (1., 2.5)
-    Tticks = makedeviationtickz(Textrema..., first(models); step = 1, digits = 0)
+    Textrema = (1., 4)
+    Tticks = makedeviationtickz(Textrema..., first(simmodels); step = 1, digits = 0)
 
     confidenceopts = @pgf { opacity = 0.5 }
     figopts = @pgf { width = raw"0.33\textwidth", height = raw"0.3\textwidth", grid = "both", xmin = 0, xmax = horizon }
@@ -95,9 +147,9 @@ begin
     qs = [0.1, 0.5, 0.9]
 
     # Makes the β plots in the first row
-    for (k, model) in enumerate(models)
+    for (k, model) in enumerate(simmodels)
         abatedsol = simulations[model];
-        itp = itpsmap[model];
+        itp = itpmap[model];
         αitp = itp[:α];
 
         # Abatement expenditure figure
@@ -110,7 +162,7 @@ begin
         βM = computeonsim(abatedsol, βfn, yearlytime);
        
         βquantiles = timequantiles(βM, qs);
-        smoothquantile!.(eachcol(βquantiles), 0)
+        smoothquantile!.(eachcol(βquantiles), 30)
 
         βmedianplot = @pgf Plot(defopts, Coordinates(yearlytime, βquantiles[:, 2]))
         βlowerplot = @pgf Plot({ defopts..., confidenceopts... }, Coordinates(yearlytime, βquantiles[:, 1]))
@@ -125,13 +177,13 @@ begin
 
         @pgf push!(simfig, {figopts...,
             ymin = βextrema[1], ymax = βextrema[2],
-            title = modellabels[model], xticklabel = raw"\empty",
+            title = labelsbymodel[model], xticklabel = raw"\empty",
             scaled_y_ticks = false, βoptionfirst...,
         }, βmedianplot, βlowerplot, βupperplot)
     end;
 
     # Makes the T plots in the second row
-    for (k, model) in enumerate(models)
+    for (k, model) in enumerate(simmodels)
         abatedsol = simulations[model]
         paths = EnsembleAnalysis.timeseries_point_quantile(abatedsol, qs, yearlytime)
         Tpaths = first.(paths.u)
@@ -149,7 +201,7 @@ begin
             ymax = Textrema[2] + model.hogg.Tᵖ,
             ytick = Tticks[1], yticklabels = Tticks[2],
             xtick = yearticks,
-            xticklabels = BASELINE_YEAR .+ yearticks,
+            xticklabels = 2020 .+ yearticks,
             xticklabel_style = { rotate = 45 },
             Ttitleoptions...
         }, Tmedianplot, Tlowerplot, Tupperplot)
@@ -181,7 +233,7 @@ begin
 
     βregret = @closure (T, m, y, t) -> begin
         model = ifelse(T - modelimminent.hogg.Tᵖ ≥ modelimminent.albedo.Tᶜ, modelimminent, modelremote)
-        αitp = itpsmap[model][:α]
+        αitp = itpmap[model][:α]
 
         return β(t, ε(t, exp(m), αitp(T, m, t), model), model.economy)
     end
@@ -224,7 +276,7 @@ begin
         ytick = Tregretticks[1], yticklabels = Tregretticks[2],
         ylabel = raw"Temperature $T_t$",
         xtick = yearticks,
-        xticklabels = BASELINE_YEAR .+ yearticks,
+        xticklabels = 2020 .+ yearticks,
         xticklabel_style = { rotate = 45 }
     }, Tmedianplot, Tlowerplot, Tupperplot)
 
