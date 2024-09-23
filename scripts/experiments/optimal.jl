@@ -6,6 +6,7 @@ using Interpolations: Extrapolation
 using SciMLBase
 using DifferentialEquations
 using FastClosures
+using Dates
 
 includet("../utils/saving.jl")
 includet("../utils/simulating.jl")
@@ -14,7 +15,7 @@ ALLOWNEGATIVE = false;
 SEED = 1148705;
 rng = MersenneTwister(SEED);
 trajectories = 10_000;
-datapath = "data/test-simulation";
+datapath = "data/simulation-small";
 
 begin
     filepaths = joinpath(datapath, ALLOWNEGATIVE ? "negative" : "constrained")
@@ -34,9 +35,20 @@ begin
     end
 end;
 
-filepath = joinpath("data/experiments", ALLOWNEGATIVE ? "negative.jld2" : "constrained.jld2");
+experimentdir = joinpath(filepaths, "experiments")
+if !isdir(experimentdir)
+    mkdir(experimentdir)
+end
 
-jldopen(filepath, "w") do experimentfile
+experimentpath = joinpath(experimentdir, ALLOWNEGATIVE ? "negative.jld2" : "constrained.jld2");
+if isfile(experimentpath)
+    unix = round(Int, time())
+    newfilepath = joinpath(experimentdir, ALLOWNEGATIVE ? "negative_$unix.jld2" : "constrained_$unix.jld2")
+
+    mv(experimentpath, newfilepath)
+end
+
+jldopen(experimentpath, "w") do experimentfile
     for (k, model) in enumerate(models)
         println("Simulation $(k)/$(length(models))...")
         
