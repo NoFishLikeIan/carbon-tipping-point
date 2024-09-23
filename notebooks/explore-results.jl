@@ -24,11 +24,14 @@ end
 # ╔═╡ b447bdc5-ea85-462c-a1f0-c8c8d5a3f1e9
 using PlutoUI; TableOfContents()
 
+# ╔═╡ d8c65298-2446-4135-b2a8-dbaf0aa90660
+using Interpolations: Extrapolation
+
 # ╔═╡ 5eb83b47-5f48-463d-8abb-21eaf36dbc25
-using JLD2, DotEnv, UnPack
+using JLD2, UnPack
 
 # ╔═╡ 9ca8ccf3-c770-4d13-8ed5-ece9eaaf4b28
-using FastClosures, Interpolations
+using FastClosures
 
 # ╔═╡ cbd38547-eea1-4214-88c7-944c1aca82c2
 using Model, Grid
@@ -72,28 +75,9 @@ function ingredients(path::String)
 end;
 
 # ╔═╡ 729c4427-986c-48b2-ae05-3b7b51c7d6bd
-md"# Setup"
-
-# ╔═╡ 576db675-6ca4-4f1e-8782-5bc39ef335e6
-begin # Global variables
-    env = DotEnv.config("../.env")
-    BASELINE_YEAR = 2020
-	ALLOWNEGATIVE = false
-
-    DATAPATH = joinpath("..", get(env, "DATAPATH", "data"))
-    
-    datapath = joinpath(
-		DATAPATH, 
-		get(env, "SIMULATIONPATH", "simulaton"), 
-		ALLOWNEGATIVE ? "negative" : ""
-	)
-
-    PLOTPATH = get(env, "PLOTPATH", "plots")
-    PRESENTATIONPATH = joinpath(PLOTPATH, "presentation")
-
-    SAVEFIG = false
-    SEED = 11148705
-end;
+md"# Setup
+## Load modules
+"
 
 # ╔═╡ 542e01e0-bbce-462b-9c43-6d375adb6bd5
 begin
@@ -102,143 +86,150 @@ begin
 	Plotting = ingredients("../scripts/plotting/utils.jl")
 end;
 
-# ╔═╡ abc6d59d-6b20-4193-ab50-53facae969e1
-begin # Default parameters
-	# Construct models and grids
-    thresholds = [1.5, 2.5];
+# ╔═╡ a8afb34d-0273-4597-bbac-9650c172ed3b
+md"## Import simulation"
 
-	calibration = load_object(joinpath(DATAPATH, "calibration.jld2"))
-	preferences = EpsteinZin()
-    damages = GrowthDamages()
-    economy = Economy()
-    jump = Jump()
-    hogg = Hogg()
-    
-	models = AbstractModel[]
+# ╔═╡ caba865f-055d-4655-91ca-14c537709dab
+begin
+	ALLOWNEGATIVE = false
+	datapath = "../data/simulation-small"
+	filepaths = joinpath(datapath, ALLOWNEGATIVE ? "negative" : "constrained")
+	simulationfiles = Saving.listfiles(filepaths)
+	simulationfilesnames = @. replace(last(split(simulationfiles, "/")), ".jld2" => "")
 
-	for Tᶜ ∈ thresholds
-	    albedo = Albedo(Tᶜ)
-	    model = TippingModel(albedo, hogg, preferences, damages, economy, calibration)
+	itpmap = Dict{AbstractModel, Dict{Symbol, Extrapolation}}();
+    models = AbstractModel[];
 
-		push!(models, model)
+    for filepath in simulationfiles
+        result = Saving.loadtotal(filepath)
+        interpolations = Simulating.buildinterpolations(result)
+        model = last(result)
 
-	end
-
-    jumpmodel = JumpModel(jump,  hogg, preferences, damages, economy, calibration)
-    push!(models, jumpmodel)
+        itpmap[model] = interpolations
+        push!(models, model)
+    end
 end;
 
 # ╔═╡ cfad70a3-73d0-4d2f-9180-3f2c6322b17d
-md"# Set-up"
-
-# ╔═╡ 891cac99-6427-47f2-8956-d4eb7817ea54
-begin
-    results = Saving.loadtotal.(models; datapath);
-    itps = Simulating.buildinterpolations.(results);
-
-	resultsmap = Dict{AbstractModel, typeof(first(results))}(models .=> results)
-    itpsmap = Dict{AbstractModel, typeof(first(itps))}(models .=> itps);
-    abatementmap = Dict{AbstractModel, Interpolations.Extrapolation}(model => itp[:α] for (model, itp) in itpsmap)
-
-	G = last(results[1])
-
-	Tspace = range(G.domains[1]...; length = size(G, 1))
-	mspace = range(G.domains[2]...; length = size(G, 2))
-
-	labels = Dict{AbstractModel, String}(models .=> ["imminent", "remote", "benchmark"])
-end;
-
-# ╔═╡ 78c11f3a-1325-46e5-974b-ae67b9637834
 md"
-# Results of simulation
+# Scenario
 
-Scenario: $( @bind plotmodel (labels |> collect |> Select) )
+$(@bind model Select(models .=> simulationfilesnames))
 "
 
+# ╔═╡ 458b32c6-47c0-44db-833a-d05866985fb1
+model
+
 # ╔═╡ d7df916d-cf45-4564-86ad-5b64e309cb11
+itp = itpmap[model];
+
+# ╔═╡ 9b215416-796e-4007-87bc-f6f0ed696b13
 begin
-	result = resultsmap[plotmodel]
-	itp = itpsmap[plotmodel]
+	Tspace = range(0., 8.; length = 101) .+ model.hogg.Tᵖ
+	mspace = range(log(model.hogg.Mᵖ), log(2.5model.hogg.Mᵖ); length = 101)
 end;
 
 # ╔═╡ 80bfe18d-8d06-4957-a4ad-dd80bf8c42b1
 md"
 ## Policy
 
-`t =` $(@bind tfigpol Slider(range(extrema(first(result))...; step = 1/4), default = 0., show_value = true))
+`t =` $(@bind tfig Slider(0:1/4:80, default = 0., show_value = true))
 "
 
 # ╔═╡ 033b0310-2df1-4613-81f8-39274d2318ba
 let
 	@unpack α, χ = itp
 	
-	χₜ = @closure (m, T) -> χ(T, m, tfigpol)
-	dm = @closure (m, T) -> 1 - ε(tfigpol, exp(m), α(T, m, tfigpol), plotmodel)
+	χₜ = @closure (m, T) -> χ(T, m, tfig)
+	dm = @closure (m, T) -> ε(tfig, exp(m), α(T, m, tfig), model)
 
-	nullcline = [mstable(T, plotmodel) for T in Tspace]
+	nullcline = [mstable(T, model) for T in Tspace]
 	
-	consfig = heatmap(mspace, Tspace, χₜ; ylabel = "\$T\$", xlabel = "\$m\$", title = "Time \$t = $tfigpol\$; \$\\chi\$", xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
-	plot!(consfig, nullcline, Tspace; linestyle = :dash, c = :white, label = false, linewidth = 3)
+	consfig = heatmap(mspace, Tspace, χₜ; ylabel = "\$T\$", xlabel = "\$m\$", title = "Time \$t = $tfig\$; \$\\chi\$", xlims = extrema(mspace), ylims = extrema(Tspace), clims = (0.3, 0.6))
+		
+	clims = ALLOWNEGATIVE ? (-1., 1.) : (-0.1, 1.)
+	cmap = ALLOWNEGATIVE ? :coolwarm : :Greens
+	
+	abatfig = heatmap(mspace, Tspace, dm; ylabel = "\$T\$", xlabel = "\$m\$", title = "\$\\varepsilon\$", xlims = extrema(mspace), ylims = extrema(Tspace), clims, cmap)
 
-	cmap = ALLOWNEGATIVE ? :coolwarm : :coolwarm
-	clims = ALLOWNEGATIVE ? (-1., 1.) : (-1., 1.)
-
-	abatfig = heatmap(mspace, Tspace, dm; ylabel = "\$T\$", xlabel = "\$m\$", title = "\$E / E^b\$", xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0., c = :coolwarm, clims = (-1., 1.))
-	plot!(abatfig , nullcline, Tspace; linestyle = :dash, c = :white, label = false, linewidth = 3)
+	for fig in (consfig, abatfig)
+		plot!(fig, nullcline, Tspace; linestyle = :dash, c = :white, label = false, linewidth = 3)
+	end
 
 	plot(consfig, abatfig; size = 500 .* (2√2, 1), margins = 10Plots.mm)
 end
 
-# ╔═╡ 28c7e9d4-d34a-4bcb-87a2-1c568ec8c669
-md"
-## Value
-
-`t =` $(@bind tfigval Slider(range(extrema(first(result))...; step = 1/4), default = 0., show_value = true))
-"
+# ╔═╡ e5895749-efc8-410a-bc1a-562979335a0b
+md"## Value"
 
 # ╔═╡ 78a476ce-788c-428d-b6bf-da39f92f4035
 let
 	@unpack F = itp
 	
-	Fₜ = @closure (m, T) -> log(F(T, m, tfigval))
+	Fₜ = @closure (m, T) -> log(abs(F(T, m, tfig)))
 
-	nullcline = [mstable(T, plotmodel) for T in Tspace]
+	nullcline = [mstable(T, model) for T in Tspace]
 	
-	consfig = contourf(mspace, Tspace, Fₜ; ylabel = "\$T\$", xlabel = "\$m\$", title = L"Time $t = %$(tfigval)$; $\log F_t(T, m)$", xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0., clims = (-10., 20.), c = :Reds)
+	consfig = contourf(mspace, Tspace, Fₜ; ylabel = "\$T\$", xlabel = "\$m\$", title = L"Time $t = %$(tfig)$; $\log F_t(T, m)$", xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0., c = :Reds)
 	plot!(consfig, nullcline, Tspace; linestyle = :dash, c = :white, label = false, linewidth = 3)
 end
 
 # ╔═╡ 497f0b6b-e7ac-4176-81b3-f8df4050d338
-md"# Simulation"
+md"## Simulation"
 
 # ╔═╡ baa07798-cd01-49cb-8d33-eafd0c92505b
 begin # Solve an ensemble problem for all models with the bau scenario
-    trajectories = 1_000
+    trajectories = 20
     ratejump = VariableRateJump(Simulating.rate, Simulating.tippingopt!);
     sols = Dict{AbstractModel, EnsembleSolution}()
 
-	x₀ = [hogg.T₀, log(hogg.M₀)]
+	initialpoints = [[T₀, log(model.hogg.M₀), log(model.economy.Y₀)] for T₀ in Simulating.sampletemperature(model, trajectories)];
 
-    for model in models
-        itp = itpsmap[model];
-        αitp = itp[:α];
-
-        prob = SDEProblem(Simulating.F!, Simulating.G!, x₀, (0., 80.), (model, αitp))
-
-        if isa(model, JumpModel)
-            jumpprob = JumpProblem(prob, ratejump)
-            ensprob = EnsembleProblem(jumpprob)
-            abatedsol = solve(ensprob, SRIW1(); trajectories)
-        else
-            ensprob = EnsembleProblem(prob)
-            abatedsol = solve(ensprob; trajectories)
+	resample = @closure (prob, id, _) -> begin
+            if prob isa JumpProblem
+                prob.prob.u0[1:3] .= initialpoints[id]
+                return prob
+            else
+                prob.u0 .= initialpoints[id]
+                return prob
+            end
         end
 
-        sols[model] = abatedsol
-    end
+	interpolations = itpmap[model];
+	policies = (interpolations[:χ], interpolations[:α]);
+	parameters = (model, policies);
+
+	problem = SDEProblem(Simulating.F!, Simulating.G!, first(initialpoints), (0., 80.), parameters)
+
+	if model isa JumpModel
+		ratejump = VariableRateJump(Simulating.rate, Simulating.tippingopt!)
+		problem = JumpProblem(problem, ratejump)
+	end
+
+	ensembleprob = EnsembleProblem(problem; prob_func = resample)
+	simulation = solve(ensembleprob, SRIW1(); trajectories = trajectories)
 end;
 
+# ╔═╡ 3bbdb5f8-b258-4b93-b939-cad8d5c5fc11
+begin
+	βfn = @closure (T, m, y, t) -> begin
+            abatement = interpolations[:α](T, m, t)
+            emissivity = ε(t, exp(m), abatement, model)
+            return β(t, emissivity, model.economy)
+        end
+	βtime = 0:0.1:80
+	βsim = Simulating.computeonsim(simulation, βfn, βtime)
+
+	Tfig = plot(simulation; idxs = 1, linewidth = 1, c = :black, alpha = 0.5, dpi = 180)
+	βfig = plot(βtime, βsim; linewidth = 1, c = :black, alpha = 0.5, dpi = 180)	
+
+
+	plot(Tfig, βfig; layout = (2, 1), link = :x)
+end
+
 # ╔═╡ 963b5d26-1f93-4cd9-8a9b-989e22c16143
+# ╠═╡ disabled = true
+#=╠═╡
 begin
 	yearlytime = 0:80
     yearticks = 0:20:80
@@ -287,11 +278,14 @@ begin
 
     plot(simfigs...; link = :x, layout = (3, 2), size = 300 .* (2√2, 2))
 end
+  ╠═╡ =#
 
 # ╔═╡ 32955af4-fa47-43dd-b6a8-7545e1398f25
 md"# Regret"
 
 # ╔═╡ 39409585-662d-4915-ae42-653e35a2b975
+# ╠═╡ disabled = true
+#=╠═╡
 begin # Solve the regret problem. Discover tipping point only after T ≥ Tᶜ.
     modelimminent, modelremote = models[[1, 2]]
     αimminent = abatementmap[modelimminent]
@@ -317,14 +311,21 @@ begin # Solve the regret problem. Discover tipping point only after T ≥ Tᶜ.
 
     regretsol = solve(regretprob; trajectories, callback)
 end;
+  ╠═╡ =#
 
 # ╔═╡ 9283bc5d-f5be-4b39-bc02-aeb942f1db79
+#=╠═╡
 plot(regretsol; idxs = 1, linewidth = 0.5, c = :black, opacity = 0.1)
+  ╠═╡ =#
 
 # ╔═╡ 68d51817-7f7e-4ebb-b986-67280479a999
+#=╠═╡
 plot(regretsol; idxs = 2, linewidth = 0.5, c = :black, opacity = 0.1)
+  ╠═╡ =#
 
 # ╔═╡ 498bf7bf-4812-4525-864e-db5454c53211
+# ╠═╡ disabled = true
+#=╠═╡
 βregret = @closure (T, m, t) -> begin
 	model = ifelse(T - hogg.Tᵖ > modelimminent.albedo.Tᶜ, modelimminent, modelremote)
 
@@ -332,11 +333,15 @@ plot(regretsol; idxs = 2, linewidth = 0.5, c = :black, opacity = 0.1)
 
 	return β(t, ε(t, exp(m), αitp(T, m, t), model), model.economy)
 end;
+  ╠═╡ =#
 
 # ╔═╡ f5584590-689c-4ddb-8e64-40c5c22e34ed
+#=╠═╡
 βM = Simulating.computeonsim(regretsol, βregret, yearlytime)
+  ╠═╡ =#
 
 # ╔═╡ 9c1452bc-611f-4e17-a9f5-89a80acf9568
+#=╠═╡
 let
 	βM = Simulating.computeonsim(regretsol, βregret, yearlytime)
 	βquantiles = Simulating.timequantiles(βM, [0.1, 0.5, 0.9])
@@ -344,31 +349,34 @@ let
 
 	regretfig = plot(yearlytime, βquantiles[:, 2])
 end
+  ╠═╡ =#
 
 # ╔═╡ Cell order:
 # ╟─35f99656-f68a-455c-9042-b5afc5e7a4a8
 # ╟─44eee19a-595a-42fe-9302-0f19df42388a
-# ╟─6d43d072-4b34-11ef-3e45-8fde68196131
 # ╠═b447bdc5-ea85-462c-a1f0-c8c8d5a3f1e9
 # ╟─729c4427-986c-48b2-ae05-3b7b51c7d6bd
+# ╟─6d43d072-4b34-11ef-3e45-8fde68196131
+# ╠═d8c65298-2446-4135-b2a8-dbaf0aa90660
 # ╠═5eb83b47-5f48-463d-8abb-21eaf36dbc25
 # ╠═9ca8ccf3-c770-4d13-8ed5-ece9eaaf4b28
-# ╠═576db675-6ca4-4f1e-8782-5bc39ef335e6
 # ╠═cbd38547-eea1-4214-88c7-944c1aca82c2
 # ╠═f6bab433-5d9d-4516-9c24-59c5441c06eb
 # ╠═bfa6364c-7376-449e-90bc-11a37334092a
 # ╠═542e01e0-bbce-462b-9c43-6d375adb6bd5
-# ╠═abc6d59d-6b20-4193-ab50-53facae969e1
+# ╟─a8afb34d-0273-4597-bbac-9650c172ed3b
+# ╠═caba865f-055d-4655-91ca-14c537709dab
 # ╟─cfad70a3-73d0-4d2f-9180-3f2c6322b17d
-# ╠═891cac99-6427-47f2-8956-d4eb7817ea54
-# ╟─78c11f3a-1325-46e5-974b-ae67b9637834
-# ╟─d7df916d-cf45-4564-86ad-5b64e309cb11
+# ╠═458b32c6-47c0-44db-833a-d05866985fb1
+# ╠═d7df916d-cf45-4564-86ad-5b64e309cb11
+# ╠═9b215416-796e-4007-87bc-f6f0ed696b13
 # ╟─80bfe18d-8d06-4957-a4ad-dd80bf8c42b1
 # ╠═033b0310-2df1-4613-81f8-39274d2318ba
-# ╟─28c7e9d4-d34a-4bcb-87a2-1c568ec8c669
+# ╟─e5895749-efc8-410a-bc1a-562979335a0b
 # ╟─78a476ce-788c-428d-b6bf-da39f92f4035
 # ╟─497f0b6b-e7ac-4176-81b3-f8df4050d338
-# ╠═baa07798-cd01-49cb-8d33-eafd0c92505b
+# ╟─baa07798-cd01-49cb-8d33-eafd0c92505b
+# ╟─3bbdb5f8-b258-4b93-b939-cad8d5c5fc11
 # ╟─963b5d26-1f93-4cd9-8a9b-989e22c16143
 # ╟─32955af4-fa47-43dd-b6a8-7545e1398f25
 # ╠═39409585-662d-4915-ae42-653e35a2b975
