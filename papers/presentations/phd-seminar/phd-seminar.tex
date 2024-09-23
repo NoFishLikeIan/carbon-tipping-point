@@ -1,0 +1,306 @@
+\documentclass[pdf]{beamer}
+
+\usetheme{Berlin}
+\beamertemplatenavigationsymbolsempty
+
+\usepackage[utf8]{inputenc}
+\usepackage{hyperref}
+
+% Math
+\usepackage{amsmath, amssymb, mathtools, bbm, bm}
+\usepackage{xcolor-solarized}
+
+
+\let\d\relax
+\newcommand{\d}[1]{\mathrm{d}#1}
+
+\newcommand{\control}[1]{\bm{#1}}
+
+% Diagrams
+\usepackage{tikz} 
+\usepackage{tikzit}
+\usepackage{tikzscale}
+\usepackage{pgfplots}
+\usepackage{graphicx}
+\usepackage{wrapfig}
+\usepackage{relsize}
+
+
+% Graphs
+\usepackage{tikz} 
+\usepackage{tikzit}
+\usepackage{pgfplots}
+\usepackage{ifdraft}
+\usetikzlibrary{positioning,fit,calc,decorations.pathreplacing,calligraphy, arrows.meta, pgfplots.groupplots}
+
+\pgfplotsset{compat=1.18}
+
+\newcommand{\X}{{\color{violet} X}}
+\newcommand{\includegraphics[width = 0.5\linewidth]}[1]{%  
+
+    \ifdraft{
+    \includegraphics[width=0.5\textwidth]{example-image-a}
+    }{
+    \IfFileExists{#1}{
+        \input{#1}
+        }{
+        \includegraphics[width=0.5\textwidth]{example-image-a}
+    }
+    }
+}
+\pgfplotsset{compat=1.18}
+
+\usepackage[bibencoding=utf8, style=apa, backend=biber, eprint=false]{biblatex}
+\addbibresource{../../scc-tipping-points.bib}
+
+\author{Andrea Titton}
+\title[Climate Tipping Points and Optimal Emissions]{\small Climate Tipping Points and\\ Optimal Emissions}
+\institute{CeNDEF, University of Amsterdam}
+\date{TI seminar, 17 November}
+
+\begin{document}
+
+\frame[plain]{\titlepage}
+
+\section{Motivation}
+\begin{frame}
+    \begin{enumerate}
+        \item To get optimal emissions, climate dynamics matter (\cite{dietz_are_2020, dietz_economic_2021})
+        \pause \item Large focus on stochastic tipping point, via jump processes (\cite{van_den_bremer_risk-adjusted_2021,lin_social_2023})
+        \pause \item In climate models most tipping points are caused by bifurcations (\cite{ashwin_tipping_2012,ashwin_extreme_2020})
+    \end{enumerate}
+\end{frame}
+
+\begin{frame}
+    In this paper I look at one such tipping point: \textbf{ice-albedo feedback}
+
+    \pause \begin{figure}
+        \centering
+        \includegraphics[width = 0.5\linewidth]{../figures/feedback.png}
+    \end{figure}
+\end{frame}
+
+
+\begin{frame}
+    \centering
+    \begin{figure}
+        \includegraphics[width = 0.9\paperwidth]{../figures/sinkhole.png}
+    \end{figure}
+\end{frame}
+
+
+\section{Climate Model}
+
+\begin{frame} \frametitle{Temperature}
+    \begin{columns}
+        \column{0.35\linewidth}
+        \begin{itemize}
+            \item ${\color{orange} S}$: solar radiation
+            \item ${\color{red} T}$: temperature
+        \end{itemize}
+        \column{0.6\linewidth}
+        \begin{equation*}
+            {\color{orange} S} = \eta \sigma {\color{red} T}^4
+        \end{equation*}
+    \end{columns}
+\end{frame}
+
+\begin{frame} \frametitle{Temperature}
+    \begin{columns}
+        \column{0.35\linewidth}
+        \begin{itemize}
+            \item ${\color{orange} S}$: solar radiation
+            \item ${\color{red} T}$: temperature
+            \item ${\color{blue} M}$: carbon concentration
+        \end{itemize}
+        \column{0.6\linewidth}
+        \begin{equation*}
+            {\color{orange} S} = \eta \sigma {\color{red} T}^4 - (G_0 + G_1 \log {\color{blue} M} / M^{\mathrm{p}})
+        \end{equation*}
+    \end{columns}
+\end{frame}
+
+\begin{frame} \frametitle{Temperature}
+    \begin{columns}
+        \column{0.35\linewidth}
+        \begin{itemize}
+            \item ${\color{orange} S_0} (1 - \lambda({\color{red} T}))$: solar radiation
+            \item ${\color{red} T}$: temperature
+            \item ${\color{blue} M}$: carbon concentration
+        \end{itemize}
+        \column{0.6\linewidth}
+        \begin{equation*}
+            {\color{orange} S_0} (1 - \lambda({\color{red} T})) = \eta \sigma {\color{red} T}^4 - (G_0 + G_1 \log {\color{blue} M} / M^{\mathrm{p}})
+        \end{equation*}
+    \end{columns}
+\end{frame}
+
+
+\begin{frame} \frametitle{Temperature}
+    \begin{columns}
+        \column{0.35\linewidth}
+        \begin{itemize}
+            \item ${\color{orange} S_0} (1 - \lambda({\color{red} T}))$: solar radiation
+            \item ${\color{red} T}$: temperature
+            \item ${\color{blue} M}$: carbon concentration
+        \end{itemize}
+        \column{0.6\linewidth}
+        \begin{equation*}
+            \begin{split}
+                \epsilon \; \d {{ \color{red} T }} = \big( &{\color{orange} S_0} (1 - \lambda({\color{red} T})) - \eta \sigma {\color{red} T}^4 \\ 
+                + &G_0 + G_1 \log {\color{blue} M} / M^{\mathrm{p}} \big) \dd{t} \\
+                + &\sigma_T \d W
+            \end{split}
+        \end{equation*}
+    \end{columns}
+\end{frame}
+
+\begin{frame} \frametitle{Albedo loss}
+    \begin{equation*}
+        \lambda({\color{red} T}) = \lambda_1 - L({\color{red} T}) \Delta \lambda
+    \end{equation*}
+    \begin{figure}
+    \resizebox{!}{0.4\linewidth}{
+        \includegraphics[width = 0.5\linewidth]{\plotpath/albedo.tikz}
+    }
+    \end{figure}
+\end{frame}
+
+\begin{frame} \frametitle{Albedo loss}
+    \centering
+    \includegraphics[width = 0.5\linewidth]{\plotpath/nullcline.tikz}
+\end{frame}
+
+\begin{frame} \frametitle{Carbon Concentration}
+    \begin{columns}
+        \column{0.35\linewidth}
+        $\gamma^\mathrm{b}$: growth rate of carbon concentration $M$ under the business-as-usual scenario.
+        \column{0.6\linewidth}
+        \begin{figure}[H]
+            \includegraphics[width = 0.5\linewidth]{\plotpath/growthmfig.tikz}
+        \end{figure}
+    \end{columns}
+\end{frame}
+
+
+\begin{frame} \frametitle{Carbon Concentration}
+    \begin{columns}
+        \column{0.35\linewidth}
+        \begin{equation*}
+            \dd{m} = \frac{\dd{M}}{M} = \left( \gamma^\mathrm{b} - \control{\alpha} \right) \dd{t}
+        \end{equation*}
+        \column{0.6\linewidth}
+        \begin{figure}[H]
+            \centering
+            \includegraphics[width = 0.5\linewidth]{\plotpath/growthmfig.tikz}
+        \end{figure}
+    \end{columns}
+\end{frame}
+
+\begin{frame}{Business-as-usual dynamics}
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width = 0.5\linewidth]{\plotpath/presentation/baufig.tikz}
+    \end{figure}
+\end{frame}
+
+\begin{frame}{Business-as-usual dynamics}
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width = 0.5\linewidth]{\plotpath/presentation/bau-x-dens.tikz}
+    \end{figure}
+\end{frame}
+
+\section{Economy}
+\begin{frame} \frametitle{Economy... without climate change}
+    \begin{columns}
+        \column{0.35\linewidth}
+        \begin{equation*}
+            \frac{\d {{\color{cyan} y}}}{\dd{t}} = \varrho \; - \; \delta_k + \phi(1 - \control{\chi})
+        \end{equation*}
+        \column{0.6\linewidth}
+        \pause \begin{figure}[H]
+            \centering
+            \includegraphics[width = 0.5\linewidth]{\plotpath/phifig.tikz}
+        \end{figure}
+    \end{columns}
+\end{frame}
+
+\begin{frame} \frametitle{Economy... with climate change}
+    \begin{equation*}
+        \frac{\d {{\color{cyan} y}}}{\dd{t}} = \varrho - \delta_k + \phi(1 - \control{\chi}) - d({\color{red} T}) - \frac{\omega}{2} \left(1 - \frac{E(\control{\alpha})}{E^{\mathrm{B}}} \right)^2
+    \end{equation*}
+\end{frame}
+
+\section{Optimal Emissions}
+
+\begin{frame}{Social Planner}
+    The social planner at time $t$ is trying to maximise \begin{equation*}
+        U(t, \X, \control{\alpha}, \control{\chi}) = \mathbb{E}_{\X} \int^\infty_t f\Big(\underbrace{\control{\chi} e^{{\color{cyan} y}}}_{C}, U(t, \X, \control{\alpha}, \control{\chi})\Big) \; \dd{t}
+    \end{equation*} where $f(C, U)$ is the Epstein-Zin aggregator and $\X = ({\color{red} T}, {\color{blue} m}, {\color{cyan} y})$.
+\end{frame}
+
+\begin{frame}{Why Epstein-Zin?}
+    \begin{columns}
+        \pause \column{0.5\linewidth}
+        I flip a coin today. You get $2$€ every day if it is head and $1$€ every day if it is tails.
+        \pause \column{0.5\linewidth}
+        Each day I flip a coin. That day you get $2$€ if it is head and $1$€ if it is tails.
+    \end{columns}
+\end{frame}
+
+\begin{frame}{Value Function}
+    We are looking for $V(t, \X) = \sup_{\control{\chi}, \control{\alpha}} U(t, \X, \control{\alpha}, \control{\chi})$, which satisfies
+    \begin{equation*}
+        \begin{split}
+            -\partial_t V = \sup_{\control{\chi}, \control{\alpha}} \Big\{ &f(\control{\chi} e^{\color{cyan} y}, V) \; +\\
+            &\nabla_{\X} V \cdot \text{drift}(\X, \control{\chi}, \control{\alpha}) \Big\} \; + \\
+            &\Delta_{\X} V \cdot \text{noise}
+        \end{split}
+    \end{equation*}
+\end{frame}
+
+\section{Solution method}
+\begin{frame}{Terminal condition}
+    \begin{enumerate}
+        \item \textbf{Assume} that at some point $\tau$ (e.g. 500 years) abatement is free, hence $\dd{m} = 0$.
+        \pause \item Solve the ``terminal'' problem \begin{equation*}
+            0 = \sup_{\control{\chi}} f(\control{\chi} e^{\color{cyan} y}, \overline{V}) + \partial_y \overline{V} \times \Big( \phi(t, 1 - \control{\chi}) - \delta_k - d({\color{red} T}) \Big)
+        \end{equation*}
+    \end{enumerate}
+\end{frame}
+
+\begin{frame}{Terminal condition}
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width = 0.8\linewidth]{\plotpath/presentation/termfig.png}
+    \end{figure}
+\end{frame}
+
+\begin{frame}{Simulate backwards...}
+    Given $\overline{V}$, numerically simulate backwards in time until today $t = 0$ using $\partial_t V$. But there are complications... \hspace{2em}
+    \begin{enumerate}
+        \pause \item Cannot use first order conditions to find optimal $\control{\chi}, \control{\alpha}$;
+        \pause \item Large state space $\X$ around 180 million points
+    \end{enumerate}
+\end{frame}
+
+\begin{frame}{Preliminary results...}
+    \begin{enumerate}
+        \pause \item Optimal emissions prescribes steep reductions compared to business as usual
+        \pause \item Unlike previous work, timing matters: reduce emissions early
+        \pause \item As a consequence the social cost of carbon is increasing rapidly 
+    \end{enumerate}
+\end{frame}
+
+
+\begin{frame}
+    \begin{figure}
+        \includegraphics[width = 0.7\linewidth]{../figures/netherlands.png}
+        \caption{Ed Hawkins, Berkeley Earth data}
+    \end{figure}
+\end{frame}
+
+
+
+\end{document}

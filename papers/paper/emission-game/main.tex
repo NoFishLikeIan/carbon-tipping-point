@@ -1,0 +1,39 @@
+\documentclass[12pt]{article}
+    \usepackage{style}
+    \newcommand{\lang}{en}
+
+    \usepackage{etoolbox}
+    \apptocmd{\sloppy}{\hbadness 10000\relax}{}{} % Fixes under-full box in bibliography
+
+    \usepackage{subfiles} % Load last
+
+    \overfullrule=5pt
+    
+    % Paper specific commands
+    \def\plotpath{../../../plots}
+    \newcommand{\control}[1]{#1}
+
+    % Title page
+    \author{Andrea Titton}
+    \title{Regret and Climate Tipping Points}
+    
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+  This paper investigates the role of non-linear tipping points in determining optimal abatement policies. To do so, I introduce a stylised ice-albedo tipping point in the climate dynamics and study the consequences this has in determining optimal emissions in a dynamic stochastic general equilibrium model. In line with recent evidence, I assume that climate change hinders economic growth. I show that the presence of a tipping point prescribes ambitious abatement policies, not only in scope but, crucially, in timing.
+\end{abstract}
+
+\newpage
+
+\section{Pollution Game}
+
+\subfile{sections/pollution-game/pollution-game.tex}
+
+\newpage
+\nocite{*}
+\bibliography{scc-tipping-points}
+
+\end{document}

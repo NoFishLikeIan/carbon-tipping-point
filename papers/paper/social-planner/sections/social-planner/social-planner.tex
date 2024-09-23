@@ -1,0 +1,20 @@
+\documentclass[../../main.tex]{subfiles}
+\begin{document}
+
+Given the climate and economic dynamics described in the previous section, in the following I introduce the objective of the social planner and the resulting maximisation problem. At time $t$ given the state of temperature, carbon concentration, carbon in sinks, and output $X_t \coloneqq (T_t, M_t, N_t, Y_t)$, societal utility is recursively defined as \begin{equation} \label{eq:social-objective}
+    V_t(X_t) = \sup_{\chi, \alpha} \mathbb{E}_t 
+    \int_{t}^{\infty} f(\chi_s(X_s) Y_s, V_s(X_s)) \dd{s}
+\end{equation} where $\chi$ and $\alpha$ are continuous functions over time and the state space, and $f$ is an Epstein-Zin aggregator \begin{equation} \label{eq:aggregator}
+    f(c, u) \coloneqq \frac{\rho}{1 - 1 / \psi} (1 - \theta) u  \left( \left(\frac{c}{((1 - \theta) u)^{\frac{1}{1 - \theta}}}\right)^{1 - 1 / \psi} - 1 \right).
+\end{equation} Consumption is integrated into a utility index by means of the Epstein-Zin integrator \citep{duffie_asset_1992}. This aggregator plays a dual role. First, it allows to disentangle the role of relative risk aversion $\theta$, elasticity of intertemporal substitution $\psi$, and the discount rate $\rho$ in determining optimal abatement paths. Second, it circumvents the known paradoxical result that abatement policies becomes less ambitious as society becomes more risk averse \citep{pindyck_economic_2013}. Details on the solution of problem (\ref{eq:social-objective}) are given in Appendix \ref{appendix:solution}. 
+
+Using the optimal policy, I then focus on the unpredictability of tipping points and the regret this might cause. More concretely, let $\alpha^{i}$ and $\alpha^{r}$ be the optimal abatement policies in the case of an imminent $T^c = 1.5^\circ$ and remote $T^c = 2.5^\circ$ tipping point, respectively. The regret associated with the tipping point derives from the social planner assuming the tipping point is remote until the critical threshold $T^c$ is crossed, if it is crossed. Thereafter, the social planner discovers the tipping point is imminent and switches to the optimal strategy. Letting $t^c \coloneqq \inf\{t \; \mid \; T_t \geq T^c \}$ be the discovery time, the policy used in this case by the social planner is \begin{equation}
+    \alpha^{d}_t(X_t) \coloneqq \begin{cases}
+        \alpha_t^r(X_t) &\text{ if } t < t^c \text{ and } \\
+        \alpha_t^i(X_t) &\text{ if } t \geq t^c,
+    \end{cases}
+\end{equation} and similarly the consumption policy $\chi^d$. The resulting social welfare is given by \begin{equation}
+    a = 2
+\end{equation}
+
+\end{document}

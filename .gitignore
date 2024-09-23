@@ -454,6 +454,4 @@ papers/presentations/figures
 .env.negative
 
 # Snellius unnecessary files
-papers
-notebooks
 jobs/example.job
