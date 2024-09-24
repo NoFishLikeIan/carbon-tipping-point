@@ -23,6 +23,6 @@ obj = Dict(
     "tippingparameters" => tippingparameters
 )
 
-open("jobs/parameters.json", "w") do f
+open("jobs/simulations/parameters.json", "w") do f
     JSON.print(f, obj, 2)
 end
