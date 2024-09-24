@@ -34,7 +34,7 @@ In the following, I link the abatement costs $B_t$ with the abatement rate $\alp
 
 As time progresses, so does abatement technology and a given abatement objective becomes cheaper, as a fraction of output. This is modelled by letting the exogenous technological parameter $\omega_t$ decrease exponentially over time \begin{equation}
     \omega_t = \omega_0 e^{-\omega_r t}.
-\end{equation} Following \citep{nordhaus_revisiting_2017}, I assume that full abatement $\varepsilon(\alpha_t) = 1$ in 2020 costs 11\% of GDP while doing so in 2100 costs 2.7\% of GDP. This estimates are in line with a large literature estimating marginal abatement curves (see the meta-analysis by \citealt{kuik_marginal_2009}). The resulting marginal abatement curves are displayed in Figure \ref{fig:mac}. \begin{figure}[htbp]
+\end{equation} Following \citep{nordhaus_revisiting_2017}, I assume that full abatement $\varepsilon(\alpha_t) = 1$ costs 11\% of GDP in 2020 and 2.7\% of GDP in 2100. This estimates are in line with a large literature estimating marginal abatement curves (see the meta-analysis by \citeauthor{kuik_marginal_2009}, \citeyear{kuik_marginal_2009}). The resulting marginal abatement curves are displayed in Figure \ref{fig:mac}. \begin{figure}[htbp]
     \centering
     \input{\plotpath/abatementfig.tikz}
     \caption{Calibrated marginal abatement curves $\beta_t^\prime(\varepsilon) = \omega_t \varepsilon$ at different times $t$.}
@@ -49,7 +49,7 @@ Finally, let \begin{equation}
     \phi_t(\chi_t) \coloneqq A_t (1 - \chi_t) - \frac{\kappa}{2} A_t^2 (1 - \chi_t)^2 - \delta_k
 \end{equation} is an endogenous growth component, $\beta_t(\varepsilon(\alpha_t))$ is the fraction of output allocated to abatement for an abatement rate  $\alpha_t$, and $d(T_t)$ are the damages from climate change. This formulation makes the trade-off between climate abatement and economic growth apparent. Devoting fewer resources to abatement to pursue higher capital growth, and hence, output growth, yields higher future temperature and can put the economy in a lower growth path altogether.
 
-Finally, as output $Y_t$ is just the product of capital $K_t$ and productivity $A_t$, its growth rate differs from that of capital just by the growth rate of productivity, hence it satisfies \begin{equation}
+Finally, as output $Y_t$ is just the product of capital $K_t$ and productivity $A_t$, its growth rate differs from that of capital just by the growth rate of productivity \begin{equation}
     \frac{\dd{Y}_t}{Y_t} = \varrho + \frac{\dd{K}_t}{K_t}. 
 \end{equation}
 
