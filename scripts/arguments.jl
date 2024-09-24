@@ -9,7 +9,7 @@ argtable = ArgParseSettings()
 
     "--simulationpath", "-s"
         arg_type = String
-        default = "simulation/planner"
+        default = "simulation-small"
         help = "Path to simulation folder"
     
     "-N"
