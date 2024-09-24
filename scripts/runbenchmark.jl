@@ -17,6 +17,7 @@ if (verbose ≥ 1)
     if overwrite
         println("$(now()): ", "Running in overwrite mode!")
     end
+    
     flush(stdout)
 end
 
