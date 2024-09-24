@@ -1,0 +1,31 @@
+#!/bin/bash
+
+#SBATCH --job-name=testexperiment
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=18
+#SBATCH --array=0-1
+#SBATCH --time=00:10:00
+#SBATCH --partition=rome
+#SBATCH --mail-type=BEGIN,END,FAIL,TIME_LIMIT_80
+#SBATCH -o ./logs/out/JOB%A_%a.out 
+#SBATCH -e ./logs/error/JOB%A_%a.out
+#SBATCH --mail-user=a.titton@uva.nl
+
+module load 2023
+module load Julia/1.9.2-linux-x86_64
+
+cd $HOME/scc-tipping-points # Move to base directory
+mkdir -p "$TMPDIR"/data # Create scratch directory with user name
+rsync data "$TMPDIR" # Copy data to scratch
+
+# Extract parameters at the SLURM_ARRAY_TASK_ID from parameters.json
+simulationpath=$(jq -r --arg id "$SLURM_ARRAY_TASK_ID" '.inputfiles[$id | tonumber]' jobs/experiments/parameters.json)
+
+# Run script
+julia --threads 18 --project scripts/experiments/run.jl $simulationpath \
+    --trajectories 5 \
+    --datapath "data"  --experiment-path "simulation-small" --verbose 2
+
+# Copy results back to home
+rsync -avzu "$TMPDIR"/data $HOME/scc-tipping-points
