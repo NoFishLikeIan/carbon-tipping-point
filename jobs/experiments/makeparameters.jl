@@ -6,6 +6,6 @@ inputfiles = replace.(listfiles(inputdir), "data/" => "");
 
 obj = Dict("inputfiles" => inputfiles);
 
-open("jobs/experiments/parameters.json", "w") do f
-    JSON.print(f, obj, 2)
+open("jobs/experiments/parameters.json", "w") do file
+    JSON.print(file, obj, 2)
 end

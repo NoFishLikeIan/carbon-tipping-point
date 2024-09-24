@@ -16,14 +16,18 @@ module load 2023
 module load Julia/1.9.2-linux-x86_64
 
 cd $HOME/scc-tipping-points # Move to base directory
-mkdir -p "$TMPDIR"/data # Create scratch directory with user name
-rsync data "$TMPDIR" # Copy data to scratch
 
 # Extract parameters at the SLURM_ARRAY_TASK_ID from parameters.json
-simulationpath=$(jq -r --arg id "$SLURM_ARRAY_TASK_ID" '.inputfiles[$id | tonumber]' jobs/experiments/parameters.json)
+SIMULATIONPATH=$(jq -r --arg id "$SLURM_ARRAY_TASK_ID" '.inputfiles[$id | tonumber]' jobs/experiments/parameters.json)
+
+RELATIVEDIR=$(dirname "$SIMULATIONPATH"); # Get the directory of the file
+mkdir -p "$TMPDIR"/data/$RELATIVEDIR # Create the directory in scratch
+rsync data/$SIMULATIONPATH $TMPDIR/data/$RELATIVEDIR # Sync the file to scratch
+
+FILEPATH=($TMPDIR/data/$SIMULATIONPATH); # Get the filename
 
 # Run script
-julia --threads 18 --project scripts/experiments/run.jl $simulationpath \
+julia --threads 18 --project scripts/experiments/run.jl $FILEPATH \
     --trajectories 5 \
     --datapath "data"  --experiment-path "simulation-small" --verbose 2
 
