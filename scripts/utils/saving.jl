@@ -90,26 +90,25 @@ function loadtotal(model::AbstractGameModel; outdir = "data/simulation")
     filename = makefilename(model)
     savepath = joinpath(cachefolder, filename)
 
-    cachefile = jldopen(savepath, "r")
-    G = cachefile["G"]
-    timekeys = filter(!=("G"), keys(cachefile))
-    timesteps = round.(parse.(Float64, timekeys), digits = 4)
+    jldopen(savepath, "r") do cachefile
+        G = cachefile["G"]
+        timekeys = filter(!=("G"), keys(cachefile))
+        timesteps = round.(parse.(Float64, timekeys), digits = 4)
 
-    ix = sortperm(timesteps)
-    timesteps = timesteps[ix]
-    timekeys = timekeys[ix]
+        ix = sortperm(timesteps)
+        timesteps = timesteps[ix]
+        timekeys = timekeys[ix]
 
-    T = length(timesteps)
-    M = size(cachefile[first(timekeys)]["F"], 3)
-    F = Array{Float64, 5}(undef, size(G, 1), size(G, 2), M, 2, T)
-    policy = Array{Float64, 5}(undef, size(G, 1), size(G, 2), M, 2, T)
+        T = length(timesteps)
+        M = size(cachefile[first(timekeys)]["F"], 3)
+        F = Array{Float64, 5}(undef, size(G, 1), size(G, 2), M, 2, T)
+        policy = Array{Float64, 5}(undef, size(G, 1), size(G, 2), M, 2, T)
 
-    for (k, key) ∈ enumerate(timekeys)
-        F[:, :, :, :, k] .= cachefile[key]["F"]
-        policy[:, :, :, :, k] .= cachefile[key]["policy"]
+        for (k, key) ∈ enumerate(timekeys)
+            F[:, :, :, :, k] .= cachefile[key]["F"]
+            policy[:, :, :, :, k] .= cachefile[key]["policy"]
+        end
     end
-
-    close(cachefile)
 
     return timesteps, F, policy, G
 end
@@ -155,7 +154,7 @@ function listfiles(simpath::String)
 
     files = String[]
     for (root, _, file_names) in walkdir(simpath)
-        if !occursin("terminal", root)
+        if !occursin("terminal", root) && !occursin("experiments", root)
             for file_name in file_names
                 push!(files, joinpath(root, file_name))
             end

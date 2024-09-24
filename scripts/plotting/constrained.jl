@@ -21,9 +21,9 @@ includet("../utils/simulating.jl")
 
 SAVEFIG = false;
 ALLOWNEGATIVE = false;
-trajectories = 10;
+trajectories = 100;
 datapath = "data/simulation-small";
-PLOT_HORIZON = 70.
+PLOT_HORIZON = 80.
 
 begin # Import results and interpolations
     filepaths = joinpath(datapath, ALLOWNEGATIVE ? "negative" : "constrained")
@@ -59,15 +59,14 @@ begin # Labels, colors and axis
 
     calibration = JLD2.load_object("data/calibration.jld2")
 
-    horizon = round(Int64, last(calibration.tspan))
-    yearlytime = range(0., horizon; step = 1 / 3) |> collect
+    yearlytime = range(0., PLOT_HORIZON; step = 1 / 3) |> collect
 
     temperatureticks = makedeviationtickz(0., ΔTmax, first(models); step = 1, digits = 0)
 end;
 
 # Constructs a Group plot, one for the path of T and β
 begin # Extract relevant models
-    θ = 10.
+    θ = 2.
     ψ = 0.75
     DamageType = Model.GrowthDamages
 
@@ -134,15 +133,19 @@ begin
 
     yearticks = 0:20:PLOT_HORIZON
 
-    βextrema = (0., 0.02)
+    βextrema = (0., 0.05)
     βticks = range(βextrema...; step = 0.01)
     βticklabels = [@sprintf("%.0f \\%%", 100 * y) for y in βticks]
 
-    Textrema = (1., 4)
+    emissionsextrema = (0., 2Model.Eᵇ(0, calibration))
+    emissionsticks = range(emissionsextrema...; step = 5)
+    emissionsticklabels = emissionsticks
+
+    Textrema = (1., 4.)
     Tticks = makedeviationtickz(Textrema..., first(simmodels); step = 1, digits = 0)
 
     confidenceopts = @pgf { opacity = 0.5 }
-    figopts = @pgf { width = raw"0.33\textwidth", height = raw"0.3\textwidth", grid = "both", xmin = 0, xmax = horizon }
+    figopts = @pgf { width = raw"0.33\textwidth", height = raw"0.3\textwidth", grid = "both", xmin = 0, xmax = PLOT_HORIZON }
 
     qs = [0.1, 0.5, 0.9]
 
@@ -162,7 +165,7 @@ begin
         βM = computeonsim(abatedsol, βfn, yearlytime);
        
         βquantiles = timequantiles(βM, qs);
-        smoothquantile!.(eachcol(βquantiles), 30)
+        smoothquantile!.(eachcol(βquantiles), 0)
 
         βmedianplot = @pgf Plot(defopts, Coordinates(yearlytime, βquantiles[:, 2]))
         βlowerplot = @pgf Plot({ defopts..., confidenceopts... }, Coordinates(yearlytime, βquantiles[:, 1]))
@@ -182,7 +185,43 @@ begin
         }, βmedianplot, βlowerplot, βupperplot)
     end;
 
-    # Makes the T plots in the second row
+    # Makes the emissions plots in the second row
+    for (k, model) in enumerate(simmodels)
+        abatedsol = simulations[model];
+        itp = itpmap[model];
+        αitp = itp[:α];
+
+        # Abatement expenditure figure
+        emissions = @closure (T, m, y, t) -> begin
+            abatement = αitp(T, m, t)
+            emissivity = ε(t, exp(m), abatement, model)
+            return Model.Eᵇ(t, model.calibration) * (1 - emissivity)
+        end
+
+        emissionsM = computeonsim(abatedsol, emissions, yearlytime);
+       
+        emissionsquantiles = timequantiles(emissionsM, qs);
+        smoothquantile!.(eachcol(emissionsquantiles), 0)
+
+        emissionsmedianplot = @pgf Plot(defopts, Coordinates(yearlytime, emissionsquantiles[:, 2]))
+        emissionslowerplot = @pgf Plot({ defopts..., confidenceopts... }, Coordinates(yearlytime, emissionsquantiles[:, 1]))
+        emissionsupperplot = @pgf Plot({ defopts..., confidenceopts... }, Coordinates(yearlytime, emissionsquantiles[:, 3]))
+
+        emissionsoptionfirst = @pgf k > 1 ? {
+            yticklabel = raw"\empty"
+        } : { 
+            ylabel = L"Abatement as \% of $Y_t$",
+            ytick = emissionsticks, yticklabels = emissionsticklabels
+        }
+
+        @pgf push!(simfig, {figopts...,
+            ymin = emissionsextrema[1], ymax = emissionsextrema[2],
+            title = labelsbymodel[model], xticklabel = raw"\empty",
+            scaled_y_ticks = false, emissionsoptionfirst...,
+        }, emissionsmedianplot, emissionslowerplot, emissionsupperplot)
+    end;
+
+    # Makes the T plots in the third row
     for (k, model) in enumerate(simmodels)
         abatedsol = simulations[model]
         paths = EnsembleAnalysis.timeseries_point_quantile(abatedsol, qs, yearlytime)
@@ -214,155 +253,157 @@ begin
     simfig
 end
 
-# --- Plotting the regret problem. Discover tipping point only after T ≥ Tᶜ.
-begin    
-    Tmin, Tmax = (1., 5)
-    Tregretticks = makedeviationtickz(Tmin, Tmax, first(models); step = 1, digits = 0)
+if false
+    # --- Plotting the regret problem. Discover tipping point only after T ≥ Tᶜ.
+    begin    
+        Tmin, Tmax = (1., 5)
+        Tregretticks = makedeviationtickz(Tmin, Tmax, first(models); step = 1, digits = 0)
 
-    regretfig = @pgf GroupPlot({
-        group_style = { 
-            group_size = "1 by 2",
-            horizontal_sep = raw"1em",
-            vertical_sep = raw"2em"
-        }
-    });
+        regretfig = @pgf GroupPlot({
+            group_style = { 
+                group_size = "1 by 2",
+                horizontal_sep = raw"1em",
+                vertical_sep = raw"2em"
+            }
+        });
 
-    regfigopts = @pgf { width = raw"0.42\textwidth", height = raw"0.3\textwidth", grid = "both", xmin = 0., xmax = maximum(yearlytime) }
+        regfigopts = @pgf { width = raw"0.42\textwidth", height = raw"0.3\textwidth", grid = "both", xmin = 0., xmax = maximum(yearlytime) }
 
-    modelimminent, modelremote = tippingmodels
+        modelimminent, modelremote = tippingmodels
 
-    βregret = @closure (T, m, y, t) -> begin
-        model = ifelse(T - modelimminent.hogg.Tᵖ ≥ modelimminent.albedo.Tᶜ, modelimminent, modelremote)
-        αitp = itpmap[model][:α]
+        βregret = @closure (T, m, y, t) -> begin
+            model = ifelse(T - modelimminent.hogg.Tᵖ ≥ modelimminent.albedo.Tᶜ, modelimminent, modelremote)
+            αitp = itpmap[model][:α]
 
-        return β(t, ε(t, exp(m), αitp(T, m, t), model), model.economy)
-    end
-
-    βregextrema = (0., 0.08)
-    βregticks = range(βregextrema...; step = 0.02) |> collect
-    βregtickslabels = [@sprintf("%.0f \\%%", 100 * y) for y in βregticks]
-
-    # Abatement expenditure figure
-    βM = computeonsim(regretsolution, βregret, yearlytime)
-    βquantiles = timequantiles(βM, qs)
-    smoothquantile!.(eachcol(βquantiles), 30)
-
-    βmedianplot = @pgf Plot(defopts, Coordinates(yearlytime, βquantiles[:, 2]))
-    βlowerplot = @pgf Plot({ defopts..., confidenceopts... }, Coordinates(yearlytime, βquantiles[:, 1]))
-    βupperplot = @pgf Plot({ defopts..., confidenceopts... }, Coordinates(yearlytime, βquantiles[:, 3]))
-
-
-    @pgf push!(regretfig, {regfigopts...,
-        ymin = βregextrema[1], ymax = βregextrema[2],
-        ytick = βregticks,
-        scaled_y_ticks = false,
-        yticklabels = βregtickslabels,
-        ylabel = L"Abatement as \% of $Y_t$",
-        xtick = yearticks,
-        xticklabels = raw"\empty"
-    }, βmedianplot, βlowerplot, βupperplot)
-
-    # Temperature figure
-    paths = EnsembleAnalysis.timeseries_point_quantile(regretsolution, qs, yearlytime)
-    Tpaths = first.(paths.u)
-
-    Tmedianplot = @pgf Plot(defopts, Coordinates(yearlytime, getindex.(Tpaths, 2)))
-    Tlowerplot = @pgf Plot({ defopts..., confidenceopts... }, Coordinates(yearlytime, getindex.(Tpaths, 1)))
-    Tupperplot = @pgf Plot({ defopts..., confidenceopts... }, Coordinates(yearlytime, getindex.(Tpaths, 3)))
-
-    @pgf push!(regretfig, {regfigopts...,
-        ymin = Tmin + modelimminent.hogg.Tᵖ, 
-        ymax = Tmax + modelimminent.hogg.Tᵖ,
-        ytick = Tregretticks[1], yticklabels = Tregretticks[2],
-        ylabel = raw"Temperature $T_t$",
-        xtick = yearticks,
-        xticklabels = 2020 .+ yearticks,
-        xticklabel_style = { rotate = 45 }
-    }, Tmedianplot, Tlowerplot, Tupperplot)
-
-    if SAVEFIG
-        PGFPlotsX.save(joinpath(plotpath, "regretfig.tikz"), regretfig; include_preamble = true)
-    end
-
-    regretfig
-end
-
-# --- Plot of highest path in regret
-yearlyregrets = regretsolution(yearlytime);
-_, maxidx = findmax(v -> maximum(first.(v.u)), yearlyregrets);
-maxsim = yearlyregrets[maxidx];
-
-_, minidx = findmin(v -> maximum(first.(v.u)), yearlyregrets);
-minsim = yearlyregrets[minidx];
-
-begin # Computes the nullclines
-    nullclinevariation = Dict{Float64,Vector{Vector{NTuple{2,Float64}}}}()
-    for model in reverse(tippingmodels)
-        nullclines = Vector{NTuple{2,Float64}}[]
-
-        currentM = NTuple{2,Float64}[]
-        currentlystable = true
-
-        for T in Tspace
-            M = Model.Mstable(T, model.hogg, model.albedo)
-            isstable = Model.radiativeforcing′(T, model.hogg, model.albedo) < 0
-            if isstable == currentlystable
-                push!(currentM, (M, T))
-            else
-                currentlystable = !currentlystable
-                push!(nullclines, currentM)
-                currentM = [(M, T)]
-            end
+            return β(t, ε(t, exp(m), αitp(T, m, t), model), model.economy)
         end
 
-        push!(nullclines, currentM)
-        nullclinevariation[model.albedo.Tᶜ] = nullclines
+        βregextrema = (0., 0.08)
+        βregticks = range(βregextrema...; step = 0.02) |> collect
+        βregtickslabels = [@sprintf("%.0f \\%%", 100 * y) for y in βregticks]
+
+        # Abatement expenditure figure
+        βM = computeonsim(regretsolution, βregret, yearlytime)
+        βquantiles = timequantiles(βM, qs)
+        smoothquantile!.(eachcol(βquantiles), 30)
+
+        βmedianplot = @pgf Plot(defopts, Coordinates(yearlytime, βquantiles[:, 2]))
+        βlowerplot = @pgf Plot({ defopts..., confidenceopts... }, Coordinates(yearlytime, βquantiles[:, 1]))
+        βupperplot = @pgf Plot({ defopts..., confidenceopts... }, Coordinates(yearlytime, βquantiles[:, 3]))
+
+
+        @pgf push!(regretfig, {regfigopts...,
+            ymin = βregextrema[1], ymax = βregextrema[2],
+            ytick = βregticks,
+            scaled_y_ticks = false,
+            yticklabels = βregtickslabels,
+            ylabel = L"Abatement as \% of $Y_t$",
+            xtick = yearticks,
+            xticklabels = raw"\empty"
+        }, βmedianplot, βlowerplot, βupperplot)
+
+        # Temperature figure
+        paths = EnsembleAnalysis.timeseries_point_quantile(regretsolution, qs, yearlytime)
+        Tpaths = first.(paths.u)
+
+        Tmedianplot = @pgf Plot(defopts, Coordinates(yearlytime, getindex.(Tpaths, 2)))
+        Tlowerplot = @pgf Plot({ defopts..., confidenceopts... }, Coordinates(yearlytime, getindex.(Tpaths, 1)))
+        Tupperplot = @pgf Plot({ defopts..., confidenceopts... }, Coordinates(yearlytime, getindex.(Tpaths, 3)))
+
+        @pgf push!(regretfig, {regfigopts...,
+            ymin = Tmin + modelimminent.hogg.Tᵖ, 
+            ymax = Tmax + modelimminent.hogg.Tᵖ,
+            ytick = Tregretticks[1], yticklabels = Tregretticks[2],
+            ylabel = raw"Temperature $T_t$",
+            xtick = yearticks,
+            xticklabels = 2020 .+ yearticks,
+            xticklabel_style = { rotate = 45 }
+        }, Tmedianplot, Tlowerplot, Tupperplot)
+
+        if SAVEFIG
+            PGFPlotsX.save(joinpath(plotpath, "regretfig.tikz"), regretfig; include_preamble = true)
+        end
+
+        regretfig
     end
-end
 
-begin # Plot of breaking regret
-    Mmax = 600.
+    # --- Plot of highest path in regret
+    yearlyregrets = regretsolution(yearlytime);
+    _, maxidx = findmax(v -> maximum(first.(v.u)), yearlyregrets);
+    maxsim = yearlyregrets[maxidx];
 
-    breakfig = @pgf Axis({
-        width = raw"0.9\textwidth",
-        height = raw"0.7\textwidth",
-        grid = "both",
-        ylabel = TEMPLABEL,
-        xlabel = raw"Carbon concentration $M_t$",
-        xmin = tippingmodels[1].hogg.Mᵖ, xmax = Mmax,
-        xtick = 200:100:Mmax,
-        yticklabels = temperatureticks[2],
-        ytick = temperatureticks[1],
-        ymin = Tmin + hogg.Tᵖ, ymax = Tmax + hogg.Tᵖ,
-        legend_cell_align = "left"
-    })
+    _, minidx = findmin(v -> maximum(first.(v.u)), yearlyregrets);
+    minsim = yearlyregrets[minidx];
 
-    for model in reverse(tippingmodels) # Nullcline plots
-        Tᶜ = model.albedo.Tᶜ
-        color = thresholdscolors[Tᶜ]
+    begin # Computes the nullclines
+        nullclinevariation = Dict{Float64,Vector{Vector{NTuple{2,Float64}}}}()
+        for model in reverse(tippingmodels)
+            nullclines = Vector{NTuple{2,Float64}}[]
 
-        stableleft, unstable, stableright = nullclinevariation[Tᶜ]
+            currentM = NTuple{2,Float64}[]
+            currentlystable = true
 
-        leftcurve = @pgf Plot({color = color, line_width = LINE_WIDTH}, Coordinates(stableleft))
-        unstablecurve = @pgf Plot({color = color, line_width = LINE_WIDTH, forget_plot, dotted}, Coordinates(unstable))
-        rightcurve = @pgf Plot({color = color, line_width = LINE_WIDTH, forget_plot}, Coordinates(stableright))
+            for T in Tspace
+                M = Model.Mstable(T, model.hogg, model.albedo)
+                isstable = Model.radiativeforcing′(T, model.hogg, model.albedo) < 0
+                if isstable == currentlystable
+                    push!(currentM, (M, T))
+                else
+                    currentlystable = !currentlystable
+                    push!(nullclines, currentM)
+                    currentM = [(M, T)]
+                end
+            end
 
-        label = labelsbythreshold[Tᶜ]
-        legend = LegendEntry(label)
-
-        push!(breakfig, leftcurve, legend, unstablecurve, rightcurve)
+            push!(nullclines, currentM)
+            nullclinevariation[model.albedo.Tᶜ] = nullclines
+        end
     end
 
-    colors = ["red", "blue"]
+    begin # Plot of breaking regret
+        Mmax = 600.
 
-    for (k, sim) in enumerate([maxsim, minsim])
+        breakfig = @pgf Axis({
+            width = raw"0.9\textwidth",
+            height = raw"0.7\textwidth",
+            grid = "both",
+            ylabel = TEMPLABEL,
+            xlabel = raw"Carbon concentration $M_t$",
+            xmin = tippingmodels[1].hogg.Mᵖ, xmax = Mmax,
+            xtick = 200:100:Mmax,
+            yticklabels = temperatureticks[2],
+            ytick = temperatureticks[1],
+            ymin = Tmin + hogg.Tᵖ, ymax = Tmax + hogg.Tᵖ,
+            legend_cell_align = "left"
+        })
 
-        simcoords = Coordinates(exp.(getindex.(sim.u, 2)), getindex.(sim.u, 1))
-        curve = @pgf Plot({line_width = LINE_WIDTH / 2, opacity = 0.7, color = colors[k]}, simcoords)
-        markers = @pgf Plot({only_marks, mark_options = {fill = "black", scale = 1.5, draw_opacity = 0, opacity = 0.7, color = colors[k]}, mark_repeat = 20}, simcoords)
+        for model in reverse(tippingmodels) # Nullcline plots
+            Tᶜ = model.albedo.Tᶜ
+            color = thresholdscolors[Tᶜ]
 
-        push!(breakfig, curve, markers)
+            stableleft, unstable, stableright = nullclinevariation[Tᶜ]
+
+            leftcurve = @pgf Plot({color = color, line_width = LINE_WIDTH}, Coordinates(stableleft))
+            unstablecurve = @pgf Plot({color = color, line_width = LINE_WIDTH, forget_plot, dotted}, Coordinates(unstable))
+            rightcurve = @pgf Plot({color = color, line_width = LINE_WIDTH, forget_plot}, Coordinates(stableright))
+
+            label = labelsbythreshold[Tᶜ]
+            legend = LegendEntry(label)
+
+            push!(breakfig, leftcurve, legend, unstablecurve, rightcurve)
+        end
+
+        colors = ["red", "blue"]
+
+        for (k, sim) in enumerate([maxsim, minsim])
+
+            simcoords = Coordinates(exp.(getindex.(sim.u, 2)), getindex.(sim.u, 1))
+            curve = @pgf Plot({line_width = LINE_WIDTH / 2, opacity = 0.7, color = colors[k]}, simcoords)
+            markers = @pgf Plot({only_marks, mark_options = {fill = "black", scale = 1.5, draw_opacity = 0, opacity = 0.7, color = colors[k]}, mark_repeat = 20}, simcoords)
+
+            push!(breakfig, curve, markers)
+        end
+
+        breakfig
     end
-
-    breakfig
 end

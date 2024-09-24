@@ -64,17 +64,18 @@ function buildsplines(result::Result; splinekwargs...)
     Tspace = range(G.domains[1]...; length = size(G, 1))
     mspace = range(G.domains[2]...; length = size(G, 2))
 
-    timesplines = Dict{Float64, NTuple{3, Spline2D}}()
+    timesplines = Dict{Symbol, Vector{Spline2D}}()
+
+    αvec = Spline2D[]
+    χvec = Spline2D[]
+    Fvec = Spline2D[]
 
     for (k, t) in enumerate(timespace)
-        χ = policy[:, :, 1, k]
-        α = policy[:, :, 2, k]
+        χₜ = policy[:, :, 1, k]
+        αₜ = policy[:, :, 2, k]
+        Fₜ = F[:, :, k]
 
-
-        timesplines[t] = map(
-            M -> Spline2D(Tspace, mspace, M; splinekwargs...),
-            (F[:, :, k], χ, α)
-        )
+        spl = Spline2D(Tspace, mspace, χₜ; s = 0.25)
     end
 
     return timesplines
@@ -104,7 +105,7 @@ function computeonsim!(outvec, sim::RODESolution, f, timesteps)
         t = timesteps[i]
         simₜ = sim(t)
 
-        xᵢ = isa(simₜ, DifferentialEquations.ExtendedJumpArray) ? simₜ.u : simₜ
+        xᵢ = simₜ isa DifferentialEquations.ExtendedJumpArray ? simₜ.u : simₜ
 
         outvec[i] = f(xᵢ..., t)
     end
