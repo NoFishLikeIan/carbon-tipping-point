@@ -30,12 +30,8 @@ interpolations = buildinterpolations(result);
 model = last(result); timesteps = first(result);
 
 outputfile = joinpath(datapath, experimentpath, simulationpath);
-outputdir = dirname(outputfile);
 if verbose ≥ 1
     println("$(now()):", "Using output file $outputfile"); flush(stdout)
-end
-if !isdir(outputdir) 
-    mkpath(outputdir) 
 end
 
 initialpoints = [[T₀, log(model.hogg.M₀), log(model.economy.Y₀)] for T₀ in sampletemperature(model, trajectories)];
@@ -61,11 +57,16 @@ end
 ensembleprob = EnsembleProblem(problem; prob_func = resample);
 
 if verbose ≥ 1
-    println("$(now()):", "Simulating..."); flush(stdout)
+    println("$(now()):", "Simulating $trajectories trajectories..."); flush(stdout)
 end
 simulation = solve(ensembleprob, SRIW1(); trajectories);
 if verbose ≥ 1
     println("$(now()):", "...done!"); flush(stdout)
+end
+
+outputdir = dirname(outputfile);
+if !isdir(outputdir) 
+    mkpath(outputdir) 
 end
 
 JLD2.save_object(outputfile, simulation)
