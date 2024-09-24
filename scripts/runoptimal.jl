@@ -10,8 +10,12 @@ parsedargs = ArgParse.parse_args(argtable)
 
 @unpack overwrite, datapath, simulationpath, N, cachestep, tol, verbose, stopat, threshold, leveldamages, eis, rra, allownegative = parsedargs
 
-if overwrite && (verbose ≥ 1)
-    println("$(now()): ", "Running in overwrite mode!")
+if (verbose ≥ 1)
+    println("$(now()): ", "Running with $(nthreads()) threads...")
+
+    if overwrite
+        println("$(now()): ", "Running in overwrite mode!")
+    end
     flush(stdout)
 end
 

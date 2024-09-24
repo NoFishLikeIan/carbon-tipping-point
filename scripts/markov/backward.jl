@@ -1,12 +1,10 @@
-using Model, Grid
 using JLD2
-using UnPack: @unpack
-using ZigZagBoomerang: dequeue!
-using DataStructures: PriorityQueue, dequeue!, enqueue!, peek
-using Base: Order
+using Printf: @printf
+
+using Model, Grid
 using FastClosures: @closure
 using Optim
-using Printf: @printf
+using ZigZagBoomerang: dequeue!
 
 include("chain.jl")
 
@@ -16,7 +14,7 @@ const defaultoptim = Optim.Options(
     iterations = 100_000);
 
 function backwardstep!(Δts, F, policy, cluster, model::AbstractModel, G; allownegative = false, options = defaultoptim)
-    for (i, δt) in cluster
+    Base.Threads.@threads for (i, δt) in cluster
         indices = CartesianIndices(G)
         idx = indices[i]
         Xᵢ = G.X[idx]
