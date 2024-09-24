@@ -27,7 +27,7 @@ jq_command='
 (if .allownegative then " --allownegative" else "" end)
 '
 
-params=$(jq -r --arg id "$SLURM_ARRAY_TASK_ID" "$jq_command" jobs/.json)
+params=$(jq -r --arg id "$SLURM_ARRAY_TASK_ID" "$jq_command" jobs/simulations/parameters.json)
 
 # Run script
 julia --threads 18 --project scripts/runbenchmark.jl \
