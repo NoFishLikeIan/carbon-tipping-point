@@ -8,8 +8,8 @@
 #SBATCH --time=16:00:00
 #SBATCH --partition=rome
 #SBATCH --mail-type=BEGIN,END,FAIL,TIME_LIMIT_80
-#SBATCH -o ./logs/out/JOB%A_%a.out 
-#SBATCH -e ./logs/error/JOB%A_%a.out
+#SBATCH -o ./logs/out/TIPPING%A_%a.out 
+#SBATCH -e ./logs/error/TIPPING%A_%a.out
 #SBATCH --mail-user=a.titton@uva.nl
 
 module load 2023

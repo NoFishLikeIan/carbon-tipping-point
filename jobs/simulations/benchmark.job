@@ -3,13 +3,13 @@
 #SBATCH --job-name=benchmark
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=1
+#SBATCH --cpus-per-task=32
 #SBATCH --array=0-15
-#SBATCH --time=16:00:00
+#SBATCH --time=24:00:00
 #SBATCH --partition=rome
 #SBATCH --mail-type=BEGIN,END,FAIL,TIME_LIMIT_80
-#SBATCH -o ./logs/out/JOB%A_%a.out 
-#SBATCH -e ./logs/error/JOB%A_%a.out
+#SBATCH -o ./logs/out/BENCHMARK%A_%a.out 
+#SBATCH -e ./logs/error/BENCHMARK%A_%a.out
 #SBATCH --mail-user=a.titton@uva.nl
 
 module load 2023
@@ -32,7 +32,7 @@ params=$(jq -r --arg id "$SLURM_ARRAY_TASK_ID" "$jq_command" jobs/simulations/pa
 # Run script 
 julia --project scripts/runbenchmark.jl \
     -d "data" -s "simulation-medium" --verbose 2 \
-    -N 71 $params
+    --overwrite -N 71 $params
 
 # Copy results back to home
 rsync -avzu "$TMPDIR"/data $HOME/scc-tipping-points

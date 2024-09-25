@@ -5,11 +5,11 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=32
 #SBATCH --array=0-47
-#SBATCH --time=00:02:00
+#SBATCH --time=02:00:00
 #SBATCH --partition=rome
 #SBATCH --mail-type=BEGIN,END,FAIL,TIME_LIMIT_80
-#SBATCH -o ./logs/out/JOB%A_%a.out 
-#SBATCH -e ./logs/error/JOB%A_%a.out
+#SBATCH -o ./logs/out/EXPERIMENT%A_%a.out 
+#SBATCH -e ./logs/error/EXPERIMENT%A_%a.out
 #SBATCH --mail-user=a.titton@uva.nl
 
 module load 2023
