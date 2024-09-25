@@ -54,7 +54,7 @@ end
 
 begin # Simulation
     if verbose ≥ 1
-        println("$(now()):", "Simulating $trajectories trajectories..."); flush(stdout)
+        println("$(now()):", "Simulating $trajectories trajectories with $(Base.Threads.nthreads()) threads."); flush(stdout)
     end
     simulation = solve(ensembleprob, SRIW1(); trajectories);
     if verbose ≥ 1
