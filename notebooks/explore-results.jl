@@ -92,39 +92,49 @@ md"## Import simulation"
 # ╔═╡ caba865f-055d-4655-91ca-14c537709dab
 begin
 	ALLOWNEGATIVE = false
-	datapath = "../data/simulation-small"
+	datapath = "../data/simulation-medium"
 	filepaths = joinpath(datapath, ALLOWNEGATIVE ? "negative" : "constrained")
 	simulationfiles = Saving.listfiles(filepaths)
-	simulationfilesnames = @. replace(last(split(simulationfiles, "/")), ".jld2" => "")
+	simulationfilesnames = @. replace(basename(simulationfiles), ".jld2" => "")
 
 	itpmap = Dict{AbstractModel, Dict{Symbol, Extrapolation}}();
     models = AbstractModel[];
 
     for filepath in simulationfiles
-        result = Saving.loadtotal(filepath)
-        interpolations = Simulating.buildinterpolations(result)
-        model = last(result)
-
-        itpmap[model] = interpolations
-        push!(models, model)
+		try 
+	        result = Saving.loadtotal(filepath)
+	        interpolations = Simulating.buildinterpolations(result)
+	        model = last(result)
+	
+	        itpmap[model] = interpolations
+	        push!(models, model)
+		catch error
+			if error isa JLD2.InvalidDataException
+				@warn "Invalid data in $filepath: $error"
+			else
+				rethrow(error)
+			end
+		end
     end
+end;
+
+# ╔═╡ e431c86c-c65e-48b0-ad78-50aeeb5ed63a
+begin
+	idxs = sortperm(models; by = model -> (model.preferences.ψ, model.preferences.θ))
+	sortedmodels = models[idxs]
+	sortedsimulationfilesnames = simulationfilesnames[idxs]
 end;
 
 # ╔═╡ cfad70a3-73d0-4d2f-9180-3f2c6322b17d
 md"
 # Scenario
 
-$(@bind model Select(models .=> simulationfilesnames))
+$(@bind model Select(sortedmodels .=> sortedsimulationfilesnames))
 "
-
-# ╔═╡ 458b32c6-47c0-44db-833a-d05866985fb1
-model
-
-# ╔═╡ d7df916d-cf45-4564-86ad-5b64e309cb11
-itp = itpmap[model];
 
 # ╔═╡ 9b215416-796e-4007-87bc-f6f0ed696b13
 begin
+	itp = itpmap[model];
 	Tspace = range(0., 8.; length = 101) .+ model.hogg.Tᵖ
 	mspace = range(log(model.hogg.Mᵖ), log(2.5model.hogg.Mᵖ); length = 101)
 end;
@@ -147,7 +157,7 @@ let
 	
 	consfig = heatmap(mspace, Tspace, χₜ; ylabel = "\$T\$", xlabel = "\$m\$", title = "Time \$t = $tfig\$; \$\\chi\$", xlims = extrema(mspace), ylims = extrema(Tspace), clims = (0.3, 0.6))
 		
-	clims = ALLOWNEGATIVE ? (-1., 1.) : (-0.1, 1.)
+	clims = ALLOWNEGATIVE ? (-1., 1.) : (0, 1.)
 	cmap = ALLOWNEGATIVE ? :coolwarm : :Greens
 	
 	abatfig = heatmap(mspace, Tspace, dm; ylabel = "\$T\$", xlabel = "\$m\$", title = "\$\\varepsilon\$", xlims = extrema(mspace), ylims = extrema(Tspace), clims, cmap)
@@ -156,7 +166,9 @@ let
 		plot!(fig, nullcline, Tspace; linestyle = :dash, c = :white, label = false, linewidth = 3)
 	end
 
-	plot(consfig, abatfig; size = 500 .* (2√2, 1), margins = 10Plots.mm)
+	# plot(consfig, abatfig; size = 500 .* (2√2, 1), margins = 10Plots.mm)
+
+	abatfig
 end
 
 # ╔═╡ e5895749-efc8-410a-bc1a-562979335a0b
@@ -199,7 +211,7 @@ begin # Solve an ensemble problem for all models with the bau scenario
 	policies = (interpolations[:χ], interpolations[:α]);
 	parameters = (model, policies);
 
-	problem = SDEProblem(Simulating.F!, Simulating.G!, first(initialpoints), (0., 80.), parameters)
+	problem = SDEProblem(Simulating.F!, Simulating.G!, first(initialpoints), (0., 140.), parameters)
 
 	if model isa JumpModel
 		ratejump = VariableRateJump(Simulating.rate, Simulating.tippingopt!)
@@ -366,17 +378,16 @@ end
 # ╠═542e01e0-bbce-462b-9c43-6d375adb6bd5
 # ╟─a8afb34d-0273-4597-bbac-9650c172ed3b
 # ╠═caba865f-055d-4655-91ca-14c537709dab
+# ╠═e431c86c-c65e-48b0-ad78-50aeeb5ed63a
 # ╟─cfad70a3-73d0-4d2f-9180-3f2c6322b17d
-# ╠═458b32c6-47c0-44db-833a-d05866985fb1
-# ╠═d7df916d-cf45-4564-86ad-5b64e309cb11
 # ╠═9b215416-796e-4007-87bc-f6f0ed696b13
 # ╟─80bfe18d-8d06-4957-a4ad-dd80bf8c42b1
 # ╠═033b0310-2df1-4613-81f8-39274d2318ba
 # ╟─e5895749-efc8-410a-bc1a-562979335a0b
 # ╟─78a476ce-788c-428d-b6bf-da39f92f4035
 # ╟─497f0b6b-e7ac-4176-81b3-f8df4050d338
-# ╟─baa07798-cd01-49cb-8d33-eafd0c92505b
-# ╟─3bbdb5f8-b258-4b93-b939-cad8d5c5fc11
+# ╠═baa07798-cd01-49cb-8d33-eafd0c92505b
+# ╠═3bbdb5f8-b258-4b93-b939-cad8d5c5fc11
 # ╟─963b5d26-1f93-4cd9-8a9b-989e22c16143
 # ╟─32955af4-fa47-43dd-b6a8-7545e1398f25
 # ╠═39409585-662d-4915-ae42-653e35a2b975
