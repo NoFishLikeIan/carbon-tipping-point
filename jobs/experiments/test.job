@@ -20,16 +20,27 @@ cd $HOME/scc-tipping-points # Move to base directory
 # Extract parameters at the SLURM_ARRAY_TASK_ID from parameters.json
 SIMULATIONPATH=$(jq -r --arg id "$SLURM_ARRAY_TASK_ID" '.inputfiles[$id | tonumber]' jobs/experiments/parameters.json)
 
-RELATIVEDIR=$(dirname "$SIMULATIONPATH"); # Get the directory of the file
-mkdir -p "$TMPDIR"/data/$RELATIVEDIR # Create the directory in scratch
-rsync data/$SIMULATIONPATH $TMPDIR/data/$RELATIVEDIR # Sync the file to scratch
+# Move the simulation file to scratch
+SIMFILENAME=$(basename $SIMFILE)        # Get the filename
+SIMDIR=$(dirname $SIMFILE)              # Get the directory of the local input file
+TMPSIMDIR=$TMPDIR/$SIMDIR           # Define the temporary directory
+mkdir -p $TMPSIMDIR                     # Make the temporary directory
+rsync -v $SIMFILE $TMPSIMDIR            # Copy the input file to the temporary directory
 
-FILEPATH=($TMPDIR/data/$SIMULATIONPATH); # Get the filename
+INPUTFILE=($TMPSIMDIR/$SIMFILENAME) # Get the filename
+
+# Add experiments between /data/ and /path/to/file
+TYPEFOLDER=$(echo "$SIMDIR" | sed 's|.*data/||')
+OUTPUTDIR=($TMPDIR/data/experiments/$TYPEFOLDER)
+
+OUTPUTFILE=($OUTPUTDIR/$SIMFILENAME)
 
 # Run script
-julia --threads 18 --project scripts/experiments/run.jl $FILEPATH \
-    --trajectories 5 \
-    --datapath "data"  --experiment-path "simulation-small" --verbose 2
+julia --threads 18 --project scripts/experiments/run.jl $INPUTFILE $OUTPUTFILE \
+    --trajectories 1 --verbose 2
 
 # Copy results back to home
-rsync -avzu "$TMPDIR"/data $HOME/scc-tipping-points
+# Copy results back to home
+LOCALOUTPUTDIR=$HOME/scc-tipping-points/data/experiments/$TYPEFOLDER
+mkdir -p $LOCALOUTPUTDIR # Locally make space for simulation
+rsync -avzu $OUTPUTFILE $LOCALOUTPUTDIR # Sync back output file to local directory

@@ -2,7 +2,7 @@ using JSON
 include("../../scripts/utils/saving.jl")
 
 inputdir = isempty(ARGS) ? "data/simulation-medium" : first(ARGS);
-inputfiles = replace.(listfiles(inputdir), "data/" => "");
+inputfiles = listfiles(inputdir);
 
 obj = Dict("inputfiles" => inputfiles);
 
