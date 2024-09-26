@@ -30,7 +30,7 @@ jq_command='
 params=$(jq -r --arg id "$SLURM_ARRAY_TASK_ID" "$jq_command" jobs/simulations/parameters.json)
 
 # Run script 
-julia --threads 64 --project scripts/runoptimal.jl \
+julia --threads ${SLURM_CPUS_PER_TASK} --project scripts/runoptimal.jl \
     -d "data" -s "simulation-medium" --verbose 2 \
     -N 51 $params
 
