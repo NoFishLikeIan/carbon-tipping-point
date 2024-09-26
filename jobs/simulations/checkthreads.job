@@ -1,0 +1,16 @@
+#!/bin/bash
+
+#SBATCH --job-name=check
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --time=00:05:00
+#SBATCH --partition=rome
+#SBATCH -o ./logs/out/CHECK%A_%a.out 
+#SBATCH -e ./logs/error/CHECK%A_%a.out
+
+module load 2023
+module load Julia/1.9.2-linux-x86_64
+
+# Run script 
+julia --threads 64 --project -e "using Base.Threads; println(nthreads()); flush(stdout)"
