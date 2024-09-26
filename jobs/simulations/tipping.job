@@ -31,7 +31,7 @@ params=$(jq -r --arg id "$SLURM_ARRAY_TASK_ID" "$jq_command" jobs/simulations/pa
 
 # Run script 
 julia --threads ${SLURM_CPUS_PER_TASK} --project scripts/runtipping.jl \
-    -d "data" -s "simulation-medium" --verbose 2 \
+    -d "data" -s "simulation-medium" --verbose 1 \
     -N 51 $params
 
 # Copy results back to home

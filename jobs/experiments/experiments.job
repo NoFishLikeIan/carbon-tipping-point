@@ -37,7 +37,7 @@ OUTPUTFILE=($OUTPUTDIR/$SIMFILENAME)
 
 # Run script
 julia --threads 32 --project scripts/experiments/run.jl $INPUTFILE $OUTPUTFILE \
-    --trajectories 10000 --verbose 2
+    --trajectories 10000 --verbose 1
 
 # Copy results back to home
 # Copy results back to home
