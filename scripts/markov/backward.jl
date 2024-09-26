@@ -3,50 +3,50 @@ using Printf: @printf
 
 using Model, Grid
 using FastClosures: @closure
-using Optim
-using ZigZagBoomerang: dequeue!
+using Printf: @printf
+using Suppressor: @suppress
+using Base: Threads
+using SciMLBase: successful_retcode
+using Optimization
+using OptimizationNLopt, OptimizationMultistartOptimization
+using OptimizationOptimJL
 
 include("chain.jl")
 
-const defaultoptim = Optim.Options(
-    g_tol = 1e-12, 
-    allow_f_increases = true, 
-    iterations = 100_000);
 
-function backwardstep!(Δts, F, policy, cluster, model::AbstractModel, G; allownegative = false, options = defaultoptim)
-    Base.Threads.@threads for (i, δt) in cluster
+function backwardstep!(Δts, F, policy, cluster, model::AbstractModel, G; allownegative = false, ad = Optimization.AutoForwardDiff(), solver = LBFGS(), tiktak = MultistartOptimization.TikTak(100))
+    objective = @closure (u, p) -> begin
+        t, idx = p
+
+        F′, Δt = markovstep(t, idx, F, u[2], model, G)
+        return logcost(F′, t, G.X[idx], Δt, u, model)
+    end
+    fn = OptimizationFunction(objective, ad)
+
+    Threads.@threads for (i, δt) in cluster
         indices = CartesianIndices(G)
-        idx = indices[i]
-        Xᵢ = G.X[idx]
 
+        idx = indices[i]
         t = model.economy.τ - δt
         u₀ = policy[idx, :]
 
-        if allownegative
-            constraints = TwiceDifferentiableConstraints([0., 0.], [1., 1.])
-            u₀ = Optim.isinterior(constraints, u₀) ? u₀ : [0.5, 0.5]
+        ub = if allownegative
+            [1., 100.]
         else
-            ᾱ = γ(t, model.calibration) + δₘ(exp(Xᵢ.m), model.hogg)
-            constraints = TwiceDifferentiableConstraints([0., 0.], [1., ᾱ])
-            u₀ = Optim.isinterior(constraints, u₀) ? u₀ : [0.5, ᾱ / 2]
+            ᾱ = γ(t, model.calibration) + δₘ(exp(G.X[idx].m), model.hogg)
+            [1., ᾱ]
         end
 
-        objective = @closure u -> begin
-            F′, Δt = markovstep(t, idx, F, u, model, G)
-            logcost(F′, t, Xᵢ, Δt, u, model)
-        end
+        prob = OptimizationProblem(fn, u₀, (t, idx), lb = [0., 0.], ub = ub)
+        sol = solve(prob, tiktak, solver)
 
-        diffobj = TwiceDifferentiable(objective, u₀; autodiff = :forward)
-        res = Optim.optimize(diffobj, constraints, u₀, IPNewton(), options)
+        hasconverged = successful_retcode(sol.retcode)
         
-        !Optim.converged(res) && @warn "Optim has not converged at t = $t and idx = $idx"
+        !hasconverged && @warn "Optimisation has not converged at t = $t and idx = $idx"
 
-        u = Optim.minimizer(res)
-        u[2] = ifelse(abs(u[2]) < 1e-10, 0., u[2]) # Round smallest numbers down
-
-        policy[idx, :] .= u
-        F[idx] = exp(Optim.minimum(res))
-        Δts[i] = last(markovstep(t, idx, F, u, model, G))
+        policy[idx, :] .= sol.u
+        F[idx] = exp(sol.objective)
+        Δts[i] = last(markovstep(t, idx, F, sol.u[2], model, G))
     end
 end
 
@@ -85,7 +85,7 @@ function backwardsimulation!(F, policy, model::AbstractModel, G; verbose = 0, ca
     Δts = zeros(N^2)
     passcounter = 1
 
-    while !isqempty(queue)
+    while !isempty(queue)
         tmin = model.economy.τ - minimum(queue.vals)
 
         if (verbose ≥ 2) 

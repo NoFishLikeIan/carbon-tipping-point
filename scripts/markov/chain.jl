@@ -1,16 +1,17 @@
 using Model
 using Grid
 
-function driftstep(t, idx, F, u, αⱼ, model::AbstractModel, G)
+using ZigZagBoomerang: PartialQueue
+
+function driftstep(t, idx, F, α, model::AbstractModel, G)
     L, R = extrema(CartesianIndices(F))
-    α = u[2]
 
     σₜ² = (model.hogg.σₜ / (model.hogg.ϵ * G.Δ.T))^2
     σₘ² = (model.hogg.σₘ / G.Δ.m)^2
 
     Xᵢ = G.X[idx]
     dT = μ(Xᵢ.T, Xᵢ.m, model) / (model.hogg.ϵ * G.Δ.T)
-    dm = (γ(t, model.calibration) - α - αⱼ) / G.Δ.m
+    dm = (γ(t, model.calibration) - α) / G.Δ.m
 
     # -- Temperature
     FᵢT₊ = F[min(idx + I[1], R)]
@@ -29,14 +30,10 @@ function driftstep(t, idx, F, u, αⱼ, model::AbstractModel, G)
 
     return F′, Δt
 end
-function driftstep(t, idx, F, u, model::AbstractModel, G)
-    driftstep(t, idx, F, u, 0., model, G)
-end
 
-markovstep(t, idx, F, u, model::AbstractTippingModel, G) = driftstep(t, idx, F, u, model, G)
-markovstep(t, idx, F, u, αⱼ, model::AbstractTippingModel, G) = driftstep(t, idx, F, u, αⱼ, model, G)
-function markovstep(t, idx, F, u, αⱼ,model::AbstractJumpModel, G)
-    Fᵈ, Δt = driftstep(t, idx, F, u, αⱼ, model, G)
+markovstep(t, idx, F, α, model::AbstractTippingModel, G) = driftstep(t, idx, F, α, model, G)
+function markovstep(t, idx, F, α, model::AbstractJumpModel, G)
+    Fᵈ, Δt = driftstep(t, idx, F, α, model, G)
 
     # Update with jump
     R = maximum(CartesianIndices(F))
@@ -53,21 +50,16 @@ function markovstep(t, idx, F, u, αⱼ,model::AbstractJumpModel, G)
 
     return F′, Δt
 end
-function markovstep(t, idx, F, u, model::AbstractJumpModel, G)
-    markovstep(t, idx, F, u, 0., model, G)
-end
 
 function logcost(F′, t, Xᵢ::Point, Δt, u, model::AbstractModel{GrowthDamages, P}) where P
-    χ = u[1]
     δ = outputfct(t, Xᵢ, Δt, u, model)
-    logg(χ, δ * F′, Δt, model.preferences)
+    logg(u[1], δ * F′, Δt, model.preferences)
 end
 
 function logcost(F′, t, Xᵢ::Point, Δt, u, model::AbstractModel{LevelDamages, P}) where P
-    χ = u[1]
     δ = outputfct(t, Xᵢ, Δt, u, model)
     damage = d(Xᵢ.T, model.damages, model.hogg)
-    logg(χ * damage, δ * F′, Δt, model.preferences)
+    logg(u[1] * damage, δ * F′, Δt, model.preferences)
 end
 
 function cost(F′, t, Xᵢ::Point, Δt, u, model::AbstractModel{GrowthDamages, P}) where P
@@ -83,6 +75,6 @@ function cost(F′, t, Xᵢ::Point, Δt, u, model::AbstractModel{LevelDamages, P
     g(χ * damage, δ * F′, Δt, model.preferences)
 end
 
-function isqempty(q)
+function Base.isempty(q::PartialQueue)
     all((isempty(m) for m in q.minima))
 end

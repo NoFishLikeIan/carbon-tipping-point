@@ -110,7 +110,7 @@ function backwardsimulation!(
     Δts = SharedVector(zeros(N^2))
     τ = first(model.economy).τ
 
-    while !isqempty(queue)
+    while !isempty(queue)
         tmin = τ - minimum(queue.vals)
         clusters = dequeue!(queue)
 

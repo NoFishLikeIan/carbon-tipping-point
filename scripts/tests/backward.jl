@@ -20,15 +20,15 @@ begin
 end
 
 begin
-	N = 101
-	Tdomain = hogg.Tᵖ .+ (0., 9.);
+	N = 31
+	Tdomain = hogg.Tᵖ .+ (0., 7.);
 	mdomain = mstable.(Tdomain, hogg)
 	G = RegularGrid([Tdomain, mdomain], N)
 end;
 
 # Testing the backward step
 begin
-	F̄, terminalpolicy, Gterm = loadterminal(model; outdir = "data/test-simulation/constrained");
+	F̄, terminalpolicy, Gterm = loadterminal(model; outdir = "data/simulation-medium/constrained");
 	policy = Array{Float64}(undef, size(G)..., 2)
 	policy[:, :, 1] .= interpolateovergrid(Gterm, G, terminalpolicy)
 	policy[:, :, 2] .= γ(economy.τ, calibration)
@@ -40,14 +40,12 @@ begin
 	queue = DiagonalRedBlackQueue(G)
 	Δts = zeros(N^2)
 	cluster = first(dequeue!(queue))
+
+	backwardstep!(Δts, F, policy, cluster, model, G; allownegative = true);
 end;
 
-begin
-	b = BenchmarkTools.@benchmark backwardstep!($Δts, $F, $policy, $cluster, $model, $G)
+withnegative = true;
+withoutnegative = false;
 
-	io = IOBuffer()
-	show(io, "text/plain", b)
-	s = String(take!(io))
-
-	println(s)
-end
+@btime backwardstep!($Δts, $F, $policy, $cluster, $model, $G; allownegative = $withnegative);
+@btime backwardstep!($Δts, $F, $policy, $cluster, $model, $G; allownegative = $withoutnegative);
