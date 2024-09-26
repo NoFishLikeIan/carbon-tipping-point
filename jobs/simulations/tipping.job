@@ -3,7 +3,7 @@
 #SBATCH --job-name=tipping
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=1
+#SBATCH --cpus-per-task=64
 #SBATCH --array=0-31
 #SBATCH --time=16:00:00
 #SBATCH --partition=rome
@@ -30,9 +30,9 @@ jq_command='
 params=$(jq -r --arg id "$SLURM_ARRAY_TASK_ID" "$jq_command" jobs/simulations/parameters.json)
 
 # Run script 
-julia --project scripts/runoptimal.jl \
+julia --threads 64 --project scripts/runoptimal.jl \
     -d "data" -s "simulation-medium" --verbose 2 \
-    -N 71 $params
+    -N 51 $params
 
 # Copy results back to home
 rsync -avzu "$TMPDIR"/data $HOME/scc-tipping-points
