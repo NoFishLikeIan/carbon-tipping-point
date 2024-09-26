@@ -88,7 +88,7 @@ function backwardsimulation!(F, policy, model::AbstractModel, G; verbose = 0, ca
     while !isempty(queue)
         tmin = model.economy.τ - minimum(queue.vals)
 
-        if (verbose ≥ 2) 
+        if (verbose ≥ 2) || ((verbose ≥ 1) && (passcounter % 500 == 0))
             @printf("%s: pass %i, cluster minimum time = %.4f\n", now(), passcounter, tmin)
             flush(stdout)
         end
