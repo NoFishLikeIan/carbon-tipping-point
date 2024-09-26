@@ -1,6 +1,7 @@
 using Pkg
 Pkg.resolve(); Pkg.instantiate();
 
+using Base.Threads: nthreads
 using UnPack: @unpack
 using Dates: now
 

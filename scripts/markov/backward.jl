@@ -4,7 +4,7 @@ using Printf: @printf
 using Model, Grid
 using FastClosures: @closure
 using Printf: @printf
-using Suppressor: @suppress
+using ZigZagBoomerang: dequeue!
 using Base: Threads
 using SciMLBase: successful_retcode
 using Optimization
