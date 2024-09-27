@@ -5,7 +5,7 @@ using Model, Grid
 using FastClosures: @closure
 using Printf: @printf
 using ZigZagBoomerang: dequeue!
-using Base: Threads
+using Base.Threads: @threads
 using SciMLBase: successful_retcode
 using Optimization
 using OptimizationNLopt, OptimizationMultistartOptimization
