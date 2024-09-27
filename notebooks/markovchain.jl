@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.46
+# v0.19.38
 
 using Markdown
 using InteractiveUtils
@@ -21,23 +21,21 @@ begin # Use local module
     Pkg.instantiate()
 end
 
-# ╔═╡ 2b3c9a7f-8078-415d-b132-999a01aca419
-using JLD2, FastClosures
-
-# ╔═╡ 4d074922-3d70-442b-be61-18f99f213d3d
-using DataStructures: dequeue!
-
-# ╔═╡ c7e2f611-07e4-4c39-b101-d20b3f71fedb
-using Distributed
-
 # ╔═╡ bfc6af5e-a261-4d7e-9a16-f4ab54c6e1ca
 using PlutoUI
 
-# ╔═╡ 9655de0d-73f7-4332-85d9-974a73b4fce1
-using Model, Grid
+# ╔═╡ 2b3c9a7f-8078-415d-b132-999a01aca419
+using JLD2, FastClosures
 
 # ╔═╡ 62a3b757-cf0b-4f8d-bdb8-7edc7ba04d47
-using Optim
+begin
+	using Optimization
+	using OptimizationNLopt, OptimizationMultistartOptimization
+	using OptimizationOptimJL
+end
+
+# ╔═╡ 9655de0d-73f7-4332-85d9-974a73b4fce1
+using Model, Grid
 
 # ╔═╡ abb69118-7aeb-4154-9e3c-680b2816953d
 using Interpolations: Extrapolation
@@ -49,6 +47,9 @@ begin
 
 	using LaTeXStrings, Printf
 end
+
+# ╔═╡ 0e58697d-75fe-4ca8-a464-6c36bf508466
+using Dates
 
 # ╔═╡ e29f796c-c57c-40c3-988a-b7d9295c3dac
 html"""
@@ -112,15 +113,14 @@ filepath
 # ╔═╡ b45c4d5f-d91b-4b07-b629-a20e9d52ca90
 begin
    	result = Saving.loadtotal(filepath)
-	timesteps, F, Policy, G, model = result
+	timesteps, F, _, G, model = result
 
 	itp = Simulating.buildinterpolations(result)
 end;
 
 # ╔═╡ 1c80b078-b4ea-47a1-bcc7-063ddb6eb0cb
 begin
-	Tdomain = (0., 8.) .+ model.hogg.Tᵖ
-	mdomain = (log(model.hogg.Mᵖ), log(2.5model.hogg.Mᵖ))
+	Tdomain, mdomain = G.domains
 	
 	Tspace = range(Tdomain...; length = size(G, 1))
 	mspace = range(mdomain...; length = size(G, 2))
@@ -128,9 +128,9 @@ end;
 
 # ╔═╡ 28f9e438-f800-4fee-a216-6daa4ead8da6
 begin # Plotting utilities
-	getbyspace(T, m) = getbyspace(Point(T, m))
+	idxbyspace(T, m) = idxbyspace(Point(T, m))
 	
-	function getbyspace(x::Point)
+	function idxbyspace(x::Point)
 		i = findfirst(≥(x.T), Tspace)
 		j = findfirst(≥(x.m), mspace)
 		return CartesianIndex(i, j)
@@ -145,14 +145,14 @@ begin # Plotting utilities
 end;
 
 # ╔═╡ 4a5f12f3-6af4-4aaf-8129-c42fe0070e8b
-md"Plot time $(@bind t Slider(timesteps, default = maximum(timesteps), show_value = true))"
+md"Plot time $(@bind t Slider(timesteps, default = 0., show_value = true))"
 
 # ╔═╡ 4f53f52a-f3b7-48fb-b63c-9fbc7f9dd65e
 begin
 	Ffig = heatmap(
 		mspace, Tspace, (m, T) -> log(itp[:F](T, m, t)); 
 		xticks = Mticks, yticks = Tticks, ylabel = L"T_t - T^p", xlabel = L"M_t", title = L"$F_{%$t}(T, M)$", 
-		xlims = mdomain, ylims = Tdomain, linewidth = 0.,)
+		xlims = mdomain, ylims = Tdomain, clims = log.(extrema(F)))
 
 	Tdense = range(Tdomain...; length = 101)
 	nullcline = mstable.(Tdense, model.hogg, model.albedo)
@@ -165,83 +165,113 @@ md"# Backward costs"
 
 # ╔═╡ 5aa075ef-8ad2-4d52-b4da-d99d687a7d4e
 begin
-	
-	function makeobjective(T, m; t = economy.τ)
-		idx = getbyspace(T, m)
-		makeobjective(idx; t)
+	function objective(u, p::NTuple{3, Float64})
+		t, T, m = p
+		
+		idx = idxbyspace(T, m)
+		return objective(u, (t, idx))
 	end
 	
-	function makeobjective(idx; t = economy.τ)
-		Xᵢ = G.X[idx]
+    function objective(u, p::Tuple{Float64, CartesianIndex})
+        t, idx = p
 
 		tdx = findfirst(x -> x ≥ t, timesteps)
 		Fₜ = @view F[:, :, tdx]
-	
-		objective = @closure u -> begin
-			F′, Δt = Chain.markovstep(t, idx, Fₜ, u, model, G)
-			Chain.logcost(F′, t, Xᵢ, Δt, u, model)
-		end
-	
-		return objective
-	end
 
+        Fᵉ, Δt = Chain.markovstep(t, idx, Fₜ, u[2], model, G)
+        return Chain.logcost(Fᵉ, t, G.X[idx], Δt, u, model)
+    end
+
+    fn = OptimizationFunction(objective, Optimization.AutoForwardDiff())
 end;
 
 # ╔═╡ 0169acc9-2d30-4e80-a38b-a0cbc5af15dc
 md"
 - ``T =`` $(@bind Tfig Slider(Tspace, default = model.hogg.T₀, show_value = true))
 - ``m =`` $(@bind mfig Slider(mspace, default = log(model.hogg.M₀), show_value = true))
-- ``t =`` $(@bind tfig Slider(timesteps, default = model.economy.τ, show_value = true))
 "
 
 # ╔═╡ ec33fe87-f4fd-4454-bfa7-e644bb89f344
+# ╠═╡ skip_as_script = true
+#=╠═╡
 begin
-	ᾱ = γ(tfig, model.calibration) + δₘ(exp(mfig), model.hogg)
-	idx = getbyspace(Tfig, mfig)
-	obj = makeobjective(Tfig, mfig; t = tfig)
+	p = (t, Tfig, mfig)
+	
+	ᾱ = γ(t, model.calibration) + δₘ(exp(mfig), model.hogg)
 	u₀ = [0.5, ᾱ / 2]
-	od = TwiceDifferentiable(obj, u₀; autodiff = :forward)
-	cons = TwiceDifferentiableConstraints([0., 0.], [1., ᾱ])
 
-	resminimisation = Optim.optimize(od, cons, u₀, IPNewton())
-	u = Optim.minimizer(resminimisation)
+	prob = OptimizationProblem(fn, u₀, p, lb = zeros(2), ub = [1., ᾱ])
+    sol = solve(prob, MultistartOptimization.TikTak(100), LBFGS())
 
-	# uncresminimisation = Optim.optimize(od, TwiceDifferentiableConstraints([0., 0.], [1., 1.]), u₀, IPNewton())
-	# ufree = Optim.minimizer(uncresminimisation)
-
-	# !all(Optim.converged.((resminimisation, uncresminimisation))) && @warn "Not converged"
+	if !SciMLBase.successful_retcode(sol)
+		@warn "Optimisation not successful"
+	end
 end;
+  ╠═╡ =#
 
 # ╔═╡ fb36873a-3db7-439e-955f-24e0725bd6b3
-begin
-	cspace = range(0., 1.; length = 51)
-	aspace = range(0., 0.05; length = 51)
+#=╠═╡
+let
+	cspace = range(0.2, 0.8; length = 201)
+	aspace = range(0., 0.05; length = 201)
 
 	Fobjfig = deepcopy(Ffig)
 	scatter!(Fobjfig, [mfig], [Tfig], c = :white, label = false, markersize = 5)
 
-	objfig = contourf(cspace, aspace, (χ, α) -> log(obj([χ, α])); 
+	objfig = contour(cspace, aspace, (χ, α) -> objective([χ, α], p); 
 		ylims = extrema(aspace), xlims = extrema(cspace),
-		xlabel = L"\chi", ylabel = L"\alpha", c = :Reds, linewidth = 1, cbar = false
+		xlabel = L"\chi", ylabel = L"\alpha", linewidth = 2, cbar = false, levels = 101
 	)
 
-	hline!(objfig, [ᾱ]; linestyle = :dash, label = false, color = :white)
-	scatter!(objfig, u[[1]], u[[2]]; label = false, c = :green, markerstrokewidth = 0)
-	# scatter!(objfig, ufree[[1]], ufree[[2]]; label = false, c = :blue, markerstrokewidth = 0)
+	hline!(objfig, [ᾱ]; linestyle = :dash, label = false, color = :black)
+	scatter!(objfig, sol.u[[1]], sol.u[[2]]; label = false, c = :green, markerstrokewidth = 0)
 	
 	plot(objfig, Fobjfig; size = 410 .* (2√2, 1), margins = 5Plots.mm)
 end
+  ╠═╡ =#
+
+# ╔═╡ bf05d920-7c30-4863-8063-71c38e308e70
+begin
+	policy = Array{Float64}(undef, size(G)..., 2)
+
+	Base.Threads.@threads for idx in CartesianIndices(G)
+		Xᵢ = G.X[idx]
+	
+		ᾱ = γ(t, model.calibration) + δₘ(exp(Xᵢ.m), model.hogg)
+
+		u₀ = [0.5, ᾱ / 2]
+
+		prob = OptimizationProblem(fn, u₀, (t, idx), lb = zeros(2), ub = [1., ᾱ])
+	    sol = solve(prob, MultistartOptimization.TikTak(100), LBFGS())
+
+		policy[idx, :] .= sol.u
+	end
+end
+
+# ╔═╡ 209947c9-47b3-4010-916d-d281ec125c2e
+begin
+	α = @view policy[:, :, 2]
+
+	αfig = heatmap(
+		mspace, Tspace, α; 
+		xticks = Mticks, yticks = Tticks, ylabel = L"T_t - T^p", xlabel = L"M_t", title = L"$\alpha_{%$t}$", 
+		xlims = mdomain, ylims = Tdomain, clims = extrema(α), c = :Greens)
+
+
+	plot!(αfig, nullcline, Tdense; c = :white, label = false)
+end
+
+# ╔═╡ bbbff34a-30ab-479c-b916-2c637ecdaa45
+extrema(log.(policy[:, :, 2]))
 
 # ╔═╡ Cell order:
 # ╟─e29f796c-c57c-40c3-988a-b7d9295c3dac
 # ╟─c4befece-4e47-11ef-36e3-a97f8e06d12b
 # ╟─fd94250f-950c-4d37-94ad-ca7d73637d08
-# ╠═2b3c9a7f-8078-415d-b132-999a01aca419
-# ╠═4d074922-3d70-442b-be61-18f99f213d3d
-# ╠═c7e2f611-07e4-4c39-b101-d20b3f71fedb
 # ╠═bfc6af5e-a261-4d7e-9a16-f4ab54c6e1ca
-# ╠═9655de0d-73f7-4332-85d9-974a73b4fce1
+# ╠═2b3c9a7f-8078-415d-b132-999a01aca419
 # ╠═62a3b757-cf0b-4f8d-bdb8-7edc7ba04d47
+# ╠═9655de0d-73f7-4332-85d9-974a73b4fce1
 # ╠═abb69118-7aeb-4154-9e3c-680b2816953d
 # ╠═ddd1a388-76fe-482f-ad8e-fbc1096f2d43
 # ╠═e0877f7e-6247-4c22-a1c7-fdc42ad4dec2
@@ -253,9 +283,13 @@ end
 # ╠═1c80b078-b4ea-47a1-bcc7-063ddb6eb0cb
 # ╠═28f9e438-f800-4fee-a216-6daa4ead8da6
 # ╟─4a5f12f3-6af4-4aaf-8129-c42fe0070e8b
-# ╠═4f53f52a-f3b7-48fb-b63c-9fbc7f9dd65e
+# ╟─4f53f52a-f3b7-48fb-b63c-9fbc7f9dd65e
 # ╟─015922f1-c954-42db-887e-4499e5dbca59
+# ╠═0e58697d-75fe-4ca8-a464-6c36bf508466
 # ╠═5aa075ef-8ad2-4d52-b4da-d99d687a7d4e
 # ╟─0169acc9-2d30-4e80-a38b-a0cbc5af15dc
-# ╟─ec33fe87-f4fd-4454-bfa7-e644bb89f344
-# ╠═fb36873a-3db7-439e-955f-24e0725bd6b3
+# ╠═ec33fe87-f4fd-4454-bfa7-e644bb89f344
+# ╟─fb36873a-3db7-439e-955f-24e0725bd6b3
+# ╠═bf05d920-7c30-4863-8063-71c38e308e70
+# ╠═209947c9-47b3-4010-916d-d281ec125c2e
+# ╠═bbbff34a-30ab-479c-b916-2c637ecdaa45

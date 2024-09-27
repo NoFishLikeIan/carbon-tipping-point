@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.46
+# v0.19.38
 
 using Markdown
 using InteractiveUtils
@@ -151,7 +151,7 @@ let
 	@unpack α, χ = itp
 	
 	χₜ = @closure (m, T) -> χ(T, m, tfig)
-	dm = @closure (m, T) -> ε(tfig, exp(m), α(T, m, tfig), model)
+	dm = @closure (m, T) -> α(T, m, tfig)
 
 	nullcline = [mstable(T, model) for T in Tspace]
 	
