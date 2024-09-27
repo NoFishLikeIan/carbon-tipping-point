@@ -14,30 +14,32 @@ using OptimizationOptimJL
 include("chain.jl")
 
 
-function backwardstep!(Δts, F, policy, cluster, model::AbstractModel, G; allownegative = false, ad = Optimization.AutoForwardDiff(), solver = LBFGS(), tiktak = MultistartOptimization.TikTak(100))
+function backwardstep!(Δts, F::NTuple{2, Matrix{Float64}}, policy, cluster, model::AbstractModel, G; allownegative = false, ad = Optimization.AutoForwardDiff(), solver = LBFGS(), tiktak = MultistartOptimization.TikTak(100), αub = 100.)
+    Fₜ, Fₜ₊ₕ = F
+
     objective = @closure (u, p) -> begin
         t, idx = p
 
-        F′, Δt = markovstep(t, idx, F, u[2], model, G)
-        return logcost(F′, t, G.X[idx], Δt, u, model)
+        Fᵉₜ₊ₕ, Δt = markovstep(t, idx, Fₜ₊ₕ, u[2], model, G)
+        return logcost(Fᵉₜ₊ₕ, t, G.X[idx], Δt, u, model)
     end
+
     fn = OptimizationFunction(objective, ad)
 
-    Threads.@threads for (i, δt) in cluster
+    @threads for (i, δt) in cluster
+        ub = [1., αub]
         indices = CartesianIndices(G)
 
         idx = indices[i]
         t = model.economy.τ - δt
         u₀ = policy[idx, :]
 
-        ub = if allownegative
-            [1., 100.]
-        else
+        if !allownegative
             ᾱ = γ(t, model.calibration) + δₘ(exp(G.X[idx].m), model.hogg)
-            [1., ᾱ]
+            ub[2] = ᾱ
         end
 
-        prob = OptimizationProblem(fn, u₀, (t, idx), lb = [0., 0.], ub = ub)
+        prob = OptimizationProblem(fn, u₀, (t, idx), lb = zeros(2), ub = ub)
         sol = solve(prob, tiktak, solver)
 
         hasconverged = successful_retcode(sol.retcode)
@@ -45,13 +47,13 @@ function backwardstep!(Δts, F, policy, cluster, model::AbstractModel, G; allown
         !hasconverged && @warn "Optimisation has not converged at t = $t and idx = $idx"
 
         policy[idx, :] .= sol.u
-        F[idx] = exp(sol.objective)
-        Δts[i] = last(markovstep(t, idx, F, sol.u[2], model, G))
+        Fₜ[idx] = exp(sol.objective)
+        Δts[i] = last(markovstep(t, idx, Fₜ₊ₕ, sol.u[2], model, G))
     end
 end
 
-"Backward simulates from F̄ down to F₀, using the albedo model. It assumes that the passed F ≡ F̄"
-function backwardsimulation!(F, policy, model::AbstractModel, G; verbose = 0, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = 150., stepkwargs...)     
+function backwardsimulation!(F::NTuple{2, Matrix{Float64}}, policy, model::AbstractModel, G; verbose = 0, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = 150., stepkwargs...)
+    
     savecache = !isnothing(cachepath)
     if savecache
         if isfile(cachepath) 
@@ -67,12 +69,12 @@ function backwardsimulation!(F, policy, model::AbstractModel, G; verbose = 0, ca
 
                 _, Fcache, policycache, Gcache, _ = loadtotal(cachepath)
 
-                F .= interpolateovergrid(Gcache, G, Fcache[:, :, 1])
+                F[1] .= interpolateovergrid(Gcache, G, Fcache[:, :, 1])
 
                 policy[:, :, 1] = interpolateovergrid(Gcache, G, policycache[:, :, 1, 1])
                 policy[:, :, 2] = interpolateovergrid(Gcache, G, policycache[:, :, 2, 1])
 
-                return F, policy
+                return F[1], policy
             end
         else
             cachefile = jldopen(cachepath, "w+")
@@ -109,11 +111,11 @@ function backwardsimulation!(F, policy, model::AbstractModel, G; verbose = 0, ca
         
         if savecache && tmin ≤ tcache
             if (verbose ≥ 2)
-                println("-- Saving cache at $tcache")
+                println("Saving cache at $tcache")
             end
 
             group = JLD2.Group(cachefile, "$tcache")
-            group["F"] = F
+            group["F"] = F[1]
             group["policy"] = policy
             tcache = tcache - cachestep 
         end
@@ -126,7 +128,7 @@ function backwardsimulation!(F, policy, model::AbstractModel, G; verbose = 0, ca
         end
     end
 
-    return F, policy
+    return F[1], policy
 end
 
 function computebackward(model::AbstractModel, G; outdir = "data", kwargs...)
@@ -135,7 +137,9 @@ function computebackward(model::AbstractModel, G; outdir = "data", kwargs...)
 end
 function computebackward(terminalresults, model::AbstractModel, G; verbose = 0, withsave = true, outdir = "data", iterkwargs...)
     F̄, terminalconsumption, terminalG = terminalresults
-    F = interpolateovergrid(terminalG, G, F̄);
+    Fₜ₊ₕ = interpolateovergrid(terminalG, G, F̄);
+    Fₜ = similar(Fₜ₊ₕ)
+    F = (Fₜ, Fₜ₊ₕ)
 
     policy = Array{Float64}(undef, size(G)..., 2)
     policy[:, :, 1] .= interpolateovergrid(terminalG, G, terminalconsumption)
