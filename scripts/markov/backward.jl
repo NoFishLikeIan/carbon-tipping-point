@@ -4,7 +4,7 @@ using Printf: @printf
 using Model, Grid
 using FastClosures: @closure
 using Printf: @printf
-using ZigZagBoomerang: dequeue!
+using ZigZagBoomerang: dequeue!, PartialQueue
 using Base.Threads: @threads
 using SciMLBase: successful_retcode
 using Optimization
@@ -12,7 +12,6 @@ using OptimizationNLopt, OptimizationMultistartOptimization
 using OptimizationOptimJL
 
 include("chain.jl")
-
 
 function backwardstep!(Δts, F::NTuple{2, Matrix{Float64}}, policy, cluster, model::AbstractModel, G; allownegative = false, ad = Optimization.AutoForwardDiff(), solver = LBFGS(), tiktak = MultistartOptimization.TikTak(100), αub = 100.)
     Fₜ, Fₜ₊ₕ = F
@@ -52,39 +51,41 @@ function backwardstep!(Δts, F::NTuple{2, Matrix{Float64}}, policy, cluster, mod
     end
 end
 
-function backwardsimulation!(F::NTuple{2, Matrix{Float64}}, policy, model::AbstractModel, G; verbose = 0, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = 150., stepkwargs...)
+function backwardsimulation!(F::NTuple{2, Matrix{Float64}}, policy, model::AbstractModel, G; kwargs...)
+    queue = DiagonalRedBlackQueue(G)
+    backwardsimulation!(queue, F, policy, model, G; kwargs...)
+end
+
+function backwardsimulation!(queue::PartialQueue, F::NTuple{2, Matrix{Float64}}, policy, model::AbstractModel, G; verbose = 0, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = model.economy.τ, stepkwargs...)
     
     savecache = !isnothing(cachepath)
     if savecache
-        if isfile(cachepath) 
-            if overwrite 
-                (verbose ≥ 1) && @warn "Removing file $cachepath.\n"
-                rm(cachepath)
-
-                cachefile = jldopen(cachepath, "w+")
-                cachefile["G"] = G
-                cachefile["model"] = model
-            else 
-                (verbose ≥ 1) && @warn "File $cachepath already exists. If you want to overwrite it pass overwrite = true. Will copy the results into `F` and `policy`.\n"
-
-                _, Fcache, policycache, Gcache, _ = loadtotal(cachepath)
-
-                F[1] .= interpolateovergrid(Gcache, G, Fcache[:, :, 1])
-
-                policy[:, :, 1] = interpolateovergrid(Gcache, G, policycache[:, :, 1, 1])
-                policy[:, :, 2] = interpolateovergrid(Gcache, G, policycache[:, :, 2, 1])
-
-                return F[1], policy
+        if isfile(cachepath) && overwrite
+            if (verbose ≥ 1) 
+                @warn "File $cachepath already exists and mode is overwrite. Will remove."
             end
+
+            rm(cachepath)
+
+            cachefile = jldopen(cachepath, "w+")
+            cachefile["G"] = G
+            cachefile["model"] = model
+        elseif isfile(cachepath) && !overwrite 
+            if (verbose ≥ 1)
+                println("File $cachepath already exists and mode is not overwrite. Will resume from cache.")
+            end
+
+            cachefile = jldopen(cachepath, "a+")
+            tcache = model.economy.τ - minimum(queue.vals) - cachestep
         else
+            
             cachefile = jldopen(cachepath, "w+")
             cachefile["G"] = G
             cachefile["model"] = model
         end
     end
 
-    queue = DiagonalRedBlackQueue(G)
-    Δts = zeros(N^2)
+    Δts = Vector{Float64}(undef, prod(size(G)))
     passcounter = 1
 
     while !isempty(queue)
@@ -95,19 +96,20 @@ function backwardsimulation!(F::NTuple{2, Matrix{Float64}}, policy, model::Abstr
             flush(stdout)
         end
 
+        passcounter += 1
+        
         clusters = dequeue!(queue)
-
         for cluster in clusters
             backwardstep!(Δts, F, policy, cluster, model, G; stepkwargs...)
 
-            for i in first.(cluster)
+            indices = first.(cluster)
+
+            for i in indices
                 if queue[i] ≤ model.economy.τ - tstop
                     queue[i] += Δts[i]
                 end
             end
         end
-
-        passcounter += 1
         
         if savecache && tmin ≤ tcache
             if (verbose ≥ 2)
@@ -115,20 +117,18 @@ function backwardsimulation!(F::NTuple{2, Matrix{Float64}}, policy, model::Abstr
             end
 
             group = JLD2.Group(cachefile, "$tcache")
-            group["F"] = F[1]
+            group["F"] = first(F)
             group["policy"] = policy
             tcache = tcache - cachestep 
         end
     end
 
     if savecache 
-        close(cachefile) 
+        close(cachefile)
         if (verbose ≥ 1)
             println("$(now()): ", "Saved cached file into $cachepath")
         end
     end
-
-    return F[1], policy
 end
 
 function computebackward(model::AbstractModel, G; outdir = "data", kwargs...)

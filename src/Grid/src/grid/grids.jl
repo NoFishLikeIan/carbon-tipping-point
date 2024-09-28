@@ -62,10 +62,9 @@ function Base.CartesianIndices(grid::RegularGrid, excludeboundary::Dict{Int, NTu
     return L:R
 end
 
-function DiagonalRedBlackQueue(grid::RegularGrid)
-    dims = size(grid)
-    G = SimpleGraphs.grid(dims)
-    Q = PartialQueue(G, zeros(prod(dims)))
+function DiagonalRedBlackQueue(grid::RegularGrid; initialvector = zeros(prod(size(grid))))
+    G = SimpleGraphs.grid(size(grid))
+    Q = PartialQueue(G, initialvector)
 
     return Q
 end
