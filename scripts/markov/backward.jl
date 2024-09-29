@@ -7,47 +7,61 @@ using Printf: @printf
 using ZigZagBoomerang: dequeue!, PartialQueue
 using Base.Threads: @threads
 using SciMLBase: successful_retcode
-using Optimization
-using OptimizationNLopt, OptimizationMultistartOptimization
-using OptimizationOptimJL
+using Optim
 
 include("chain.jl")
 
-function backwardstep!(Δts, F::NTuple{2, Matrix{Float64}}, policy, cluster, model::AbstractModel, G; allownegative = false, ad = Optimization.AutoForwardDiff(), solver = LBFGS(), tiktak = MultistartOptimization.TikTak(100), αub = 100.)
+function backwardstep!(Δts, F::NTuple{2, Matrix{Float64}}, policy, cluster, model::AbstractModel, G; options = Optim.Options(g_tol = 1e-12, iterations = 100_000), αfactors = (0.5, 1., 1.5), allownegative = false)
     Fₜ, Fₜ₊ₕ = F
 
-    objective = @closure (u, p) -> begin
-        t, idx = p
-
-        Fᵉₜ₊ₕ, Δt = markovstep(t, idx, Fₜ₊ₕ, u[2], model, G)
-        return logcost(Fᵉₜ₊ₕ, t, G.X[idx], Δt, u, model)
-    end
-
-    fn = OptimizationFunction(objective, ad)
-
     @threads for (i, δt) in cluster
-        ub = [1., αub]
-        indices = CartesianIndices(G)
-
-        idx = indices[i]
+        idx = CartesianIndices(G)[i]
         t = model.economy.τ - δt
-        u₀ = policy[idx, :]
+        M = exp(G.X[idx].m)
+        ᾱ = γ(t, model.calibration) + δₘ(M, model.hogg)
 
-        if !allownegative
-            ᾱ = γ(t, model.calibration) + δₘ(exp(G.X[idx].m), model.hogg)
-            ub[2] = ᾱ
+        objective = @closure u -> begin
+            Fᵉₜ, Δt = markovstep(t, idx, Fₜ₊ₕ, u[2], model, G)
+            return cost(Fᵉₜ, t, G.X[idx], Δt, u, model)
         end
 
-        prob = OptimizationProblem(fn, u₀, (t, idx), lb = zeros(2), ub = ub)
-        sol = solve(prob, tiktak, solver)
+        u₀ = policy[idx, :]
+        diffobjective = TwiceDifferentiable(objective, u₀; autodiff = :forward)
 
-        hasconverged = successful_retcode(sol.retcode)
-        
-        !hasconverged && @warn "Optimisation has not converged at t = $t and idx = $idx"
+        # Solve first unconstrained problem
+        constraints = TwiceDifferentiableConstraints([0., 0.], [1., Inf])
+       
+        objective, optimum = Inf, similar(u₀)
+        for factor in αfactors
+            u₀[2] = factor * ᾱ
 
-        policy[idx, :] .= sol.u
-        Fₜ[idx] = exp(sol.objective)
-        Δts[i] = last(markovstep(t, idx, Fₜ₊ₕ, sol.u[2], model, G))
+            res = Optim.optimize(diffobjective, constraints, u₀, IPNewton(), options)
+
+            if res.minimum < objective
+                objective = Optim.minimum(res)
+                optimum .= Optim.minimizer(res)
+            end
+        end
+
+        # Solve constrained problem with χ from unconstrained problem
+        if !allownegative
+            u₀[1] = opt[1]
+            u₀[2] = min(opt[2], ᾱ * (1 - 1e-3)) # Guarantees u₀ ∈ U
+            constraints = TwiceDifferentiableConstraints([0., 0.], [1., ᾱ])
+
+            res = Optim.optimize(diffobjective, constraints, u₀, IPNewton(), options)
+
+            if !Optim.converged(res)
+                @warn "Unconstrained optimisation has not converged at t = $t and idx = $idx"
+            end
+
+            objective = Optim.minimum(res)
+            optimum .= Optim.minimizer(res)
+        end
+
+        policy[idx, :] .= optimum
+        Fₜ[idx] = objective
+        Δts[i] = last(markovstep(t, idx, Fₜ₊ₕ, policy[idx, 2], model, G))
     end
 end
 

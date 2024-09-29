@@ -34,6 +34,12 @@ begin
 	using OptimizationOptimJL
 end
 
+# ╔═╡ 808203cc-c1d9-4f3d-b7fd-d42e49ff72a9
+using StaticArrays
+
+# ╔═╡ 6d0da022-2bb8-4291-ac43-721d6355ddbe
+using Optim
+
 # ╔═╡ 9655de0d-73f7-4332-85d9-974a73b4fce1
 using Model, Grid
 
@@ -49,7 +55,7 @@ begin
 end
 
 # ╔═╡ 0e58697d-75fe-4ca8-a464-6c36bf508466
-using Dates
+using Dates, ForwardDiff
 
 # ╔═╡ e29f796c-c57c-40c3-988a-b7d9295c3dac
 html"""
@@ -113,7 +119,7 @@ filepath
 # ╔═╡ b45c4d5f-d91b-4b07-b629-a20e9d52ca90
 begin
    	result = Saving.loadtotal(filepath)
-	timesteps, F, _, G, model = result
+	timesteps, F, policy, G, model = result
 
 	itp = Simulating.buildinterpolations(result)
 end;
@@ -163,54 +169,60 @@ end
 # ╔═╡ 015922f1-c954-42db-887e-4499e5dbca59
 md"# Backward costs"
 
-# ╔═╡ 5aa075ef-8ad2-4d52-b4da-d99d687a7d4e
-begin
-	function objective(u, p::NTuple{3, Float64})
-		t, T, m = p
-		
-		idx = idxbyspace(T, m)
-		return objective(u, (t, idx))
-	end
-	
-    function objective(u, p::Tuple{Float64, CartesianIndex})
-        t, idx = p
-
-		tdx = findfirst(x -> x ≥ t, timesteps)
-		Fₜ = @view F[:, :, tdx]
-
-        Fᵉ, Δt = Chain.markovstep(t, idx, Fₜ, u[2], model, G)
-        return Chain.logcost(Fᵉ, t, G.X[idx], Δt, u, model)
-    end
-
-    fn = OptimizationFunction(objective, Optimization.AutoForwardDiff())
-end;
-
 # ╔═╡ 0169acc9-2d30-4e80-a38b-a0cbc5af15dc
 md"
 - ``T =`` $(@bind Tfig Slider(Tspace, default = model.hogg.T₀, show_value = true))
 - ``m =`` $(@bind mfig Slider(mspace, default = log(model.hogg.M₀), show_value = true))
 "
 
-# ╔═╡ ec33fe87-f4fd-4454-bfa7-e644bb89f344
-# ╠═╡ skip_as_script = true
-#=╠═╡
+# ╔═╡ 5aa075ef-8ad2-4d52-b4da-d99d687a7d4e
 begin
-	p = (t, Tfig, mfig)
-	
-	ᾱ = γ(t, model.calibration) + δₘ(exp(mfig), model.hogg)
-	u₀ = [0.5, ᾱ / 2]
-
-	prob = OptimizationProblem(fn, u₀, p, lb = zeros(2), ub = [1., ᾱ])
-    sol = solve(prob, MultistartOptimization.TikTak(100), LBFGS())
-
-	if !SciMLBase.successful_retcode(sol)
-		@warn "Optimisation not successful"
+	tdx = findfirst(x -> x ≥ t, timesteps)
+	Fₜ = @view F[:, :, tdx]
+	idx = idxbyspace(Tfig, mfig)
+		
+	objective = @closure u -> begin
+		α = u[2]
+		
+		F′, Δt = Chain.markovstep(t, idx, Fₜ, α, model, G)
+		return Chain.logcost(F′, t, G.X[idx], Δt, max.(u, 0.), model)
 	end
+
+	diffobj = TwiceDifferentiable(objective, Vector{Float64}(undef, 2); autodiff = :forward)
 end;
-  ╠═╡ =#
+
+# ╔═╡ 9e62f69d-e3bc-43a2-ad0c-0bcb2584350a
+begin
+	defaultoptim = Optim.Options(
+	    g_tol = 1e-12, 
+	    allow_f_increases = false, 
+	    iterations = 100_000)
+
+
+	diffobjective = TwiceDifferentiable(objective, Vector{Float64}(undef, 2); autodiff = :forward)
+
+	ᾱ = γ(t, model.calibration) + δₘ(exp(G.X[idx].m), model.hogg)
+	constraints = TwiceDifferentiableConstraints([0., 0.], [1., ᾱ])
+	unconstrained = TwiceDifferentiableConstraints([0., 0.], [1., Inf])
+
+	u₀ = policy[idx, :, tdx]
+	uncobj, uopt = Inf, similar(u₀)
+
+	for α₀ in [0.5, 1., 1.5]
+		setindex!(u₀, α₀ * ᾱ, 2)
+
+		res = Optim.optimize(diffobjective, unconstrained, u₀, IPNewton(), defaultoptim)
+		if res.minimum < uncobj
+			uncobj = Optim.minimum(res)
+			uopt .= Optim.minimizer(res)
+		end
+	end
+end
+
+# ╔═╡ 87bf0d42-2b97-459d-8304-dddb3b45b382
+constrains = TwiceDifferentiableConstraints([0., 0.], [1., Inf])
 
 # ╔═╡ fb36873a-3db7-439e-955f-24e0725bd6b3
-#=╠═╡
 let
 	cspace = range(0.2, 0.8; length = 201)
 	aspace = range(0., 0.05; length = 201)
@@ -218,19 +230,20 @@ let
 	Fobjfig = deepcopy(Ffig)
 	scatter!(Fobjfig, [mfig], [Tfig], c = :white, label = false, markersize = 5)
 
-	objfig = contour(cspace, aspace, (χ, α) -> objective([χ, α], p); 
+	objfig = contour(cspace, aspace, (χ, α) -> objective([χ, α]); 
 		ylims = extrema(aspace), xlims = extrema(cspace),
-		xlabel = L"\chi", ylabel = L"\alpha", linewidth = 2, cbar = false, levels = 101
+		xlabel = L"\chi", ylabel = L"\alpha", linewidth = 2, cbar = false, levels = 21
 	)
 
 	hline!(objfig, [ᾱ]; linestyle = :dash, label = false, color = :black)
-	scatter!(objfig, sol.u[[1]], sol.u[[2]]; label = false, c = :green, markerstrokewidth = 0)
+	scatter!(objfig, uopt[[1]], uopt[[2]]; label = false, c = :green, markerstrokewidth = 0)
 	
 	plot(objfig, Fobjfig; size = 410 .* (2√2, 1), margins = 5Plots.mm)
 end
-  ╠═╡ =#
 
 # ╔═╡ bf05d920-7c30-4863-8063-71c38e308e70
+# ╠═╡ disabled = true
+#=╠═╡
 begin
 	policy = Array{Float64}(undef, size(G)..., 2)
 
@@ -247,6 +260,7 @@ begin
 		policy[idx, :] .= sol.u
 	end
 end
+  ╠═╡ =#
 
 # ╔═╡ 209947c9-47b3-4010-916d-d281ec125c2e
 begin
@@ -262,7 +276,9 @@ begin
 end
 
 # ╔═╡ bbbff34a-30ab-479c-b916-2c637ecdaa45
+#=╠═╡
 extrema(log.(policy[:, :, 2]))
+  ╠═╡ =#
 
 # ╔═╡ Cell order:
 # ╟─e29f796c-c57c-40c3-988a-b7d9295c3dac
@@ -271,6 +287,8 @@ extrema(log.(policy[:, :, 2]))
 # ╠═bfc6af5e-a261-4d7e-9a16-f4ab54c6e1ca
 # ╠═2b3c9a7f-8078-415d-b132-999a01aca419
 # ╠═62a3b757-cf0b-4f8d-bdb8-7edc7ba04d47
+# ╠═808203cc-c1d9-4f3d-b7fd-d42e49ff72a9
+# ╠═6d0da022-2bb8-4291-ac43-721d6355ddbe
 # ╠═9655de0d-73f7-4332-85d9-974a73b4fce1
 # ╠═abb69118-7aeb-4154-9e3c-680b2816953d
 # ╠═ddd1a388-76fe-482f-ad8e-fbc1096f2d43
@@ -288,8 +306,9 @@ extrema(log.(policy[:, :, 2]))
 # ╠═0e58697d-75fe-4ca8-a464-6c36bf508466
 # ╠═5aa075ef-8ad2-4d52-b4da-d99d687a7d4e
 # ╟─0169acc9-2d30-4e80-a38b-a0cbc5af15dc
-# ╠═ec33fe87-f4fd-4454-bfa7-e644bb89f344
-# ╟─fb36873a-3db7-439e-955f-24e0725bd6b3
+# ╠═9e62f69d-e3bc-43a2-ad0c-0bcb2584350a
+# ╠═87bf0d42-2b97-459d-8304-dddb3b45b382
+# ╠═fb36873a-3db7-439e-955f-24e0725bd6b3
 # ╠═bf05d920-7c30-4863-8063-71c38e308e70
 # ╠═209947c9-47b3-4010-916d-d281ec125c2e
 # ╠═bbbff34a-30ab-479c-b916-2c637ecdaa45
