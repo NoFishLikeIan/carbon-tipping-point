@@ -11,7 +11,7 @@ using Optim
 
 include("chain.jl")
 
-function backwardstep!(Δts, F::NTuple{2, Matrix{Float64}}, policy, cluster, model::AbstractModel, G; options = Optim.Options(g_tol = 1e-12, iterations = 100_000), αfactors = (0.5, 1., 1.5), allownegative = false)
+function backwardstep!(Δts, F::NTuple{2, Matrix{Float64}}, policy, cluster, model::AbstractModel, G; options = Optim.Options(g_tol = 1e-12, iterations = 100_000), αfactors = (0.5, 1.5), allownegative = false)
     Fₜ, Fₜ₊ₕ = F
 
     @threads for (i, δt) in cluster
@@ -45,8 +45,8 @@ function backwardstep!(Δts, F::NTuple{2, Matrix{Float64}}, policy, cluster, mod
 
         # Solve constrained problem with χ from unconstrained problem
         if !allownegative
-            u₀[1] = opt[1]
-            u₀[2] = min(opt[2], ᾱ * (1 - 1e-3)) # Guarantees u₀ ∈ U
+            u₀[1] = optimum[1]
+            u₀[2] = min(optimum[2], ᾱ * (1 - 1e-3)) # Guarantees u₀ ∈ U
             constraints = TwiceDifferentiableConstraints([0., 0.], [1., ᾱ])
 
             res = Optim.optimize(diffobjective, constraints, u₀, IPNewton(), options)
