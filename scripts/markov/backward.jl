@@ -8,59 +8,88 @@ using ZigZagBoomerang: dequeue!, PartialQueue
 using Base.Threads: @threads
 using SciMLBase: successful_retcode
 using Optim
+using Statistics: mean
 
 include("chain.jl")
 
-function backwardstep!(Δts, F::NTuple{2, Matrix{Float64}}, policy, cluster, model::AbstractModel, G; options = Optim.Options(g_tol = 1e-12, iterations = 100_000), αfactors = (0.5, 1.5), allownegative = false)
+const defaultoptoptions = Optim.Options(g_tol = 1e-12, iterations = 100_000)
+
+"""
+Optimise `diffobjective` and stores the minimiser in u. If the optimisation does not converge, it takes the mean of the policy in the neighbourhood.
+"""
+function fallbackoptimisation!(u,
+    diffobjective, u₀, 
+    idx, t, policy, 
+    constraints::TwiceDifferentiableConstraints, G::RegularGrid; 
+    optoptions = defaultoptoptions, verbose = 0)
+
+    res = Optim.optimize(diffobjective, constraints, u₀, IPNewton(), optoptions)
+
+    if Optim.converged(res)
+        u .= Optim.minimizer(res)
+    else # If it does not converge we take the mean of the policy in the neighbourhood
+        if verbose ≥ 1 
+            @warn "Constrained optimisation has not converged at t = $t and idx = $idx"
+        end
+
+        unit = oneunit(idx)
+        L = max(minimum(CartesianIndices(G)), idx - unit)
+        R = min(maximum(CartesianIndices(G)), idx + unit)
+
+        u .= mean(policy[L:R, :])
+    end
+end
+
+function backwardstep!(Δts, F::NTuple{2, Matrix{Float64}}, policy, cluster, model::AbstractModel, G; αfactors = [1.5], allownegative = false, optargs...)
     Fₜ, Fₜ₊ₕ = F
 
     @threads for (i, δt) in cluster
-        idx = CartesianIndices(G)[i]
+        indices = CartesianIndices(G)
+
+        idx = indices[i]
         t = model.economy.τ - δt
         M = exp(G.X[idx].m)
         ᾱ = γ(t, model.calibration) + δₘ(M, model.hogg)
+        u₀ = policy[idx, :]
 
         objective = @closure u -> begin
             Fᵉₜ, Δt = markovstep(t, idx, Fₜ₊ₕ, u[2], model, G)
             return cost(Fᵉₜ, t, G.X[idx], Δt, u, model)
         end
 
-        u₀ = policy[idx, :]
         diffobjective = TwiceDifferentiable(objective, u₀; autodiff = :forward)
 
         # Solve first unconstrained problem
         constraints = TwiceDifferentiableConstraints([0., 0.], [1., Inf])
-       
-        objective, optimum = Inf, similar(u₀)
+        optimum = similar(u₀)
+        candidate = similar(u₀)
+
+        objectiveminimum = Inf
         for factor in αfactors
             u₀[2] = factor * ᾱ
 
-            res = Optim.optimize(diffobjective, constraints, u₀, IPNewton(), options)
+            fallbackoptimisation!(candidate, diffobjective, u₀, idx, t, policy, constraints, G; optargs...)
+            factorminimum = objective(candidate)
 
-            if res.minimum < objective
-                objective = Optim.minimum(res)
-                optimum .= Optim.minimizer(res)
+            if factorminimum < objectiveminimum
+                optimum .= candidate
+                objectiveminimum = factorminimum
             end
         end
 
         # Solve constrained problem with χ from unconstrained problem
         if !allownegative
             u₀[1] = optimum[1]
-            u₀[2] = min(optimum[2], ᾱ * (1 - 1e-3)) # Guarantees u₀ ∈ U
+            u₀[2] = min(optimum[2], ᾱ / 2) # Guarantees u₀ ∈ U
             constraints = TwiceDifferentiableConstraints([0., 0.], [1., ᾱ])
 
-            res = Optim.optimize(diffobjective, constraints, u₀, IPNewton(), options)
+            fallbackoptimisation!(optimum, diffobjective, u₀, idx, t, policy, constraints, G; optargs...)
 
-            if !Optim.converged(res)
-                @warn "Unconstrained optimisation has not converged at t = $t and idx = $idx"
-            end
-
-            objective = Optim.minimum(res)
-            optimum .= Optim.minimizer(res)
+            objectiveminimum = objective(optimum)
         end
 
         policy[idx, :] .= optimum
-        Fₜ[idx] = objective
+        Fₜ[idx] = objectiveminimum
         Δts[i] = last(markovstep(t, idx, Fₜ₊ₕ, policy[idx, 2], model, G))
     end
 end
@@ -114,7 +143,7 @@ function backwardsimulation!(queue::PartialQueue, F::NTuple{2, Matrix{Float64}},
         
         clusters = dequeue!(queue)
         for cluster in clusters
-            backwardstep!(Δts, F, policy, cluster, model, G; stepkwargs...)
+            backwardstep!(Δts, F, policy, cluster, model, G; verbose, stepkwargs...)
 
             indices = first.(cluster)
 
@@ -167,7 +196,7 @@ function computebackward(terminalresults, model::AbstractModel, G; verbose = 0, 
         filename = makefilename(model)
     end
 
-    cachepath = ifelse(withsave, joinpath(cachefolder, filename), nothing)
+    cachepath = withsave ? joinpath(cachefolder, filename) : nothing
     backwardsimulation!(F, policy, model, G; verbose, cachepath, iterkwargs...)
 
     return F, policy

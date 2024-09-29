@@ -42,7 +42,7 @@ albedo = Albedo(threshold)
 model = TippingModel(albedo, hogg, preferences, damages, economy, calibration)
 
 # Construct Grid
-Tdomain = hogg.Tᵖ .+ (0., 7.);
+Tdomain = hogg.Tᵖ .+ (0., 6.);
 mdomain = mstable.(Tdomain, hogg)
 G = RegularGrid([Tdomain, mdomain], N)
 

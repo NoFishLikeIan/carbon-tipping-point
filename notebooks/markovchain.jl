@@ -100,7 +100,7 @@ md"## Import simulation"
 # ╔═╡ a308bb59-cf5f-4d11-b03e-bbe3169f3a71
 begin
 	ALLOWNEGATIVE = false
-	datapath = "../data/simulation-medium"
+	datapath = "../data/simulation-local"
 	filepaths = joinpath(datapath, ALLOWNEGATIVE ? "negative" : "constrained")
 	simulationfiles = Saving.listfiles(filepaths)
 	simulationfilesnames = @. replace(basename(simulationfiles), ".jld2" => "")
@@ -124,6 +124,9 @@ begin
 	itp = Simulating.buildinterpolations(result)
 end;
 
+# ╔═╡ 115465f8-003e-427b-9b91-12eb09ed8280
+model
+
 # ╔═╡ 1c80b078-b4ea-47a1-bcc7-063ddb6eb0cb
 begin
 	Tdomain, mdomain = G.domains
@@ -131,6 +134,9 @@ begin
 	Tspace = range(Tdomain...; length = size(G, 1))
 	mspace = range(mdomain...; length = size(G, 2))
 end;
+
+# ╔═╡ ddfcfbf7-f677-42e8-9d4d-67544b2a9a48
+mdomain
 
 # ╔═╡ 28f9e438-f800-4fee-a216-6daa4ead8da6
 begin # Plotting utilities
@@ -157,13 +163,23 @@ md"Plot time $(@bind t Slider(timesteps, default = 0., show_value = true))"
 begin
 	Ffig = heatmap(
 		mspace, Tspace, (m, T) -> log(itp[:F](T, m, t)); 
-		xticks = Mticks, yticks = Tticks, ylabel = L"T_t - T^p", xlabel = L"M_t", title = L"$F_{%$t}(T, M)$", 
-		xlims = mdomain, ylims = Tdomain, clims = log.(extrema(F)))
+		xticks = Mticks, yticks = Tticks, ylabel = L"T_t - T^p", xlabel = L"M_t", title = L"$\log F_{%$t}(T, M)$", 
+		xlims = mdomain, ylims = Tdomain, clims = log.(extrema(F)), cbar = false)
 
 	Tdense = range(Tdomain...; length = 101)
 	nullcline = mstable.(Tdense, model.hogg, model.albedo)
 
 	plot!(Ffig, nullcline, Tdense; c = :white, label = false)
+
+	αfig = heatmap(
+		mspace, Tspace, (m, T) -> itp[:α](T, m, t); 
+		xticks = Mticks, yticks = nothing, xlabel = L"M_t", title = L"$\alpha_{%$t}$", 
+		xlims = mdomain, ylims = Tdomain, clims = extrema(itp[:α].itp.coefs), c = :Greens
+	)
+
+	plot!(αfig, nullcline, Tdense; c = :black, label = false)
+
+	plot(Ffig, αfig; size = 400 .* (2√2, 1.), link = :y, hsep = 0, margins = 5Plots.mm)
 end
 
 # ╔═╡ 015922f1-c954-42db-887e-4499e5dbca59
@@ -241,45 +257,6 @@ let
 	plot(objfig, Fobjfig; size = 410 .* (2√2, 1), margins = 5Plots.mm)
 end
 
-# ╔═╡ bf05d920-7c30-4863-8063-71c38e308e70
-# ╠═╡ disabled = true
-#=╠═╡
-begin
-	policy = Array{Float64}(undef, size(G)..., 2)
-
-	Base.Threads.@threads for idx in CartesianIndices(G)
-		Xᵢ = G.X[idx]
-	
-		ᾱ = γ(t, model.calibration) + δₘ(exp(Xᵢ.m), model.hogg)
-
-		u₀ = [0.5, ᾱ / 2]
-
-		prob = OptimizationProblem(fn, u₀, (t, idx), lb = zeros(2), ub = [1., ᾱ])
-	    sol = solve(prob, MultistartOptimization.TikTak(100), LBFGS())
-
-		policy[idx, :] .= sol.u
-	end
-end
-  ╠═╡ =#
-
-# ╔═╡ 209947c9-47b3-4010-916d-d281ec125c2e
-begin
-	α = @view policy[:, :, 2]
-
-	αfig = heatmap(
-		mspace, Tspace, α; 
-		xticks = Mticks, yticks = Tticks, ylabel = L"T_t - T^p", xlabel = L"M_t", title = L"$\alpha_{%$t}$", 
-		xlims = mdomain, ylims = Tdomain, clims = extrema(α), c = :Greens)
-
-
-	plot!(αfig, nullcline, Tdense; c = :white, label = false)
-end
-
-# ╔═╡ bbbff34a-30ab-479c-b916-2c637ecdaa45
-#=╠═╡
-extrema(log.(policy[:, :, 2]))
-  ╠═╡ =#
-
 # ╔═╡ Cell order:
 # ╟─e29f796c-c57c-40c3-988a-b7d9295c3dac
 # ╟─c4befece-4e47-11ef-36e3-a97f8e06d12b
@@ -298,17 +275,16 @@ extrema(log.(policy[:, :, 2]))
 # ╟─94232fa5-9ab4-49f6-9f8b-d97bd5dbd9c4
 # ╠═720e031b-5140-4287-8964-99799317953e
 # ╠═b45c4d5f-d91b-4b07-b629-a20e9d52ca90
+# ╠═115465f8-003e-427b-9b91-12eb09ed8280
+# ╠═ddfcfbf7-f677-42e8-9d4d-67544b2a9a48
 # ╠═1c80b078-b4ea-47a1-bcc7-063ddb6eb0cb
 # ╠═28f9e438-f800-4fee-a216-6daa4ead8da6
 # ╟─4a5f12f3-6af4-4aaf-8129-c42fe0070e8b
 # ╟─4f53f52a-f3b7-48fb-b63c-9fbc7f9dd65e
 # ╟─015922f1-c954-42db-887e-4499e5dbca59
 # ╠═0e58697d-75fe-4ca8-a464-6c36bf508466
-# ╠═5aa075ef-8ad2-4d52-b4da-d99d687a7d4e
+# ╟─5aa075ef-8ad2-4d52-b4da-d99d687a7d4e
 # ╟─0169acc9-2d30-4e80-a38b-a0cbc5af15dc
-# ╠═9e62f69d-e3bc-43a2-ad0c-0bcb2584350a
+# ╟─9e62f69d-e3bc-43a2-ad0c-0bcb2584350a
 # ╠═87bf0d42-2b97-459d-8304-dddb3b45b382
-# ╠═fb36873a-3db7-439e-955f-24e0725bd6b3
-# ╠═bf05d920-7c30-4863-8063-71c38e308e70
-# ╠═209947c9-47b3-4010-916d-d281ec125c2e
-# ╠═bbbff34a-30ab-479c-b916-2c637ecdaa45
+# ╟─fb36873a-3db7-439e-955f-24e0725bd6b3

@@ -41,7 +41,7 @@ begin
 end;
 
 
-backwardstep!(Δts, F, policy, cluster, model, G);
+backwardstep!(Δts, F, policy, cluster, model, G; verbose = 2);
 
 @btime backwardstep!($Δts, $F, $policy, $cluster, $model, $G; allownegative = true);
 @btime backwardstep!($Δts, $F, $policy, $cluster, $model, $G; allownegative = false);
