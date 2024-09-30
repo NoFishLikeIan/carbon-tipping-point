@@ -92,7 +92,7 @@ md"## Import simulation"
 # ╔═╡ caba865f-055d-4655-91ca-14c537709dab
 begin
 	ALLOWNEGATIVE = false
-	datapath = "../data/simulation-medium"
+	datapath = "../data/simulation-local"
 	filepaths = joinpath(datapath, ALLOWNEGATIVE ? "negative" : "constrained")
 	simulationfiles = Saving.listfiles(filepaths)
 	simulationfilesnames = @. replace(basename(simulationfiles), ".jld2" => "")
@@ -151,7 +151,7 @@ let
 	@unpack α, χ = itp
 	
 	χₜ = @closure (m, T) -> χ(T, m, tfig)
-	dm = @closure (m, T) -> α(T, m, tfig)
+	dm = @closure (m, T) -> (1 - ε(tfig, exp(m), α(T, m, tfig), model))
 
 	nullcline = [mstable(T, model) for T in Tspace]
 	
