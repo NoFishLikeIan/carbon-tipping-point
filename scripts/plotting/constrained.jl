@@ -21,30 +21,44 @@ includet("../utils/simulating.jl")
 
 SAVEFIG = false;
 ALLOWNEGATIVE = false;
-trajectories = 100;
-datapath = "data/simulation-small";
+datapath = "data/simulation-local";
+experimentpath = "data/experiments/simulation-local";
 PLOT_HORIZON = 80.
 
 begin # Import results and interpolations
-    filepaths = joinpath(datapath, ALLOWNEGATIVE ? "negative" : "constrained")
+    simulationfilespath = joinpath(datapath, ALLOWNEGATIVE ? "negative" : "constrained")
+    experimentfilespath = joinpath(experimentpath, ALLOWNEGATIVE ? "negative" : "constrained")
+    
+    simulationfiles = listfiles(simulationfilespath)
 
-    simulationfiles = listfiles(filepaths)
-
-    itpmap = Dict{AbstractModel, Dict{Symbol, Extrapolation}}(); 
-    models = AbstractModel[];
+    models = AbstractModel[]
+    interpolations = Dict{AbstractModel, Dict{Symbol, Extrapolation}}();
+    simulations = Dict{AbstractModel, EnsembleSolution}();
 
     for filepath in simulationfiles
         result = loadtotal(filepath)
-        interpolations = buildinterpolations(result)
         model = last(result)
-
-        itpmap[model] = interpolations
         push!(models, model)
+
+        interpolations[model] = buildinterpolations(result)
+
+        experimentfilepath = replace(filepath, simulationfilespath => experimentfilespath)
+
+        if isfile(experimentfilepath)
+            simulations[model] = JLD2.load_object(experimentfilepath)
+        else
+            @warn "No simulation found for $model in $experimentfilepath."
+        end
     end
-end;
+end
+
+begin # Filter models in simulations for which we have interpolations
+    tippingmodels = filter(m -> m isa TippingModel, models)
+    jumpmodels = filter(m -> m isa JumpModel, models)
+end
 
 begin # Labels, colors and axis
-    thresholds = [1.5, 2.5];
+    thresholds = unique((model.albedo.Tᶜ for model in tippingmodels))
     PALETTE = colorschemes[:grays]
     graypalette = n -> n > 1 ? get(PALETTE, range(0.1, 0.8; length = n)) : 0.8
 
