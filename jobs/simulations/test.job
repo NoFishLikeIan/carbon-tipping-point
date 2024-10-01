@@ -17,7 +17,7 @@ module load Julia/1.9.2-linux-x86_64
 
 cd $HOME/scc-tipping-points # Move to base directory
 
-SCRATCHDATA= "$TMPDIR"data
+SCRATCHDATA="$TMPDIR"data
 mkdir -p $SCRATCHDATA # Create scratch directory with user name
 rsync data/calibration.jld2 $SCRATCHDATA # Copy calibration data to scratch
 
@@ -32,9 +32,10 @@ jq_command='
 params=$(jq -r --arg id "$SLURM_ARRAY_TASK_ID" "$jq_command" jobs/simulations/parameters.json)
 
 # Run script
-julia --threads ${SLURM_CPUS_PER_TASK} --project scripts/runtipping.jl \
-    --cachestep 0.25 -d $SCRATCHDATA -s "simulation-test" --verbose 1 --overwrite \
-    -N 5 $params
+julia --threads ${SLURM_CPUS_PER_TASK} --project scripts/runtipping.jl -N 5 \
+    --cachestep 0.25 --verbose 1 \
+    --datapath "$SCRATCHDATA"  --simulationpath "simulation-test" --overwrite \
+    $params
 
 # Copy results back to home
 rsync -avzu $SCRATCHDATA $HOME/scc-tipping-points
