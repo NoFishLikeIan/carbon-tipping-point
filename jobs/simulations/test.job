@@ -36,3 +36,4 @@ julia --threads ${SLURM_CPUS_PER_TASK} --project scripts/runtipping.jl \
 
 # Copy results back to home
 rsync -avzu "$TMPDIR"/data $HOME/scc-tipping-points
+rm -r "$TMPDIR"/data # Remove scratch directory
