@@ -23,6 +23,10 @@ function fallbackoptimisation!(u,
     constraints::TwiceDifferentiableConstraints, G::RegularGrid; 
     optoptions = defaultoptoptions, verbose = 0)
 
+    if !Optim.isinterior(constraints, u₀)
+        throw(ArgumentError("Initial guess is not in the interior of the constraints at t = $t and idx = $idx, using mean policy instead"))
+    end
+
     res = Optim.optimize(diffobjective, constraints, u₀, IPNewton(), optoptions)
 
     if Optim.converged(res)
@@ -40,56 +44,44 @@ function fallbackoptimisation!(u,
     end
 end
 
-function backwardstep!(Δts, F::NTuple{2, Matrix{Float64}}, policy, cluster, model::AbstractModel, G; αfactors = [1.5], allownegative = false, optargs...)
+function backwardstep!(Δts, F::NTuple{2, Matrix{Float64}}, policy, cluster, model::AbstractModel, G; αfactor = 1.5, allownegative = false, optargs...)
     Fₜ, Fₜ₊ₕ = F
 
-    @threads for (i, δt) in cluster
+    for (i, δt) in cluster
         indices = CartesianIndices(G)
 
         idx = indices[i]
         t = model.economy.τ - δt
         M = exp(G.X[idx].m)
         ᾱ = γ(t, model.calibration) + δₘ(M, model.hogg)
-        u₀ = policy[idx, :]
+        u₀ = copy(policy[idx, :])
 
         objective = @closure u -> begin
             Fᵉₜ, Δt = markovstep(t, idx, Fₜ₊ₕ, u[2], model, G)
-            return cost(Fᵉₜ, t, G.X[idx], Δt, u, model)
+            return logcost(Fᵉₜ, t, G.X[idx], Δt, u, model)
         end
 
         diffobjective = TwiceDifferentiable(objective, u₀; autodiff = :forward)
 
         # Solve first unconstrained problem
-        constraints = TwiceDifferentiableConstraints([0., 0.], [1., Inf])
+        openinterval = TwiceDifferentiableConstraints([0., 0.], [1., Inf])
+        u₀[2] = αfactor * ᾱ
         optimum = similar(u₀)
-        candidate = similar(u₀)
 
-        objectiveminimum = Inf
-        for factor in αfactors
-            u₀[2] = factor * ᾱ
+        fallbackoptimisation!(optimum, diffobjective, u₀, idx, t, policy, openinterval, G; optargs...)
 
-            fallbackoptimisation!(candidate, diffobjective, u₀, idx, t, policy, constraints, G; optargs...)
-            factorminimum = objective(candidate)
-
-            if factorminimum < objectiveminimum
-                optimum .= candidate
-                objectiveminimum = factorminimum
-            end
-        end
-
-        # Solve constrained problem with χ from unconstrained problem
-        if !allownegative
+        if !allownegative # Solve constrained problem with χ from unconstrained problem
             u₀[1] = optimum[1]
             u₀[2] = min(optimum[2], ᾱ / 2) # Guarantees u₀ ∈ U
             constraints = TwiceDifferentiableConstraints([0., 0.], [1., ᾱ])
 
             fallbackoptimisation!(optimum, diffobjective, u₀, idx, t, policy, constraints, G; optargs...)
-
-            objectiveminimum = objective(optimum)
         end
 
+        objectiveminimum = objective(optimum)
+
         policy[idx, :] .= optimum
-        Fₜ[idx] = objectiveminimum
+        Fₜ[idx] = exp(objectiveminimum)
         Δts[i] = last(markovstep(t, idx, Fₜ₊ₕ, policy[idx, 2], model, G))
     end
 end

@@ -12,18 +12,17 @@ begin
     calibration = load_object("data/calibration.jld2")
     damages = GrowthDamages()
     hogg = Hogg()
-    preferences = EpsteinZin()
+    preferences = EpsteinZin(ψ = 0.75, θ = 10.)
     economy = Economy()
 
-	Tᶜ = 1.5
-    albedo = Albedo(Tᶜ)
+    albedo = Albedo(1.5)
 
     model = TippingModel(albedo, hogg, preferences, damages, economy, calibration)
 end
 
 # Testing the backward step
 begin
-	F̄, terminalpolicy, G = loadterminal(model; outdir = "data/simulation-medium/constrained");
+	F̄, terminalpolicy, G = loadterminal(model; outdir = "data/simulation-local-small/constrained");
 	policy = Array{Float64}(undef, size(G)..., 2)
 	policy[:, :, 1] .= terminalpolicy
 	policy[:, :, 2] .= γ(economy.τ, calibration)
@@ -39,7 +38,6 @@ begin
 	Fₜ = similar(Fₜ₊ₕ)
 	F = (Fₜ, Fₜ₊ₕ)
 end;
-
 
 backwardstep!(Δts, F, policy, cluster, model, G; verbose = 2);
 
