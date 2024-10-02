@@ -47,7 +47,7 @@ end
 function backwardstep!(Δts, F::NTuple{2, Matrix{Float64}}, policy, cluster, model::AbstractModel, G; αfactor = 1.5, allownegative = false, optargs...)
     Fₜ, Fₜ₊ₕ = F
 
-    for (i, δt) in cluster
+    @threads for (i, δt) in cluster
         indices = CartesianIndices(G)
 
         idx = indices[i]
