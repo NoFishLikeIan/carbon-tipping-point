@@ -16,8 +16,10 @@ module load 2023
 module load Julia/1.9.2-linux-x86_64
 
 cd $HOME/scc-tipping-points # Move to base directory
-mkdir -p "$TMPDIR"/data # Create scratch directory with user name
-rsync data/calibration.jld2 "$TMPDIR"/data # Copy calibration data to scratch
+
+SCRATCHDATA="$TMPDIR"/data
+mkdir -p $SCRATCHDATA # Create scratch directory with user name
+rsync data/calibration.jld2 $SCRATCHDATA # Copy calibration data to scratch
 
 # Extract parameters at the SLURM_ARRAY_TASK_ID from parameters.json
 jq_command='
@@ -30,10 +32,11 @@ jq_command='
 params=$(jq -r --arg id "$SLURM_ARRAY_TASK_ID" "$jq_command" jobs/simulations/parameters.json)
 
 # Run script 
-julia --threads ${SLURM_CPUS_PER_TASK} --project scripts/runbenchmark.jl \
-    -d "data" -s "simulation-small" --verbose 1 \
-    --overwrite -N 61 $params
+julia --threads ${SLURM_CPUS_PER_TASK} --project scripts/runbenchmark.jl -N 61 \
+    --cachestep 0.25 --verbose 1 \
+    --datapath "$SCRATCHDATA"  --simulationpath "simulation-medium" --overwrite \
+    $params
 
 # Copy results back to home
-rsync -avzu "$TMPDIR"/data $HOME/scc-tipping-points
-rm -r "$TMPDIR"/data # Remove scratch directory
+rsync -avzu $SCRATCHDATA $HOME/scc-tipping-points
+rm -r $SCRATCHDATA # Remove scratch directory
