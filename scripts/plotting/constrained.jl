@@ -52,12 +52,26 @@ begin # Import results and interpolations
     end
 end
 
-begin # Filter models in simulations for which we have interpolations
-    tippingmodels = filter(m -> m isa TippingModel, models)
-    jumpmodels = filter(m -> m isa JumpModel, models)
-end
 
-begin # Labels, colors and axis
+begin # Extract relevant models
+    θ = 10.
+    ψ = 0.75
+    DamageType = Model.GrowthDamages
+
+    simmodels = filter(
+        model -> begin
+            model.damages isa DamageType &&
+            model.preferences.θ == θ &&
+            model.preferences.ψ == ψ
+        end, models)
+
+    sort!(tippingmodels; by = model -> model.albedo.Tᶜ)
+
+    jumpmodels = filter(model -> model isa JumpModel, simmodels)
+
+    labels = ["Imminent"] # ["Imminent", "Distant", "Benchmark"]
+    labelsbymodel = Dict{AbstractModel, String}(simmodels .=> labels)
+
     thresholds = unique((model.albedo.Tᶜ for model in tippingmodels))
     PALETTE = colorschemes[:grays]
     graypalette = n -> n > 1 ? get(PALETTE, range(0.1, 0.8; length = n)) : 0.8
@@ -78,68 +92,10 @@ begin # Labels, colors and axis
     temperatureticks = makedeviationtickz(0., ΔTmax, first(models); step = 1, digits = 0)
 end;
 
-# Constructs a Group plot, one for the path of T and β
-begin # Extract relevant models
-    θ = 2.
-    ψ = 0.75
-    DamageType = Model.GrowthDamages
-
-    simmodels = filter(
-        model -> begin
-            model.damages isa DamageType &&
-            model.preferences.θ == θ &&
-            model.preferences.ψ == ψ
-        end, models)
-
-    tippingmodels = filter(model -> model isa TippingModel, simmodels)
-    sort!(tippingmodels; by = model -> model.albedo.Tᶜ)
-
-    jumpmodel = filter(model -> model isa JumpModel, simmodels) |> first
-
-    labels = ["Imminent", "Remote", "Benchmark"]
-    labelsbymodel = Dict{AbstractModel, String}(simmodels .=> labels)
-end
-
-begin # Run simulations
-    simulations = Dict{AbstractModel, EnsembleSolution}()
-    
-    for (k, model) in enumerate(simmodels)
-        print("Simulating model $k / $(length(simmodels))...\r")
-
-        interpolations = itpmap[model];
-        policies = (interpolations[:χ], interpolations[:α]);
-        parameters = (model, policies);
-    
-        initialpoints = [[T₀, log(model.hogg.M₀), log(model.economy.Y₀)] for T₀ in sampletemperature(model, trajectories)];
-    
-        resample = @closure (prob, id, _) -> begin
-            if prob isa JumpProblem
-                prob.prob.u0[1:3] .= initialpoints[id]
-                return prob
-            else
-                prob.u0 .= initialpoints[id]
-                return prob
-            end
-        end
-    
-        problem = SDEProblem(F!, G!, first(initialpoints), (0., PLOT_HORIZON), (model, policies))
-    
-        if model isa JumpModel
-            ratejump = VariableRateJump(rate, tippingopt!)
-            problem = JumpProblem(problem, ratejump)
-        end
-
-        ensembleproblem = EnsembleProblem(problem; prob_func = resample)
-
-        simulations[model] = solve(ensembleproblem, SRIW1(), trajectories = trajectories)
-    end
-    print("\nDone!\n")
-end
-
 begin
     simfig = @pgf GroupPlot({
         group_style = { 
-            group_size = "$(length(simmodels)) by 3",
+            group_size = "$(length(simmodels)) by 2",
             horizontal_sep = raw"1em",
             vertical_sep = raw"2em"
         }
@@ -147,16 +103,13 @@ begin
 
     yearticks = 0:20:PLOT_HORIZON
 
-    βextrema = (0., 0.05)
-    βticks = range(βextrema...; step = 0.01)
+    βextrema = (0., 0.15)
+    βticks = range(βextrema...; step = 0.05) 
     βticklabels = [@sprintf("%.0f \\%%", 100 * y) for y in βticks]
 
-    emissionsextrema = (0., 2Model.Eᵇ(0, calibration))
-    emissionsticks = range(emissionsextrema...; step = 5)
+    emissionsextrema = (0., Model.Eᵇ(0, calibration))
+    emissionsticks = range(emissionsextrema...; step = 10)
     emissionsticklabels = emissionsticks
-
-    Textrema = (1., 4.)
-    Tticks = makedeviationtickz(Textrema..., first(simmodels); step = 1, digits = 0)
 
     confidenceopts = @pgf { opacity = 0.5 }
     figopts = @pgf { width = raw"0.33\textwidth", height = raw"0.3\textwidth", grid = "both", xmin = 0, xmax = PLOT_HORIZON }
@@ -166,7 +119,7 @@ begin
     # Makes the β plots in the first row
     for (k, model) in enumerate(simmodels)
         abatedsol = simulations[model];
-        itp = itpmap[model];
+        itp = interpolations[model];
         αitp = itp[:α];
 
         # Abatement expenditure figure
@@ -179,7 +132,7 @@ begin
         βM = computeonsim(abatedsol, βfn, yearlytime);
        
         βquantiles = timequantiles(βM, qs);
-        smoothquantile!.(eachcol(βquantiles), 0)
+        smoothquantile!.(eachcol(βquantiles), 30)
 
         βmedianplot = @pgf Plot(defopts, Coordinates(yearlytime, βquantiles[:, 2]))
         βlowerplot = @pgf Plot({ defopts..., confidenceopts... }, Coordinates(yearlytime, βquantiles[:, 1]))
@@ -202,7 +155,7 @@ begin
     # Makes the emissions plots in the second row
     for (k, model) in enumerate(simmodels)
         abatedsol = simulations[model];
-        itp = itpmap[model];
+        itp = interpolations[model];
         αitp = itp[:α];
 
         # Abatement expenditure figure
@@ -215,7 +168,7 @@ begin
         emissionsM = computeonsim(abatedsol, emissions, yearlytime);
        
         emissionsquantiles = timequantiles(emissionsM, qs);
-        smoothquantile!.(eachcol(emissionsquantiles), 0)
+        smoothquantile!.(eachcol(emissionsquantiles), 30)
 
         emissionsmedianplot = @pgf Plot(defopts, Coordinates(yearlytime, emissionsquantiles[:, 2]))
         emissionslowerplot = @pgf Plot({ defopts..., confidenceopts... }, Coordinates(yearlytime, emissionsquantiles[:, 1]))
@@ -224,41 +177,21 @@ begin
         emissionsoptionfirst = @pgf k > 1 ? {
             yticklabel = raw"\empty"
         } : { 
-            ylabel = L"Abatement as \% of $Y_t$",
+            ylabel = "Emissions, Gt",
             ytick = emissionsticks, yticklabels = emissionsticklabels
         }
 
         @pgf push!(simfig, {figopts...,
             ymin = emissionsextrema[1], ymax = emissionsextrema[2],
-            title = labelsbymodel[model], xticklabel = raw"\empty",
-            scaled_y_ticks = false, emissionsoptionfirst...,
+            xticklabel = raw"\empty",
+            scaled_y_ticks = false,
+            xtick = yearticks,
+            xticklabels = 2020 .+ yearticks,
+            xticklabel_style = { rotate = 45 }, 
+            emissionsoptionfirst...,
         }, emissionsmedianplot, emissionslowerplot, emissionsupperplot)
     end;
 
-    # Makes the T plots in the third row
-    for (k, model) in enumerate(simmodels)
-        abatedsol = simulations[model]
-        paths = EnsembleAnalysis.timeseries_point_quantile(abatedsol, qs, yearlytime)
-        Tpaths = first.(paths.u)
-
-        Tmedianplot = @pgf Plot(defopts, Coordinates(yearlytime, getindex.(Tpaths, 2)))
-        Tlowerplot = @pgf Plot({ defopts..., confidenceopts... }, Coordinates(yearlytime, getindex.(Tpaths, 1)))
-        Tupperplot = @pgf Plot({ defopts..., confidenceopts... }, Coordinates(yearlytime, getindex.(Tpaths, 3)))
-
-        Ttitleoptions = @pgf k > 1 ? {
-            yticklabel = raw"\empty"
-        } : { ylabel = raw"Temperature $T_t$" }
-
-        @pgf push!(simfig, {figopts...,
-            ymin = Textrema[1] + model.hogg.Tᵖ, 
-            ymax = Textrema[2] + model.hogg.Tᵖ,
-            ytick = Tticks[1], yticklabels = Tticks[2],
-            xtick = yearticks,
-            xticklabels = 2020 .+ yearticks,
-            xticklabel_style = { rotate = 45 },
-            Ttitleoptions...
-        }, Tmedianplot, Tlowerplot, Tupperplot)
-    end
 
     if SAVEFIG
         PGFPlotsX.save(joinpath(plotpath, "simfig.tikz"), simfig; include_preamble = true)
@@ -287,7 +220,7 @@ if false
 
         βregret = @closure (T, m, y, t) -> begin
             model = ifelse(T - modelimminent.hogg.Tᵖ ≥ modelimminent.albedo.Tᶜ, modelimminent, modelremote)
-            αitp = itpmap[model][:α]
+            αitp = interpolations[model][:α]
 
             return β(t, ε(t, exp(m), αitp(T, m, t), model), model.economy)
         end
@@ -311,7 +244,7 @@ if false
             ytick = βregticks,
             scaled_y_ticks = false,
             yticklabels = βregtickslabels,
-            ylabel = L"Abatement as \% of $Y_t$",
+            ylabel = L"Abatement, \% of $Y_t$",
             xtick = yearticks,
             xticklabels = raw"\empty"
         }, βmedianplot, βlowerplot, βupperplot)
