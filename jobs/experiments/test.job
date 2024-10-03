@@ -8,8 +8,8 @@
 #SBATCH --time=00:10:00
 #SBATCH --partition=rome
 #SBATCH --mail-type=BEGIN,END,FAIL,TIME_LIMIT_80
-#SBATCH -o ./logs/out/TEST%A_%a.out 
-#SBATCH -e ./logs/error/TEST%A_%a.out
+#SBATCH -o ./logs/out/EXPERIMENTTEST%A_%a.out 
+#SBATCH -e ./logs/error/EXPERIMENTTEST%A_%a.out
 #SBATCH --mail-user=a.titton@uva.nl
 
 module load 2023
@@ -36,7 +36,7 @@ OUTPUTDIR=($TMPDIR/data/experiments/$TYPEFOLDER)
 OUTPUTFILE=($OUTPUTDIR/$SIMFILENAME)
 
 # Run script
-julia --threads 18 --project scripts/experiments/run.jl $INPUTFILE $OUTPUTFILE \
+julia --threads ${SLURM_CPUS_PER_TASK} --project scripts/experiments/run.jl $INPUTFILE $OUTPUTFILE \
     --trajectories 1 --verbose 1
 
 # Copy results back to home
@@ -44,3 +44,5 @@ julia --threads 18 --project scripts/experiments/run.jl $INPUTFILE $OUTPUTFILE \
 LOCALOUTPUTDIR=$HOME/scc-tipping-points/data/experiments/$TYPEFOLDER
 mkdir -p $LOCALOUTPUTDIR # Locally make space for simulation
 rsync -avzu $OUTPUTFILE $LOCALOUTPUTDIR # Sync back output file to local directory
+
+rm -r TMPSIMDIR # Remove temporary directory

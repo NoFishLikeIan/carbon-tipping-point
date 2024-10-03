@@ -3,7 +3,7 @@
 #SBATCH --job-name=experiment
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=32
+#SBATCH --cpus-per-task=64
 #SBATCH --array=0-47
 #SBATCH --time=02:00:00
 #SBATCH --partition=rome
@@ -36,7 +36,7 @@ OUTPUTDIR=($TMPDIR/data/experiments/$TYPEFOLDER)
 OUTPUTFILE=($OUTPUTDIR/$SIMFILENAME)
 
 # Run script
-julia --threads 32 --project scripts/experiments/run.jl $INPUTFILE $OUTPUTFILE \
+julia --threads ${SLURM_CPUS_PER_TASK} --project scripts/experiments/run.jl $INPUTFILE $OUTPUTFILE \
     --trajectories 10000 --verbose 1
 
 # Copy results back to home
@@ -44,3 +44,4 @@ julia --threads 32 --project scripts/experiments/run.jl $INPUTFILE $OUTPUTFILE \
 LOCALOUTPUTDIR=$HOME/scc-tipping-points/data/experiments/$TYPEFOLDER
 mkdir -p $LOCALOUTPUTDIR # Locally make space for simulation
 rsync -avzu $OUTPUTFILE $LOCALOUTPUTDIR # Sync back output file to local directory
+rm -r TMPSIMDIR # Remove temporary directory
