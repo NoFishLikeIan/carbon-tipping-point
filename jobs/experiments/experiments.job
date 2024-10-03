@@ -4,7 +4,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=64
-#SBATCH --array=0-26
+#SBATCH --array=0-22
 #SBATCH --time=02:00:00
 #SBATCH --partition=rome
 #SBATCH --mail-type=BEGIN,END,FAIL,TIME_LIMIT_80
@@ -44,4 +44,4 @@ julia --threads ${SLURM_CPUS_PER_TASK} --project scripts/experiments/run.jl $INP
 LOCALOUTPUTDIR=$HOME/scc-tipping-points/data/experiments/$TYPEFOLDER
 mkdir -p $LOCALOUTPUTDIR # Locally make space for simulation
 rsync -avzu $OUTPUTFILE $LOCALOUTPUTDIR # Sync back output file to local directory
-rm -r TMPSIMDIR # Remove temporary directory
+rm -r $TMPSIMDIR # Remove temporary directory
