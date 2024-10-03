@@ -2,7 +2,7 @@ using JSON
 include("../../scripts/utils/saving.jl")
 
 inputdir = isempty(ARGS) ? "data/simulation-medium" : first(ARGS);
-inputfiles = listfiles(inputdir);
+inputfiles = listfiles(inputdir; exclude = ["terminal", "jump"]); # FIXME: Jump is not working for now.
 
 obj = Dict("inputfiles" => inputfiles);
 

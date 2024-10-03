@@ -18,7 +18,7 @@ parsedargs = ArgParse.parse_args(argtable)
 @unpack inputpath, outputpath, verbose, trajectories = parsedargs
 
 if verbose ≥ 1
-    println("$(now()):", "Using input file $inputpath"); flush(stdout)
+    println("$(now()): ", "Using input file $inputpath"); flush(stdout)
 end
 if !isfile(inputpath)
     error("File $inputpath does not exist.")
@@ -46,7 +46,7 @@ begin # Setup
 
     if model isa JumpModel
         ratejump = VariableRateJump(rate, tippingopt!)
-        problem = JumpProblem(problem, ratejump)
+        problem = JumpProblem(problem, Direct(), ratejump)
     end
 
     ensembleprob = EnsembleProblem(problem; prob_func = resample)
@@ -56,6 +56,9 @@ begin # Simulation
     if verbose ≥ 1
         println("$(now()):", "Simulating $trajectories trajectories with $(Base.Threads.nthreads()) threads."); flush(stdout)
     end
+    
+    solver = model isa JumpModel ? ImplicitEM() : SRIW1()
+
     simulation = solve(ensembleprob, SRIW1(); trajectories);
     if verbose ≥ 1
         println("$(now()):", "...done!"); flush(stdout)
