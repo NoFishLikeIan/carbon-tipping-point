@@ -12,6 +12,8 @@
 #SBATCH -e ./logs/error/BENCHMARK%A_%a.out
 #SBATCH --mail-user=a.titton@uva.nl
 
+# There are 16 parameter sets
+
 module load 2023
 module load Julia/1.9.2-linux-x86_64
 
@@ -32,9 +34,9 @@ jq_command='
 params=$(jq -r --arg id "$SLURM_ARRAY_TASK_ID" "$jq_command" jobs/simulations/parameters.json)
 
 # Run script 
-julia --threads ${SLURM_CPUS_PER_TASK} --project scripts/runbenchmark.jl -N 61 \
+julia --threads ${SLURM_CPUS_PER_TASK} --project scripts/runbenchmark.jl -N 71 \
     --cachestep 0.25 --verbose 1 \
-    --datapath "$SCRATCHDATA"  --simulationpath "simulation-medium" --overwrite \
+    --datapath "$SCRATCHDATA"  --simulationpath "simulation-large" --overwrite \
     $params
 
 # Copy results back to home
