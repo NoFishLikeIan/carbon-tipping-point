@@ -21,8 +21,8 @@ includet("../utils/simulating.jl")
 
 SAVEFIG = false;
 ALLOWNEGATIVE = false;
-datapath = "data/simulation-local";
-experimentpath = "data/experiments/simulation-local";
+datapath = "data/simulation-medium";
+experimentpath = "data/experiments/simulation-medium";
 PLOT_HORIZON = 80.
 
 begin # Import results and interpolations

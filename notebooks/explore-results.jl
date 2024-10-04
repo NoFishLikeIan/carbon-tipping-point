@@ -222,6 +222,9 @@ begin # Solve an ensemble problem for all models with the bau scenario
 	simulation = solve(ensembleprob, SRIW1(); trajectories = trajectories)
 end;
 
+# ╔═╡ 2d8598d8-96b7-430b-ae20-961d9f5da791
+plot(simulation, idxs = 1)
+
 # ╔═╡ 963b5d26-1f93-4cd9-8a9b-989e22c16143
 # ╠═╡ disabled = true
 #=╠═╡
@@ -277,6 +280,9 @@ end
 
 # ╔═╡ 32955af4-fa47-43dd-b6a8-7545e1398f25
 md"# Regret"
+
+# ╔═╡ f546ac11-e6e3-4cb8-b568-dfbbb5619c43
+
 
 # ╔═╡ 39409585-662d-4915-ae42-653e35a2b975
 # ╠═╡ disabled = true
@@ -365,13 +371,15 @@ end
 # ╟─cfad70a3-73d0-4d2f-9180-3f2c6322b17d
 # ╠═9b215416-796e-4007-87bc-f6f0ed696b13
 # ╟─80bfe18d-8d06-4957-a4ad-dd80bf8c42b1
-# ╠═033b0310-2df1-4613-81f8-39274d2318ba
+# ╟─033b0310-2df1-4613-81f8-39274d2318ba
 # ╟─e5895749-efc8-410a-bc1a-562979335a0b
 # ╟─78a476ce-788c-428d-b6bf-da39f92f4035
 # ╟─497f0b6b-e7ac-4176-81b3-f8df4050d338
-# ╠═baa07798-cd01-49cb-8d33-eafd0c92505b
+# ╟─baa07798-cd01-49cb-8d33-eafd0c92505b
+# ╠═2d8598d8-96b7-430b-ae20-961d9f5da791
 # ╟─963b5d26-1f93-4cd9-8a9b-989e22c16143
 # ╟─32955af4-fa47-43dd-b6a8-7545e1398f25
+# ╠═f546ac11-e6e3-4cb8-b568-dfbbb5619c43
 # ╠═39409585-662d-4915-ae42-653e35a2b975
 # ╠═9283bc5d-f5be-4b39-bc02-aeb942f1db79
 # ╠═68d51817-7f7e-4ebb-b986-67280479a999

@@ -31,7 +31,7 @@ model = last(result); timesteps = first(result);
 begin # Setup
     initialpoints = [[T₀, log(model.hogg.M₀), log(model.economy.Y₀)] for T₀ in sampletemperature(model, trajectories)];
 
-    resample = @closure (prob, id, _) -> begin
+    resample = (prob, id, _) -> begin
         prob = prob isa JumpProblem ? prob.prob : prob
         prob.u0[1:3] .= initialpoints[id]
 
