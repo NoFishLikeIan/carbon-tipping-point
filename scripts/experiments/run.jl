@@ -56,8 +56,6 @@ begin # Simulation
     if verbose ≥ 1
         println("$(now()):", "Simulating $trajectories trajectories with $(Base.Threads.nthreads()) threads."); flush(stdout)
     end
-    
-    solver = model isa JumpModel ? ImplicitEM() : SRIW1()
 
     simulation = solve(ensembleprob, SRIW1(); trajectories);
     if verbose ≥ 1
