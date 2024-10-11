@@ -92,7 +92,7 @@ md"## Import simulation"
 # ╔═╡ caba865f-055d-4655-91ca-14c537709dab
 begin
 	ALLOWNEGATIVE = false
-	datapath = "../data/simulation-medium"
+	datapath = "../data/simulation-large"
 	filepaths = joinpath(datapath, ALLOWNEGATIVE ? "negative" : "constrained")
 	simulationfiles = Saving.listfiles(filepaths)
 	simulationfilesnames = @. replace(basename(simulationfiles), ".jld2" => "")
@@ -135,38 +135,33 @@ $(@bind model Select(sortedmodels .=> sortedsimulationfilesnames))
 # ╔═╡ 9b215416-796e-4007-87bc-f6f0ed696b13
 begin
 	itp = itpmap[model];
-	Tspace = range(0., 8.; length = 101) .+ model.hogg.Tᵖ
-	mspace = range(log(model.hogg.Mᵖ), log(2.5model.hogg.Mᵖ); length = 101)
+	Tspace = range(0., 5.; length = 101) .+ model.hogg.Tᵖ
+	mspace = range(mstable.(extrema(Tspace), model)...; length = 101)
+
+	temperatureticks = Plotting.makedeviationtickz(0., 5., model; step = 1, digits = 0)
+	Mtick = [300., 350., 420., 500., 600.]
 end;
 
 # ╔═╡ 80bfe18d-8d06-4957-a4ad-dd80bf8c42b1
 md"
 ## Policy
-
-`t =` $(@bind tfig Slider(0:1/4:80, default = 0., show_value = true))
 "
 
-# ╔═╡ 033b0310-2df1-4613-81f8-39274d2318ba
+# ╔═╡ 6530bc6e-ba29-4da9-b348-8950a887f6e6
 let
 	@unpack α, χ = itp
-	
-	χₜ = @closure (m, T) -> χ(T, m, tfig)
-	dm = @closure (m, T) -> (1 - ε(tfig, exp(m), α(T, m, tfig), model))
+	t = 80.
+	dm = @closure (m, T) -> (1 - ε(t, exp(m), α(T, m, t), model))
+
+	abatfig = contourf(mspace, Tspace, dm;  title = L"Abated fraction of BAU $1 - \varepsilon_t$", cmap = cgrad(:Greens, rev = true),
+		ylabel = L"Temperature $T_t$", xlabel = L"Carbon concentration $M_t$", xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0,
+		yticks = temperatureticks, xticks = (log.(Mtick), Int.(Mtick)), background_color = "#FAFAFA", dpi = 280
+	)
 
 	nullcline = [mstable(T, model) for T in Tspace]
-	
-	consfig = heatmap(mspace, Tspace, χₜ; ylabel = "\$T\$", xlabel = "\$m\$", title = "Time \$t = $tfig\$; \$\\chi\$", xlims = extrema(mspace), ylims = extrema(Tspace), clims = (0.3, 0.6))
-		
-	clims = ALLOWNEGATIVE ? (-1., 1.) : (0, 1.)
-	cmap = ALLOWNEGATIVE ? :coolwarm : :Greens
-	
-	abatfig = heatmap(mspace, Tspace, dm; ylabel = "\$T\$", xlabel = "\$m\$", title = "\$\\varepsilon\$", xlims = extrema(mspace), ylims = extrema(Tspace), clims, cmap)
+	plot!(abatfig, nullcline, Tspace; linestyle = :dash, c = :white, label = false, linewidth = 3)
 
-	for fig in (consfig, abatfig)
-		plot!(fig, nullcline, Tspace; linestyle = :dash, c = :white, label = false, linewidth = 3)
-	end
-
-	# plot(consfig, abatfig; size = 500 .* (2√2, 1), margins = 10Plots.mm)
+	savefig(abatfig, "../plots/presentation/epsilonfig.pdf")
 
 	abatfig
 end
@@ -178,20 +173,30 @@ md"## Value"
 let
 	@unpack F = itp
 	
-	Fₜ = @closure (m, T) -> log(abs(F(T, m, tfig)))
+	Fₜ = @closure (m, T) -> log(abs(F(T, m, 0.)))
 
 	nullcline = [mstable(T, model) for T in Tspace]
 	
-	consfig = contourf(mspace, Tspace, Fₜ; ylabel = "\$T\$", xlabel = "\$m\$", title = L"Time $t = %$(tfig)$; $\log F_t(T, m)$", xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0., c = :Reds)
+	consfig = contourf(mspace, Tspace, Fₜ; title = L"$\log F_0(T, m)$",
+		ylabel = L"Temperature $T_t$", xlabel = L"Carbon concentration $M_t$", xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0,
+		yticks = temperatureticks, xticks = (log.(Mtick), Int.(Mtick)), background_color = "#FAFAFA", c = :viridis, cmap = false, dpi = 280
+	)
+	
 	plot!(consfig, nullcline, Tspace; linestyle = :dash, c = :white, label = false, linewidth = 3)
+
+	savefig(consfig, "../plots/presentation/Ffig.pdf")
+
+	consfig
 end
 
 # ╔═╡ 497f0b6b-e7ac-4176-81b3-f8df4050d338
 md"## Simulation"
 
 # ╔═╡ baa07798-cd01-49cb-8d33-eafd0c92505b
+# ╠═╡ disabled = true
+#=╠═╡
 begin # Solve an ensemble problem for all models with the bau scenario
-    trajectories = 20
+    trajectories = 100
     ratejump = VariableRateJump(Simulating.rate, Simulating.tippingopt!);
     sols = Dict{AbstractModel, EnsembleSolution}()
 
@@ -221,9 +226,15 @@ begin # Solve an ensemble problem for all models with the bau scenario
 	ensembleprob = EnsembleProblem(problem; prob_func = resample)
 	simulation = solve(ensembleprob, SRIW1(); trajectories = trajectories)
 end;
+  ╠═╡ =#
 
 # ╔═╡ 2d8598d8-96b7-430b-ae20-961d9f5da791
+#=╠═╡
 plot(simulation, idxs = 1)
+  ╠═╡ =#
+
+# ╔═╡ 08797785-65a7-4a1e-b350-f7ac85be2d60
+
 
 # ╔═╡ 963b5d26-1f93-4cd9-8a9b-989e22c16143
 # ╠═╡ disabled = true
@@ -371,12 +382,13 @@ end
 # ╟─cfad70a3-73d0-4d2f-9180-3f2c6322b17d
 # ╠═9b215416-796e-4007-87bc-f6f0ed696b13
 # ╟─80bfe18d-8d06-4957-a4ad-dd80bf8c42b1
-# ╟─033b0310-2df1-4613-81f8-39274d2318ba
+# ╠═6530bc6e-ba29-4da9-b348-8950a887f6e6
 # ╟─e5895749-efc8-410a-bc1a-562979335a0b
-# ╟─78a476ce-788c-428d-b6bf-da39f92f4035
+# ╠═78a476ce-788c-428d-b6bf-da39f92f4035
 # ╟─497f0b6b-e7ac-4176-81b3-f8df4050d338
-# ╟─baa07798-cd01-49cb-8d33-eafd0c92505b
+# ╠═baa07798-cd01-49cb-8d33-eafd0c92505b
 # ╠═2d8598d8-96b7-430b-ae20-961d9f5da791
+# ╠═08797785-65a7-4a1e-b350-f7ac85be2d60
 # ╟─963b5d26-1f93-4cd9-8a9b-989e22c16143
 # ╟─32955af4-fa47-43dd-b6a8-7545e1398f25
 # ╠═f546ac11-e6e3-4cb8-b568-dfbbb5619c43
