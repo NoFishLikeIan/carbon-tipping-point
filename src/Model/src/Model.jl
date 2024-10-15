@@ -6,7 +6,7 @@ export Calibration, RegionalCalibration
 export Damages, GrowthDamages, LevelDamages
 export equilibriumHogg
 export intensity, increase, d
-export μ, b, bterminal, γ, mstable, boundb, δₘ, ϕ
+export μ, b, bterminal, costbreakdown, γ, mstable, boundb, δₘ, ϕ
 export β, ε
 export criticaltemperature
 export potential, density

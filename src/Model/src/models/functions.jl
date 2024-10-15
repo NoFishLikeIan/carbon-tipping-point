@@ -37,7 +37,7 @@ function ε(t, M, α::NTuple{2, Float64}, model::AbstractGameModel)
     α ./ (δₘ(M, model.hogg) .+ γ(t, model.regionalcalibration))
 end
 
-"Drift of log output y for `t < τ`" # TODO: Combine the two drifts
+"Drift of log output y for `t < τ`" # TODO: Combine the drifts
 function b(t, Xᵢ::Point, u, model::AbstractModel{GrowthDamages, P}) where P <: Preferences 
     χ, α = u
     εₜ = ε(t, exp(Xᵢ.m), α, model)
@@ -78,6 +78,19 @@ function b(t, Xᵢ::Point, u::NTuple{2, Policy}, model::AbstractGameModel{Growth
     damage = d.(Xᵢ.T, model.damages, Ref(model.hogg))
 
     @. growth + investments - abatement - damage
+end
+
+function costbreakdown(t, Xᵢ::Point, u,  model::AbstractModel{GrowthDamages, P}) where P <: Preferences
+    χ, α = u
+    εₜ = ε(t, exp(Xᵢ.m), α, model)
+    Aₜ = A(t, model.economy)
+
+    abatement = β(t, εₜ, model.economy)
+    adjcosts = model.economy.κ * β(t, εₜ, model.economy)^2 / 2.
+    
+    damage = d(Xᵢ.T, model.damages, model.hogg)
+
+    damage, adjcosts, abatement
 end
 
 # TODO: Combine the two terminal output function

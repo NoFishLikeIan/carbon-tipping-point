@@ -36,3 +36,17 @@ function labelofmodel(model::AbstractModel)
 
     throw("Not found label for model $model")
 end
+
+function smoother(vs, n)
+    out = similar(vs)
+    m = length(vs)
+
+    for i in axes(vs, 1)
+        l = max(i - n, 1)
+        r = min(i + n, m)
+
+        out[i] = mean(@view vs[l:r])
+    end
+
+    return out
+end
