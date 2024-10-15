@@ -149,7 +149,7 @@ begin
             return ε(t, exp(m), abatement, imminentmodel)
         end
 
-        EM = computeonsim(sol, Efn, yearlytime);
+        EM = computeonsim(sim, Efn, yearlytime);
 
         Equantiles = timequantiles(EM, qs);
         smoothquantile!.(eachcol(Equantiles), SMOOTH_FACTOR)
@@ -169,7 +169,7 @@ begin
     end
 
     begin # Tₜ
-        paths = EnsembleAnalysis.timeseries_point_quantile(sol, qs, yearlytime)
+        paths = EnsembleAnalysis.timeseries_point_quantile(sim, qs, yearlytime)
         Tpaths = first.(paths.u)
 
         Tmedianplot = @pgf Plot(medianopts, Coordinates(yearlytime, getindex.(Tpaths, 2)))

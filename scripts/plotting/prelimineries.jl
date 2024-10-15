@@ -1,5 +1,5 @@
 using Revise
-using JLD2, DotEnv, CSV
+using JLD2, CSV
 using UnPack
 using DataFrames, DataStructures
 using FastClosures
@@ -19,10 +19,9 @@ includet("../utils/simulating.jl")
 includet("utils.jl")
 
 begin # Global variables
-    env = DotEnv.config()
     BASELINE_YEAR = 2020
-    DATAPATH = get(env, "DATAPATH", "data")
-    PLOTPATH = get(env, "PLOTPATH", "plots")
+    DATAPATH = "data"
+    PLOTPATH = "plots"
     PRESENTATIONPATH = joinpath(PLOTPATH, "presentation")
 
     SAVEFIG = false
@@ -63,7 +62,7 @@ begin # Labels, colors and axis
 
     thresholdcolors = Dict(thresholds .=> reverse(graypalette(length(thresholds))))
 
-    TEMPLABEL = "Temperature deviations \$T_t - T^{p}\$"
+    TEMPLABEL = "Temperature \$T_t\$"
 
     ΔTmax = 8.0
     ΔTspace = range(0.0, ΔTmax; length=51)
@@ -247,20 +246,19 @@ begin # Growth of carbon concentration
     horizon = Int(last(yearlytime))
 
     figsize = @pgf {
-        width = raw"0.7\textwidth",
-        height = raw"0.5\textwidth",
+        width = raw"0.425\linewidth",
+        height = raw"0.3\linewidth",
     }
 
     gfig = @pgf GroupPlot({
         group_style = {
-            group_size = "1 by 2",
-            xticklabels_at = "edge bottom",
-            vertical_sep = "5pt"
+            group_size = "2 by 1",
+            horizontal_sep = raw"0.15\linewidth"
         },
         xmin = 0.0, xmax = horizon
     })
 
-    growthticks = (0.6:0.2:1.4) ./ 100
+    growthticks = (0.8:0.2:1.4) ./ 100
 
     γfig = @pgf Axis({})
 
@@ -272,16 +270,21 @@ begin # Growth of carbon concentration
     curve = @pgf Plot({color = "black", line_width = "0.1cm"}, coords)
 
     ymin, ymax = extrema(growthticks)
+    xtick = 0:20:horizon
+    xticklabels = ["\\footnotesize $(Int(y + 2020))" for y in xtick]
 
     @pgf push!(gfig, {
             figsize...,
             grid = "both",
-            ylabel = raw"Growth rate $\gamma_t^{b}$",
+            ylabel = raw"\footnotesize Growth rate $\gamma_t^{b}$",
             ytick = growthticks,
-            ymin = ymin - 5e-4,
-            ymax = ymax + 5e-4,
-            yticklabels = [@sprintf("%.1f\\%%", 100 * x) for x in growthticks],
-            xtick = 0:10:horizon,
+            ymin = ymin,
+            ymax = ymax,
+            yticklabels = [@sprintf("\\footnotesize %.1f\\%%", 100 * x) for x in growthticks],
+            xtick = xtick,
+            xmin = 0, xmax = horizon,
+            xticklabels = xticklabels,
+            xticklabel_style = {rotate = 45},
             scaled_y_ticks = false
         }, curve, markers)
 
@@ -302,11 +305,10 @@ begin # Growth of carbon concentration
     @pgf push!(gfig, {
             figsize...,
             grid = "both",
-            ylabel = raw"Carbon concentration $M_t^{b}$",
-            xlabel = raw"Year",
-            xtick = 0:10:horizon,
+            ylabel = raw"\footnotesize Carbon conc. $M_t^{b}$",
+            xtick = xtick,
             xmin = 0, xmax = horizon,
-            xticklabels = BASELINE_YEAR .+ (0:10:horizon),
+            xticklabels = xticklabels,
             xticklabel_style = {rotate = 45},
         }, mfig)
 
@@ -318,11 +320,11 @@ begin # Growth of carbon concentration
 end
 
 # TODO: Finish the comparison of density plots between jump and tipping models.
-densmodels = AbstractModel[first(tippingmodels), jumpmodel];
+densmodels = AbstractModel[last(tippingmodels), jumpmodel];
 
-begin
-    m₀ = log(418.)
-    
+begin # Simulates the two models    
+    m₀ = log(540)
+
     temperaturedrift! = @closure (du, u, model, t) -> begin
         du[1] = μ(u[1], m₀, model) / model.hogg.ϵ
     end
@@ -338,6 +340,7 @@ begin
     for model in densmodels
         isjump = model isa JumpModel
         fn = SDEFunction(temperaturedrift!, temperaturenoise!)
+
         densprob = SDEProblem(fn, [T₀], (0., 50_000.), model)
         
         if !isjump
