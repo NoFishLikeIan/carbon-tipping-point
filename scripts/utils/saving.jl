@@ -25,7 +25,7 @@ function makefilename(model::TippingModel{LevelDamages, EpsteinZin})
     @unpack Tᶜ = model.albedo
     @unpack ξ = model.damages
 
-    filename = @sprintf("Tc=%.2f_ρ=%.5f_θ=%.2f_ψ=%.2f_σT=%.4f_σm=%.4f_ωᵣ=%.5f_ξ=%.6f", Tᶜ, ρ, θ, ψ, σₜ, σₘ, ωᵣ, ξ)
+    filename = @sprintf("Tc=%.2f_ρ=%.5f_θ=%.2f_ψ=%.2f_σT=%.4f_σm=%.4f_ωr=%.5f_ξ=%.6f", Tᶜ, ρ, θ, ψ, σₜ, σₘ, ωᵣ, ξ)
 
     return "$(replace(filename, "." => ",")).jld2"
 end
@@ -37,7 +37,7 @@ function makefilename(model::TippingModel{GrowthDamages, EpsteinZin})
     @unpack Tᶜ = model.albedo
     @unpack ξ, υ = model.damages
 
-    filename = @sprintf("Tc=%.2f_ρ=%.5f_θ=%.2f_ψ=%.2f_σT=%.4f_σm=%.4f_ωᵣ=%.5f_ξ=%.6f_υ=%.3f", Tᶜ, ρ, θ, ψ, σₜ, σₘ, ωᵣ, ξ, υ)
+    filename = @sprintf("Tc=%.2f_ρ=%.5f_θ=%.2f_ψ=%.2f_σT=%.4f_σm=%.4f_ωr=%.5f_ξ=%.6f_υ=%.3f", Tᶜ, ρ, θ, ψ, σₜ, σₘ, ωᵣ, ξ, υ)
 
     return "$(replace(filename, "." => ",")).jld2"
 end
@@ -57,7 +57,7 @@ function makefilename(model::JumpModel{GrowthDamages, EpsteinZin})
     @unpack σₜ, σₘ = model.hogg
     @unpack ξ, υ = model.damages
 
-    filename = @sprintf("ρ=%.5f_θ=%.2f_ψ=%.2f_σT=%.4f_σm=%.4f_ωᵣ=%.5f_ξ=%.6f_υ=%.3f", ρ, θ, ψ, σₜ, σₘ, ωᵣ, ξ, υ)
+    filename = @sprintf("ρ=%.5f_θ=%.2f_ψ=%.2f_σT=%.4f_σm=%.4f_ωr=%.5f_ξ=%.6f_υ=%.3f", ρ, θ, ψ, σₜ, σₘ, ωᵣ, ξ, υ)
 
     return "$(replace(filename, "." => ",")).jld2"
 end
@@ -68,7 +68,7 @@ function makefilename(model::JumpModel{LevelDamages, EpsteinZin})
     @unpack σₜ, σₘ = model.hogg
     @unpack ξ = model.damages
 
-    filename = @sprintf("ρ=%.5f_θ=%.2f_ψ=%.2f_σT=%.4f_σm=%.4f_ωᵣ=%.5f_ξ=%.6f", ρ, θ, ψ, σₜ, σₘ, ωᵣ, ξ)
+    filename = @sprintf("ρ=%.5f_θ=%.2f_ψ=%.2f_σT=%.4f_σm=%.4f_ωr=%.5f_ξ=%.6f", ρ, θ, ψ, σₜ, σₘ, ωᵣ, ξ)
 
     return "$(replace(filename, "." => ",")).jld2"
 end
