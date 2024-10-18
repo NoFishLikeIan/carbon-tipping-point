@@ -34,6 +34,7 @@ struct EpsteinZin
 end
 
 Preferences = Union{CRRA, EpsteinZin, LogUtility}
+Base.broadcastable(p::Preferences) = Ref(p)
 
 function f(c, v, Δt, p::EpsteinZin)
     ψ⁻¹ = 1 / p.ψ

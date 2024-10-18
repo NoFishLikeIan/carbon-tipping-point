@@ -117,7 +117,7 @@ end
 begin # Simulation
     TRAJECTORIES = 10_000
 
-    sim = solve(EnsembleProblem(wtprob); trajectories = TRAJECTORIES, callback = cb)
+    wsim = solve(EnsembleProblem(wtprob); trajectories = TRAJECTORIES, callback = cb)
 end;
 
 begin
@@ -149,7 +149,7 @@ begin
             return ε(t, exp(m), abatement, imminentmodel)
         end
 
-        EM = computeonsim(sim, Efn, yearlytime);
+        EM = computeonsim(wsim, Efn, yearlytime);
 
         Equantiles = timequantiles(EM, qs);
         smoothquantile!.(eachcol(Equantiles), SMOOTH_FACTOR)
@@ -169,7 +169,7 @@ begin
     end
 
     begin # Tₜ
-        paths = EnsembleAnalysis.timeseries_point_quantile(sim, qs, yearlytime)
+        paths = EnsembleAnalysis.timeseries_point_quantile(wsim, qs, yearlytime)
         Tpaths = first.(paths.u)
 
         Tmedianplot = @pgf Plot(medianopts, Coordinates(yearlytime, getindex.(Tpaths, 2)))
@@ -207,7 +207,7 @@ begin
     ytick = 0:0.025:0.1
     yticklabels = [L"%$(y * 100)\%" for y in ytick]
 
-    decadespath = EnsembleAnalysis.timeseries_point_median(sim, decadetime)
+    decadespath = EnsembleAnalysis.timeseries_point_median(wsim, decadetime)
     decadechange = diff(decadespath.u) / step(decadetime) # average
 
     barchart = @pgf Axis({
@@ -250,7 +250,7 @@ begin
     imminentpolicies = (interpolations[imminentmodel][:χ], interpolations[imminentmodel][:α]);
     prudenceprob = SDEProblem(Fbreakdown!, Gbreakdown!, u₀, (0., 200.), (remotemodel, imminentpolicies))
 
-    prudsol = solve(EnsembleProblem(prudenceprob); trajectories = TRAJECTORIES)
+    prudsim = solve(EnsembleProblem(prudenceprob); trajectories = TRAJECTORIES)
 end;
 
 begin
@@ -268,7 +268,7 @@ begin
             return ε(t, exp(m), abatement, imminentmodel)
         end
 
-        EM = computeonsim(prudsol, Efn, yearlytime);
+        EM = computeonsim(prudsim, Efn, yearlytime);
 
         Equantiles = timequantiles(EM, qs);
         smoothquantile!.(eachcol(Equantiles), SMOOTH_FACTOR)
@@ -288,7 +288,7 @@ begin
     end
 
     begin # Tₜ
-        paths = EnsembleAnalysis.timeseries_point_quantile(prudsol, qs, yearlytime)
+        paths = EnsembleAnalysis.timeseries_point_quantile(prudsim, qs, yearlytime)
         Tpaths = first.(paths.u)
 
         Tmedianplot = @pgf Plot(medianopts, Coordinates(yearlytime, getindex.(Tpaths, 2)))
@@ -316,7 +316,7 @@ end
 
 # Cost breakdown
 begin
-    decadespath = EnsembleAnalysis.timeseries_point_median(prudsol, decadetime)
+    decadespath = EnsembleAnalysis.timeseries_point_median(prudsim, decadetime)
     decadechange = diff(decadespath.u) / step(decadetime) # average
 
     barchart = @pgf Axis({

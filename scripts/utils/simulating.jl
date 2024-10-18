@@ -188,7 +188,7 @@ end
 sampletemperature(model::AbstractModel, trajectories) = sampletemperature(default_rng(), model, trajectories)
 function sampletemperature(rng, model::AbstractModel, trajectories; σ = 0.15)
     T̄ = minimum(Model.Tstable(log(model.hogg.M₀), model))
-    z = randn(trajectories)
+    z = randn(rng, trajectories)
 
     return @. T̄ + z * σ
 end
