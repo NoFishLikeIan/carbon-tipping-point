@@ -13,7 +13,7 @@ export potential, density
 export terminaloutputfct, outputfct
 export Preferences, EpsteinZin, LogSeparable, CRRA, LogUtility
 export f, g, logg
-export TippingModel, JumpModel, AbstractPlannerModel
+export TippingModel, LinearModel, JumpModel, AbstractPlannerModel
 export TippingGameModel, JumpGameModel, AbstractGameModel
 export AbstractJumpModel, AbstractTippingModel
 export AbstractModel
@@ -30,6 +30,16 @@ include("models/calibration.jl")
 include("models/climate.jl")
 include("models/economy.jl")
 include("models/preferences.jl")
+
+struct LinearModel{D <: Damages, P <: Preferences}
+    hogg::Hogg
+
+    preferences::P
+    damages::D
+
+    economy::Economy
+    calibration::Calibration
+end
 
 struct TippingModel{D <: Damages, P <: Preferences}
     albedo::Albedo
@@ -76,7 +86,7 @@ struct JumpGameModel{D <: Damages, P <: Preferences}
 end
 
 AbstractPlannerModel{D, P} = Union{
-    TippingModel{D, P}, JumpModel{D, P}
+    TippingModel{D, P}, JumpModel{D, P}, LinearModel{D, P}
 } where {D <: Damages, P <: Preferences}
 
 AbstractGameModel{D, P} = Union{
@@ -92,8 +102,7 @@ AbstractTippingModel{D, P} = Union{
 } where {D <: Damages, P <: Preferences}
 
 AbstractModel{D, P} = Union{
-    TippingModel{D, P}, JumpModel{D, P},
-    TippingGameModel{D, P}, JumpGameModel{D, P}
+    AbstractPlannerModel{D, P}, AbstractGameModel{D, P}
 } where {D <: Damages, P <: Preferences}
 
 Base.broadcastable(m::AbstractModel) = Ref(m)

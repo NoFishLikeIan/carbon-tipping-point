@@ -87,3 +87,12 @@ function f(c, v, Δt, p::LogUtility)
 
     βᵢ * v + Δt * log(c)
 end
+
+function f(c, v, p::EpsteinZin)
+    u = (1 - p.θ) * v
+    eis = 1 - 1 / p.ψ
+
+    cratio = (c / (u)^inv(1 - p.θ))^eis
+
+    return (p.ρ * u / eis) * (cratio - 1) 
+end

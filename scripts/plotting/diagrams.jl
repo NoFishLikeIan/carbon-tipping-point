@@ -4,9 +4,17 @@ using Roots
 using LaTeXStrings
 using DifferentialEquations
 
+using Colors, ColorSchemes
+
+PALETTE = colorschemes[:grays];
 plotpath = "plots/toy-model"
 
+colors = get(PALETTE, [0., 0.7]);
+LINE_WIDTH = 2.5
+
 push!(PGFPlotsX.CUSTOM_PREAMBLE, raw"\usetikzlibrary{arrows.meta}")
+push!(PGFPlotsX.CUSTOM_PREAMBLE, raw"\usepackage{siunitx}")
+push!(PGFPlotsX.CUSTOM_PREAMBLE, raw"\DeclareSIUnit{\ppm}{p.p.m.}")
 
 function λ(T; a = 0.08, c = 1 / 2)
     a * T^2  - 3 * √(a * c) * T + 2c
@@ -54,33 +62,30 @@ begin # Trajectory
     
     trajaxis = @pgf Axis({
         xlabel = L"Time $t$", xmin = minimum(timesteps), xmax = maximum(timesteps),
-        ylabel = L"Temperature $T_t$", ymin = minimum(Tspace), ymax = maximum(Tspace),
+        ylabel = L"Temperature $T_t \; [\si{\degree}]$", ymin = minimum(Tspace), ymax = maximum(Tspace),
         grid = "both",
         ytick = Tticks, yticklabels = Ttickslabel,
         width = raw"0.7\linewidth", height = raw"0.5\linewidth",
         xtick = range(extrema(timesteps)...; step = 1.)
     })
 
-    trajplot = @pgf Plot({
-        line_width = 2.
-    }, Coordinates(timesteps, Ttraj))
-
-    push!(trajaxis, trajplot)
-
     if a > 0.
         prob = ODEProblem{true}(F!, u₀, timespan, (0., E));
         sol = solve(prob)
 
-        Ttraj = first.(sol(timesteps).u)
-
         trajplot = @pgf Plot({
-            line_width = 2., dashed
-        }, Coordinates(timesteps, Ttraj))
+            line_width = LINE_WIDTH, color = colors[2]
+        }, Coordinates(timesteps, first.(sol(timesteps).u)))
 
         push!(trajaxis, trajplot)
     end
+
+    trajplot = @pgf Plot({
+        line_width = LINE_WIDTH, color = colors[1]
+    }, Coordinates(timesteps, Ttraj))
+
+    push!(trajaxis, trajplot)
     
-    PGFPlotsX.save(joinpath(plotpath, "trajfig_$label.tikz"), trajaxis; include_preamble = true)
 
     trajaxis
 end
@@ -100,8 +105,7 @@ begin # Phase diagram
 
     defaxisopts = @pgf {
         xmin = Textrema[1], xmax = Textrema[2],
-        xtick = Tticks, xticklabels = Ttickslabel,
-        xlabel = L"Temperature $T_t$", 
+        xtick = Tticks, xticklabels = Ttickslabel, 
         ymin = -1, ymax = 1.5,
         grid = "both",
         width = raw"0.4\linewidth", 
@@ -127,6 +131,7 @@ begin # Phase diagram
             defaxisopts...,
             ylabel = i > 1 ? "" : L"\small Change in temperature $\mathrm{d}T_t \big/ \mathrm{d} t$", 
             ytick = -1:0.5:2,
+            xlabel = i == 2 ? L"\small Temperature $T_t \; [\si{\degree}]$" : "",
             yticklabels = raw"\empty",
             title = title
         })
@@ -201,40 +206,34 @@ begin # Plot marginal benefit and marginal cost
     a = 0.02
     timesteps = range(0, 3., length = 101)
 
-    values = J.(timesteps; a, ρ = 0.1, β = 50_000., c = 1.)
-    bifurcation = findlast(v -> length(v) > 1, values)
+    objvalues = J.(timesteps; a, ρ = 0.1, β = 50_000., c = 1.)
+    bifurcation = findlast(v -> length(v) > 1, objvalues)
 
-    triple = values[1:bifurcation]
-    single = values[(bifurcation + 1):end]
+    triple = objvalues[1:bifurcation]
+    single = objvalues[(bifurcation + 1):end]
 
     Jfig = @pgf Axis({
         xmin = 0., xmax = maximum(timesteps),
-        xlabel = L"$\tau$", grid = "both",
-        yticklabels = raw"\empty", ylabel = L"$J(\tau)$",
+        xlabel = L"Emissions stopping time $\tau$", grid = "both",
+        yticklabels = raw"\empty", ylabel = L"Social objective $J(\tau)$",
         scaled_y_ticks = false,
     })
 
     upperpath = first.(triple)
-    lowerpath = last.(single)
-
-    lowervirtualpath = last.(triple)
+    lowerpath = last.(objvalues)
 
     uppercoords = Coordinates(
         timesteps[1:bifurcation],
         upperpath
     )
 
-    upperplot = @pgf Plot({line_width = 2.}, uppercoords)
+    upperplot = @pgf Plot({ line_width = LINE_WIDTH, color = colors[2] }, uppercoords)
 
-    uppermark = @pgf Plot({only_marks, mark_options = {scale = 1.25}, forget_plot}, Coordinates(timesteps[[bifurcation]], upperpath[[bifurcation]]))
+    uppermark = @pgf Plot({ only_marks, mark_options = {scale = 1.25}, forget_plot, color = colors[2] }, Coordinates(timesteps[[bifurcation]], upperpath[[bifurcation]]))
 
-    lowerplot = @pgf Plot({line_width = 2.}, Coordinates(timesteps[(bifurcation + 1):end], lowerpath))
+    lowerplot = @pgf Plot({line_width = LINE_WIDTH, color = colors[1]}, Coordinates(timesteps, lowerpath))
 
-    lowermark = @pgf Plot({only_marks, mark_options = {scale = 1.25}, forget_plot}, Coordinates(timesteps[[bifurcation + 1]], lowerpath[[1]]))
-
-    lowervirtualplot = @pgf Plot({line_width = 2, dashed}, Coordinates(timesteps[1:bifurcation], lowervirtualpath))
-
-    push!(Jfig, upperplot, uppermark, lowerplot, lowermark, lowervirtualplot)
+    push!(Jfig, upperplot, uppermark, lowerplot)
 
     PGFPlotsX.save(joinpath(plotpath, "maximisation_feedback.tikz"), Jfig; include_preamble = true)
 

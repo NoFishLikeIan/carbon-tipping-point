@@ -1,11 +1,15 @@
 # TODO: break up these functions
 μ(T, m, model::AbstractTippingModel) = μ(T, m, model.hogg, model.albedo)
 μ(T, m, model::AbstractJumpModel) = μ(T, m, model.hogg)
+μ(T, m, model::LinearModel) = μ(T, m, model.hogg)
+
 mstable(T, model::AbstractTippingModel) = mstable(T, model.hogg, model.albedo)
 mstable(T, model::AbstractJumpModel) = mstable(T, model.hogg)
+mstable(T, model::LinearModel) = mstable(T, model.hogg)
+
 Tstable(m, model::AbstractTippingModel) = Tstable(m, model.hogg, model.albedo)
 Tstable(m, model::AbstractJumpModel) = Tstable(m, model.hogg)
-
+Tstable(m, model::LinearModel) = Tstable(m, model.hogg)
 
 function bterminal(χ::Float64, economy::Economy)
     growth = economy.ϱ - economy.δₖᵖ

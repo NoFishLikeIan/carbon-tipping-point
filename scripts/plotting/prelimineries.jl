@@ -11,6 +11,8 @@ using Plots, Printf, PGFPlotsX, Colors, ColorSchemes, LaTeXStrings
 using Statistics
 
 push!(PGFPlotsX.CUSTOM_PREAMBLE, raw"\usepgfplotslibrary{fillbetween}")
+push!(PGFPlotsX.CUSTOM_PREAMBLE, raw"\usepackage{siunitx}")
+push!(PGFPlotsX.CUSTOM_PREAMBLE, raw"\DeclareSIUnit{\ppm}{p.p.m.}")
 
 using Model, Grid
 
@@ -27,14 +29,14 @@ begin # Global variables
     SAVEFIG = false
     LINE_WIDTH = 2.5
     SEED = 11148705
+
+    TLABEL = L"Temperature $T_t \; [\si{\degree}]$"
+    MLABEL = L"Carbon concentration $M_t \; [\si{\ppm}]$"
 end;
 
 begin # Construct models and grids
     thresholds = [1.5, 2.5]
-
-    labels = ["Imminent", "Remote", "Benchmark"]
-    labelsbythreshold = Dict(thresholds .=> labels[1:2])
-
+    
     calibration = load_object(joinpath(DATAPATH, "calibration.jld2"))
     preferences = EpsteinZin()
     damages = GrowthDamages()
@@ -42,6 +44,7 @@ begin # Construct models and grids
     jump = Jump()
     hogg = Hogg()
 
+    linearmodel = LinearModel(hogg, preferences, damages, economy, calibration)
     jumpmodel = JumpModel(jump, hogg, preferences, damages, economy, calibration)
 
     tippingmodels = TippingModel[]
@@ -52,20 +55,18 @@ begin # Construct models and grids
         push!(tippingmodels, model)
     end
 
-    models = AbstractModel[tippingmodels..., jumpmodel]
+    models = AbstractModel[tippingmodels..., linearmodel, jumpmodel]
+    labels = ["Imminent", "Remote", "No Feedback", "Benchmark"]
     labelsbymodel = Dict(models .=> labels)
 end;
 
 begin # Labels, colors and axis
     PALETTE = colorschemes[:grays]
-    graypalette = n -> reverse(get(PALETTE, range(0.1, 0.8; length=n)))
+    colors = get(PALETTE, [0., 0.5, 0.7, 1])
 
-    thresholdcolors = Dict(thresholds .=> reverse(graypalette(length(thresholds))))
-
-    TEMPLABEL = "Temperature \$T_t\$"
-
-    ΔTmax = 8.0
-    ΔTspace = range(0.0, ΔTmax; length=51)
+    colorsbymodel = Dict(models .=> colors)
+    ΔTmax = 6.
+    ΔTspace = range(0.0, ΔTmax; length = 51)
     Tspace = ΔTspace .+ Hogg().Tᵖ
 
     horizon = round(Int64, calibration.tspan[2])
@@ -75,7 +76,8 @@ begin # Labels, colors and axis
 
     Tmin, Tmax = extrema(temperatureticks[1])
 
-    X₀ = [hogg.T₀, log(hogg.M₀)]
+    m₀ = log(hogg.M₀)
+    X₀ = [first(Model.Tstable(m₀, hogg)), m₀]
 end;
 
 begin # Load IPCC data
@@ -97,17 +99,15 @@ begin # Albedo plot
         width = raw"0.5\textwidth",
         height = raw"0.5\textwidth",
         grid = "both",
-        xlabel = TEMPLABEL,
-        ylabel = "\$\\lambda(T_t)\$",
+        xlabel = TLABEL,
+        ylabel = "Positive feedback \$\\lambda(T_t)\$",
         xticklabels = temperatureticks[2],
         xtick = temperatureticks[1],
         xmin = Tmin, xmax = Tmax,
         ymin = ytick[1] - 0.01, ymax = ytick[end] + 0.01,
         ytick = ytick,
-        yticklabels = [@sprintf("%.0f\\%%", 100 * x) for x in ytick],
         legend_cell_align = "left"
-    }
-    )
+    })
 
     if SAVEFIG
         PGFPlotsX.save(joinpath(PLOTPATH, "skeleton-albedo.tikz"), albedofig; include_preamble=true)
@@ -115,12 +115,12 @@ begin # Albedo plot
 
     @pgf for (model, loss) in zip(tippingmodels, albedovariation)
         Tᶜ = model.albedo.Tᶜ
-        curve = Plot(
-            {color = thresholdcolors[Tᶜ], line_width = LINE_WIDTH, opacity = 0.8},
-            Coordinates(zip(Tspace, loss))
-        )
+        curve = Plot({
+                color = colorsbymodel[model], 
+                line_width = LINE_WIDTH, opacity = 0.8
+            }, Coordinates(zip(Tspace, loss)))
 
-        label = labelsbythreshold[Tᶜ]
+        label = labelsbymodel[model]
         legend = LegendEntry(label)
 
         push!(albedofig, curve, legend)
@@ -136,95 +136,154 @@ begin # Albedo plot
 end
 
 begin
-    sims = Dict{Float64,DiffEqArray}()
+    simmodels = models[1:3]
+    sims = Dict{AbstractModel, DiffEqArray}()
 
-    for model in tippingmodels
-        prob = SDEProblem(Fbau!, G!, X₀, (0.0, 80.0), model)
-        sol = solve(prob; seed=SEED)
+    for model in simmodels
+        prob = SDEProblem(Fbau!, G!, X₀, (0.0, 200.0), model)
+        sol = solve(EnsembleProblem(prob), trajectories = 1000)
 
-        simpath = sol(0:1:80)
+        simpath = timeseries_point_median(sol, yearlytime)
 
-        sims[model.albedo.Tᶜ] = simpath
+        sims[model] = simpath
     end
 end;
 
 begin # Nullcline plot
-    nullclinevariation = Dict{Float64,Vector{Vector{NTuple{2,Float64}}}}()
-    for model in reverse(tippingmodels)
-        nullclines = Vector{NTuple{2,Float64}}[]
+    nullclinevariation = Dict{AbstractModel, Vector{Vector{NTuple{2,Float64}}}}()
 
+    for model in reverse(simmodels)
+        nullclines = Vector{NTuple{2,Float64}}[]
         currentM = NTuple{2,Float64}[]
         currentlystable = true
 
         for T in Tspace
-            M = Model.Mstable(T, model.hogg, model.albedo)
-            isstable = Model.radiativeforcing′(T, model.hogg, model.albedo) < 0
+            M = Model.Mstable(T, model)
+            isstable = model isa LinearModel || Model.radiativeforcing′(T, model.hogg, model.albedo) < 0
             if isstable == currentlystable
-                push!(currentM, (M, T))
+                push!(currentM, (M, T - 0.1))
             else
                 currentlystable = !currentlystable
                 push!(nullclines, currentM)
-                currentM = [(M, T)]
+                currentM = [(M, T - 0.1)]
             end
         end
 
         push!(nullclines, currentM)
-        nullclinevariation[model.albedo.Tᶜ] = nullclines
+        nullclinevariation[model] = nullclines
     end
 
-    Mmax = 1000.0
+    Mmax = 1000.
 
-    nullclinefig = @pgf Axis(
-        {
+    Mpath = exp.(last.(sims[simmodels[1]].u))
+    
+    Mticks = Mpath[1:10:end]
+    Mtickslabels = [
+        L"\small $%$M$\\ \footnotesize ($%$y$)"
+        for (M, y) in zip(round.(Int, Mticks), 2020:10:2100)
+    ]
+
+    nullclinefig = @pgf Axis({
         width = raw"0.9\textwidth",
         height = raw"0.7\textwidth",
         grid = "both",
-        ylabel = TEMPLABEL,
-        xlabel = raw"Carbon concentration $M_t$",
-        xmin = tippingmodels[1].hogg.Mᵖ, xmax = Mmax,
-        xtick = 200:100:Mmax,
+        ylabel = TLABEL,
+        xlabel_style = {align = "center"},
+        xlabel = L"Carbon concentration $M_t \; [\si{\ppm}]$ \\ and (year) reached in business-as-usual",
         yticklabels = temperatureticks[2],
         ytick = temperatureticks[1],
         ymin = Tmin, ymax = Tmax,
-        legend_cell_align = "left"
+        legend_cell_align = "left",
+        xmin = 380, xmax = 845,
+        xtick = Mticks, xticklabels = Mtickslabels,
+        xticklabel_style = {align = "center"}
     })
 
     if SAVEFIG
         PGFPlotsX.save(joinpath(PLOTPATH, "skeleton-nullcline.tikz"), nullclinefig; include_preamble=true)
     end
 
-    for model in reverse(tippingmodels) # Nullcline plots
-        Tᶜ = model.albedo.Tᶜ
-        color = thresholdcolors[Tᶜ]
+    for model in reverse(simmodels) # Nullcline plots
+        color = colorsbymodel[model]
+        
+        stableleft, rest... = nullclinevariation[model]
 
-        stableleft, unstable, stableright = nullclinevariation[Tᶜ]
+        leftcurve = @pgf Plot({color = color, line_width = LINE_WIDTH / 2, forget_plot}, Coordinates(stableleft))
 
-        leftcurve = @pgf Plot({color = color, line_width = LINE_WIDTH}, Coordinates(stableleft))
-        unstablecurve = @pgf Plot({color = color, line_width = LINE_WIDTH, forget_plot, dotted}, Coordinates(unstable))
-        rightcurve = @pgf Plot({color = color, line_width = LINE_WIDTH, forget_plot}, Coordinates(stableright))
+        push!(nullclinefig, leftcurve)
 
-        label = labelsbythreshold[Tᶜ]
-        legend = LegendEntry(label)
+        if !isempty(rest)
+            unstable, stableright = rest
+            unstablecurve = @pgf Plot({color = color, line_width = LINE_WIDTH / 2, forget_plot, dotted}, Coordinates(unstable))
+            rightcurve = @pgf Plot({color = color, line_width = LINE_WIDTH / 2, forget_plot}, Coordinates(stableright))
 
-        push!(nullclinefig, leftcurve, legend, unstablecurve, rightcurve)
+            push!(nullclinefig, unstablecurve, rightcurve)
+        end
     end
 
-    for model in reverse(tippingmodels) # Simulation plots
-        color = thresholdcolors[model.albedo.Tᶜ]
-        simpath = sims[model.albedo.Tᶜ]
+    for model in reverse(simmodels) # Simulation plots
+        color = colorsbymodel[model]
+        simpath = sims[model]
         simcoords = Coordinates(zip(exp.(last.(simpath.u)), first.(simpath.u)))
 
-        curve = @pgf Plot({color = color, line_width = LINE_WIDTH / 2, forget_plot, opacity = 0.7}, simcoords)
+        curve = @pgf Plot({color = color, line_width = LINE_WIDTH}, simcoords)
 
-        markers = @pgf Plot({only_marks, mark_options = {fill = "black", scale = 1.5, draw_opacity = 0, color = color, opacity = 0.7}, mark_repeat = 10}, simcoords)
+        markers = @pgf Plot({only_marks, mark_options = {fill = "black", scale = 1.5, draw_opacity = 0, color = color}, mark_repeat = 10, forget_plot}, simcoords)
 
-        push!(nullclinefig, curve, markers)
+        label = labelsbymodel[model]
+        legend = LegendEntry(label)
+
+        push!(nullclinefig, curve, legend, markers)
     end
 
     @pgf nullclinefig["legend style"] = raw"at = {(0.95, 0.3)}"
 
     if SAVEFIG
         PGFPlotsX.save(joinpath(PLOTPATH, "nullcline.tikz"), nullclinefig; include_preamble=true)
+    end
+
+    nullclinefig
+end
+
+begin # Pure nullcline figure
+    nullclinefig = @pgf Axis({
+        width = raw"0.9\textwidth",
+        height = raw"0.7\textwidth",
+        grid = "both",
+        ylabel = TLABEL,
+        xlabel_style = {align = "center"},
+        xlabel = MLABEL,
+        yticklabels = temperatureticks[2],
+        ytick = temperatureticks[1],
+        ymin = Tmin, ymax = Tmax,
+        xmin = 380, xmax = 845,
+        legend_cell_align = "left"
+    })
+
+    for model in reverse(simmodels) # Nullcline plots
+        color = colorsbymodel[model]
+        
+        stableleft, rest... = nullclinevariation[model]
+
+        leftcurve = @pgf Plot({color = color, line_width = LINE_WIDTH}, Coordinates(stableleft))
+
+        label = LegendEntry(labelsbymodel[model])
+
+        push!(nullclinefig, leftcurve, label)
+
+        if !isempty(rest)
+            unstable, stableright = rest
+            unstablecurve = @pgf Plot({color = color, line_width = LINE_WIDTH, forget_plot, dotted}, Coordinates(unstable))
+            rightcurve = @pgf Plot({color = color, line_width = LINE_WIDTH, forget_plot}, Coordinates(stableright))
+
+            push!(nullclinefig, unstablecurve, rightcurve)
+        end
+    end
+
+    @pgf nullclinefig["legend style"] = raw"at = {(0.95, 0.3)}"
+
+    if SAVEFIG
+        PGFPlotsX.save(joinpath(PLOTPATH, "just-nullclines.tikz"), nullclinefig; include_preamble=true)
     end
 
     nullclinefig
@@ -305,7 +364,8 @@ begin # Growth of carbon concentration
     @pgf push!(gfig, {
             figsize...,
             grid = "both",
-            ylabel = raw"\footnotesize Carbon conc. $M_t^{b}$",
+            ylabel = L"\footnotesize \\$M_t^{b} \; [\si{\ppm}]$",
+            ylabel_style = {align = "center"},
             xtick = xtick,
             xmin = 0, xmax = horizon,
             xticklabels = xticklabels,
@@ -367,10 +427,10 @@ end
 
 begin # Construct histograms
     Textrema = map(sim -> extrema(first.(sim.u)), values(simulations))
-    Tmin = minimum(first.(Textrema)) - 0.1
-    Tmax = maximum(last.(Textrema)) + 0.1
+    Thistmin = minimum(first.(Textrema)) - 0.1
+    Thistmax = maximum(last.(Textrema)) + 0.1
 
-    Tbins = range(Tmin, Tmax; length = 31)
+    Tbins = range(Thistmin, Thistmax; length = 31)
 
     histograms = Dict{AbstractModel, Histogram}()
 
@@ -407,10 +467,10 @@ begin
         }, Table(histogram))
 
 
-        @pgf lastplotopt = k < length(densmodels) ? {} : { xlabel = TEMPLABEL, xticklabels = denstemperatureticks[2] }
+        @pgf lastplotopt = k < length(densmodels) ? {} : { xlabel = TLABEL, xticklabels = denstemperatureticks[2] }
 
         @pgf push!(densfig, {lastplotopt...,
-            xmin = Tmin, xmax = Tmax, 
+            xmin = Thistmin, xmax = Thistmax, 
             xtick = denstemperatureticks[1],
             ymin = 0, ymax = 5000,
             grid = "both", yticklabels = raw"\empty",
@@ -428,7 +488,7 @@ end
 
 
 function simulatebau(model::TippingModel; trajectories=100, X₀=[model.hogg.T₀, log(model.hogg.M₀)])
-    prob = SDEProblem(baufn, X₀, (0.0, 80.0), model)
+    prob = SDEProblem(Fbau!, G!, X₀, (0.0, 80.0), model)
     ensemble = EnsembleProblem(prob)
 
     sol = solve(ensemble; trajectories)
@@ -437,7 +497,7 @@ function simulatebau(model::TippingModel; trajectories=100, X₀=[model.hogg.T�
 end
 
 function simulatebau(model::JumpModel; trajectories=100, X₀=[model.hogg.T₀, log(model.hogg.M₀)])
-    diffprob = SDEProblem(baufn, X₀, (0.0, 80.0), model)
+    diffprob = SDEProblem(Fbau!, G!, X₀, (0.0, 80.0), model)
     varjump = VariableRateJump(rate, affect!)
     prob = JumpProblem(diffprob, Direct(), varjump)
 
@@ -477,20 +537,20 @@ begin # Side by side BAU Δλ = 0.8
     for (i, model) in enumerate(baumodels)
         nextgroup = @pgf if i == 1
             {
-                ylabel = TEMPLABEL,
+                ylabel = TLABEL,
                 yticklabels = temperatureticks[2],
                 ytick = temperatureticks[1]
             }
         elseif i == length(baumodels)
             {
-                ylabel = TEMPLABEL,
+                ylabel = TLABEL,
                 xlabel = "Year",
                 yticklabels = temperatureticks[2][1:(end-1)],
                 ytick = temperatureticks[1][1:(end-1)]
             }
         else
             {
-                ylabel = TEMPLABEL,
+                ylabel = TLABEL,
                 yticklabels = temperatureticks[2][1:(end-1)],
                 ytick = temperatureticks[1][1:(end-1)]
             }
@@ -589,7 +649,7 @@ begin # Damage fig
         width = raw"0.5\textwidth",
         height = raw"0.5\textwidth",
         grid = "both",
-        xlabel = TEMPLABEL,
+        xlabel = TLABEL,
         ylabel = raw"Damage function $d(T_t)$",
         xticklabels = temperatureticks[2],
         xtick = temperatureticks[1],

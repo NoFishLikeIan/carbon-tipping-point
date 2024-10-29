@@ -10,6 +10,8 @@ using LaTeXStrings, Printf
 using Colors, ColorSchemes
 
 push!(PGFPlotsX.CUSTOM_PREAMBLE, raw"\usepgfplotslibrary{fillbetween}", raw"\usetikzlibrary{patterns}")
+push!(PGFPlotsX.CUSTOM_PREAMBLE, raw"\usepackage{siunitx}")
+push!(PGFPlotsX.CUSTOM_PREAMBLE, raw"\DeclareSIUnit{\ppm}{p.p.m.}")
 
 using Statistics
 using Model, Grid
@@ -117,22 +119,37 @@ begin
         lowerpolicy = imfilter(first.(abatements[1:right]), ker)
         upperpolicy = imfilter(last.(abatements[left:end]), ker)
 
-        mtick = range(extrema(mspace)...; length = 5)[1:(i > 1 ? end : end - 1)]
-        mticklabels = @. Int(round(exp(mtick)))[1:(i > 1 ? end : end - 1)]
+        mtick = collect(range(extrema(mspace)...; length = 5))[2:(end - 1)]
+        mticklabels = ["$l" for l in @. Int(round(exp(mtick)))]
 
-        leftopts = @pgf i > 1 ? { yticklabels = raw"\empty" } : {
+        push!(mtick, log(model.hogg.M₀))
+        push!(mticklabels, L"M_0")
+
+        idxs = sortperm(mtick)
+
+        mtick = mtick[idxs]
+        mticklabels = mticklabels[idxs]
+
+        leftopts = @pgf i > 1 ? { 
+            yticklabels = raw"\empty" 
+        } : {
             ylabel = L"Abated fraction $\varepsilon_t$",
+            xlabel = L"Carbon Concentration $M_t \; [\si{\ppm}]$ ",
+            x_label_style= { anchor="north west" },
         }
 
         policyax = @pgf Axis({
             set_layers, mark_layer="axis background",
             title = labelsbymodel[model],
-            xlabel = L"Carbon Concentration $M_t$",
+            xmin = minimum(mspace), xmax = maximum(mspace),
+            enlarge_x_limits = 0.01,
             xtick = mtick, xticklabels = mticklabels,
-            grid = "both", ymin = -0.03, ymax = 1.03,
-            xmin = minimum(mtick), xmax = maximum(mtick),
+            grid = "both", ymin = 0, ymax = 1,
+            enlarge_y_limits = 0.01,
             width = raw"0.5\linewidth", height = raw"0.5\linewidth", leftopts...
         })
+
+
 
         lowerplot = @pgf Plot(
             { line_width = LINE_WIDTH, color = colors[2] }, 
@@ -147,7 +164,7 @@ begin
         push!(policyax, lowerplot, lowermarker)
 
         if i > 1 
-            push!(policyax, LegendEntry(raw"\footnotesize Low $T_t$"))
+            push!(policyax, LegendEntry(raw"\footnotesize Low $T$"))
         end
         
         upperplot = @pgf Plot(
@@ -163,7 +180,7 @@ begin
         push!(policyax, upperplot, uppermarker)
 
         if i > 1 
-            push!(policyax, LegendEntry(raw"\footnotesize High $T_t$"))
+            push!(policyax, LegendEntry(raw"\footnotesize High $T$"))
         end
 
         push!(policyfig, policyax)

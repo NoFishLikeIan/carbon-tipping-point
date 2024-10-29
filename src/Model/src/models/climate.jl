@@ -114,7 +114,7 @@ end
 "Radiative forcing."
 radiativeforcing(T, hogg::Hogg, albedo::Albedo) = hogg.S₀ * (1 - λ(T, hogg, albedo)) - hogg.η * T^4
 radiativeforcing(T, hogg::Hogg) = hogg.S₀ * 0.69 - hogg.η * T^4
-radiativeforcing′(T, hogg::Hogg, albedo::Albedo) = -hogg.S₀ * λ′(T, hogg, albedo) - 4hogg.η * T^3 
+radiativeforcing′(T, hogg::Hogg, albedo::Albedo) = -hogg.S₀ * λ′(T, hogg, albedo) - 4hogg.η * T^3
 
 "Greenhouse gases"
 ghgforcing(m, hogg::Hogg) = hogg.G₀ + hogg.G₁ * (m - log(hogg.Mᵖ))
