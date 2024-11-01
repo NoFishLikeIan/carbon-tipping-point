@@ -233,7 +233,7 @@ begin # Plot marginal benefit and marginal cost
 
     lowerplot = @pgf Plot({line_width = LINE_WIDTH, color = colors[1]}, Coordinates(timesteps, lowerpath))
 
-    push!(Jfig, upperplot, uppermark, lowerplot)
+    push!(Jfig, upperplot, uppermark, LegendEntry(L"Low $T_t$"), lowerplot, LegendEntry(L"High $T_t$"))
 
     PGFPlotsX.save(joinpath(plotpath, "maximisation_feedback.tikz"), Jfig; include_preamble = true)
 
