@@ -50,9 +50,7 @@ begin
 
     prob = ODEProblem{true}(F!, u₀, timespan, (a, E));
     sol = solve(prob)
-end;
 
-begin # Trajectory
     Tspace = range(0, 7.; length = 51)
     Tticks = range(extrema(Tspace)...; step = 1.)
     Ttickslabel = [L"$%$(Int(T))^\circ$" for T in Tticks]
@@ -74,18 +72,21 @@ begin # Trajectory
         sol = solve(prob)
 
         trajplot = @pgf Plot({
-            line_width = LINE_WIDTH, color = colors[2]
+            line_width = LINE_WIDTH, color = colors[1], dotted
         }, Coordinates(timesteps, first.(sol(timesteps).u)))
 
-        push!(trajaxis, trajplot)
+        push!(trajaxis, trajplot, LegendEntry(raw"\footnotesize Without feedback"))
     end
 
     trajplot = @pgf Plot({
         line_width = LINE_WIDTH, color = colors[1]
     }, Coordinates(timesteps, Ttraj))
 
-    push!(trajaxis, trajplot)
-    
+    push!(trajaxis, trajplot, LegendEntry(raw"\footnotesize With feedback"))
+
+    @pgf trajaxis["legend style"] = raw"at = {(0.5, 0.98)}"
+
+    PGFPlotsX.save(joinpath(plotpath, "trajfig_feedback.tikz"), trajaxis; include_preamble = true)
 
     trajaxis
 end
@@ -152,10 +153,16 @@ begin # Phase diagram
         steadystates = find_zeros(fₐ, (-1., 8.))
 
         for T̄ in steadystates
-            markercolor = f′ₐ(T̄) < 0. ? "black" : "white"
+            markercolor = f′ₐ(T̄) < 0. ? 
+                (T̄ < 3 ? colors[2] : colors[1]) : 
+                "white"
+
+            strokecolor = f′ₐ(T̄) < 0. ? 
+                (T̄ < 3 ? colors[2] : colors[1]) : 
+                "black"
 
             options = @pgf {
-                mark_options = {fill = markercolor, stroke = "black", scale = 1.5},
+                mark_options = {fill = markercolor, stroke = strokecolor, scale = 1.5},
                 forget_plot,
                 only_marks
             }
@@ -186,7 +193,6 @@ begin # Phase diagram
 end
 
 # Optimisation of τ
-
 d(T) = exp(T)
 Tsteadystate(τ; params...) = find_zeros(
     T -> T * λ(T; params...) - log(1 + E * τ),
@@ -233,7 +239,7 @@ begin # Plot marginal benefit and marginal cost
 
     lowerplot = @pgf Plot({line_width = LINE_WIDTH, color = colors[1]}, Coordinates(timesteps, lowerpath))
 
-    push!(Jfig, upperplot, uppermark, LegendEntry(L"Low $T_t$"), lowerplot, LegendEntry(L"High $T_t$"))
+    push!(Jfig, upperplot, uppermark, LegendEntry(raw"\footnotesize Low temp."), lowerplot, LegendEntry(raw"\footnotesize High temp."))
 
     PGFPlotsX.save(joinpath(plotpath, "maximisation_feedback.tikz"), Jfig; include_preamble = true)
 

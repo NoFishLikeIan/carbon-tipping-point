@@ -143,7 +143,7 @@ begin
         prob = SDEProblem(Fbau!, G!, X₀, (0.0, 200.0), model)
         sol = solve(EnsembleProblem(prob), trajectories = 1000)
 
-        simpath = timeseries_point_median(sol, yearlytime)
+        simpath = timeseries_point_quantile(sol, [0.2, 0.5, 0.8], yearlytime)
 
         sims[model] = simpath
     end
@@ -174,10 +174,10 @@ begin # Nullcline plot
     end
 
     Mmax = 1000.
-
-    Mpath = exp.(last.(sims[simmodels[1]].u))
     
-    Mticks = Mpath[1:10:end]
+    Mmedianpath = @. exp(getindex(getindex(simpath.u, 2), 2))
+    Mticks = Mmedianpath[1:10:end]
+
     Mtickslabels = [
         L"\small $%$M$\\ \footnotesize ($%$y$)"
         for (M, y) in zip(round.(Int, Mticks), 2020:10:2100)
@@ -203,7 +203,7 @@ begin # Nullcline plot
         PGFPlotsX.save(joinpath(PLOTPATH, "skeleton-nullcline.tikz"), nullclinefig; include_preamble=true)
     end
 
-    for model in reverse(simmodels) # Nullcline plots
+    for model in reverse(simmodels) # Nullclines
         color = colorsbymodel[model]
         
         stableleft, rest... = nullclinevariation[model]
@@ -224,16 +224,24 @@ begin # Nullcline plot
     for model in reverse(simmodels) # Simulation plots
         color = colorsbymodel[model]
         simpath = sims[model]
-        simcoords = Coordinates(zip(exp.(last.(simpath.u)), first.(simpath.u)))
 
-        curve = @pgf Plot({color = color, line_width = LINE_WIDTH}, simcoords)
+        Tpath = @. getindex(simpath.u, 1)
+        lower, median, upper = (getindex.(Tpath, i) for i in 1:3)
 
-        markers = @pgf Plot({only_marks, mark_options = {fill = "black", scale = 1.5, draw_opacity = 0, color = color}, mark_repeat = 10, forget_plot}, simcoords)
+        mediancoords = Coordinates(Mmedianpath, median)
+        curve = @pgf Plot({color = color, line_width = LINE_WIDTH}, mediancoords)
+
+        markers = @pgf Plot({only_marks, mark_options = {fill = "black", scale = 1.5, draw_opacity = 0, color = color}, mark_repeat = 10, forget_plot}, mediancoords)
 
         label = labelsbymodel[model]
         legend = LegendEntry(label)
 
-        push!(nullclinefig, curve, legend, markers)
+        # Add shading between lower and upper curves
+        lowerpath = @pgf Plot({draw = "none", name_path = "lower", forget_plot}, Coordinates(Mmedianpath, lower))
+        upperpath = @pgf Plot({draw = "none", name_path = "upper", forget_plot}, Coordinates(Mmedianpath, upper))
+        shading = @pgf Plot({fill = color, opacity = 0.15, forget_plot}, raw"fill between [of=lower and upper]")
+
+        push!(nullclinefig, curve, legend, markers, lowerpath, upperpath, shading)
     end
 
     @pgf nullclinefig["legend style"] = raw"at = {(0.95, 0.3)}"
@@ -677,7 +685,7 @@ begin # Marginal abatement curve
 
     times = [0., 40., 80.] |> reverse
 
-    yearcolors = graypalette(length(times))
+    yearcolors = get(PALETTE, [0., 0.4, 0.6]) # graypalette(length(times))
 
     xticks = 0:0.2:1
     xticklabels = [@sprintf("%.0f\\%%", 100 * x) for x in xticks]
