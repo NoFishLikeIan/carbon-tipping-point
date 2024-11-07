@@ -3,6 +3,7 @@ using Model, Grid
 using Interpolations
 using Roots
 using QuadGK
+using Plots
 
 include("utils/saving.jl")
 include("markov/forward.jl")
@@ -26,17 +27,17 @@ begin # Constructs wishful thinker and prudent policies
 
     remotepolicy = remotepolicy[:, :, :, findall(in(timestepsimm), timestepsrem)]; # Assert the same size
 
-    wfpolicy = similar(imminentpolicy);
+    wfpolicy = NaN * zeros(size(remotepolicy))
 
-    tippedregion = @. getindex(G.X, 1) ≥ 1.5 + hogg.Tᵖ
-    wfpolicy[tippedregion, :, :] .= imminentpolicy[tippedregion, :, :]
-    wfpolicy[.~tippedregion, :, :] .= remotepolicy[.~tippedregion, :, :]
+    imminenttipregion = @. getindex(G.X, 1) ≥ 1.5 + hogg.Tᵖ
+    wfpolicy[imminenttipregion, :, :] .= imminentpolicy[imminenttipregion, :, :]
+    wfpolicy[.~imminenttipregion, :, :] .= remotepolicy[.~imminenttipregion, :, :]
 
-    prudpolicy = similar(imminentpolicy);
+    prudpolicy = NaN * zeros(size(remotepolicy))
 
-    tippedregion = @. getindex(G.X, 1) ≥ 2.5 + hogg.Tᵖ
-    prudpolicy[tippedregion, :, :] .= remotepolicy[tippedregion, :, :]
-    prudpolicy[.~tippedregion, :, :] .= imminentpolicy[.~tippedregion, :, :]
+    remotetippedregion = @. getindex(G.X, 1) ≥ 2.5 + hogg.Tᵖ
+    prudpolicy[remotetippedregion, :, :] .= remotepolicy[remotetippedregion, :, :]
+    prudpolicy[.~remotetippedregion, :, :] .= imminentpolicy[.~remotetippedregion, :, :]
 
     Tspace = range(G.domains[1]...; length = size(G, 1))
     mspace = range(G.domains[2]...; length = size(G, 2))
@@ -48,36 +49,53 @@ begin # Constructs wishful thinker and prudent policies
 
     χpitp = linear_interpolation(nodes, prudpolicy[:, :, 1, :]; extrapolation_bc = Line())
     αpitp = linear_interpolation(nodes, prudpolicy[:, :, 2, :]; extrapolation_bc = Line())
+
+    χremoteitp = linear_interpolation(nodes, remotepolicy[:, :, 1, :]; extrapolation_bc = Line())
+    αremoteitp = linear_interpolation(nodes, remotepolicy[:, :, 2, :]; extrapolation_bc = Line())
+
+    χimminentitp = linear_interpolation(nodes, imminentpolicy[:, :, 1, :]; extrapolation_bc = Line())
+    αimminentitp = linear_interpolation(nodes, imminentpolicy[:, :, 2, :]; extrapolation_bc = Line())
 end;
+
+Δwf = (wfpolicy[:, :, 2, 1] .- prudpolicy[:, :, 2, 1])
+heatmap(mspace, Tspace, Δwf; clims = maximum(abs.(Δwf)) .* (-1, 1), c = :coolwarm)
 
 # Compute the climate change cost the wishful thinker and the prudent policies
+
+
 begin
-    Fw = computebackward(simpath, χwfitp, αwfitp, imminentmodel; verbose = 1);
+    F̄ = computebackward(simpath, χremoteitp, αremoteitp, remotemodel; verbose = 1)
+    F̲ = computebackward(simpath, χimminentitp, αimminentitp, remotemodel; verbose = 1)
+    Fw = computebackward(simpath, χwfitp, αwfitp, imminentmodel; verbose = 1)
     Fp = computebackward(simpath, χpitp, αpitp, remotemodel; verbose = 1)
 end;
-
-# Loads initial optimal values
-F̄ = loadtotal(remotemodel; outdir = simpath)[2][:, :, 1];
-F̲ = loadtotal(imminentmodel; outdir = simpath)[2][:, :, 1];
 
 # Get values at X₀
 X₀ = [imminentmodel.hogg.T₀, log(imminentmodel.hogg.M₀)];
 Y₀ = imminentmodel.economy.Y₀;
 
-function getV₀(F, X₀)
+function getV₀(F, X₀, model)
     F₀ = linear_interpolation((Tspace, mspace), F)(X₀[1], X₀[2])
     
-    θ = 15.
+    θ = model.preferences.θ
     F₀ * Y₀^(1 - θ) / (1 - θ)
 end
 
-V̄ = getV₀(F̄, X₀)
-V̲ = getV₀(F̲, X₀)
-Vw = getV₀(Fw, X₀)
-Vp = getV₀(Fp, X₀)
+
+# Only care about relative size
+V̄ = getV₀(F̄, X₀, imminentmodel)
+V̲ = getV₀(F̲, X₀, imminentmodel)
+Vw = getV₀(Fw, X₀, imminentmodel)
+Vp = getV₀(Fp, X₀, imminentmodel)
 
 # Certainty equilvanece
-function ce(V₀, model; interval = (0.005, 10_000.))
+function ∫f(x, V, model)
+    QuadGK.quadgk(
+        t -> f(x * exp(economy.ϱ * t), V, model.preferences), 0., 1_000
+    ) |> first
+end
+
+function ce(V₀, model; interval = (0.005, Inf))
     a = f(interval[1], V₀, model.preferences) - V₀
     b = f(interval[2], V₀, model.preferences) - V₀
 
@@ -85,20 +103,28 @@ function ce(V₀, model; interval = (0.005, 10_000.))
         throw("Interval is not bracketing: ∫f ∈ [$a, $b]")
     end
 
-    find_zero(x -> f(x, V₀, model.preferences) - V₀, interval)
+    find_zero(x ->  ∫f(x, V₀, model) - V₀, interval)
 end
 
-ceʷ = ce(Vw, imminentmodel) # Reckless 
-ceᵖ = ce(Vp, remotemodel) # Prudent
-
+ceᵖ = ce(Vp, remotemodel)
+ceʷ = ce(Vw, imminentmodel) 
 cē = ce(V̄, remotemodel) # Optimal with remote
 ce̲ = ce(V̲, imminentmodel) # Optimal with imminent
 
 labels = ["ceʷ", "ceᵖ", "cē", "ce̲"];
 
-for (i, ce) in enumerate((ceʷ, ceᵖ, cē, ce̲))
-    per = round(100 * ce / Y₀, digits = 2)
+function printce(ce, label; digits = 3)
+    per = round(100 * ce / Y₀, digits = digits)
 
-    println("$(labels[i]) : $(round(ce, digits = 2)) ($per %)")
+    println("$(label) : $(round(ce, digits = digits)) / ($per %)")
 end
 
+for (i, ce) in enumerate((ceʷ, ceᵖ, cē, ce̲))
+    printce(ce, labels[i])
+end
+
+printce(ce̲ - ceʷ, "ce̲ - ceʷ")
+printce(cē - ceᵖ, "cē - ceᵖ")
+printce(cē - ce̲, "cē - ce̲")
+
+printce((ce̲ - ceʷ) - (cē - ceᵖ), "(cē - ceᵖ) - (ce̲ - ceʷ)")
