@@ -4,6 +4,7 @@ using BenchmarkTools: @btime
 using Plots
 
 using Model, Grid
+using JLD2
 
 includet("../utils/saving.jl")
 includet("../markov/terminal.jl")
@@ -16,34 +17,23 @@ begin
 	hogg = Hogg()
 	economy = RegionalEconomies()
 	preferences = (EpsteinZin(), EpsteinZin())
-	albedo = Albedo(Tᶜ = 1.5)
+	albedo = Albedo(1.5)
 	damages = (GrowthDamages(), GrowthDamages())
 end;
 
-# --- Albedo
-plannermodel = TippingModel(albedo, hogg, first(preferences), first(damages), first(economy), calibration)
 model = TippingGameModel(albedo, hogg, preferences, damages, economy, rc);
 
 begin
 	N = 31
-	M = 10
 	G = terminalgrid(N, model)
 
 	Tspace = range(G.domains[1]...; length = size(G, 1))
 	mspace = range(G.domains[2]...; length = size(G, 2))
 end
 
-begin
-	F̄, terminalpolicy = loadterminal(collect(breakgamemodel(model)), G; datapath = "data/simulation/game", addpath = ["high", "low"])
+begin # Terminal problem
+	hmodel, lmodel = breakgamemodel(model)
 
-	N₁, N₂ = size(G)
-	nmodels = size(F̄, 3)
-
-	Fs = ntuple(_ -> SharedArray{Float64}(N₁, N₂, M), nmodels)
-	policies = ntuple(_ -> SharedArray{Policy}(N₁, N₂, M), nmodels)
-
-	for m in eachindex(Fs), k in axes(Fs[m], 3)
-		Fs[m][:, :, k] .= F̄[:, :, m]
-		policies[m][:, :, k] .= [Policy(χ, 0.) for χ ∈ terminalpolicy[:, :, m]]
-	end
+	computeterminal(hmodel, G; verbose = true, outdir = "data/game-test", addpath = "high")
+	computeterminal(lmodel, G; verbose = true, outdir = "data/game-test", addpath = "low")
 end

@@ -4,6 +4,9 @@ using Grid
 using ZigZagBoomerang: PartialQueue
 
 function driftstep(t, idx, F, α, model::AbstractModel, G)
+    driftstep(t, idx, F, α, 0., model, G)
+end
+function driftstep(t, idx, F, αᵢ, α₋ᵢ, model::AbstractModel, G)
     L, R = extrema(CartesianIndices(F))
 
     σₜ² = (model.hogg.σₜ / (model.hogg.ϵ * G.Δ.T))^2
@@ -11,7 +14,7 @@ function driftstep(t, idx, F, α, model::AbstractModel, G)
 
     Xᵢ = G.X[idx]
     dT = μ(Xᵢ.T, Xᵢ.m, model) / (model.hogg.ϵ * G.Δ.T)
-    dm = (γ(t, model.calibration) - α) / G.Δ.m
+    dm = (γ(t, model.calibration) - αᵢ - α₋ᵢ) / G.Δ.m
 
     # -- Temperature
     FᵢT₊ = F[min(idx + I[1], R)]
@@ -31,9 +34,10 @@ function driftstep(t, idx, F, α, model::AbstractModel, G)
     return F′, Δt
 end
 
-markovstep(t, idx, F, α, model::AbstractTippingModel, G) = driftstep(t, idx, F, α, model, G)
-function markovstep(t, idx, F, α, model::AbstractJumpModel, G)
-    Fᵈ, Δt = driftstep(t, idx, F, α, model, G)
+markovstep(t, idx, F, α, model, G) = markovstep(t, idx, F, α, 0., model, G)
+markovstep(t, idx, F, αᵢ, α₋ᵢ, model::AbstractTippingModel, G) = driftstep(t, idx, F, αᵢ, α₋ᵢ, model, G)
+function markovstep(t, idx, F, αᵢ, α₋ᵢ, model::AbstractJumpModel, G)
+    Fᵈ, Δt = driftstep(t, idx, F, αᵢ, α₋ᵢ, model, G)
 
     # Update with jump
     R = maximum(CartesianIndices(F))

@@ -1,36 +1,61 @@
-using Distributed: @everywhere, @distributed, @sync, nprocs
-using SharedArrays: SharedArray, SharedMatrix, SharedVector
-using DataStructures: PriorityQueue, dequeue!, enqueue!, peek
+using JLD2
+using Printf: @printf
 
 using Model, Grid
+using FastClosures: @closure
+using Printf: @printf
+using ZigZagBoomerang: dequeue!, PartialQueue
+using Base.Threads: @threads
+using SciMLBase: successful_retcode
+using Optim
+using Statistics: mean
 
-@everywhere begin
-    using Model, Grid
-    using JLD2, DotEnv
-    using UnPack: @unpack
-    using ZigZagBoomerang: dequeue!
-    using Base: Order
-    using FastClosures: @closure
-    using NLopt: Opt, lower_bounds!, upper_bounds!, min_objective!, optimize, xtol_rel!
-        
-    env = DotEnv.config()
-    DATAPATH = get(env, "DATAPATH", "data")
+include("chain.jl")
+
+const defaultoptoptions = Optim.Options(g_tol = 1e-12, iterations = 100_000)
+
+
+"""
+Optimise `diffobjective` and stores the minimiser in u. If the optimisation does not converge, it takes the mean of the policy in the neighbourhood.
+"""
+function fallbackoptimisation!(u,
+    diffobjective, u₀, 
+    idx, k, i, t, policies, 
+    constraints::TwiceDifferentiableConstraints, G::RegularGrid; 
+    optoptions = defaultoptoptions, verbose = 0)
+
+    if !Optim.isinterior(constraints, u₀)
+        throw(ArgumentError("Initial guess is not in the interior of the constraints at t = $t and idx = $idx, using mean policy instead"))
+    end
+
+    res = Optim.optimize(diffobjective, constraints, u₀, IPNewton(), optoptions)
+
+    if Optim.converged(res)
+        u .= Optim.minimizer(res)
+    else # If it does not converge we take the mean of the policy in the neighbourhood
+        if verbose ≥ 1 
+            @warn "Constrained optimisation has not converged at t = $t and idx = $idx"
+        end
+
+        unit = oneunit(idx)
+        L = max(minimum(CartesianIndices(G)), idx - unit)
+        R = min(maximum(CartesianIndices(G)), idx + unit)
+
+        u[1] = mean(policies[1, L:R, k, i])
+        u[2] = mean(policies[2, L:R, k, i])
+    end
 end
 
-@everywhere include("chain.jl")
-
-function backwardstep!(Δts, F::AbstractArray{Float64, 4}, policies::AbstractArray{Policy, 4}, cluster, model::AbstractGameModel, G)
+function backwardstep!(Δts, F, policies, cluster, model::AbstractGameModel, G; αfactor = 1.5, allownegative = false, optargs...)
+    Fₜ, Fₜ₊ₕ = F
     indices = CartesianIndices(G)
     models = breakgamemodel(model)
 
     τ = models[1].economy.τ
-    M = size(F, 3)
+    M = size(Fₜ, 3)
     unit = range(0, 1; length = M)
 
-    optimiser = Opt(:LN_SBPLX, 2)
-    lower_bounds!(optimiser, [0., 0.]); 
-
-    @sync @distributed for (l, δt) in cluster
+    for (l, δt) in cluster
         idx = indices[l]
         Xᵢ = G.X[idx]
 
@@ -42,31 +67,39 @@ function backwardstep!(Δts, F::AbstractArray{Float64, 4}, policies::AbstractArr
 
         for (i, regionalmodel) in enumerate(models)
             j = ifelse(i == 1, 2, 1)
-
-            xtol_rel!(optimiser, ᾱ[i] / M)
-            upper_bounds!(optimiser, [1., ᾱ[i]])
-
-            A = ᾱ[j] * unit
+            A = ᾱ[j] * unit # Action space of opponent
 
             for (k, αⱼ) in enumerate(A)
-                pₖ = @view policies[:, :, k, i]
-                Fₖ = @view F[:, :, k, i]
-    
-                objective = @closure (x, _) -> begin
-                    u = Policy(x[1], x[2])
-                    F′, Δt = markovstep(t, idx, Fₖ, u, αⱼ, regionalmodel, G)
-                    cost(F′, t, Xᵢ, Δt, u, regionalmodel)
+                Fᵏₜ₊ₕ = @view Fₜ₊ₕ[:, :, k, i]
+                u₀ = copy(policies[:, idx, k, i])
+
+                objective = @closure u -> begin
+                    Fᵉₜ, Δt = markovstep(t, idx, Fᵏₜ₊ₕ, u[2], αⱼ, regionalmodel, G)
+                    return logcost(Fᵉₜ, t, G.X[idx], Δt, u, regionalmodel)
                 end
 
-                min_objective!(optimiser, objective)
-                candidate = min.(pₖ[idx], [1., ᾱ[i]])
+                diffobjective = TwiceDifferentiable(objective, u₀; autodiff = :forward)
 
-                obj, pol, _ = optimize(optimiser, candidate)
+                # Solve first unconstrained problem
+                openinterval = TwiceDifferentiableConstraints([0., 0.], [1., Inf])
+                u₀[2] = αfactor * ᾱ[i]
+                optimum = similar(u₀)
 
-                Fₖ[idx] = obj
-                pₖ[idx] = pol
+                fallbackoptimisation!(optimum, diffobjective, u₀, idx, k, i, t, policies, openinterval, G; optargs...)
 
-                timestep = last(markovstep(t, idx, Fₖ, pₖ[idx], αⱼ, regionalmodel, G))
+                if !allownegative # Solve constrained problem with χ from unconstrained problem
+                    u₀[1] = optimum[1]
+                    u₀[2] = min(optimum[2], ᾱ[i] / 2) # Guarantees u₀ ∈ U
+                    constraints = TwiceDifferentiableConstraints([0., 0.], [1., ᾱ[i]])
+        
+                    fallbackoptimisation!(optimum, diffobjective, u₀, idx, k, i, t, policies, constraints, G; optargs...)
+                end
+        
+                objectiveminimum = objective(optimum)
+
+                policies[:, idx, k, i] .= optimum
+                Fₜ[idx, k, i] = exp(objectiveminimum)
+                timestep = last(markovstep(t, idx, Fᵏₜ₊ₕ, optimum[2], αⱼ, regionalmodel, G))
 
                 Δtₗ = min(timestep, Δtₗ)
             end
@@ -76,11 +109,12 @@ function backwardstep!(Δts, F::AbstractArray{Float64, 4}, policies::AbstractArr
     end
 end
 
-function backwardsimulation!(
-    F::AbstractArray{Float64, 4}, 
-    policies::AbstractArray{Policy, 4},
-    model::AbstractGameModel, G; 
-    verbose = false, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = last(model.regionalcalibration.calibration.tspan), allownegative = false, stepkwargs...)
+function backwardsimulation!(F::NTuple{2, Array{Float64, 4}}, policy, model::AbstractModel, G; kwargs...)
+    queue = DiagonalRedBlackQueue(G)
+    backwardsimulation!(queue, F, policy, model, G; kwargs...)
+end
+
+function backwardsimulation!(queue::PartialQueue, F::NTuple{2, Array{Float64, 4}}, policies, model::AbstractGameModel, G; verbose = false, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = last(model.regionalcalibration.calibration.tspan), allownegative = false, stepkwargs...)
     verbose && println("Starting backward simulation...")
      
     savecache = !isnothing(cachepath)
@@ -106,9 +140,10 @@ function backwardsimulation!(
         cachefile["G"] = G
     end
 
-    queue = DiagonalRedBlackQueue(G)
-    Δts = SharedVector(zeros(N^2))
+    Δts = Vector{Float64}(undef, prod(size(G)))
     τ = first(model.economy).τ
+
+    passcounter = 1
 
     while !isempty(queue)
         tmin = τ - minimum(queue.vals)
@@ -140,33 +175,38 @@ function backwardsimulation!(
     return F, policies
 end
 
-function computebackward(model::AbstractGameModel, G; datapath = "data", kwargs...)
-
-    h, l = breakgamemodel(model)
-    F̄low, pollow, Gterminal = loadterminal(l; addpath = "low", datapath)
-    F̄high, polhigh, _ = loadterminal(h; addpath = "high", datapath)
+function computebackward(model::AbstractGameModel, G; datapath = "data", addpaths = ["high", "low"], kwargs...)
+    highmodel, lowmodel = breakgamemodel(model)
+    F̄high, χhigh, terminalG = loadterminal(highmodel; outdir = datapath, addpath = addpaths[1])
+    F̄low, χlow, _ = loadterminal(lowmodel; outdir = datapath, addpath = addpaths[2])
 
     F̄ = cat(F̄high, F̄low; dims = 3)
-    terminalpolicy = cat(polhigh, pollow; dims = 3)
+    terminalpolicy = cat(χhigh, χlow; dims = 3)
     
-    terminalres = F̄, terminalpolicy, Gterminal
+    terminalresults = F̄, terminalpolicy, terminalG
     
-    computebackward(terminalres, model, G; datapath, kwargs...)
+    computebackward(terminalresults, model, G; datapath, kwargs...)
 end
-function computebackward(terminalres::Tuple{Array{Float64, 3}, Array{Float64, 3}, RegularGrid}, model::AbstractGameModel, G; verbose = false, withsave = true, datapath = "data", allownegative = false, M = 10, iterkwargs...)
-    F̄, terminalconsumption, Gterminal = terminalres
+
+TerminalResults = Tuple{Array{Float64, 3}, Array{Policy, 3}, RegularGrid}
+
+function computebackward(terminalresults::TerminalResults, model::AbstractGameModel, G; verbose = false, withsave = true, datapath = "data", allownegative = false, M = 10, iterkwargs...)
+    F̄, terminalconsumption, terminalG = terminalresults
     
     N₁, N₂ = size(G)
-    nmodels = size(F̄, 3)
+    nplayers = size(F̄, 3)
 
-    F = SharedArray{Float64}(N₁, N₂, M, nmodels)
-    policies = SharedArray{Policy}(N₁, N₂, M, nmodels)
+    Fₜ₊ₕ = Array{Float64}(undef, N₁, N₂, M, nplayers)
+    policies = Array{Float64}(undef, 2, N₁, N₂, M, nplayers)
 
-    for k in 1:nmodels
-        F[:, :, :, k] .= interpolateovergrid(Gterminal, G, F̄[:, :, k])
-        terminalpolicy = [Policy(χ, 0.) for χ ∈ terminalconsumption[:, :, k]]
-        policies[:, :, :, k] .= interpolateovergrid(Gterminal, G, terminalpolicy)
+    for k in 1:nplayers
+        Fₜ₊ₕ[:, :, :, k] .= interpolateovergrid(terminalG, G, F̄[:, :, k])
+        policies[1, :, :, :, :, :] .= interpolateovergrid(terminalG, G, terminalconsumption[:, :, k])
+        policies[2, :, :, :, :, :] .= γ(model.economy[k].τ, model.regionalcalibration)[k]
     end
+
+    Fₜ = similar(Fₜ₊ₕ)
+    F = (Fₜ, Fₜ₊ₕ);
 
     if withsave
         folder = SIMPATHS[typeof(model)]
