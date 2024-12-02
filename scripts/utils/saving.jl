@@ -84,36 +84,7 @@ function loadterminal(model::AbstractModel; outdir = "data/simulation", addpath 
     return F̄, policy, G
 end
 
-function loadtotal(model::AbstractGameModel; outdir = "data/simulation")     
-    folder = SIMPATHS[typeof(model)]
-    cachefolder = joinpath(outdir, folder)
-    filename = makefilename(model)
-    savepath = joinpath(cachefolder, filename)
-
-    jldopen(savepath, "r") do cachefile
-        G = cachefile["G"]
-        timekeys = filter(!=("G"), keys(cachefile))
-        timesteps = round.(parse.(Float64, timekeys), digits = 4)
-
-        ix = sortperm(timesteps)
-        timesteps = timesteps[ix]
-        timekeys = timekeys[ix]
-
-        T = length(timesteps)
-        M = size(cachefile[first(timekeys)]["F"], 3)
-        F = Array{Float64, 5}(undef, size(G, 1), size(G, 2), M, 2, T)
-        policy = Array{Float64, 5}(undef, size(G, 1), size(G, 2), M, 2, T)
-
-        for (k, key) ∈ enumerate(timekeys)
-            F[:, :, :, :, k] .= cachefile[key]["F"]
-            policy[:, :, :, :, k] .= cachefile[key]["policy"]
-        end
-    end
-
-    return timesteps, F, policy, G
-end
-
-function loadtotal(model::AbstractPlannerModel; outdir = "data/simulation")
+function loadtotal(model::AbstractModel; outdir = "data/simulation")
     folder = SIMPATHS[typeof(model)]
     cachefolder = joinpath(outdir, folder)
     filename = makefilename(model)

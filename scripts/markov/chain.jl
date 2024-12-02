@@ -35,8 +35,8 @@ function driftstep(t, idx, F, αᵢ, α₋ᵢ, model::AbstractModel, G)
 end
 
 markovstep(t, idx, F, α, model, G) = markovstep(t, idx, F, α, 0., model, G)
-markovstep(t, idx, F, αᵢ, α₋ᵢ, model::AbstractTippingModel, G) = driftstep(t, idx, F, αᵢ, α₋ᵢ, model, G)
-function markovstep(t, idx, F, αᵢ, α₋ᵢ, model::AbstractJumpModel, G)
+markovstep(t, idx, F, αᵢ, α₋ᵢ, model::TippingModel, G) = driftstep(t, idx, F, αᵢ, α₋ᵢ, model, G)
+function markovstep(t, idx, F, αᵢ, α₋ᵢ, model::JumpModel, G)
     Fᵈ, Δt = driftstep(t, idx, F, αᵢ, α₋ᵢ, model, G)
 
     # Update with jump

@@ -8,11 +8,10 @@ using JLD2
 
 includet("../utils/saving.jl")
 includet("../markov/terminal.jl")
-includet("../markov/game.jl")
+includet("../markov/chain.jl")
 
 begin
 	DATAPATH = "data"
-	calibration = load_object(joinpath(DATAPATH, "calibration.jld2"))
 	rc = load_object(joinpath(DATAPATH, "regionalcalibration.jld2"))
 	hogg = Hogg()
 	economy = RegionalEconomies()

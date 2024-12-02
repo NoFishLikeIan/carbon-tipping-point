@@ -8,11 +8,6 @@ struct Calibration
     tspan::NTuple{2, Float64} # Span of the IPCC data wrt to 2020
 end
 
-struct RegionalCalibration
-    calibration::Calibration
-    hiweights::Vector{Float64} # High income weighting
-end
-
 "Growth rate of carbon concentration in BAU"
 function γ(t, calibration::Calibration)
     tmin, tmax = calibration.tspan
@@ -25,18 +20,9 @@ function γ(t, calibration::Calibration)
     return pol * decay
 end
 
-"Growth rate of carbon concentration in BAU, regionally broke up"
-function γ(t, rc::RegionalCalibration)
-    γₜ = γ(t, rc.calibration)
-    hw = weight(t, rc)
-
-    return γₜ * hw, γₜ * (1 - hw)
-end
-
 
 "Linear interpolation of emissions in `calibration`"
 Eᵇ(t, calibration::Calibration) = interpolateovert(t, calibration.tspan, calibration.emissions)
-weight(t, rc::RegionalCalibration) = interpolateovert(t, rc.calibration.tspan, rc.hiweights)
 
 function interpolateovert(t, tspan, v)
 

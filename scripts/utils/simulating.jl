@@ -51,14 +51,14 @@ function G!(Σ, u, model::AbstractModel, t)
 	Σ[1] = model.hogg.σₜ / model.hogg.ϵ
 	Σ[2] = model.hogg.σₘ
 end
-function G!(Σ, u, parameters::Tuple{AbstractPlannerModel, PoliciesFunctions}, t)
+function G!(Σ, u, parameters::Tuple{AbstractModel, PoliciesFunctions}, t)
     model = first(parameters)
 
     Σ[1] = model.hogg.σₜ / model.hogg.ϵ
 	Σ[2] = model.hogg.σₘ
     Σ[3] = model.economy.σₖ
 end
-function Gbreakdown!(Σ, u, parameters::Tuple{AbstractPlannerModel, PoliciesFunctions}, t)
+function Gbreakdown!(Σ, u, parameters::Tuple{AbstractModel, PoliciesFunctions}, t)
     model = first(parameters)
 
     Σ[1] = model.hogg.σₜ / model.hogg.ϵ
