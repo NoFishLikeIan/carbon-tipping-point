@@ -10,12 +10,7 @@ const SIMPATHS = Dict(
     TippingModel{LevelDamages, EpsteinZin}  => "albedo/level",
     TippingModel{GrowthDamages, EpsteinZin} => "albedo/growth",
     JumpModel{LevelDamages, EpsteinZin}  => "jump/level",
-    JumpModel{GrowthDamages, EpsteinZin}  => "jump/growth",
-
-    TippingGameModel{LevelDamages, EpsteinZin}  => "albedo/level",
-    TippingGameModel{GrowthDamages, EpsteinZin} => "albedo/growth",
-    JumpGameModel{LevelDamages, EpsteinZin}  => "jump/level",
-    JumpGameModel{GrowthDamages, EpsteinZin}  => "jump/growth"
+    JumpModel{GrowthDamages, EpsteinZin}  => "jump/growth"
 )
 
 function makefilename(model::TippingModel{LevelDamages, EpsteinZin})
@@ -38,15 +33,6 @@ function makefilename(model::TippingModel{GrowthDamages, EpsteinZin})
     @unpack ξ, υ = model.damages
 
     filename = @sprintf("Tc=%.2f_ρ=%.5f_θ=%.2f_ψ=%.2f_σT=%.4f_σm=%.4f_ωr=%.5f_ξ=%.6f_υ=%.3f", Tᶜ, ρ, θ, ψ, σₜ, σₘ, ωᵣ, ξ, υ)
-
-    return "$(replace(filename, "." => ",")).jld2"
-end
-function makefilename(model::TippingGameModel{GrowthDamages, EpsteinZin})
-    @unpack Tᶜ = model.albedo
-    ξh, ξl = getproperty.(model.damages, :ξ)
-    υh, υl = getproperty.(model.damages, :υ)
-
-    filename = @sprintf("Tc=%.2f_ξh=%.6f_ξl=%.6f_υh=%.3f_υl=%.3f", Tᶜ, ξh, ξl, υh, υl)
 
     return "$(replace(filename, "." => ",")).jld2"
 end
@@ -82,6 +68,15 @@ function loadterminal(model::AbstractModel; outdir = "data/simulation", addpath 
     G = load(savepath, "G")
 
     return F̄, policy, G
+end
+
+function loadterminal(model::DiffGameModel; outdir = "data/simulation", addpaths = repeat([""], length(model.models)))
+    terminalresults = Tuple{Array{Float64, 2}, Array{Float64, 2}, RegularGrid}[]
+    for (i, m) in enumerate(model.models)
+        push!(terminalresults, loadterminal(m; outdir, addpath = addpaths[i]))
+    end
+
+    return terminalresults
 end
 
 function loadtotal(model::AbstractModel; outdir = "data/simulation")
