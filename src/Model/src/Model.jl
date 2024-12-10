@@ -6,7 +6,7 @@ export Calibration, RegionalCalibration
 export Damages, GrowthDamages, LevelDamages
 export equilibriumHogg
 export intensity, increase, d
-export μ, b, bterminal, costbreakdown, γ, mstable, boundb, δₘ, ϕ
+export μ, b, bterminal, costbreakdown, γ, mstable, δₘ, ϕ
 export β, ε
 export criticaltemperature
 export potential, density
@@ -16,7 +16,7 @@ export f, g, logg
 export TippingModel, LinearModel, JumpModel
 export AbstractModel
 export terminalgrid
-export RegionalEconomies, breakgamemodel
+export RegionalEconomies
 
 # Packages
 using Grid: Point, Policy, RegularGrid, gss

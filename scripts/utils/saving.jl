@@ -59,6 +59,19 @@ function makefilename(model::JumpModel{LevelDamages, EpsteinZin})
     return "$(replace(filename, "." => ",")).jld2"
 end
 
+function makefilename(models::Vector{<:AbstractModel})
+
+    filenames = String[]
+
+    for model in models
+        filename = makefilename(model)
+
+        push!(filenames, replace(filename, ".jld2" => ""))
+    end
+
+    return "$(join(filenames, "-")).jld2"
+end
+
 function loadterminal(model::AbstractModel; outdir = "data/simulation", addpath = "")
     folder = SIMPATHS[typeof(model)]
     filename = makefilename(model)
@@ -76,6 +89,10 @@ function loadterminal(model::AbstractModel; outdir = "data/simulation", addpath 
 
     return F̄, policy, G
 end
+function loadterminal(models::Vector{<:AbstractModel}; outdir = "data/simulation", addpath = repeat([""], length(models)))
+    return [loadterminal(model; outdir = outdir, addpath = addpath[i]) for (i, model) ∈ enumerate(models)] 
+end
+
 
 function loadtotal(model::AbstractModel; outdir = "data/simulation")
     folder = SIMPATHS[typeof(model)]

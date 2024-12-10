@@ -88,7 +88,7 @@ end
 
 function backwardsimulation!(F::NTuple{2, Matrix{Float64}}, policy, model::AbstractModel, calibration::Calibration, G; kwargs...)
     queue = DiagonalRedBlackQueue(G)
-    backwardsimulation!(queue, F, policy, model, G; kwargs...)
+    backwardsimulation!(queue, F, policy, model, calibration, G; kwargs...)
 end
 
 function backwardsimulation!(queue::PartialQueue, F::NTuple{2, Matrix{Float64}}, policy, model::AbstractModel, calibration::Calibration, G; verbose = 0, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = model.economy.τ, stepkwargs...)
@@ -190,7 +190,8 @@ function computebackward(terminalresults, model::AbstractModel, calibration::Cal
     end
 
     cachepath = withsave ? joinpath(cachefolder, filename) : nothing
-    backwardsimulation!(F, policy, model, G; verbose, cachepath, iterkwargs...)
+
+    backwardsimulation!(F, policy, model, calibration, G; verbose, cachepath, iterkwargs...)
 
     return F, policy
 end
