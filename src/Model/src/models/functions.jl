@@ -29,14 +29,14 @@ function bterminal(T::Float64, χ::Float64, model::AbstractModel{GrowthDamages, 
 end
 
 "Emissivity rate implied by abatement `α` at time `t` and carbon concentration `M`"
-function ε(t, M, α, model::AbstractModel) 
-    α / (δₘ(M, model.hogg) + γ(t, model.calibration))
+function ε(t, M, α, model::AbstractModel, calibration::Calibration) 
+    α / (δₘ(M, model.hogg) + γ(t, calibration))
 end
 
 "Drift of log output y for `t < τ`" # TODO: Combine the drifts
-function b(t, Xᵢ::Point, u, model::AbstractModel{GrowthDamages, P}) where P <: Preferences 
+function b(t, Xᵢ::Point, u, model::AbstractModel{GrowthDamages, P}, calibration::Calibration) where P <: Preferences 
     χ, α = u
-    εₜ = ε(t, exp(Xᵢ.m), α, model)
+    εₜ = ε(t, exp(Xᵢ.m), α, model, calibration) 
     Aₜ = A(t, model.economy)
 
     abatement = Aₜ * β(t, εₜ, model.economy)
@@ -47,10 +47,10 @@ function b(t, Xᵢ::Point, u, model::AbstractModel{GrowthDamages, P}) where P <:
 
     return growth + investments - abatement - damage
 end
-function b(t, Xᵢ::Point, u, model::AbstractModel{LevelDamages, P}) where P <: Preferences
+function b(t, Xᵢ::Point, u, model::AbstractModel{LevelDamages, P}, calibration::Calibration) where P <: Preferences
     χ, α = u
 
-    εₜ = ε(t, exp(Xᵢ.m), α, model)
+    εₜ = ε(t, exp(Xᵢ.m), α, model, calibration)
     Aₜ = A(t, model.economy)
 
     abatement = Aₜ * β(t, εₜ, model.economy)
@@ -61,9 +61,9 @@ function b(t, Xᵢ::Point, u, model::AbstractModel{LevelDamages, P}) where P <: 
     return growth + investments - abatement
 end
 
-function costbreakdown(t, Xᵢ::Point, u,  model::AbstractModel{GrowthDamages, P}) where P <: Preferences
+function costbreakdown(t, Xᵢ::Point, u,  model::AbstractModel{GrowthDamages, P}, calibration::Calibration) where P <: Preferences
     χ, α = u
-    εₜ = ε(t, exp(Xᵢ.m), α, model)
+    εₜ = ε(t, exp(Xᵢ.m), α, model, calibration::Calibration)
     Aₜ = A(t, model.economy)
 
     abatement = β(t, εₜ, model.economy)
@@ -83,8 +83,8 @@ function terminaloutputfct(Tᵢ, Δt, χ, model::AbstractModel)
     return max(1 + adj, 0.)
 end
 
-function outputfct(t, Xᵢ::Point, Δt, u, model::AbstractModel)
-    drift = b(t, Xᵢ, u, model) - model.preferences.θ * model.economy.σₖ^2 / 2
+function outputfct(t, Xᵢ::Point, Δt, u, model::AbstractModel, calibration::Calibration)
+    drift = b(t, Xᵢ, u, model, calibration) - model.preferences.θ * model.economy.σₖ^2 / 2
 
     adj = Δt * (1 - model.preferences.θ) * drift
 

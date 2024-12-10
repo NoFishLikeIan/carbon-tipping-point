@@ -62,21 +62,19 @@ end
 function loadterminal(model::AbstractModel; outdir = "data/simulation", addpath = "")
     folder = SIMPATHS[typeof(model)]
     filename = makefilename(model)
-    savepath = joinpath(outdir, folder, "terminal", addpath, filename)
+    
+    savedir = joinpath(outdir, folder, "terminal", addpath)
+    savepath = joinpath(savedir, filename)
+
+    if !isfile(savepath)
+        error("File $filename does not exist in $savedir.\nAvailable files are:\n$(join(readdir(savedir), "\n"))")
+    end
+
     F̄ = load(savepath, "F̄")
     policy = load(savepath, "policy")
     G = load(savepath, "G")
 
     return F̄, policy, G
-end
-
-function loadterminal(model::DiffGameModel; outdir = "data/simulation", addpaths = repeat([""], length(model.models)))
-    terminalresults = Tuple{Array{Float64, 2}, Array{Float64, 2}, RegularGrid}[]
-    for (i, m) in enumerate(model.models)
-        push!(terminalresults, loadterminal(m; outdir, addpath = addpaths[i]))
-    end
-
-    return terminalresults
 end
 
 function loadtotal(model::AbstractModel; outdir = "data/simulation")

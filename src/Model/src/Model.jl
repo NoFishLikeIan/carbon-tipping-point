@@ -36,7 +36,6 @@ struct LinearModel{D <: Damages, P <: Preferences}
     damages::D
 
     economy::Economy
-    calibration::Calibration
 end
 
 struct TippingModel{D <: Damages, P <: Preferences}
@@ -47,7 +46,6 @@ struct TippingModel{D <: Damages, P <: Preferences}
     damages::D
 
     economy::Economy
-    calibration::Calibration
 end
 
 struct JumpModel{D <: Damages, P <: Preferences}
@@ -58,7 +56,6 @@ struct JumpModel{D <: Damages, P <: Preferences}
     damages::D
 
     economy::Economy
-    calibration::Calibration
 end
 
 AbstractModel{D, P} = Union{

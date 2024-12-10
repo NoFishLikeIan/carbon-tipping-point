@@ -17,7 +17,7 @@ end;
 
 # --- Albedo
 damages = GrowthDamages()
-model = TippingModel(albedo, hogg, preferences, damages, economy, calibration);
+model = TippingModel(albedo, hogg, preferences, damages, economy);
 N = 6
 G = terminalgrid(N, model)
 
@@ -33,7 +33,7 @@ F̄, policy = vfi(F₀, model, G; maxiter = 10_000, verbose = 2)
 
 # --- Jump
 jump = Jump()
-model = JumpModel(jump,  hogg, preferences, damages, economy, calibration);
+model = JumpModel(jump,  hogg, preferences, damages, economy);
 
 F̄ = [(X.T / hogg.T₀)^2 + (X.m / log(hogg.M₀))^2 for X in G.X]
 policy = zeros(size(G));
