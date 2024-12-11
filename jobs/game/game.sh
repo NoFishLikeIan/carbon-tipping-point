@@ -20,7 +20,10 @@ cd $HOME/scc-tipping-points # Move to base directory
 
 SCRATCHDATA="$TMPDIR"/data
 mkdir -p $SCRATCHDATA # Create scratch directory with user name
-rsync data/calibration.jld2 $SCRATCHDATA # Copy calibration data to scratch
+
+# Copy calibration data to scratch
+rsync data/calibration.jld2 $SCRATCHDATA 
+rsync data/regionalcalibration.jld2 $SCRATCHDATA
 
 # Extract parameters at the SLURM_ARRAY_TASK_ID from parameters.json
 jq_command='
@@ -30,7 +33,7 @@ jq_command='
 (if .allownegative then " --allownegative" else "" end)
 '
 
-params=$(jq -r --arg id "$SLURM_ARRAY_TASK_ID" "$jq_command" jobs/simulations/parameters.json)
+params=$(jq -r --arg id "$SLURM_ARRAY_TASK_ID" "$jq_command" jobs/game/parameters.json)
 
 # Run script 
 julia --threads ${SLURM_CPUS_PER_TASK} --project scripts/rungame.jl -N 71 \
