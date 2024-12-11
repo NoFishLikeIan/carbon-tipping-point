@@ -1,14 +1,16 @@
-# Code for paper on "Regret and Tipping Points"
+The following repository contains the code for the paper "The Cost of Uncertainty in Irreversible Climate Tipping Points" ([available here](https://www.andreatitton.com/static/docs/tipping-point.pdf)) and the working paper ``Climate Policy with Regional Tipping Points'' (forthcoming).
 
-## Running simulations
+### Reproducing the paper
 
-Running simulations requires `Julia 1.9.2`. The simulations are run using the `scripts/runtipping.jl` or `scripts/runbenchmark.jl` script as follows 
+Running simulations (`scripts/runtipping.jl`, `scripts/rungame.jl` or `scripts/runbenchmark.jl`) requires `Julia 1.9.2`.
 
 ```bash
-julia +1.9.2 --project scripts/runbenchmark.jl -N 11 -s simulation/test-small --overwrite -v 2 -p 8
+julia +1.9.2 --project scripts/runbenchmark.jl \
+    -N 11 -s simulation/test-small \
+    --overwrite -v 2 -p 8
 ```
 
-It takes the following command line arguments
+All simulation scripts take the following arguments:
 
 - `"--datapath"`, `"-d"`
     - type = `String`
@@ -43,3 +45,11 @@ It takes the following command line arguments
 - `"--cachestep"`
     - type = `Float64`
     - default = 0.25
+
+### Snellius Supercomputer
+
+The `jobs/` directory contains the scripts to run the simulations on the Snellius supercomputer.
+
+### Input data  
+
+Input data is available upon request. Contact me at a[dot]titton[at]uva[dot]nl.
