@@ -28,12 +28,8 @@ end;
 
 begin
 	regionalcalibration = load_object(joinpath(DATAPATH, "regionalcalibration.jld2"))
-
-	oecdcalibration = regionalcalibration[:oecd]
-	rowcalibration = regionalcalibration[:row]
-	regionalcalibrations = [oecdcalibration, rowcalibration]
+	regionalcalibrations = [regionalcalibration[:oecd], regionalcalibration[:row]]
 end;
-
 
 begin
 	N = 31
@@ -44,12 +40,12 @@ begin
 end
 
 begin # Terminal problem
-	computeterminal(oecdmodel, G; verbose = true, outdir = "data/game-test", addpath = "oecd", overwrite = true)
-	computeterminal(rowmodel, G; verbose = true, outdir = "data/game-test", addpath = "row", overwrite = true)
+	computeterminal(oecdmodel, G; verbose = true, outdir = "data/game-test", addpath = "oecd")
+	computeterminal(rowmodel, G; verbose = true, outdir = "data/game-test", addpath = "row")
 end
 
 # Backward step
-terminalresults = loadterminal([oecdmodel, rowmodel]; outdir = "data/game-test", addpath = ["oecd", "row"]);
+terminalresults = loadterminal([oecdmodel, rowmodel]; outdir = "data/game-test", addpaths = ["oecd", "row"]);
 
 policies = Array{Float64, length(size(G)) + 1}[]
 Fs = NTuple{2, Array{Float64, length(size(G))}}[]
@@ -74,6 +70,7 @@ begin
 	cluster = first(dequeue!(queue))
 end;
 
-backwardstep!(Δts, Fs, policies, cluster, model, regionalcalibrations, calibration, G) # FIXME: ArgumentError
+backwardstep!(Δts, Fs, policies, cluster, models, regionalcalibrations, calibration, G)
+@benchmark backwardstep!($Δts, $Fs, $policies, $cluster, $models, $regionalcalibrations, $calibration, $G)
 
-# @benchmark backwardstep!($Δts, $Fs, $policies, $cluster, $model, $regionalcalibrations, $calibration, $G)
+computebackward(terminalresults, models, regionalcalibrations, calibration, G; verbose = 2, addpaths = ["oecd", "row"])

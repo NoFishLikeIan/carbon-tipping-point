@@ -89,8 +89,8 @@ function loadterminal(model::AbstractModel; outdir = "data/simulation", addpath 
 
     return F̄, policy, G
 end
-function loadterminal(models::Vector{<:AbstractModel}; outdir = "data/simulation", addpath = repeat([""], length(models)))
-    return [loadterminal(model; outdir = outdir, addpath = addpath[i]) for (i, model) ∈ enumerate(models)] 
+function loadterminal(models::Vector{<:AbstractModel}; outdir = "data/simulation", addpaths = repeat([""], length(models)))
+    return [loadterminal(model; outdir = outdir, addpath = addpaths[i]) for (i, model) ∈ enumerate(models)] 
 end
 
 

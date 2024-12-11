@@ -10,6 +10,8 @@ using SciMLBase: successful_retcode
 using Optim
 using Statistics: mean
 
+using Dates: now
+
 include("chain.jl")
 
 const defaultoptoptions = Optim.Options(g_tol = 1e-12, iterations = 100_000)

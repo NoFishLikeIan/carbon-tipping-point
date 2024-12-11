@@ -1,13 +1,12 @@
 include("backward.jl") # Extends backward scripts to game model
 
-
 Values = Vector{NTuple{2, Matrix{Float64}}}
 Policies = Vector{Array{Float64, 3}}
 
-function backwardstep!(Δts, Fs::Values, policies::Policies, cluster, model::AbstractModel, regionalcalibrations::Vector{Calibration}, calibration::Calibration, G; αfactor = 1.5, allownegative = false,optargs...)
+function backwardstep!(Δts, Fs::Values, policies::Policies, cluster, models::Vector{<:AbstractModel}, regionalcalibrations::Vector{Calibration}, calibration::Calibration, G; αfactor = 1.5, allownegative = false,optargs...)
 
     for (i, δt) in cluster
-        n = length(Fs) # Number of players
+        n = length(models) # Number of players
         indices = CartesianIndices(G)
 
         idx = indices[i]
@@ -33,7 +32,7 @@ function backwardstep!(Δts, Fs::Values, policies::Policies, cluster, model::Abs
             diffobjective = TwiceDifferentiable(objective, u₀; autodiff = :forward)
 
             # Solve first unconstrained problem
-            openinterval = TwiceDifferentiableConstraints([0., 0.], [1., Inf])
+            openinterval = TwiceDifferentiableConstraints([0., 0.], [1., 2ᾱ])
             u₀[2] = αfactor * ᾱ
             optimum = similar(u₀)
 
@@ -60,7 +59,7 @@ end
 
 function backwardsimulation!(Fs::Values, policies::Policies, models::Vector{<:AbstractModel}, regionalcalibrations::Vector{Calibration}, calibration::Calibration, G; kwargs...)
     queue = DiagonalRedBlackQueue(G)
-    backwardsimulation!(queue, F, policies, model, regionalcalibrations, calibration, G; kwargs...)
+    backwardsimulation!(queue, Fs, policies, models, regionalcalibrations, calibration, G; kwargs...)
 end
 
 function backwardsimulation!(queue::PartialQueue, Fs::Values, policies::Policies, models::Vector{<:AbstractModel}, regionalcalibrations::Vector{Calibration}, calibration::Calibration, G; verbose = 0, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = models[1].economy.τ, stepkwargs...)
@@ -87,7 +86,7 @@ function backwardsimulation!(queue::PartialQueue, Fs::Values, policies::Policies
             end
 
             cachefile = jldopen(cachepath, "a+")
-            tcache = model.economy.τ - minimum(queue.vals) - cachestep
+            tcache = models[1].economy.τ - minimum(queue.vals) - cachestep
 
         else
             
@@ -113,12 +112,12 @@ function backwardsimulation!(queue::PartialQueue, Fs::Values, policies::Policies
         
         clusters = dequeue!(queue)
         for cluster in clusters
-            backwardstep!(Δts, Fs, policies, cluster, model, regionalcalibrations, calibration, G; verbose, stepkwargs...)
+            backwardstep!(Δts, Fs, policies, cluster, models, regionalcalibrations, calibration, G; verbose, stepkwargs...)
 
             indices = first.(cluster)
 
             for i in indices
-                if queue[i] ≤ model.economy.τ - tstop
+                if queue[i] ≤ models[1].economy.τ - tstop
                     queue[i] += Δts[i]
                 end
             end
@@ -130,8 +129,8 @@ function backwardsimulation!(queue::PartialQueue, Fs::Values, policies::Policies
             end
 
             group = JLD2.Group(cachefile, "$tcache")
-            group["F"] = first(F)
-            group["policy"] = policy
+            group["Fs"] = Fs
+            group["policies"] = policies
             tcache = tcache - cachestep 
         end
     end
