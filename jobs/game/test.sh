@@ -3,13 +3,13 @@
 #SBATCH --job-name=game
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=64
-#SBATCH --array=0-1
-#SBATCH --time=24:00:00
+#SBATCH --cpus-per-task=1
+#SBATCH --array=0
+#SBATCH --time=2:00:00
 #SBATCH --partition=rome
 #SBATCH --mail-type=BEGIN,END,FAIL,TIME_LIMIT_80
-#SBATCH -o ./logs/out/GAME%A_%a.out 
-#SBATCH -e ./logs/error/GAME%A_%a.out
+#SBATCH -o ./logs/out/TEST%A_%a.out 
+#SBATCH -e ./logs/error/TEST%A_%a.out
 #SBATCH --mail-user=a.titton@uva.nl
 
 # There are 2 parameters set
@@ -35,9 +35,9 @@ jq_command='
 params=$(jq -r --arg id "$SLURM_ARRAY_TASK_ID" "$jq_command" jobs/game/parameters.json)
 
 # Run script 
-julia --threads ${SLURM_CPUS_PER_TASK} --project scripts/rungame.jl -N 71 \
+julia --threads ${SLURM_CPUS_PER_TASK} --project scripts/rungame.jl -N 5 \
     --cachestep 0.25 --verbose 1 \
-    --datapath "$SCRATCHDATA"  --simulationpath "game-simulation-large" --overwrite \
+    --datapath "$SCRATCHDATA"  --simulationpath "game-test" --overwrite \
     $params
 
 # Copy results back to home
