@@ -1,0 +1,31 @@
+#!/bin/bash
+
+#SBATCH --job-name=specific
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=64
+#SBATCH --time=16:00:00
+#SBATCH --partition=rome
+#SBATCH --mail-type=BEGIN,END,FAIL,TIME_LIMIT_80
+#SBATCH -o ./logs/out/SPECIFIC%A_%a.out 
+#SBATCH -e ./logs/error/SPECIFIC%A_%a.out
+#SBATCH --mail-user=a.titton@uva.nl
+
+module load 2023
+module load Julia/1.9.2-linux-x86_64
+
+cd $HOME/scc-tipping-points # Move to base directory
+
+SCRATCHDATA="$TMPDIR"/data
+mkdir -p $SCRATCHDATA # Create scratch directory with user name
+rsync data/calibration.jld2 $SCRATCHDATA # Copy calibration data to scratch
+
+# Run script 
+julia --threads ${SLURM_CPUS_PER_TASK} --project scripts/runtipping.jl -N 71 \
+    --cachestep 0.25 --verbose 1 \
+    --datapath "$SCRATCHDATA"  --simulationpath "simulation-large" --overwrite \
+    --threshold 2.5 --rra 10 --eis 0.75
+
+# Copy results back to home
+rsync -avzu $SCRATCHDATA $HOME/scc-tipping-points
+rm -r $SCRATCHDATA # Remove scratch directory
