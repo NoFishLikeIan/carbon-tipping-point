@@ -38,15 +38,20 @@ regionalcalibrations = [regionalcalibration[:oecd], regionalcalibration[:row]]
 
 # -- Climate
 hogg = Hogg()
-albedo = Albedo(threshold)
 
 # -- Economy and Preferences
 preferences = EpsteinZin(θ = rra, ψ = eis);
 oecdeconomy, roweconomy = RegionalEconomies()
+damages = GrowthDamages()
 
-oecdmodel = TippingModel(albedo, hogg, preferences, LevelDamages(), oecdeconomy)
-rowmodel = TippingModel(albedo, hogg, preferences, GrowthDamages(), roweconomy)
-models = [oecdmodel, rowmodel]
+oecdmodel = LinearModel(hogg, preferences, damages, oecdeconomy)
+
+rowmodel = threshold > 0. ?
+    TippingModel(Albedo(threshold), hogg, preferences, damages, roweconomy) :
+    LinearModel(hogg, preferences, damages, roweconomy)
+
+
+models = AbstractModel[oecdmodel, rowmodel]
 
 # Construct Grid
 Tdomain = hogg.Tᵖ .+ (0., 6.);
@@ -54,7 +59,9 @@ mdomain = mstable.(Tdomain, hogg)
 G = RegularGrid([Tdomain, mdomain], N)
 
 if (verbose ≥ 1)
-    println("$(now()): ","Solving game model with Tᶜ = $threshold, ψ = $eis, θ = $rra...")
+    thresholdprint = threshold > 0. ? "Tᶜ = $threshold" : "linear climate"
+
+    println("$(now()): ","Solving game model with $thresholdprint, ψ = $eis, θ = $rra...")
     flush(stdout)
 end
 

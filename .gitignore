@@ -449,9 +449,7 @@ papers/presentations/figures
 .vscode
 **/*.mem
 *.code-workspace
-.env
-.env.game
-.env.negative
+.env*
 
 # Snellius unnecessary files
 jobs/example.job

@@ -3,7 +3,7 @@ include("backward.jl") # Extends backward scripts to game model
 Values = Vector{NTuple{2, Matrix{Float64}}}
 Policies = Vector{Array{Float64, 3}}
 
-function backwardstep!(Δts, Fs::Values, policies::Policies, cluster, models::Vector{<:AbstractModel}, regionalcalibrations::Vector{Calibration}, calibration::Calibration, G; αfactor = 1.5, allownegative = false,optargs...)
+function backwardstep!(Δts, Fs::Values, policies::Policies, cluster, models::Vector{<:AbstractModel}, regionalcalibrations::Vector{Calibration}, calibration::Calibration, G; αfactor = 1.5, allownegative = false, optargs...)
 
     for (i, δt) in cluster
         n = length(models) # Number of players
@@ -129,7 +129,9 @@ function backwardsimulation!(queue::PartialQueue, Fs::Values, policies::Policies
             end
 
             group = JLD2.Group(cachefile, "$tcache")
-            group["Fs"] = Fs
+
+            Fsₜ = first.(Fs)
+            group["Fs"] = Fsₜ
             group["policies"] = policies
             tcache = tcache - cachestep 
         end

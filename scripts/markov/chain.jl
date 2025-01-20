@@ -35,7 +35,7 @@ function driftstep(t, idx, F, αᵢ, α₋ᵢ, model::AbstractModel, calibration
 end
 
 markovstep(t, idx, F, α, model, calibration, G) = markovstep(t, idx, F, α, 0., model, calibration, G)
-markovstep(t, idx, F, αᵢ, α₋ᵢ, model::TippingModel, calibration::Calibration, G) = driftstep(t, idx, F, αᵢ, α₋ᵢ, model, calibration, G)
+markovstep(t, idx, F, αᵢ, α₋ᵢ, model::Union{LinearModel, TippingModel}, calibration::Calibration, G) = driftstep(t, idx, F, αᵢ, α₋ᵢ, model, calibration, G)
 function markovstep(t, idx, F, αᵢ, α₋ᵢ, model::JumpModel, calibration::Calibration, G)
     Fᵈ, Δt = driftstep(t, idx, F, αᵢ, α₋ᵢ, model, calibration, G)
 

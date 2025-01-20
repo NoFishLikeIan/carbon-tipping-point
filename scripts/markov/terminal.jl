@@ -40,6 +40,7 @@ function terminaldriftstep(idx, F̄, model::AbstractModel, G)
     return F′, Δt
 end
 
+terminalmarkovstep(idx, F̄, model::LinearModel, G) = terminaldriftstep(idx, F̄, model, G)
 terminalmarkovstep(idx, F̄, model::TippingModel, G) = terminaldriftstep(idx, F̄, model, G)
 function terminalmarkovstep(idx, F̄, model::JumpModel, G)
     Fᵈ, Δt = terminaldriftstep(idx, F̄, model, G)

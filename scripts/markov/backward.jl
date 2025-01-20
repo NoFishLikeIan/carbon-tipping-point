@@ -26,24 +26,35 @@ function fallbackoptimisation!(u,
     optoptions = defaultoptoptions, verbose = 0)
 
     if !Optim.isinterior(constraints, u₀)
-        throw(ArgumentError("Initial guess is not in the interior of the constraints at t = $t and idx = $idx, using mean policy instead"))
-    end
-
-    res = Optim.optimize(diffobjective, constraints, u₀, IPNewton(), optoptions)
-
-    if Optim.converged(res)
-        u .= Optim.minimizer(res)
-    else # If it does not converge we take the mean of the policy in the neighbourhood
-        if verbose ≥ 1 
-            @warn "Constrained optimisation has not converged at t = $t and idx = $idx"
-        end
-
+        @warn "Initial guess is not in the interior of the constraints at t = $t and idx = $idx, using mean policy instead"
+        
         unit = oneunit(idx)
         L = max(minimum(CartesianIndices(G)), idx - unit)
         R = min(maximum(CartesianIndices(G)), idx + unit)
 
         u .= mean(policy[L:R, :])
-    end
+    else
+
+        res = Optim.optimize(diffobjective, constraints, u₀, IPNewton(), optoptions)
+
+        if Optim.converged(res)
+            u .= Optim.minimizer(res)
+
+            return u
+        else # If it does not converge we take the mean of the policy in the neighbourhood
+            if verbose ≥ 1 
+                @warn "Constrained optimisation has not converged at t = $t and idx = $idx"
+            end
+
+            unit = oneunit(idx)
+            L = max(minimum(CartesianIndices(G)), idx - unit)
+            R = min(maximum(CartesianIndices(G)), idx + unit)
+
+            u .= mean(policy[L:R, :])
+
+            return u
+        end
+        end
 end
 
 function backwardstep!(Δts, F::NTuple{2, Matrix{Float64}}, policy, cluster, model::AbstractModel, calibration::Calibration, G; αfactor = 1.5, allownegative = false, ᾱcalibration = calibration, optargs...)

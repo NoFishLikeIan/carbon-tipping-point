@@ -7,11 +7,35 @@ using FileIO: load
 
 
 const SIMPATHS = Dict(
+    LinearModel{LevelDamages, EpsteinZin}  => "linear/level",
+    LinearModel{GrowthDamages, EpsteinZin} => "linear/growth",
     TippingModel{LevelDamages, EpsteinZin}  => "albedo/level",
     TippingModel{GrowthDamages, EpsteinZin} => "albedo/growth",
     JumpModel{LevelDamages, EpsteinZin}  => "jump/level",
     JumpModel{GrowthDamages, EpsteinZin}  => "jump/growth"
 )
+
+function makefilename(model::LinearModel{LevelDamages, EpsteinZin})
+    @unpack ρ, θ, ψ = model.preferences
+    @unpack ωᵣ = model.economy
+    @unpack σₜ, σₘ = model.hogg
+    @unpack ξ = model.damages
+
+    filename = @sprintf("ρ=%.5f_θ=%.2f_ψ=%.2f_σT=%.4f_σm=%.4f_ωr=%.5f_ξ=%.6f", ρ, θ, ψ, σₜ, σₘ, ωᵣ, ξ)
+
+    return "$(replace(filename, "." => ",")).jld2"
+end
+
+function makefilename(model::LinearModel{GrowthDamages, EpsteinZin})
+    @unpack ρ, θ, ψ = model.preferences
+    @unpack ωᵣ = model.economy
+    @unpack σₜ, σₘ = model.hogg
+    @unpack ξ, υ = model.damages
+
+    filename = @sprintf("ρ=%.5f_θ=%.2f_ψ=%.2f_σT=%.4f_σm=%.4f_ωr=%.5f_ξ=%.6f_υ=%.3f", ρ, θ, ψ, σₜ, σₘ, ωᵣ, ξ, υ)
+
+    return "$(replace(filename, "." => ",")).jld2"
+end
 
 function makefilename(model::TippingModel{LevelDamages, EpsteinZin})
     @unpack ρ, θ, ψ = model.preferences
@@ -126,6 +150,45 @@ function loadtotal(cachepath::String)
     close(cachefile)
 
     return timesteps, F, policy, G, model
+end
+
+function loadgame(models::Vector{<:AbstractModel}; outdir = "data/simulation")
+    filename = makefilename(models)
+    cachepath = joinpath(outdir, filename)
+
+    return loadgame(cachepath)
+end
+
+function loadgame(cachepath::String)
+    cachefile = jldopen(cachepath, "r")
+    G = cachefile["G"]
+    models = cachefile["models"]
+    timekeys = filter(key -> key ∉ ["G", "models"], keys(cachefile))
+    timesteps = round.(parse.(Float64, timekeys), digits = 4)
+
+    ix = sortperm(timesteps)
+    timesteps = timesteps[ix]
+    timekeys = timekeys[ix]
+
+    T = length(timesteps)
+
+    F = Dict(model => Array{Float64, 3}(undef, size(G)..., T) for model ∈ models)
+    policy = Dict(model => Array{Float64, 4}(undef, size(G)..., 2, T) for model ∈ models)
+
+    for (k, key) in enumerate(timekeys)
+        # TODO: This assumes the order of Fs to be the same of models, think of a check for this
+        Fs = cachefile[key]["Fs"]
+        policies = cachefile[key]["policies"]
+
+        for (j, model) in enumerate(models)
+            F[model][:, :, k] .= Fs[j]
+            policy[model][:, :, :, k] .= policies[j]
+        end
+    end
+
+    close(cachefile)
+
+    return timesteps, F, policy, G, models
 end
 
 function listfiles(simpath::String; exclude = ["terminal"])

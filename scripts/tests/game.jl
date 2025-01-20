@@ -15,15 +15,14 @@ begin
 	calibration = load_object(joinpath(DATAPATH, "calibration.jld2"))
 
 	hogg = Hogg()
-	preferences = (EpsteinZin(), EpsteinZin())
-	albedo = Albedo(1.5)
-	damages = (GrowthDamages(), LevelDamages())
+	preferences = EpsteinZin()
+	damages = GrowthDamages()
 	
 	oecdeconomy, roweconomy = RegionalEconomies()
-	oecdmodel = TippingModel(albedo, hogg, EpsteinZin(), LevelDamages(), oecdeconomy)
-	rowmodel = TippingModel(albedo, hogg, EpsteinZin(), GrowthDamages(), roweconomy)
+	oecdmodel = LinearModel(hogg, preferences, damages, oecdeconomy)
+	rowmodel = TippingModel(Albedo(2.), hogg, preferences, damages, roweconomy)
 
-	models = [oecdmodel, rowmodel]
+	models = AbstractModel[oecdmodel, rowmodel]
 end;
 
 begin
@@ -32,8 +31,8 @@ begin
 end;
 
 begin
-	N = 31
-	G = terminalgrid(N, oecdmodel)
+	N = 11
+	G = terminalgrid(N, rowmodel)
 
 	Tspace = range(G.domains[1]...; length = size(G, 1))
 	mspace = range(G.domains[2]...; length = size(G, 2))
@@ -45,7 +44,7 @@ begin # Terminal problem
 end
 
 # Backward step
-terminalresults = loadterminal([oecdmodel, rowmodel]; outdir = "data/game-test", addpaths = ["oecd", "row"]);
+terminalresults = loadterminal(models; outdir = "data/game-test", addpaths = ["oecd", "row"]);
 
 policies = Array{Float64, length(size(G)) + 1}[]
 Fs = NTuple{2, Array{Float64, length(size(G))}}[]
@@ -73,4 +72,4 @@ end;
 backwardstep!(Δts, Fs, policies, cluster, models, regionalcalibrations, calibration, G)
 @benchmark backwardstep!($Δts, $Fs, $policies, $cluster, $models, $regionalcalibrations, $calibration, $G)
 
-computebackward(terminalresults, models, regionalcalibrations, calibration, G; verbose = 2, addpaths = ["oecd", "row"])
+computebackward(terminalresults, models, regionalcalibrations, calibration, G; verbose = 1)
