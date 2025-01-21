@@ -39,7 +39,7 @@ begin
     rename!(baudata, :REGION => :YEAR);
     baudata[!, :YEAR] .= parse.(Int, baudata[!, :YEAR]);
 
-    baudata[!, Not(:YEAR)] .*= 0.001 #Mt to Gt
+    baudata[!, Not(:YEAR)] .*= 0.001 # Mt to Gt
 end
 
 # World average calibration
@@ -80,7 +80,7 @@ begin # Calibrate growth rate γᵇ
 end
 
 # Plot solution
-begin
+let
     solvedprob = ODEProblem{false}(parametricemissions, growthdata[1], extrema(time); p = γparameters)
     sol = solve(solvedprob)
 
@@ -93,37 +93,22 @@ save_object(joinpath(DATAPATH, "calibration.jld2"), calibration)
 
 # Regional calibration
 oecdfrac = baudata.var"R5.2OECD" ./ Eᵇ
-oecdMᵇ = Mᵇ .* oecdfrac;
-rowMᵇ = Mᵇ .- oecdMᵇ;
+regionalcalibration = RegionalCalibration(calibration, oecdfrac)
 
-γoecd, roecd = extractparameters(log.(oecdMᵇ))
-γrow, rrow = extractparameters(log.(rowMᵇ))
-
-oecdcalibration = Calibration(time, Eᵇ .* oecdfrac, γoecd, roecd, (T0, T))
-rowcalibration = Calibration(time, Eᵇ .* (1 .- oecdfrac), γrow, rrow, (T0, T))
+save_object(joinpath(DATAPATH, "regionalcalibration.jld2"), regionalcalibration)
 
 let
     fig = plot(xlabel = "Year")
+    ts = range(0., 80.; length = 101)
 
-    initconditions = [first(log.(oecdMᵇ)), first(log.(rowMᵇ))]
-    calibrations = [oecdcalibration, rowcalibration]
-    labels = ["OECD", "RoW"]
+    growthrate = γ.(ts, regionalcalibration)
 
-    for i in 1:2
-        m₀ = initconditions[i]
-        calibration = calibrations[i]
-        label = labels[i]
-
-        solvedprob = ODEProblem{false}(parametricemissions, m₀, extrema(time); p = γparameters)
-        sol = solve(solvedprob)
-    
-        plot!(fig, time, t -> sol(t); label, marker = :o)
-    end
+    plot!(fig, ts, first.(growthrate); label = "OECD")
+    plot!(fig, ts, last.(growthrate); label = "RoW")
+    plot!(fig, ts, sum.(growthrate); label = "World")
 
     fig
 end
-
-save_object(joinpath(DATAPATH, "regionalcalibration.jld2"), Dict(:oecd => oecdcalibration, :row => rowcalibration))
 
 # Climate sensitivity
 thresholds = [1.5, 2.5];

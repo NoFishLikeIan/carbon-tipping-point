@@ -8,6 +8,15 @@ struct Calibration
     tspan::NTuple{2, Float64} # Span of the IPCC data wrt to 2020
 end
 
+struct RegionalCalibration
+    calibration::Calibration
+    fraction::Vector{Float64}
+end
+
+Base.broadcastable(c::Calibration) = Ref(c)
+Base.broadcastable(c::RegionalCalibration) = Ref(c)
+
+
 "Growth rate of carbon concentration in BAU"
 function γ(t, calibration::Calibration)
     tmin, tmax = calibration.tspan
@@ -18,6 +27,14 @@ function γ(t, calibration::Calibration)
     decay = exp(-calibration.r * max(0, t  - tmax))
 
     return pol * decay
+end
+
+function γ(t, regionalcalibration::RegionalCalibration)
+    frac = interpolateovert(t, regionalcalibration.calibration.tspan, regionalcalibration.fraction)
+
+    γₜ = γ(t, regionalcalibration.calibration)
+
+    return γₜ * frac, γₜ * (1 - frac)
 end
 
 

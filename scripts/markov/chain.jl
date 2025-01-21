@@ -55,28 +55,20 @@ function markovstep(t, idx, F, αᵢ, α₋ᵢ, model::JumpModel, calibration::C
     return F′, Δt
 end
 
-function logcost(F′, t, Xᵢ::Point, Δt, u, model::AbstractModel{GrowthDamages, P}, calibration::Calibration) where P
+function logcost(F′, t, Xᵢ::Point, Δt, u, model::AbstractModel, calibration::RegionalCalibration, p)
+    δ = outputfct(t, Xᵢ, Δt, u, model, calibration, p)
+    logcost(F′, δ, Xᵢ, Δt, u, model)
+end
+function logcost(F′, t, Xᵢ::Point, Δt, u, model::AbstractModel, calibration::Calibration)
     δ = outputfct(t, Xᵢ, Δt, u, model, calibration)
+    logcost(F′, δ, Xᵢ, Δt, u, model)
+end
+function logcost(F′, δ, _, Δt, u, model::AbstractModel{GrowthDamages, P}) where P
     logg(u[1], δ * F′, Δt, model.preferences)
 end
-
-function logcost(F′, t, Xᵢ::Point, Δt, u, model::AbstractModel{LevelDamages, P}, calibration::Calibration) where P
-    δ = outputfct(t, Xᵢ, Δt, u, model, calibration)
+function logcost(F′, δ, Xᵢ::Point, Δt, u, model::AbstractModel{LevelDamages, P}) where P
     damage = d(Xᵢ.T, model.damages, model.hogg)
     logg(u[1] * damage, δ * F′, Δt, model.preferences)
-end
-
-function cost(F′, t, Xᵢ::Point, Δt, u, model::AbstractModel{GrowthDamages, P}, calibration::Calibration) where P
-    χ = u[1]
-    δ = outputfct(t, Xᵢ, Δt, u, model, calibration)
-    g(χ, δ * F′, Δt, model.preferences)
-end
-
-function cost(F′, t, Xᵢ::Point, Δt, u, model::AbstractModel{LevelDamages, P}, calibration::Calibration) where P
-    χ = u[1]
-    δ = outputfct(t, Xᵢ, Δt, u, model, calibration)
-    damage = d(Xᵢ.T, model.damages, model.hogg)
-    g(χ * damage, δ * F′, Δt, model.preferences)
 end
 
 function Base.isempty(q::PartialQueue)

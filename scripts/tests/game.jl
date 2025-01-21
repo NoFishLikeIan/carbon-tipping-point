@@ -11,6 +11,7 @@ includet("../markov/game.jl")
 
 begin
 	DATAPATH = "data"
+	threshold = 2.0
 
 	calibration = load_object(joinpath(DATAPATH, "calibration.jld2"))
 
@@ -20,27 +21,23 @@ begin
 	
 	oecdeconomy, roweconomy = RegionalEconomies()
 	oecdmodel = LinearModel(hogg, preferences, damages, oecdeconomy)
-	rowmodel = TippingModel(Albedo(2.), hogg, preferences, damages, roweconomy)
+	rowmodel = TippingModel(Albedo(threshold), hogg, preferences, damages, roweconomy)
 
 	models = AbstractModel[oecdmodel, rowmodel]
-end;
-
-begin
 	regionalcalibration = load_object(joinpath(DATAPATH, "regionalcalibration.jld2"))
-	regionalcalibrations = [regionalcalibration[:oecd], regionalcalibration[:row]]
 end;
 
 begin
-	N = 11
+	N = 31
 	G = terminalgrid(N, rowmodel)
 
 	Tspace = range(G.domains[1]...; length = size(G, 1))
 	mspace = range(G.domains[2]...; length = size(G, 2))
-end
+end;
 
 begin # Terminal problem
-	computeterminal(oecdmodel, G; verbose = true, outdir = "data/game-test", addpath = "oecd")
-	computeterminal(rowmodel, G; verbose = true, outdir = "data/game-test", addpath = "row")
+	computeterminal(oecdmodel, G; verbose = true, outdir = "data/game-test", addpath = "oecd", overwrite = true)
+	computeterminal(rowmodel, G; verbose = true, outdir = "data/game-test", addpath = "row", overwrite = true)
 end
 
 # Backward step
@@ -57,7 +54,7 @@ for (i, terminalresult) in enumerate(terminalresults)
 
 	policy = Array{Float64}(undef, size(G)..., 2)
 	policy[:, :, 1] .= interpolateovergrid(terminalG, G, terminalconsumption)
-	policy[:, :, 2] .= γ(models[i].economy.τ, regionalcalibrations[i])
+	policy[:, :, 2] .= γ(models[i].economy.τ, regionalcalibration)[i]
 
 	push!(policies, policy)
 	push!(Fs, F)
@@ -69,7 +66,5 @@ begin
 	cluster = first(dequeue!(queue))
 end;
 
-backwardstep!(Δts, Fs, policies, cluster, models, regionalcalibrations, calibration, G)
-@benchmark backwardstep!($Δts, $Fs, $policies, $cluster, $models, $regionalcalibrations, $calibration, $G)
-
-computebackward(terminalresults, models, regionalcalibrations, calibration, G; verbose = 1)
+backwardstep!(Δts, Fs, policies, cluster, models, regionalcalibration, G)
+@benchmark backwardstep!($Δts, $Fs, $policies, $cluster, $models, $regionalcalibration, $G)

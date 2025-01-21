@@ -16,7 +16,7 @@ export f, g, logg
 export TippingModel, LinearModel, JumpModel
 export AbstractModel
 export terminalgrid
-export RegionalEconomies
+export RegionalEconomies, RegionalCalibration
 
 # Packages
 using Grid: Point, Policy, RegularGrid, gss

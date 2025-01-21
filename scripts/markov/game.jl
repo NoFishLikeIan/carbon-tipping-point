@@ -3,9 +3,9 @@ include("backward.jl") # Extends backward scripts to game model
 Values = Vector{NTuple{2, Matrix{Float64}}}
 Policies = Vector{Array{Float64, 3}}
 
-function backwardstep!(Δts, Fs::Values, policies::Policies, cluster, models::Vector{<:AbstractModel}, regionalcalibrations::Vector{Calibration}, calibration::Calibration, G; αfactor = 1.5, allownegative = false, optargs...)
+function backwardstep!(Δts, Fs::Values, policies::Policies, cluster, models::Vector{<:AbstractModel}, regionalcalibration, G; αfactor = 1.5, allownegative = false, optargs...)
 
-    for (i, δt) in cluster
+    @threads for (i, δt) in cluster
         n = length(models) # Number of players
         indices = CartesianIndices(G)
 
@@ -19,14 +19,14 @@ function backwardstep!(Δts, Fs::Values, policies::Policies, cluster, models::Ve
             policy = policies[p]
             model = models[p]
 
-            ᾱ = γ(t, regionalcalibrations[p]) + δₘ(M, model.hogg)
+            ᾱ = γ(t, regionalcalibration)[p] + δₘ(M, model.hogg)
             α₋ᵢ = sum(policies[j][idx, 2] for j in 1:n if j ≠ p)
             u₀ = copy(policy[idx, :])
 
             objective = @closure u -> begin
-                Fᵉₜ, Δt = markovstep(t, idx, Fₜ₊ₕ, u[2], α₋ᵢ, model, calibration, G) # Transition uses the global calibration
+                Fᵉₜ, Δt = markovstep(t, idx, Fₜ₊ₕ, u[2], α₋ᵢ, model, regionalcalibration.calibration, G) # Transition uses the global calibration
                 
-                return logcost(Fᵉₜ, t, G.X[idx], Δt, u, model, regionalcalibrations[p]) # Costs use the regional calibration
+                return logcost(Fᵉₜ, t, G.X[idx], Δt, u, model, regionalcalibration, p) # Costs use the regional calibration
             end
 
             diffobjective = TwiceDifferentiable(objective, u₀; autodiff = :forward)
@@ -50,19 +50,19 @@ function backwardstep!(Δts, Fs::Values, policies::Policies, cluster, models::Ve
 
             policy[idx, :] .= optimum
             Fₜ[idx] = exp(objectiveminimum)
-            Δtᵢ = min(last(markovstep(t, idx, Fₜ₊ₕ, policy[idx, 2], model, calibration, G)), Δtᵢ)
+            Δtᵢ = min(last(markovstep(t, idx, Fₜ₊ₕ, policy[idx, 2], model, regionalcalibration.calibration, G)), Δtᵢ)
         end
 
         Δts[i] = Δtᵢ
     end
 end
 
-function backwardsimulation!(Fs::Values, policies::Policies, models::Vector{<:AbstractModel}, regionalcalibrations::Vector{Calibration}, calibration::Calibration, G; kwargs...)
+function backwardsimulation!(Fs::Values, policies::Policies, models::Vector{<:AbstractModel}, regionalcalibration::RegionalCalibration, G; kwargs...)
     queue = DiagonalRedBlackQueue(G)
-    backwardsimulation!(queue, Fs, policies, models, regionalcalibrations, calibration, G; kwargs...)
+    backwardsimulation!(queue, Fs, policies, models, regionalcalibration, G; kwargs...)
 end
 
-function backwardsimulation!(queue::PartialQueue, Fs::Values, policies::Policies, models::Vector{<:AbstractModel}, regionalcalibrations::Vector{Calibration}, calibration::Calibration, G; verbose = 0, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = models[1].economy.τ, stepkwargs...)
+function backwardsimulation!(queue::PartialQueue, Fs::Values, policies::Policies, models::Vector{<:AbstractModel}, regionalcalibration::RegionalCalibration, G; verbose = 0, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = models[1].economy.τ, stepkwargs...)
     tcache = tcache # Just to make sure it is well defined in all paths.
 
     savecache = !isnothing(cachepath)
@@ -112,7 +112,7 @@ function backwardsimulation!(queue::PartialQueue, Fs::Values, policies::Policies
         
         clusters = dequeue!(queue)
         for cluster in clusters
-            backwardstep!(Δts, Fs, policies, cluster, models, regionalcalibrations, calibration, G; verbose, stepkwargs...)
+            backwardstep!(Δts, Fs, policies, cluster, models, regionalcalibration, G; verbose, stepkwargs...)
 
             indices = first.(cluster)
 
@@ -145,11 +145,11 @@ function backwardsimulation!(queue::PartialQueue, Fs::Values, policies::Policies
     end
 end
 
-function computebackward(models::Vector{<:AbstractModel}, regionalcalibrations::Vector{Calibration}, calibration::Calibration, G::RegularGrid;  outdir = "data", addpaths = repeat([""], length(models)), kwargs...)
+function computebackward(models::Vector{<:AbstractModel}, regionalcalibration::RegionalCalibration, G::RegularGrid;  outdir = "data", addpaths = repeat([""], length(models)), kwargs...)
     terminalresults = loadterminal(models; outdir, addpaths)
-    computebackward(terminalresults, models, regionalcalibrations, calibration, G; outdir, kwargs...)
+    computebackward(terminalresults, models, regionalcalibration, G; outdir, kwargs...)
 end
-function computebackward(terminalresults, models::Vector{<:AbstractModel}, regionalcalibrations::Vector{Calibration}, calibration::Calibration, G::RegularGrid; verbose = 0, withsave = true, outdir = "data", iterkwargs...)
+function computebackward(terminalresults, models::Vector{<:AbstractModel}, regionalcalibration::RegionalCalibration, G::RegularGrid; verbose = 0, withsave = true, outdir = "data", iterkwargs...)
 
     dims = length(size(G))
     policies = Array{Float64, dims + 1}[]
@@ -163,7 +163,7 @@ function computebackward(terminalresults, models::Vector{<:AbstractModel}, regio
     
         policy = Array{Float64}(undef, size(G)..., 2)
         policy[:, :, 1] .= interpolateovergrid(terminalG, G, terminalconsumption)
-        policy[:, :, 2] .= γ(models[i].economy.τ, regionalcalibrations[i])
+        policy[:, :, 2] .= γ(models[i].economy.τ, regionalcalibration)[i]
     
         push!(policies, policy)
         push!(Fs, F)
@@ -177,5 +177,5 @@ function computebackward(terminalresults, models::Vector{<:AbstractModel}, regio
 
     cachepath = withsave ? joinpath(outdir, filename) : nothing
     
-    backwardsimulation!(Fs, policies, models, regionalcalibrations, calibration, G; verbose, cachepath, iterkwargs...)
+    backwardsimulation!(Fs, policies, models, regionalcalibration, G; verbose, cachepath, iterkwargs...)
 end

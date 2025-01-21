@@ -34,7 +34,6 @@ function fallbackoptimisation!(u,
 
         u .= mean(policy[L:R, :])
     else
-
         res = Optim.optimize(diffobjective, constraints, u₀, IPNewton(), optoptions)
 
         if Optim.converged(res)
