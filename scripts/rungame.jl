@@ -32,9 +32,7 @@ include("markov/game.jl")
 
 # Construct model
 # -- Calibration
-calibration = load_object(joinpath(datapath, "calibration.jld2"));
 regionalcalibration = load_object(joinpath(datapath, "regionalcalibration.jld2"));
-regionalcalibrations = [regionalcalibration[:oecd], regionalcalibration[:row]]
 
 # -- Climate
 hogg = Hogg()
@@ -84,4 +82,4 @@ if (verbose ≥ 1)
     flush(stdout)
 end
 
-computebackward(models, regionalcalibrations, calibration, G; verbose, outdir, overwrite, tstop = stopat, cachestep, allownegative, addpaths = ["oecd", "row"])
+computebackward(models, regionalcalibration, G; verbose, outdir, overwrite, tstop = stopat, cachestep, allownegative, addpaths = ["oecd", "row"])
