@@ -172,8 +172,8 @@ function loadgame(cachepath::String)
 
     T = length(timesteps)
 
-    F = Dict(model => Array{Float64, 3}(undef, size(G)..., T) for model ∈ models)
-    policy = Dict(model => Array{Float64, 4}(undef, size(G)..., 2, T) for model ∈ models)
+    F = Dict{AbstractModel, Array{Float64, 3}}(model => Array{Float64, 3}(undef, size(G)..., T) for model ∈ models)
+    policy = Dict{AbstractModel, Array{Float64, 4}}(model => Array{Float64, 4}(undef, size(G)..., 2, T) for model ∈ models)
 
     for (k, key) in enumerate(timekeys)
         # TODO: This assumes the order of Fs to be the same of models, think of a check for this

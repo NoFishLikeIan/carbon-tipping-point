@@ -9,6 +9,41 @@ using Random: default_rng
 PolicyFunction = Union{Interpolations.Extrapolation, Function};
 PoliciesFunctions = NTuple{2, PolicyFunction};
 
+GameParameters = Tuple{Vector{<:AbstractModel}, Vector{PoliciesFunctions}, Calibration}
+
+function Fgame!(du, u, parameters::GameParameters, t)
+    models, policies = parameters
+    oecdmodel, rowmodel = models
+    oecdpolicies, rowpolicies = policies
+
+    α₁ = oecdpolicies[2](T₁, m, t)
+    α₂ = rowpolicies[2](T₂, m, t)
+
+    T₁, T₂, m = @view u[1:3]
+
+    # Temperature
+    du[1] = μ(T₁, m, oecdmodel) / oecdmodel.hogg.ϵ
+    du[2] = μ(T₂, m, rowmodel) / rowmodel.hogg.ϵ
+    
+    # Carbon concentration
+    du[3] = γ(t, calibration) - oecdpolicies[2](T₁, m, t) - rowpolicies[2](T₁, m, t)
+
+    # Output
+    du[4] = b(t, Point(T₁, m), (oecdpolicies[1](T₁, m, t), oecdpolicies[2](T₁, m, t)), oecdmodel, calibration)
+    du[5] = b(t, Point(T₂, m), (rowpolicies[1](T₂, m, t), rowpolicies[2](T₂, m, t)), rowmodel, calibration)
+end
+
+function Ggame!(Σ, u, parameters::GameParameters, t)
+    models = first(parameters)
+    oecdmodel, rowmodel = models
+
+    Σ[1] = oecdmodel.hogg.σₜ / oecdmodel.hogg.ϵ
+	Σ[2] = rowmodel.hogg.σₜ / rowmodel.hogg.ϵ
+    Σ[3] = oecdmodel.hogg.σₘ
+    Σ[4] = oecdmodel.economy.σₖ
+    Σ[4] = rowmodel.economy.σₖ
+end
+
 function Fbreakdown!(du, u, parameters::Tuple{AbstractModel, PoliciesFunctions}, t)
     model, pols = parameters
     χitp, αitp = pols
@@ -82,33 +117,8 @@ function tipping!(integrator)
 end
 
 Result = Tuple{Vector{Float64}, Array{Float64, 3}, Array{Float64, 4}, RegularGrid, AbstractModel}
-"Constructs spline of results"
-function buildsplines(result::Result; splinekwargs...)
-    timespace, F, policy, G, _ = result
-
-    Tspace = range(G.domains[1]...; length = size(G, 1))
-    mspace = range(G.domains[2]...; length = size(G, 2))
-
-    timesplines = Dict{Symbol, Vector{Spline2D}}()
-
-    αvec = Spline2D[]
-    χvec = Spline2D[]
-    Fvec = Spline2D[]
-
-    for (k, t) in enumerate(timespace)
-        χₜ = policy[:, :, 1, k]
-        αₜ = policy[:, :, 2, k]
-        Fₜ = F[:, :, k]
-
-        spl = Spline2D(Tspace, mspace, χₜ; s = 0.25)
-    end
-
-    return timesplines
-end
-
-ResultInterpolation = Dict{Symbol, Interpolations.Extrapolation}
 "Constructs linear interpolation of results"
-function buildinterpolations(result::Result; splinekwargs...)
+function buildinterpolations(result::Result)
     timespace, F, policy, G, _ = result
 
     Tspace = range(G.domains[1]...; length = size(G, 1))
@@ -120,6 +130,31 @@ function buildinterpolations(result::Result; splinekwargs...)
     αitp = linear_interpolation(nodes, policy[:, :, 2, :]; extrapolation_bc = Line())
 
     Dict{Symbol, typeof(χitp)}(:F => Fitp, :χ => χitp, :α => αitp)
+end
+
+GameResult = Tuple{Vector{Float64}, Dict{<:AbstractModel, Array{Float64, 3}}, Dict{<:AbstractModel, Array{Float64, 4}}, RegularGrid, Vector{<:AbstractModel}}
+function buildinterpolations(result::GameResult)
+    timespace, F, policy, G, models = result
+
+    Tspace = range(G.domains[1]...; length = size(G, 1))
+    mspace = range(G.domains[2]...; length = size(G, 2))
+
+    nodes = (Tspace, mspace, timespace)
+
+    itps = Dict{
+        AbstractModel, 
+        Dict{Symbol, Extrapolation}
+    }()
+
+    for model in models
+        Fitp = linear_interpolation(nodes, F[model]; extrapolation_bc = Line())
+        χitp = linear_interpolation(nodes, policy[model][:, :, 1, :]; extrapolation_bc = Line())
+        αitp = linear_interpolation(nodes, policy[model][:, :, 2, :]; extrapolation_bc = Line())
+
+        itps[model] = Dict{Symbol, Extrapolation}(:F => Fitp, :χ => χitp, :α => αitp)
+    end
+
+    return itps
 end
 
 # Functions
