@@ -32,7 +32,7 @@ begin # Environment variables
     simulationpath = get(env, "SIMULATIONPATH", "simulations")
 
     BASELINE_YEAR = 2020
-    PLOT_HORIZON = 80.
+    PLOT_HORIZON = 60.
     SAVEFIG = false
 
     calibration = load_object(joinpath(datapath, "calibration.jld2"))
@@ -76,7 +76,6 @@ end
 begin # Plot estetics
     PALETTE = colorschemes[:grays];
     colors = get(PALETTE, [0., 0.5]);
-    PLOT_HORIZON = 80.
     
     TEMPLABEL = L"Temperature deviations $T_t$"
     LINE_WIDTH = 2.5
@@ -127,8 +126,8 @@ end
 # Expolration
 using DifferentialEquations.EnsembleAnalysis
 
-figthresholds = [1.8, 2.5];
-colors = Dict(figthresholds .=> [:darkred, :darkgreen]);
+figthresholds = [1.8, 2.5, :benchmark];
+colors = Dict(figthresholds .=> [:darkred, :darkorange, :darkgreen]);
 countrylabels = ["OECD", "RoW"]
 
 qs = 0.1:0.2:0.9;
@@ -200,23 +199,35 @@ for threshold in figthresholds
         return ε(t, exp(m), α, oecdmodel, regionalcalibration, 1)
     end
 
-
     ε₂ = @closure (T₁, T₂, m, y₁, y₂, t) -> begin
-        α = itp[rowmodels[threshold]][:α](T₂, m, t)
+        rowmodel = rowmodels[threshold]
+        α = itp[rowmodel][:α](T₂, m, t)
 
-        return ε(t, exp(m), α, oecdmodel, regionalcalibration, 2)
+        return ε(t, exp(m), α, rowmodel, regionalcalibration, 2)
+    end
+
+    gap = @closure (T₁, T₂, m, y₁, y₂, t) -> begin
+        α₁ = itp[oecdmodel][:α](T₁, m, t)
+
+        rowmodel = rowmodels[threshold]
+        α₂ = itp[rowmodel][:α](T₂, m, t)
+
+        return γ(t, regionalcalibration.calibration) - α₁ - α₂
     end
     
     A₁ = computeonsim(simulations[threshold], ε₁, timesteps);
     A₂ = computeonsim(simulations[threshold], ε₂, timesteps);
+    G = computeonsim(simulations[threshold], gap, timesteps);
 
     polquantiles = Dict{Symbol, Matrix{Float64}}()
     polquantiles[:oecd] = Array{Float64}(undef, length(axes(A₁, 1)), length(qs))
-    polquantiles[:row] = Array{Float64}(undef, length(axes(A₁, 1)), length(qs))
+    polquantiles[:row] = Array{Float64}(undef, length(axes(A₂, 1)), length(qs))
+    polquantiles[:gap] = Array{Float64}(undef, length(axes(G, 1)), length(qs))
 
     for tdx in axes(A₁, 1)
         polquantiles[:oecd][tdx, :] .= Statistics.quantile(A₁[tdx, :], qs)
         polquantiles[:row][tdx, :] .= Statistics.quantile(A₂[tdx, :], qs)
+        polquantiles[:gap][tdx, :] .= Statistics.quantile(G[tdx, :], qs)
     end
 
     poldict[threshold] = polquantiles
@@ -251,5 +262,28 @@ begin # Control
         push!(policyfigures, idxfig)
     end
 
-    policyfig = plot(policyfigures...; layout = (1, 2), size = 350 .* (2√2, 1), legend = :topleft, margins = 10Plots.mm)
+    growthfig = deepcopy(defaultfig)
+
+    ylabel!(growthfig, L"\gamma_t - \alpha_{1,t} - \alpha_{2,t}")
+
+    for threshold in figthresholds
+        quantiles = poldict[threshold][:gap]
+
+        median = quantiles[:, medianidx]
+
+        color = colors[threshold]
+
+        plot!(growthfig, timesteps, median; color, linewidth = LINE_WIDTH, label = "$threshold")
+
+        qdx = medianidx
+        for dxstep in 1:(length(qs) ÷ 2)
+            fillalpha = 0.1 + 0.3 * (dxstep / length(qs))
+
+            plot!(growthfig, timesteps, quantiles[:, qdx + dxstep]; fillrange = quantiles[:, qdx - dxstep], color, linewidth = 0, label = false, fillalpha)
+        end
+    end;
+
+    l = @layout [° °; °]
+
+    policyfig = plot(policyfigures..., growthfig; layout = l, size = 350 .* (2√2, 2), margins = 10Plots.mm)
 end
