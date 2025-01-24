@@ -9,28 +9,32 @@ using Random: default_rng
 PolicyFunction = Union{Interpolations.Extrapolation, Function};
 PoliciesFunctions = NTuple{2, PolicyFunction};
 
-GameParameters = Tuple{Vector{<:AbstractModel}, Vector{PoliciesFunctions}, Calibration}
+GameParameters = Tuple{Tuple{M1, M2}, NTuple{2, PoliciesFunctions}, Calibration} where {M1 <: AbstractModel, M2 <: AbstractModel}
 
 function Fgame!(du, u, parameters::GameParameters, t)
     models, policies = parameters
     oecdmodel, rowmodel = models
     oecdpolicies, rowpolicies = policies
 
+    T₁, T₂, m = @view u[1:3]
     α₁ = oecdpolicies[2](T₁, m, t)
     α₂ = rowpolicies[2](T₂, m, t)
+    χ₁ = oecdpolicies[2](T₁, m, t)
+    χ₂ = rowpolicies[2](T₂, m, t)
 
-    T₁, T₂, m = @view u[1:3]
 
     # Temperature
     du[1] = μ(T₁, m, oecdmodel) / oecdmodel.hogg.ϵ
     du[2] = μ(T₂, m, rowmodel) / rowmodel.hogg.ϵ
     
     # Carbon concentration
-    du[3] = γ(t, calibration) - oecdpolicies[2](T₁, m, t) - rowpolicies[2](T₁, m, t)
+    du[3] = γ(t, calibration) - α₁ - α₂
 
     # Output
-    du[4] = b(t, Point(T₁, m), (oecdpolicies[1](T₁, m, t), oecdpolicies[2](T₁, m, t)), oecdmodel, calibration)
-    du[5] = b(t, Point(T₂, m), (rowpolicies[1](T₂, m, t), rowpolicies[2](T₂, m, t)), rowmodel, calibration)
+    du[4] = b(t, Point(T₁, m), (χ₁, α₁), oecdmodel, calibration)
+    du[5] = b(t, Point(T₂, m), (χ₂, α₂), rowmodel, calibration)
+
+    return
 end
 
 function Ggame!(Σ, u, parameters::GameParameters, t)
@@ -42,6 +46,8 @@ function Ggame!(Σ, u, parameters::GameParameters, t)
     Σ[3] = oecdmodel.hogg.σₘ
     Σ[4] = oecdmodel.economy.σₖ
     Σ[4] = rowmodel.economy.σₖ
+
+    return
 end
 
 function Fbreakdown!(du, u, parameters::Tuple{AbstractModel, PoliciesFunctions}, t)
