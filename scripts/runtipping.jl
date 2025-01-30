@@ -39,7 +39,7 @@ economy = Economy()
 damages = leveldamages ? LevelDamages() : GrowthDamages()
 
 albedo = Albedo(threshold)
-model = TippingModel(albedo, hogg, preferences, damages, economy, calibration)
+model = TippingModel(albedo, hogg, preferences, damages, economy)
 
 # Construct Grid
 Tdomain = hogg.Tᵖ .+ (0., 6.);

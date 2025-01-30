@@ -14,8 +14,8 @@ begin
     preferences = EpsteinZin(ψ = 0.75, θ = 10.)
     economy = Economy()
 
-    imminentmodel = TippingModel(Albedo(1.5), hogg, preferences, damages, economy, calibration)
-    remotemodel = TippingModel(Albedo(2.5), hogg, preferences, damages, economy, calibration)
+    imminentmodel = TippingModel(Albedo(1.5), hogg, preferences, damages, economy)
+    remotemodel = TippingModel(Albedo(2.5), hogg, preferences, damages, economy)
 end;
 
 begin # Constructs wishful thinker and prudent policies

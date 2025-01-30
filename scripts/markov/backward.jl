@@ -181,7 +181,7 @@ end
 
 function computebackward(model::AbstractModel, calibration::Calibration, G; outdir = "data", kwargs...)
     terminalresults = loadterminal(model; outdir)
-    computebackward(terminalresults, model, G; outdir, kwargs...)
+    computebackward(terminalresults, model, calibration, G; outdir, kwargs...)
 end
 function computebackward(terminalresults, model::AbstractModel, calibration::Calibration, G; verbose = 0, withsave = true, outdir = "data", iterkwargs...)
     F̄, terminalconsumption, terminalG = terminalresults
