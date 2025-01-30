@@ -2,9 +2,9 @@ using JSON
 
 rras = [2.0, 10.0];
 eiss = [0.75, 1.5];
-thresholds = [1.5, 2.5];
-allownegatives = [false, true];
-withleveldamages = [false, true];
+thresholds = [1.5, 2.5, 3.5];
+allownegatives = [false];
+withleveldamages = [false];
 
 tippingparameters = Dict{String, Union{Float64, Bool}}[];
 benchmarkparameters = Dict{String, Union{Float64, Bool}}[];

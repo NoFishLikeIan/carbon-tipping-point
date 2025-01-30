@@ -8,44 +8,8 @@
     },
     {
       "allownegative": false,
-      "eis": 0.75,
-      "leveldamages": true,
-      "rra": 2.0
-    },
-    {
-      "allownegative": true,
-      "eis": 0.75,
-      "leveldamages": false,
-      "rra": 2.0
-    },
-    {
-      "allownegative": true,
-      "eis": 0.75,
-      "leveldamages": true,
-      "rra": 2.0
-    },
-    {
-      "allownegative": false,
       "eis": 1.5,
       "leveldamages": false,
-      "rra": 2.0
-    },
-    {
-      "allownegative": false,
-      "eis": 1.5,
-      "leveldamages": true,
-      "rra": 2.0
-    },
-    {
-      "allownegative": true,
-      "eis": 1.5,
-      "leveldamages": false,
-      "rra": 2.0
-    },
-    {
-      "allownegative": true,
-      "eis": 1.5,
-      "leveldamages": true,
       "rra": 2.0
     },
     {
@@ -56,44 +20,8 @@
     },
     {
       "allownegative": false,
-      "eis": 0.75,
-      "leveldamages": true,
-      "rra": 10.0
-    },
-    {
-      "allownegative": true,
-      "eis": 0.75,
-      "leveldamages": false,
-      "rra": 10.0
-    },
-    {
-      "allownegative": true,
-      "eis": 0.75,
-      "leveldamages": true,
-      "rra": 10.0
-    },
-    {
-      "allownegative": false,
       "eis": 1.5,
       "leveldamages": false,
-      "rra": 10.0
-    },
-    {
-      "allownegative": false,
-      "eis": 1.5,
-      "leveldamages": true,
-      "rra": 10.0
-    },
-    {
-      "allownegative": true,
-      "eis": 1.5,
-      "leveldamages": false,
-      "rra": 10.0
-    },
-    {
-      "allownegative": true,
-      "eis": 1.5,
-      "leveldamages": true,
       "rra": 10.0
     }
   ],
@@ -113,45 +41,10 @@
       "rra": 2.0
     },
     {
-      "threshold": 1.5,
+      "threshold": 3.5,
       "allownegative": false,
       "eis": 0.75,
-      "leveldamages": true,
-      "rra": 2.0
-    },
-    {
-      "threshold": 2.5,
-      "allownegative": false,
-      "eis": 0.75,
-      "leveldamages": true,
-      "rra": 2.0
-    },
-    {
-      "threshold": 1.5,
-      "allownegative": true,
-      "eis": 0.75,
       "leveldamages": false,
-      "rra": 2.0
-    },
-    {
-      "threshold": 2.5,
-      "allownegative": true,
-      "eis": 0.75,
-      "leveldamages": false,
-      "rra": 2.0
-    },
-    {
-      "threshold": 1.5,
-      "allownegative": true,
-      "eis": 0.75,
-      "leveldamages": true,
-      "rra": 2.0
-    },
-    {
-      "threshold": 2.5,
-      "allownegative": true,
-      "eis": 0.75,
-      "leveldamages": true,
       "rra": 2.0
     },
     {
@@ -169,45 +62,10 @@
       "rra": 2.0
     },
     {
-      "threshold": 1.5,
+      "threshold": 3.5,
       "allownegative": false,
       "eis": 1.5,
-      "leveldamages": true,
-      "rra": 2.0
-    },
-    {
-      "threshold": 2.5,
-      "allownegative": false,
-      "eis": 1.5,
-      "leveldamages": true,
-      "rra": 2.0
-    },
-    {
-      "threshold": 1.5,
-      "allownegative": true,
-      "eis": 1.5,
       "leveldamages": false,
-      "rra": 2.0
-    },
-    {
-      "threshold": 2.5,
-      "allownegative": true,
-      "eis": 1.5,
-      "leveldamages": false,
-      "rra": 2.0
-    },
-    {
-      "threshold": 1.5,
-      "allownegative": true,
-      "eis": 1.5,
-      "leveldamages": true,
-      "rra": 2.0
-    },
-    {
-      "threshold": 2.5,
-      "allownegative": true,
-      "eis": 1.5,
-      "leveldamages": true,
       "rra": 2.0
     },
     {
@@ -225,45 +83,10 @@
       "rra": 10.0
     },
     {
-      "threshold": 1.5,
+      "threshold": 3.5,
       "allownegative": false,
       "eis": 0.75,
-      "leveldamages": true,
-      "rra": 10.0
-    },
-    {
-      "threshold": 2.5,
-      "allownegative": false,
-      "eis": 0.75,
-      "leveldamages": true,
-      "rra": 10.0
-    },
-    {
-      "threshold": 1.5,
-      "allownegative": true,
-      "eis": 0.75,
       "leveldamages": false,
-      "rra": 10.0
-    },
-    {
-      "threshold": 2.5,
-      "allownegative": true,
-      "eis": 0.75,
-      "leveldamages": false,
-      "rra": 10.0
-    },
-    {
-      "threshold": 1.5,
-      "allownegative": true,
-      "eis": 0.75,
-      "leveldamages": true,
-      "rra": 10.0
-    },
-    {
-      "threshold": 2.5,
-      "allownegative": true,
-      "eis": 0.75,
-      "leveldamages": true,
       "rra": 10.0
     },
     {
@@ -281,45 +104,10 @@
       "rra": 10.0
     },
     {
-      "threshold": 1.5,
+      "threshold": 3.5,
       "allownegative": false,
       "eis": 1.5,
-      "leveldamages": true,
-      "rra": 10.0
-    },
-    {
-      "threshold": 2.5,
-      "allownegative": false,
-      "eis": 1.5,
-      "leveldamages": true,
-      "rra": 10.0
-    },
-    {
-      "threshold": 1.5,
-      "allownegative": true,
-      "eis": 1.5,
       "leveldamages": false,
-      "rra": 10.0
-    },
-    {
-      "threshold": 2.5,
-      "allownegative": true,
-      "eis": 1.5,
-      "leveldamages": false,
-      "rra": 10.0
-    },
-    {
-      "threshold": 1.5,
-      "allownegative": true,
-      "eis": 1.5,
-      "leveldamages": true,
-      "rra": 10.0
-    },
-    {
-      "threshold": 2.5,
-      "allownegative": true,
-      "eis": 1.5,
-      "leveldamages": true,
       "rra": 10.0
     }
   ]
