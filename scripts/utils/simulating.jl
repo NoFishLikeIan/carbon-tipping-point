@@ -17,11 +17,11 @@ function Fgame!(du, u, parameters::GameParameters, t)
     oecdpolicies, rowpolicies = policies
 
     T₁, T₂, m = @view u[1:3]
+    χ₁ = oecdpolicies[1](T₁, m, t)
+    χ₂ = rowpolicies[1](T₂, m, t)
+
     α₁ = oecdpolicies[2](T₁, m, t)
     α₂ = rowpolicies[2](T₂, m, t)
-    χ₁ = oecdpolicies[2](T₁, m, t)
-    χ₂ = rowpolicies[2](T₂, m, t)
-
 
     # Temperature
     du[1] = μ(T₁, m, oecdmodel) / oecdmodel.hogg.ϵ
@@ -45,7 +45,7 @@ function Ggame!(Σ, u, parameters::GameParameters, t)
 	Σ[2] = rowmodel.hogg.σₜ / rowmodel.hogg.ϵ
     Σ[3] = oecdmodel.hogg.σₘ
     Σ[4] = oecdmodel.economy.σₖ
-    Σ[4] = rowmodel.economy.σₖ
+    Σ[5] = rowmodel.economy.σₖ
 
     return
 end

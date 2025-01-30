@@ -185,7 +185,7 @@ begin # State variables
 
     l = @layout [° °; ° °; °]
 
-    plot(statefigures...; layout = l, size = 350 .* (2√2, 4), legend = :topleft, margins = 10Plots.mm)
+    statefig = plot(statefigures...; layout = l, size = 350 .* (2√2, 4), legend = :topleft, margins = 10Plots.mm)
 end
 
 # Extract control quantiles
