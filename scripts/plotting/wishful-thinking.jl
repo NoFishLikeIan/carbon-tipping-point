@@ -136,7 +136,7 @@ begin
     medianopts = @pgf { line_width = LINE_WIDTH }
     confidenceopts = @pgf { draw = "none", forget_plot }
     fillopts = @pgf { fill = "gray", opacity = 0.5 }
-    figopts = @pgf { width = raw"0.5\textwidth", height = raw"0.35\textwidth", grid = "both", xmin = 0, xmax = PLOT_HORIZON }
+    figopts = @pgf { width = raw"0.45\textwidth", height = raw"0.35\textwidth", grid = "both", xmin = 0, xmax = PLOT_HORIZON }
 
     qs = [0.05, 0.5, 0.95]
 
