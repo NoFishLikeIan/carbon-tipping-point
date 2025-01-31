@@ -26,7 +26,6 @@ includet("../utils/simulating.jl")
 SAVEFIG = false;
 ALLOWNEGATIVE = false;
 datapath = "data/simulation-large";
-experimentpath = "data/experiments/simulation-medium";
 PLOT_HORIZON = 80.
 
 begin # Default parameters
@@ -64,11 +63,13 @@ begin # Import results and interpolations
 end
 
 begin # Extract relevant models
-    tippingmodels = sort(models[1:2], by = m -> m.albedo.Tᶜ)
+    tippingmodels = sort(filter(m -> m isa TippingModel, models), by = m -> m.albedo.Tᶜ)[1:2]
     labels = ["Imminent", "Remote"]
 
     labelsbymodel = Dict{AbstractModel, String}(tippingmodels .=> labels)
     thresholds = unique(m.albedo.Tᶜ for m in tippingmodels)
+
+    calibration = load_object("data/calibration.jld2")
 end;
 
 begin # Plot estetics
@@ -87,7 +88,7 @@ begin # Plot estetics
 
     model = first(tippingmodels)
     nofeedback = Albedo(0., 0., model.albedo.λ₁, 0)
-    nofeedbackmodel = TippingModel(nofeedback, model.hogg, model.preferences, model.damages, model.economy, model.calibration)
+    nofeedbackmodel = TippingModel(nofeedback, model.hogg, model.preferences, model.damages, model.economy)
 
     mspace = range(mstable(Tmin, nofeedbackmodel), mstable(Tmax, nofeedbackmodel); length = length(ΔTspace))
 
@@ -106,7 +107,7 @@ begin
 
         function stableabatement(m, t, model)
             steadystates = Model.Tstable(m, model)
-            return [ε(t, exp(m), α(T, m, t), model) for T in steadystates]
+            return [ε(t, exp(m), α(T, m, t), model, calibration) for T in steadystates]
         end
 
 
@@ -208,8 +209,9 @@ begin
         itp = interpolations[model];
 
         policies = (itp[:χ], itp[:α]);
+        parameters = (model, policies, calibration)
 
-        problem = SDEProblem(Fbreakdown!, Gbreakdown!, u₀, (0., 200.), (model, policies))
+        problem = SDEProblem(Fbreakdown!, Gbreakdown!, u₀, (0., 200.), parameters)
 
         ensembleprob = EnsembleProblem(problem)
 
@@ -231,8 +233,8 @@ begin
     yearticks = 0:20:PLOT_HORIZON
 
     medianopts = @pgf { line_width = LINE_WIDTH }
-    confidenceopts = @pgf { dotted }
-    
+    confidenceopts = @pgf { draw = "none", forget_plot }
+    fillopts = @pgf { fill = "gray", opacity = 0.5 }
     figopts = @pgf { width = raw"0.5\textwidth", height = raw"0.35\textwidth", grid = "both", xmin = 0, xmax = PLOT_HORIZON }
 
     qs = [0.01, 0.5, 0.99]
@@ -247,7 +249,7 @@ begin
         # Abatement expenditure figure
         Efn = @closure (T, m, y, _, _, _, t) -> begin
             abatement = αitp(T, m, t)
-            return ε(t, exp(m), abatement, model)
+            return ε(t, exp(m), abatement, model, calibration)
         end
 
         EM = computeonsim(abatedsol, Efn, yearlytime);
@@ -256,8 +258,10 @@ begin
         smoothquantile!.(eachcol(Equantiles), SMOOTH_FACTOR)
 
         Emedianplot = @pgf Plot(medianopts, Coordinates(yearlytime, Equantiles[:, 2]))
-        Elowerplot = @pgf Plot({ medianopts..., confidenceopts... }, Coordinates(yearlytime, Equantiles[:, 1]))
-        Eupperplot = @pgf Plot({ medianopts..., confidenceopts... }, Coordinates(yearlytime, Equantiles[:, 3]))
+        Elower = @pgf Plot({ confidenceopts..., name_path = "lower" }, Coordinates(yearlytime, Equantiles[:, 1]))
+        Eupper = @pgf Plot({ confidenceopts..., name_path = "upper" }, Coordinates(yearlytime, Equantiles[:, 3]))
+
+        Efill = @pgf Plot(fillopts, raw"fill between [of=lower and upper]")
 
         Eoptionfirst = @pgf k > 1 ? {
             yticklabel = raw"\empty"
@@ -268,7 +272,7 @@ begin
         @pgf push!(simfig, {figopts...,
             title = labelsbymodel[model], xticklabel = raw"\empty", ymin = 0, ymax = 1.03,
             scaled_y_ticks = false, Eoptionfirst...,
-        }, Emedianplot, Elowerplot, Eupperplot)
+        }, Emedianplot, Elower, Eupper, Efill)
     end;
 
     # Makes the emissions plots in the second row
@@ -281,8 +285,10 @@ begin
         Tpaths = first.(paths.u)
 
         Tmedianplot = @pgf Plot(medianopts, Coordinates(yearlytime, getindex.(Tpaths, 2)));
-        Tlowerplot = @pgf Plot({ medianopts..., confidenceopts... }, Coordinates(yearlytime, getindex.(Tpaths, 1)));
-        Tupperplot = @pgf Plot({ medianopts..., confidenceopts... }, Coordinates(yearlytime, getindex.(Tpaths, 3)));
+        Tlowerplot = @pgf Plot({ confidenceopts..., name_path = "lower" }, Coordinates(yearlytime, getindex.(Tpaths, 1)));
+        Tupperplot = @pgf Plot({ confidenceopts..., name_path = "upper" }, Coordinates(yearlytime, getindex.(Tpaths, 3)));
+
+        Tfill = @pgf Plot(fillopts, raw"fill between [of=lower and upper]")
 
         figticks = yearticks[1:(k > 1 ? end : end - 1)];
 
@@ -300,7 +306,7 @@ begin
             xticklabels = 2020 .+ Int.(figticks),
             xticklabel_style = { rotate = 45 },
             Toptionfirst...
-        }, Tmedianplot, Tlowerplot, Tupperplot)
+        }, Tmedianplot, Tlowerplot, Tupperplot, Tfill)
     end;
 
     if SAVEFIG

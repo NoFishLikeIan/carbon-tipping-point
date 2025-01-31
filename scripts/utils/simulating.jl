@@ -50,38 +50,39 @@ function Ggame!(Σ, u, parameters::GameParameters, t)
     return
 end
 
-function Fbreakdown!(du, u, parameters::Tuple{AbstractModel, PoliciesFunctions}, t)
-    model, pols = parameters
+SimulationParameters = Tuple{AbstractModel, PoliciesFunctions, Calibration}
+function Fbreakdown!(du, u, parameters::SimulationParameters, t)
+    model, pols, calibration = parameters
     χitp, αitp = pols
     T, m = @view u[1:2]
 
     du[1] = μ(T, m, model) / model.hogg.ϵ
-	du[2] = γ(t, model.calibration) - αitp(T, m, t)
-    du[3] =  b(t, Point(T, m), (χitp(T, m, t), αitp(T, m, t)), model)
+	du[2] = γ(t, calibration) - αitp(T, m, t)
+    du[3] =  b(t, Point(T, m), (χitp(T, m, t), αitp(T, m, t)), model, calibration)
 
     # Cost breakdown breakdown
-    damage, adjcosts, abatement = costbreakdown(t, Point(T, m), (χitp(T, m, t), αitp(T, m, t)), model)
+    damage, adjcosts, abatement = costbreakdown(t, Point(T, m), (χitp(T, m, t), αitp(T, m, t)), model, calibration)
 
     du[4] = adjcosts
     du[5] = abatement
     du[6] = damage
 end
 
-function F!(du, u, parameters::Tuple{AbstractModel, PoliciesFunctions}, t)
-    model, pols = parameters
+function F!(du, u, parameters::SimulationParameters, t)
+    model, pols, calibration = parameters
     χitp, αitp = pols
     T, m = @view u[1:2]
 
     du[1] = μ(T, m, model) / model.hogg.ϵ
-	du[2] = γ(t, model.calibration) - αitp(T, m, t)
-    du[3] = b(t, Point(T, m), (χitp(T, m, t), αitp(T, m, t)), model)
+	du[2] = γ(t, calibration) - αitp(T, m, t)
+    du[3] = b(t, Point(T, m), (χitp(T, m, t), αitp(T, m, t)), model, calibration)
 end
 function F!(du, u, parameters::Tuple{AbstractModel, PolicyFunction}, t)
-    model, αitp = parameters
+    model, αitp, calibration  = parameters
     T, m = u
 
     du[1] = μ(T, m, model) / model.hogg.ϵ
-	du[2] = γ(t, model.calibration) - αitp(T, m, t)
+	du[2] = γ(t, calibration) - αitp(T, m, t)
 end
 function Fbau!(du, u, model::AbstractModel, t)
 	du[1] = μ(u[1], u[2], model) / model.hogg.ϵ
@@ -92,14 +93,14 @@ function G!(Σ, u, model::AbstractModel, t)
 	Σ[1] = model.hogg.σₜ / model.hogg.ϵ
 	Σ[2] = model.hogg.σₘ
 end
-function G!(Σ, u, parameters::Tuple{AbstractModel, PoliciesFunctions}, t)
+function G!(Σ, u, parameters::SimulationParameters, t)
     model = first(parameters)
 
     Σ[1] = model.hogg.σₜ / model.hogg.ϵ
 	Σ[2] = model.hogg.σₘ
     Σ[3] = model.economy.σₖ
 end
-function Gbreakdown!(Σ, u, parameters::Tuple{AbstractModel, PoliciesFunctions}, t)
+function Gbreakdown!(Σ, u, parameters::SimulationParameters, t)
     model = first(parameters)
 
     Σ[1] = model.hogg.σₜ / model.hogg.ϵ

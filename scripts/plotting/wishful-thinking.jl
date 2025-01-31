@@ -39,6 +39,7 @@ begin # Default parameters
     end
 
     plotpath = joinpath("plots", damages == LevelDamages ? "damage-robust" : "")
+    calibration = load_object("data/calibration.jld2")
 end
 
 begin # Import results and interpolations
@@ -78,7 +79,7 @@ begin # Plot estetics
 
     model = first(models)
     nofeedback = Albedo(0., 0., model.albedo.λ₁, 0)
-    nofeedbackmodel = TippingModel(nofeedback, model.hogg, model.preferences, model.damages, model.economy, model.calibration)
+    nofeedbackmodel = TippingModel(nofeedback, model.hogg, model.preferences, model.damages, model.economy)
 
     mspace = range(mstable(Tmin, nofeedbackmodel), mstable(Tmax, nofeedbackmodel); length = length(ΔTspace))
 
@@ -98,7 +99,9 @@ begin
 
     initpolicies = (interpolations[remotemodel][:χ], interpolations[remotemodel][:α]);
 
-    wtprob = SDEProblem(Fbreakdown!, Gbreakdown!, u₀, (0., 200.), (imminentmodel, initpolicies));
+    parameters = (imminentmodel, initpolicies, calibration)
+
+    wtprob = SDEProblem(Fbreakdown!, Gbreakdown!, u₀, (0., 200.), parameters);
 
     function discovery(u, t, integrator)
         model = integrator.p[1]
@@ -131,9 +134,9 @@ begin
     yearticks = 0:20:PLOT_HORIZON
 
     medianopts = @pgf { line_width = LINE_WIDTH }
-    confidenceopts = @pgf { dotted }
-    
-    figopts = @pgf { width = raw"0.45\textwidth", height = raw"0.32\textwidth", grid = "both", xmin = 0, xmax = PLOT_HORIZON }
+    confidenceopts = @pgf { draw = "none", forget_plot }
+    fillopts = @pgf { fill = "gray", opacity = 0.5 }
+    figopts = @pgf { width = raw"0.5\textwidth", height = raw"0.35\textwidth", grid = "both", xmin = 0, xmax = PLOT_HORIZON }
 
     qs = [0.05, 0.5, 0.95]
 
@@ -146,7 +149,7 @@ begin
             αitp = interpolations[remotemodel][:α]
 
             abatement = αitp(T, m, t)
-            return ε(t, exp(m), abatement, imminentmodel)
+            return ε(t, exp(m), abatement, imminentmodel, calibration)
         end
 
         EM = computeonsim(wsim, Efn, yearlytime);
@@ -155,8 +158,10 @@ begin
         smoothquantile!.(eachcol(Equantiles), SMOOTH_FACTOR)
 
         Emedianplot = @pgf Plot(medianopts, Coordinates(yearlytime, Equantiles[:, 2]))
-        Elowerplot = @pgf Plot({ medianopts..., confidenceopts... }, Coordinates(yearlytime, Equantiles[:, 1]))
-        Eupperplot = @pgf Plot({ medianopts..., confidenceopts... }, Coordinates(yearlytime, Equantiles[:, 3]))
+        Elowerplot = @pgf Plot({ confidenceopts..., name_path = "lower" }, Coordinates(yearlytime, Equantiles[:, 1]))
+        Eupperplot = @pgf Plot({ confidenceopts..., name_path = "upper" }, Coordinates(yearlytime, Equantiles[:, 3]))
+
+        Efill = @pgf Plot(fillopts, raw"fill between [of=lower and upper]")
 
 
         @pgf push!(simfig, {figopts...,
@@ -165,7 +170,7 @@ begin
             xticklabels = 2020 .+ Int.(yearticks),
             xticklabel_style = { rotate = 45 },
             scaled_y_ticks = false, ylabel = L"\footnotesize Abated fraction $\varepsilon_t$"
-        }, Emedianplot, Elowerplot, Eupperplot)
+        }, Emedianplot, Elowerplot, Eupperplot, Efill)
     end
 
     begin # Tₜ
@@ -173,8 +178,10 @@ begin
         Tpaths = first.(paths.u)
 
         Tmedianplot = @pgf Plot(medianopts, Coordinates(yearlytime, getindex.(Tpaths, 2)))
-        Tlowerplot = @pgf Plot({ medianopts..., confidenceopts... }, Coordinates(yearlytime, getindex.(Tpaths, 1)))
-        Tupperplot = @pgf Plot({ medianopts..., confidenceopts... }, Coordinates(yearlytime, getindex.(Tpaths, 3)))
+        Tlowerplot = @pgf Plot({ confidenceopts..., name_path = "lower" }, Coordinates(yearlytime, getindex.(Tpaths, 1)));
+        Tupperplot = @pgf Plot({ confidenceopts..., name_path = "upper" }, Coordinates(yearlytime, getindex.(Tpaths, 3)));
+
+        Tfill = @pgf Plot(fillopts, raw"fill between [of=lower and upper]")
 
         @pgf push!(simfig, {figopts...,
             ymin = minimum(temperatureticks[1]),
@@ -184,7 +191,7 @@ begin
             xticklabel_style = { rotate = 45 },
             ytick = temperatureticks[1], yticklabels = temperatureticks[2],
             ylabel = raw"\footnotesize Temperature $T_t$"
-        }, Tmedianplot, Tlowerplot, Tupperplot)
+        }, Tmedianplot, Tlowerplot, Tupperplot, Tfill)
     end;
 
 
@@ -248,7 +255,9 @@ end
 # -- Prudence
 begin
     imminentpolicies = (interpolations[imminentmodel][:χ], interpolations[imminentmodel][:α]);
-    prudenceprob = SDEProblem(Fbreakdown!, Gbreakdown!, u₀, (0., 200.), (remotemodel, imminentpolicies))
+    parameters = (remotemodel, imminentpolicies, calibration)
+
+    prudenceprob = SDEProblem(Fbreakdown!, Gbreakdown!, u₀, (0., 200.), parameters)
 
     prudsim = solve(EnsembleProblem(prudenceprob); trajectories = TRAJECTORIES)
 end;
@@ -265,7 +274,7 @@ begin
             αitp = interpolations[imminentmodel][:α]
 
             abatement = αitp(T, m, t)
-            return ε(t, exp(m), abatement, imminentmodel)
+            return ε(t, exp(m), abatement, imminentmodel, calibration)
         end
 
         EM = computeonsim(prudsim, Efn, yearlytime);
@@ -274,8 +283,10 @@ begin
         smoothquantile!.(eachcol(Equantiles), SMOOTH_FACTOR)
 
         Emedianplot = @pgf Plot(medianopts, Coordinates(yearlytime, Equantiles[:, 2]))
-        Elowerplot = @pgf Plot({ medianopts..., confidenceopts... }, Coordinates(yearlytime, Equantiles[:, 1]))
-        Eupperplot = @pgf Plot({ medianopts..., confidenceopts... }, Coordinates(yearlytime, Equantiles[:, 3]))
+        Elowerplot = @pgf Plot({ confidenceopts..., name_path = "lower" }, Coordinates(yearlytime, Equantiles[:, 1]))
+        Eupperplot = @pgf Plot({ confidenceopts..., name_path = "upper" }, Coordinates(yearlytime, Equantiles[:, 3]))
+
+        Efill = @pgf Plot(fillopts, raw"fill between [of=lower and upper]")
 
 
         @pgf push!(simfig, {figopts...,
@@ -284,7 +295,7 @@ begin
             xticklabels = 2020 .+ Int.(yearticks),
             xticklabel_style = { rotate = 45 },
             scaled_y_ticks = false, ylabel = L"\footnotesize Abated fraction $\varepsilon_t$"
-        }, Emedianplot, Elowerplot, Eupperplot)
+        }, Emedianplot, Elowerplot, Eupperplot, Efill)
     end
 
     begin # Tₜ
@@ -292,8 +303,10 @@ begin
         Tpaths = first.(paths.u)
 
         Tmedianplot = @pgf Plot(medianopts, Coordinates(yearlytime, getindex.(Tpaths, 2)))
-        Tlowerplot = @pgf Plot({ medianopts..., confidenceopts... }, Coordinates(yearlytime, getindex.(Tpaths, 1)))
-        Tupperplot = @pgf Plot({ medianopts..., confidenceopts... }, Coordinates(yearlytime, getindex.(Tpaths, 3)))
+        Tlowerplot = @pgf Plot({ confidenceopts..., name_path = "lower" }, Coordinates(yearlytime, getindex.(Tpaths, 1)));
+        Tupperplot = @pgf Plot({ confidenceopts..., name_path = "upper" }, Coordinates(yearlytime, getindex.(Tpaths, 3)));
+
+        Tfill = @pgf Plot(fillopts, raw"fill between [of=lower and upper]")
 
         @pgf push!(simfig, {figopts...,
             ymin = minimum(temperatureticks[1]),
@@ -303,7 +316,7 @@ begin
             xticklabel_style = { rotate = 45 },
             ytick = temperatureticks[1], yticklabels = temperatureticks[2],
             ylabel = raw"\footnotesize Temperature $T_t$"
-        }, Tmedianplot, Tlowerplot, Tupperplot)
+        }, Tmedianplot, Tlowerplot, Tupperplot, Tfill)
     end;
 
 
