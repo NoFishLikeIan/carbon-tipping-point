@@ -1,3 +1,4 @@
+using Revise
 using Model, Grid
 
 using Interpolations
@@ -5,8 +6,8 @@ using Roots
 using QuadGK
 using Plots
 
-include("utils/saving.jl")
-include("markov/forward.jl")
+includet("utils/saving.jl")
+includet("markov/forward.jl")
 
 begin
     calibration = load_object("data/calibration.jld2")
@@ -15,8 +16,8 @@ begin
     preferences = EpsteinZin(ψ = 0.75, θ = 10.)
     economy = Economy()
 
-    imminentmodel = TippingModel(Albedo(1.5), hogg, preferences, damages, economy, calibration)
-    remotemodel = TippingModel(Albedo(2.5), hogg, preferences, damages, economy, calibration)
+    imminentmodel = TippingModel(Albedo(1.5), hogg, preferences, damages, economy)
+    remotemodel = TippingModel(Albedo(2.5), hogg, preferences, damages, economy)
 end;
 
 begin # Constructs wishful thinker and prudent policies
@@ -57,17 +58,12 @@ begin # Constructs wishful thinker and prudent policies
     αimminentitp = linear_interpolation(nodes, imminentpolicy[:, :, 2, :]; extrapolation_bc = Line())
 end;
 
-Δwf = (wfpolicy[:, :, 2, 1] .- prudpolicy[:, :, 2, 1])
-heatmap(mspace, Tspace, Δwf; clims = maximum(abs.(Δwf)) .* (-1, 1), c = :coolwarm)
-
 # Compute the climate change cost the wishful thinker and the prudent policies
-
-
 begin
-    F̄ = computebackward(simpath, χremoteitp, αremoteitp, remotemodel; verbose = 1)
-    F̲ = computebackward(simpath, χimminentitp, αimminentitp, remotemodel; verbose = 1)
-    Fw = computebackward(simpath, χwfitp, αwfitp, imminentmodel; verbose = 1)
-    Fp = computebackward(simpath, χpitp, αpitp, remotemodel; verbose = 1)
+    F̄ = computebackward(χremoteitp, αremoteitp, remotemodel, calibration; outdir = simpath, verbose = 1)
+    F̲ = computebackward(χimminentitp, αimminentitp, remotemodel, calibration; outdir = simpath, verbose = 1)
+    Fw = computebackward(χwfitp, αwfitp, imminentmodel, calibration; outdir = simpath, verbose = 1)
+    Fp = computebackward(χpitp, αpitp, remotemodel, calibration; outdir = simpath, verbose = 1)
 end;
 
 # Get values at X₀

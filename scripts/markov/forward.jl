@@ -11,7 +11,7 @@ using Interpolations: Extrapolation
 
 include("chain.jl")
 
-function backwardstep!(Δts, F::Matrix{Float64}, χitp::Extrapolation, αitp::Extrapolation, cluster, model::AbstractModel, G)
+function backwardstep!(Δts, F::Matrix{Float64}, χitp::Extrapolation, αitp::Extrapolation, cluster, model::AbstractModel, calibration::Calibration, G)
     @threads for (i, δt) in cluster
         indices = CartesianIndices(G)
 
@@ -21,13 +21,13 @@ function backwardstep!(Δts, F::Matrix{Float64}, χitp::Extrapolation, αitp::Ex
         
         u = (χitp(Xᵢ.T, Xᵢ.m, t), αitp(Xᵢ.T, Xᵢ.m, t))
 
-        F′, Δt = markovstep(t, idx, F, u[2], model, G)
-        F[idx] = cost(F′, t, Xᵢ, Δt, u, model)
+        F′, Δt = markovstep(t, idx, F, u[2], model, calibration, G)
+        F[idx] = exp(logcost(F′, t, Xᵢ, Δt, u, model))
         Δts[i] = Δt
     end
 end
 
-function backwardsimulation!(queue::PartialQueue, F::Matrix{Float64}, χitp::Extrapolation, αitp::Extrapolation, model::AbstractModel, G; verbose = 0, tstop = 0.)
+function backwardsimulation!(queue::PartialQueue, F::Matrix{Float64}, χitp::Extrapolation, αitp::Extrapolation, model::AbstractModel, calibration::Calibration, G; verbose = 0, tstop = 0.)
     Δts = Vector{Float64}(undef, prod(size(G)))
     passcounter = 1
 
@@ -43,7 +43,7 @@ function backwardsimulation!(queue::PartialQueue, F::Matrix{Float64}, χitp::Ext
         
         clusters = dequeue!(queue)
         for cluster in clusters
-            backwardstep!(Δts, F, χitp, αitp, cluster, model, G)
+            backwardstep!(Δts, F, χitp, αitp, cluster, model, calibration, G)
 
             indices = first.(cluster)
 
@@ -56,21 +56,21 @@ function backwardsimulation!(queue::PartialQueue, F::Matrix{Float64}, χitp::Ext
     end
 end
 
-function backwardsimulation!(F::Matrix{Float64}, χitp::Extrapolation, αitp::Extrapolation, model::AbstractModel, G; kwargs...)
+function backwardsimulation!(F::Matrix{Float64}, χitp::Extrapolation, αitp::Extrapolation, model::AbstractModel, calibration::Calibration, G; kwargs...)
     queue = DiagonalRedBlackQueue(G)
-    backwardsimulation!(queue, F, χitp, αitp, model, G; kwargs...)
+    backwardsimulation!(queue, F, χitp, αitp, model, calibration, G; kwargs...)
 end
 
-function computebackward(outdir::String, χitp::Extrapolation, αitp::Extrapolation, model::AbstractModel; kwargs...)
+function computebackward(χitp::Extrapolation, αitp::Extrapolation, model::AbstractModel, calibration::Calibration; outdir = "", kwargs...)
     terminalresults = loadterminal(model; outdir)
-    computebackward(terminalresults, χitp, αitp, model, G; kwargs...)
+    computebackward(terminalresults, χitp, αitp, model, calibration; kwargs...)
 end
 
-function computebackward(terminalresults, χitp::Extrapolation, αitp::Extrapolation, model::AbstractModel, G; verbose = 0, iterkwargs...)
+function computebackward(terminalresults, χitp::Extrapolation, αitp::Extrapolation, model::AbstractModel, calibration::Calibration; verbose = 0, iterkwargs...)
     F̄, _, G = terminalresults
     F = copy(F̄)
 
-    backwardsimulation!(F, χitp, αitp, model, G; verbose, iterkwargs...)
+    backwardsimulation!(F, χitp, αitp, model, calibration, G; verbose, iterkwargs...)
 
     return F
 end
