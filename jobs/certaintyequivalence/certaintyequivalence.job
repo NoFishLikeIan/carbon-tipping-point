@@ -33,7 +33,7 @@ jq_command='
 params=$(jq -r --arg id "$SLURM_ARRAY_TASK_ID" "$jq_command" jobs/certaintyequivalence/parameters.json)
 
 # Run script
-julia +1.9.2 --threads ${SLURM_CPUS_PER_TASK} \
+julia --threads ${SLURM_CPUS_PER_TASK} \
     --project scripts/certaintyequivalence.jl \
     --verbose 1 --datapath "$SCRATCHDATA"  --simulationpath "simulation-large" \
     $params

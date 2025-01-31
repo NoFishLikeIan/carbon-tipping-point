@@ -22,7 +22,6 @@ using Model, Grid
 using Interpolations
 using Roots
 using QuadGK
-using Plots
 
 include("utils/saving.jl")
 include("markov/forward.jl")
