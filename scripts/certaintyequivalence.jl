@@ -151,5 +151,8 @@ results = Dict(
 paramname = @sprintf("θ=%.2f_ψ=%.2f_threshold=%.2f", rra, eis, remotethreshold)
 filename = "$(replace(paramname, "." => ",")).jld2"
 
-outpath = joinpath(datapath, "certaintyequivalence", filename) 
-JLD2.save_object(outpath, results)
+outpath = joinpath(datapath, "certaintyequivalence")
+if !isdir(outpath) mkdir(outpath) end
+
+outfile = joinpath(outpath, filename) 
+JLD2.save_object(outfile, results)
