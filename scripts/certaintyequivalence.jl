@@ -12,7 +12,7 @@ parsedargs = ArgParse.parse_args(ceargstable)
 @unpack simulationpath, eis, rra, remotethreshold, verbose, datapath = parsedargs
 
 if (verbose ≥ 1)
-    println("$(now()): ", "Running with $(nthreads()) threads...")
+    println("$(now()): ", "Running with $(nthreads()) threads for ψ=$eis, θ=$rra and remote threshold=$remotethreshold...")
     flush(stdout)
 end
 
@@ -43,7 +43,37 @@ outdir = joinpath(datapath, simulationpath, "constrained")
 timestepsimm, _, imminentpolicy, _ = loadtotal(imminentmodel; outdir)
 timestepsrem, _, remotepolicy, G = loadtotal(remotemodel; outdir)
 
-remotepolicy = remotepolicy[:, :, :, findall(in(timestepsimm), timestepsrem)]; # Assert the same size
+# Ensure the same size of the two policies FIXME: This is very ugly
+if length(timestepsrem) < length(timestepsimm)
+    extendedremote = similar(imminentpolicy)
+    indxs = findall(in(timestepsrem), timestepsimm)
+    extendedremote[:, :, :, indxs] .= remotepolicy
+    
+    outdxs = findall(!in(timestepsrem), timestepsimm)
+
+    for idx in outdxs
+        _, closest = findmin(jdx -> abs(idx - jdx), indxs)
+        extendedremote[:, :, :, idx] .= remotepolicy[:, :, :, indxs[closest]]
+    end
+
+    remotepolicy = extendedremote
+
+elseif length(timestepsrem) > length(timestepsimm)
+    extendedimminent = similar(remotepolicy)
+    indxs = findall(in(timestepsimm), timestepsrem)
+    extendedimminent[:, :, :, indxs] .= imminentpolicy
+    
+    outdxs = findall(!in(timestepsimm), timestepsrem)
+
+    for idx in outdxs
+        _, closest = findmin(jdx -> abs(idx - jdx), indxs)
+        extendedimminent[:, :, :, idx] .= imminentpolicy[:, :, :, indxs[closest]]
+    end
+
+    imminentpolicy = extendedimminent
+end
+
+@assert size(imminentpolicy) == size(remotepolicy)
 
 wfpolicy = NaN * zeros(size(remotepolicy))
 
@@ -53,7 +83,7 @@ wfpolicy[.~imminenttipregion, :, :] .= remotepolicy[.~imminenttipregion, :, :]
 
 prudpolicy = NaN * zeros(size(remotepolicy))
 
-remotetippedregion = @. getindex(G.X, 1) ≥ 2.5 + hogg.Tᵖ
+remotetippedregion = @. getindex(G.X, 1) ≥ remotethreshold + hogg.Tᵖ
 prudpolicy[remotetippedregion, :, :] .= remotepolicy[remotetippedregion, :, :]
 prudpolicy[.~remotetippedregion, :, :] .= imminentpolicy[.~remotetippedregion, :, :]
 
