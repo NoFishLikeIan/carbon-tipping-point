@@ -71,6 +71,23 @@ function logcost(F′, δ, Xᵢ::Point, Δt, u, model::AbstractModel{LevelDamage
     logg(u[1] * damage, δ * F′, Δt, model.preferences)
 end
 
+function cost(F′, t, Xᵢ::Point, Δt, u, model::AbstractModel, calibration::RegionalCalibration, p)
+    δ = outputfct(t, Xᵢ, Δt, u, model, calibration, p)
+    cost(F′, δ, Xᵢ, Δt, u, model)
+end
+function cost(F′, t, Xᵢ::Point, Δt, u, model::AbstractModel, calibration::Calibration)
+    δ = outputfct(t, Xᵢ, Δt, u, model, calibration)
+    cost(F′, δ, Xᵢ, Δt, u, model)
+end
+function cost(F′, δ, _, Δt, u, model::AbstractModel{GrowthDamages, P}) where P
+    g(u[1], δ * F′, Δt, model.preferences)
+end
+function cost(F′, δ, Xᵢ::Point, Δt, u, model::AbstractModel{LevelDamages, P}) where P
+    damage = d(Xᵢ.T, model.damages, model.hogg)
+    g(u[1] * damage, δ * F′, Δt, model.preferences)
+end
+
+
 function Base.isempty(q::PartialQueue)
     all((isempty(m) for m in q.minima))
 end

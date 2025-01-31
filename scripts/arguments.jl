@@ -79,3 +79,33 @@ resumeargtable = ArgParseSettings()
         arg_type = Float64
         default = 0.25
 end
+
+ceargstable = ArgParseSettings()
+@add_arg_table ceargstable begin
+    "--simulationpath", "-s"
+        arg_type = String
+        default = "simulation-small"
+        help = "Path to simulation folder"
+
+    "--datapath", "-d"
+        arg_type = String
+        default = "data"
+        help = "Path to data folder"
+    
+    "--verbose" , "-v"
+        arg_type = Int
+        default = 0
+        help = "Verbosity can be set to 0, 1, or 2 and larger."
+
+    "--remotethreshold"
+        arg_type = Float64
+        default = 2.5
+
+    "--eis"
+        arg_type = Float64
+        default = 0.75
+
+    "--rra"
+        arg_type = Float64
+        default = 10.
+end

@@ -1,0 +1,44 @@
+{
+  "certaintyequivalence": [
+    {
+      "eis": 0.75,
+      "rra": 2.0,
+      "remotethreshold": 2.5
+    },
+    {
+      "eis": 0.75,
+      "rra": 2.0,
+      "remotethreshold": 3.5
+    },
+    {
+      "eis": 1.5,
+      "rra": 2.0,
+      "remotethreshold": 2.5
+    },
+    {
+      "eis": 1.5,
+      "rra": 2.0,
+      "remotethreshold": 3.5
+    },
+    {
+      "eis": 0.75,
+      "rra": 10.0,
+      "remotethreshold": 2.5
+    },
+    {
+      "eis": 0.75,
+      "rra": 10.0,
+      "remotethreshold": 3.5
+    },
+    {
+      "eis": 1.5,
+      "rra": 10.0,
+      "remotethreshold": 2.5
+    },
+    {
+      "eis": 1.5,
+      "rra": 10.0,
+      "remotethreshold": 3.5
+    }
+  ]
+}

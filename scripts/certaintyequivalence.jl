@@ -1,4 +1,22 @@
-using Revise
+using Pkg
+Pkg.resolve(); Pkg.instantiate();
+
+using Base.Threads: nthreads
+using UnPack: @unpack
+using Dates: now
+
+include("arguments.jl") # Import argument parser
+
+parsedargs = ArgParse.parse_args(ceargstable)
+
+@unpack simulationpath, eis, rra, remotethreshold, verbose, datapath = parsedargs
+
+if (verbose ≥ 1)
+    println("$(now()): ", "Running with $(nthreads()) threads...")
+    flush(stdout)
+end
+
+# Begin script
 using Model, Grid
 
 using Interpolations
@@ -6,65 +24,76 @@ using Roots
 using QuadGK
 using Plots
 
-includet("utils/saving.jl")
-includet("markov/forward.jl")
+include("utils/saving.jl")
+include("markov/forward.jl")
 
-begin
-    calibration = load_object("data/calibration.jld2")
-    damages = GrowthDamages()
-    hogg = Hogg()
-    preferences = EpsteinZin(ψ = 0.75, θ = 10.)
-    economy = Economy()
+calibrationdirectory = joinpath(datapath, "calibration.jld2")
+calibration = load_object(calibrationdirectory)
 
-    imminentmodel = TippingModel(Albedo(1.5), hogg, preferences, damages, economy)
-    remotemodel = TippingModel(Albedo(2.5), hogg, preferences, damages, economy)
-end;
+damages = GrowthDamages()
+hogg = Hogg()
+preferences = EpsteinZin(θ = rra, ψ = eis);
+economy = Economy()
 
-begin # Constructs wishful thinker and prudent policies
-    simpath = "data/simulation-large/constrained"
+imminentmodel = TippingModel(Albedo(1.5), hogg, preferences, damages, economy)
+remotemodel = TippingModel(Albedo(remotethreshold), hogg, preferences, damages, economy)
 
-    timestepsimm, _, imminentpolicy, _ = loadtotal(imminentmodel; outdir = simpath)
-    timestepsrem, _, remotepolicy, G = loadtotal(remotemodel; outdir = simpath)
+# Constructs wishful thinker and prudent policies
+outdir = joinpath(datapath, simulationpath, "constrained")
 
-    remotepolicy = remotepolicy[:, :, :, findall(in(timestepsimm), timestepsrem)]; # Assert the same size
+timestepsimm, _, imminentpolicy, _ = loadtotal(imminentmodel; outdir)
+timestepsrem, _, remotepolicy, G = loadtotal(remotemodel; outdir)
 
-    wfpolicy = NaN * zeros(size(remotepolicy))
+remotepolicy = remotepolicy[:, :, :, findall(in(timestepsimm), timestepsrem)]; # Assert the same size
 
-    imminenttipregion = @. getindex(G.X, 1) ≥ 1.5 + hogg.Tᵖ
-    wfpolicy[imminenttipregion, :, :] .= imminentpolicy[imminenttipregion, :, :]
-    wfpolicy[.~imminenttipregion, :, :] .= remotepolicy[.~imminenttipregion, :, :]
+wfpolicy = NaN * zeros(size(remotepolicy))
 
-    prudpolicy = NaN * zeros(size(remotepolicy))
+imminenttipregion = @. getindex(G.X, 1) ≥ 1.5 + hogg.Tᵖ
+wfpolicy[imminenttipregion, :, :] .= imminentpolicy[imminenttipregion, :, :]
+wfpolicy[.~imminenttipregion, :, :] .= remotepolicy[.~imminenttipregion, :, :]
 
-    remotetippedregion = @. getindex(G.X, 1) ≥ 2.5 + hogg.Tᵖ
-    prudpolicy[remotetippedregion, :, :] .= remotepolicy[remotetippedregion, :, :]
-    prudpolicy[.~remotetippedregion, :, :] .= imminentpolicy[.~remotetippedregion, :, :]
+prudpolicy = NaN * zeros(size(remotepolicy))
 
-    Tspace = range(G.domains[1]...; length = size(G, 1))
-    mspace = range(G.domains[2]...; length = size(G, 2))
+remotetippedregion = @. getindex(G.X, 1) ≥ 2.5 + hogg.Tᵖ
+prudpolicy[remotetippedregion, :, :] .= remotepolicy[remotetippedregion, :, :]
+prudpolicy[.~remotetippedregion, :, :] .= imminentpolicy[.~remotetippedregion, :, :]
 
-    nodes = (Tspace, mspace, timestepsimm)
+Tspace = range(G.domains[1]...; length = size(G, 1))
+mspace = range(G.domains[2]...; length = size(G, 2))
 
-    χwfitp = linear_interpolation(nodes, wfpolicy[:, :, 1, :]; extrapolation_bc = Line())
-    αwfitp = linear_interpolation(nodes, wfpolicy[:, :, 2, :]; extrapolation_bc = Line())
+nodes = (Tspace, mspace, timestepsimm)
 
-    χpitp = linear_interpolation(nodes, prudpolicy[:, :, 1, :]; extrapolation_bc = Line())
-    αpitp = linear_interpolation(nodes, prudpolicy[:, :, 2, :]; extrapolation_bc = Line())
+χwfitp = linear_interpolation(nodes, wfpolicy[:, :, 1, :]; extrapolation_bc = Line())
+αwfitp = linear_interpolation(nodes, wfpolicy[:, :, 2, :]; extrapolation_bc = Line())
 
-    χremoteitp = linear_interpolation(nodes, remotepolicy[:, :, 1, :]; extrapolation_bc = Line())
-    αremoteitp = linear_interpolation(nodes, remotepolicy[:, :, 2, :]; extrapolation_bc = Line())
+χpitp = linear_interpolation(nodes, prudpolicy[:, :, 1, :]; extrapolation_bc = Line())
+αpitp = linear_interpolation(nodes, prudpolicy[:, :, 2, :]; extrapolation_bc = Line())
 
-    χimminentitp = linear_interpolation(nodes, imminentpolicy[:, :, 1, :]; extrapolation_bc = Line())
-    αimminentitp = linear_interpolation(nodes, imminentpolicy[:, :, 2, :]; extrapolation_bc = Line())
-end;
+χremoteitp = linear_interpolation(nodes, remotepolicy[:, :, 1, :]; extrapolation_bc = Line())
+αremoteitp = linear_interpolation(nodes, remotepolicy[:, :, 2, :]; extrapolation_bc = Line())
+
+χimminentitp = linear_interpolation(nodes, imminentpolicy[:, :, 1, :]; extrapolation_bc = Line())
+αimminentitp = linear_interpolation(nodes, imminentpolicy[:, :, 2, :]; extrapolation_bc = Line())
 
 # Compute the climate change cost the wishful thinker and the prudent policies
-begin
-    F̄ = computebackward(χremoteitp, αremoteitp, remotemodel, calibration; outdir = simpath, verbose = 1)
-    F̲ = computebackward(χimminentitp, αimminentitp, remotemodel, calibration; outdir = simpath, verbose = 1)
-    Fw = computebackward(χwfitp, αwfitp, imminentmodel, calibration; outdir = simpath, verbose = 1)
-    Fp = computebackward(χpitp, αpitp, remotemodel, calibration; outdir = simpath, verbose = 1)
-end;
+if (verbose ≥ 1)
+    println("$(now()): ","Running forward mode...")
+    flush(stdout)
+end
+
+(verbose ≥ 1) && println("$(now()): ","Remote optimal...")
+F̄ = computebackward(χremoteitp, αremoteitp, remotemodel, calibration; outdir, verbose)
+
+(verbose ≥ 1) && println("$(now()): ","Imminent optimal...")
+F̲ = computebackward(χimminentitp, αimminentitp, remotemodel, calibration; outdir, verbose)
+
+
+(verbose ≥ 1) && println("$(now()): ","Wishful thinker...")
+Fw = computebackward(χwfitp, αwfitp, imminentmodel, calibration; outdir, verbose)
+
+
+(verbose ≥ 1) && println("$(now()): ","Cautious...")
+Fp = computebackward(χpitp, αpitp, remotemodel, calibration; outdir, verbose)
 
 # Get values at X₀
 X₀ = [imminentmodel.hogg.T₀, log(imminentmodel.hogg.M₀)];
@@ -102,25 +131,25 @@ function ce(V₀, model; interval = (0.005, Inf))
     find_zero(x ->  ∫f(x, V₀, model) - V₀, interval)
 end
 
+if (verbose ≥ 1)
+    println("$(now()): ","Computing certainty equivalence...")
+    flush(stdout)
+end
+
 ceᵖ = ce(Vp, remotemodel)
 ceʷ = ce(Vw, imminentmodel) 
 cē = ce(V̄, remotemodel) # Optimal with remote
 ce̲ = ce(V̲, imminentmodel) # Optimal with imminent
 
-labels = ["ceʷ", "ceᵖ", "cē", "ce̲"];
+results = Dict(
+    "ceᵖ" => ceᵖ,
+    "ceʷ" => ceʷ,
+    "cē" => cē,
+    "ce̲" => ce̲
+)
 
-function printce(ce, label; digits = 3)
-    per = round(100 * ce / Y₀, digits = digits)
+paramname = @sprintf("θ=%.2f_ψ=%.2f_threshold=%.2f", rra, eis, remotethreshold)
+filename = "$(replace(paramname, "." => ",")).jld2"
 
-    println("$(label) : $(round(ce, digits = digits)) / ($per %)")
-end
-
-for (i, ce) in enumerate((ceʷ, ceᵖ, cē, ce̲))
-    printce(ce, labels[i])
-end
-
-printce(ce̲ - ceʷ, "ce̲ - ceʷ")
-printce(cē - ceᵖ, "cē - ceᵖ")
-printce(cē - ce̲, "cē - ce̲")
-
-printce((ce̲ - ceʷ) - (cē - ceᵖ), "(cē - ceᵖ) - (ce̲ - ceʷ)")
+outpath = joinpath(datapath, "certaintyequivalence", filename) 
+JLD2.save_object(outpath, results)

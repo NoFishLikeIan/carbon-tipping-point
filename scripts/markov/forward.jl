@@ -22,7 +22,7 @@ function backwardstep!(Δts, F::Matrix{Float64}, χitp::Extrapolation, αitp::Ex
         u = (χitp(Xᵢ.T, Xᵢ.m, t), αitp(Xᵢ.T, Xᵢ.m, t))
 
         F′, Δt = markovstep(t, idx, F, u[2], model, calibration, G)
-        F[idx] = exp(logcost(F′, t, Xᵢ, Δt, u, model))
+        F[idx] = cost(F′, t, Xᵢ, Δt, u, model, calibration)
         Δts[i] = Δt
     end
 end

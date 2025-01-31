@@ -3,6 +3,7 @@ using Test: @test
 using UnPack: @unpack
 using BenchmarkTools
 using JLD2
+using Interpolations
 
 includet("../utils/saving.jl")
 includet("../markov/forward.jl")
@@ -50,4 +51,5 @@ begin
     αitp = linear_interpolation(nodes, wfpolicy[:, :, 2, :]; extrapolation_bc = Line())
 end;
 
-F₀ = computebackward(simpath, χitp, αitp, model, G; verbose = 2);
+model = imminentmodel
+F₀ = computebackward(χitp, αitp, model, G; outdir = simpath, verbose = 2);
