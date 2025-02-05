@@ -4,7 +4,9 @@ begin # Load
     cepath = "data/certaintyequivalence"
     results = Dict{String, Float64}[]
 
-    for filename in readdir(cepath)
+    filelist = readdir(cepath)
+
+    for filename in filelist
         filepath = joinpath(cepath, filename)
         result = JLD2.load_object(filepath)
         push!(results, result)
@@ -16,4 +18,6 @@ function costofregret(result)
     (result["cē"] - result["ceᵖ"]) - (result["ce̲"] - result["ceʷ"])
 end
 
-costofregret.(results)
+cor = costofregret.(results)
+
+println(Dict(filelist .=> cor))

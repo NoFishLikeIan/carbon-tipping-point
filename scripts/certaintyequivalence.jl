@@ -142,6 +142,7 @@ V̲ = getV₀(F̲, X₀, imminentmodel)
 Vw = getV₀(Fw, X₀, imminentmodel)
 Vp = getV₀(Fp, X₀, imminentmodel)
 
+# FIXME: It does not find a root for ψ ≥ 1.
 # Certainty equilvanece
 function ∫f(x, V, model)
     QuadGK.quadgk(
