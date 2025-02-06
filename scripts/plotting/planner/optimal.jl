@@ -19,9 +19,9 @@ using SciMLBase, DifferentialEquations, DiffEqBase
 using Interpolations: Extrapolation
 using Dierckx, ImageFiltering
 
-includet("utils.jl")
-includet("../utils/saving.jl")
-includet("../utils/simulating.jl")
+includet("../utils.jl")
+includet("../../utils/saving.jl")
+includet("../../utils/simulating.jl")
 
 SAVEFIG = false;
 ALLOWNEGATIVE = false;

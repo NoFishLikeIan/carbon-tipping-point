@@ -18,9 +18,9 @@ scalefontsizes(1.3)
 using Statistics
 using Model, Grid
 
-include("utils.jl")
-include("../utils/saving.jl")
-include("../utils/simulating.jl")
+include("../utils.jl")
+include("../../utils/saving.jl")
+include("../../utils/simulating.jl")
 
 begin # Environment variables
     env = DotEnv.config()
