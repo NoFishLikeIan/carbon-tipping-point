@@ -77,6 +77,7 @@ function F!(du, u, parameters::SimulationParameters, t)
 	du[2] = γ(t, calibration) - αitp(T, m, t)
     du[3] = b(t, Point(T, m), (χitp(T, m, t), αitp(T, m, t)), model, calibration)
 end
+
 function F!(du, u, parameters::Tuple{AbstractModel, PolicyFunction}, t)
     model, αitp, calibration  = parameters
     T, m = u
@@ -84,9 +85,21 @@ function F!(du, u, parameters::Tuple{AbstractModel, PolicyFunction}, t)
     du[1] = μ(T, m, model) / model.hogg.ϵ
 	du[2] = γ(t, calibration) - αitp(T, m, t)
 end
+
 function Fbau!(du, u, model::AbstractModel, t)
 	du[1] = μ(u[1], u[2], model) / model.hogg.ϵ
 	du[2] = γ(t, model.calibration)
+end
+
+BAUGameParameters = Tuple{NTuple{2, AbstractModel}, Calibration}
+function Fbau!(du, u, parameters::BAUGameParameters, t)
+    models, calibration = parameters
+    oecdmodel, rowmodel = models
+    T₁, T₂, m = @view u[1:3]
+
+    du[1] = μ(T₁, m, oecdmodel) / oecdmodel.hogg.ϵ
+    du[2] = μ(T₂, m, rowmodel) / rowmodel.hogg.ϵ
+    du[3] = γ(t, calibration)
 end
 
 function G!(Σ, u, model::AbstractModel, t)    
@@ -99,6 +112,13 @@ function G!(Σ, u, parameters::SimulationParameters, t)
     Σ[1] = model.hogg.σₜ / model.hogg.ϵ
 	Σ[2] = model.hogg.σₘ
     Σ[3] = model.economy.σₖ
+end
+function G!(Σ, u, parameters::BAUGameParameters, t)
+    oecdmodel, rowmodel = first(parameters)
+
+    Σ[1] = oecdmodel.hogg.σₜ / oecdmodel.hogg.ϵ
+    Σ[2] = rowmodel.hogg.σₜ / rowmodel.hogg.ϵ
+    Σ[3] = oecdmodel.hogg.σₘ
 end
 function Gbreakdown!(Σ, u, parameters::SimulationParameters, t)
     model = first(parameters)
