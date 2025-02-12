@@ -57,14 +57,14 @@ function RegionalEconomies(kwargs...)
     economyhigh = Economy(
         Y₀ = 47.54,
         A₀ = 0.13, # Initial TFP
-        ϱ = 5e-4,
+        ϱ = 0.00052,
         kwargs...
     )
 
     economylow = Economy(
         Y₀ = 28.25,
         A₀ = 0.05,
-        ϱ = 1e-3,
+        ϱ = 0.004322045780109746,
         kwargs...
     )
 
