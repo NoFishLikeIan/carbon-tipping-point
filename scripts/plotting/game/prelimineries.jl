@@ -323,9 +323,8 @@ begin
         grid = "both",
         ylabel = L"Business-as-usual\\carbon concentration $M_t^{b} \; [\si{\ppm}]$",
         ylabel_style = {align = "center"},
-        xtick = xtick,
         xmin = 0, xmax = horizon,
-        xticklabels = xticklabels,
+        xtick = decadetime, xticklabels = decadeslabels,
         xticklabel_style = { rotate = 45 },
     })
 
@@ -350,4 +349,47 @@ begin
     end
 
     mfig
+end
+
+# Economy
+begin # Marginal abatement curve
+    emissivity = range(0.0, 1.0; length = 51)
+    timestyle = Dict(80 => "dashed", 0 => "solid")
+    regioncolors = Dict(oecdeconomy => oecdcolor, roweconomy => first(PALETTE))
+
+    xticks = 0:0.2:1
+    xticklabels = [@sprintf("%.0f\\%%", 100 * x) for x in xticks]
+
+    ytick = 0.02:0.02:0.12
+    yticklabels = [@sprintf("%.f\\%%", 100 * y) for y in ytick]
+
+    macfigure = @pgf Axis({
+        width = raw"0.71\textwidth",
+        height = raw"0.5\textwidth",
+        grid = "both",
+        xlabel = L"Abated percentage $\varepsilon(\alpha_t)$",
+        ylabel = L"Abatement costs $\beta_t\big(\varepsilon(\alpha_t)\big)$",
+        xmin = 0., xmax = 1.,
+        xtick = xticks, xticklabels = xticklabels,
+        ymin = 0., ymax = maximum(ytick),
+        ytick = ytick, yticklabels = yticklabels,
+        scaled_y_ticks = false,
+        legend_style = { at = "{(0.3, 0.95)}" }
+    })
+
+    for (t, linestyle) in timestyle, (economy, color) in regioncolors
+        mac = [β(t, ε, economy) for ε in emissivity]
+
+        style = @pgf linestyle == "dashed" ? {dashed} : {}
+
+        abatementcurve = @pgf Plot({line_width = LINE_WIDTH, color = color, style...}, Coordinates(emissivity, mac))
+
+        push!(macfigure, abatementcurve, LegendEntry(@sprintf("%d", 2020 + t)))
+    end
+
+    if SAVEFIG
+        PGFPlotsX.save(joinpath(PLOTPATH, "macfigure.tikz"), macfigure; include_preamble=true)
+    end
+    
+    macfigure
 end

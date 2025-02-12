@@ -5,7 +5,7 @@ using LaTeXStrings
 using DotEnv, JLD2
 using FastClosures
 
-using Random
+using Random, DataStructures
 
 using Plots, PGFPlotsX
 using LaTeXStrings, Printf
@@ -14,6 +14,9 @@ using Colors, ColorSchemes
 push!(PGFPlotsX.CUSTOM_PREAMBLE, raw"\usepgfplotslibrary{fillbetween}", raw"\usetikzlibrary{patterns}")
 push!(PGFPlotsX.CUSTOM_PREAMBLE, raw"\usepackage{siunitx}")
 push!(PGFPlotsX.CUSTOM_PREAMBLE, raw"\DeclareSIUnit{\ppm}{p.p.m.}")
+push!(PGFPlotsX.CUSTOM_PREAMBLE, raw"\DeclareSIUnit{\CO}{\,CO_2}")
+push!(PGFPlotsX.CUSTOM_PREAMBLE, raw"\DeclareSIUnit{\output}{trillion US\mathdollar / year}")
+push!(PGFPlotsX.CUSTOM_PREAMBLE, raw"\DeclareSIUnit{\shortoutput}{tr US\mathdollar / y}")
 
 using Statistics
 using Model, Grid
@@ -33,11 +36,16 @@ begin # Environment variables
 
     BASELINE_YEAR = 2020
     PLOT_HORIZON = 60.
+    LINE_WIDTH = 2.5
     SAVEFIG = false
+
+    decadetick = 0:10:Int(PLOT_HORIZON)
+    decadeticklabels = decadetick .+ BASELINE_YEAR
 
     calibration = load_object(joinpath(datapath, "calibration.jld2"))
     regionalcalibration = load_object(joinpath(datapath, "regionalcalibration.jld2"))
 end;
+
 
 begin # Models definition
     # -- Climate
@@ -49,22 +57,20 @@ begin # Models definition
 
     oecdmodel = LinearModel(hogg, preferences, damages, oecdeconomy)
 
-    rowmodels = Dict{Union{Float64, Symbol}, AbstractModel}()
+    rowmodels = SortedDict{Float64, AbstractModel}()    
+    thresholds = [1.8, 2., 2.5]
 
-    rowmodels[:benchmark] =  LinearModel(hogg, preferences, damages, roweconomy);
-
-    for threshold in [1.5, 1.6, 1.7, 1.8, 2., 2.5]
+    for threshold in thresholds
         rowmodels[threshold] = TippingModel(Albedo(threshold), hogg, preferences, damages, roweconomy);
     end
-end
+
+    rowmodels[Inf] = LinearModel(hogg, preferences, damages, roweconomy)
+    push!(thresholds, Inf)
+end;
 
 begin # Load simulations and build interpolations
-    interpolations = Dict{
-        Union{Float64, Symbol}, 
-        Dict{
-            AbstractModel, 
-            Dict{Symbol, Extrapolation}
-        }}();
+    Interpolation = Dict{AbstractModel, Dict{Symbol, Extrapolation}}
+    interpolations = SortedDict{Float64, Interpolation}();
 
     for (threshold, rowmodel) in rowmodels
         result = loadgame(AbstractModel[oecdmodel, rowmodel]; outdir = simulationpath)
@@ -73,30 +79,31 @@ begin # Load simulations and build interpolations
     end
 end
 
-begin # Plot estetics
-    PALETTE = colorschemes[:grays];
-    colors = get(PALETTE, [0., 0.5]);
+begin # Labels, colors and axis
+    PALETTE = cgrad(:Reds, rev = true)
+    colors = get(PALETTE, range(0, 0.5; length = length(rowmodels)))
     
-    TEMPLABEL = L"Temperature deviations $T_t$"
-    LINE_WIDTH = 2.5
+    oecdcolor = RGB(2 / 255, 57 / 255, 74 / 255)
 
-    ΔTmin = hogg.T₀ - hogg.Tᵖ
+    colorsbymodels = Dict{AbstractModel, RGB{Float64}}(values(rowmodels) .=> colors)
+    colorsbythreshold = SortedDict{Float64, RGB{Float64}}(thresholds .=> colors)
+
     ΔTmax = 6.
+    ΔTspace = range(0.0, ΔTmax; length = 51)
+    Tspace = ΔTspace .+ Hogg().Tᵖ
 
-    ΔTspace = range(ΔTmin, ΔTmax; length = 201);
-    Tspace = ΔTspace .+ hogg.Tᵖ
-    Tmin, Tmax = extrema(Tspace)
+    horizon = round(Int64, calibration.tspan[2])
+    yearlytime = 0:1:horizon
 
-    mspace = range(mstable(Tmin, oecdmodel), mstable(Tmax, oecdmodel); length = length(ΔTspace))
+    temperatureticks = collect.(makedeviationtickz(0.0, ΔTmax, oecdmodel; step=1, digits=0))
 
-    yearlytime = range(0., PLOT_HORIZON; step = 1.)
-    temperatureticks = makedeviationtickz(ΔTmin, ΔTmax, oecdmodel; step = 1, digits = 0)
+    Tmin, Tmax = extrema(temperatureticks[1])
 end;
 
 # -- Make simulation of optimal trajectories
 begin
-    TRAJECTORIES = 10_000;
-    simulations = Dict{Union{Float64, Symbol}, EnsembleSolution}();
+    TRAJECTORIES = 100_000;
+    simulations = SortedDict{Float64, EnsembleSolution}();
 
     # The initial state is given by (T₁, T₂, m, y₁, y₂)
     X₀ = [Hogg().T₀, Hogg().T₀, log(Hogg().M₀), log(oecdeconomy.Y₀), log(roweconomy.Y₀)];
@@ -123,76 +130,24 @@ begin
     end
 end
 
-# Expolration
+# Results extraction
 using DifferentialEquations.EnsembleAnalysis
 
-figthresholds = [1.8, 2.5, :benchmark];
-colors = Dict(figthresholds .=> [:darkred, :darkorange, :darkgreen]);
-countrylabels = ["OECD", "RoW"]
-
-qs = 0.1:0.2:0.9;
-medianidx = findfirst(q -> q == 0.5, qs);
+quantiles = [0.1, 0.3, 0.5, 0.7, 0.9];
+medianidx = findfirst(q -> q == 0.5, quantiles);
 
 timesteps = 0:0.5:PLOT_HORIZON;
 decades = 0:10:Int(PLOT_HORIZON);
 
 # Extract quantiles
-quantilesdict = Dict{Union{Float64, Symbol}, DiffEqArray}();
-for threshold in figthresholds
-    quantilesdict[threshold] = timeseries_point_quantile(simulations[threshold], qs, timesteps)
-end
-
-begin # State variables
-    ylabels = ["\$T_{1, t}\$", "\$T_{2, t}\$", "\$M_t\$","\$Y_{1,t}\$", "\$Y_{2, t}\$"]
-
-    defaultfig = plot(xlabel = "Year", xticks = (decades, decades .+ BASELINE_YEAR))
-
-    statefigures = Plots.Plot{Plots.GRBackend}[]
-    for idx in (1, 2, 4, 5, 3)
-        idxfig = deepcopy(defaultfig)
-
-        ylabel!(idxfig, ylabels[idx])
-
-        if idx ≤ 2
-            ylims!(idxfig, extrema(temperatureticks[1]))
-            yticks!(idxfig, temperatureticks)
-        end
-        
-        for threshold in figthresholds # Extract simulation
-            quantiles = quantilesdict[threshold]
-
-            series = getindex.(quantiles.u, idx)
-            median = getindex.(series, medianidx)
-            
-            color = colors[threshold]
-
-            plot!(idxfig, timesteps, median; color, linewidth = LINE_WIDTH, label = "$threshold")
-
-            qdx = medianidx
-            for dxstep in 1:(length(qs) ÷ 2)
-                fillalpha = 0.1 + 0.4 * (dxstep / length(qs))
-
-                plot!(idxfig, timesteps, getindex.(series, qdx + dxstep); fillrange = getindex.(series, qdx - dxstep), color, linewidth = 0, label = false, fillalpha)
-            end
-
-            decadequantiles = timeseries_point_median(simulations[threshold], decades)
-
-            scatter!(idxfig, decades, getindex.(decadequantiles.u, idx); color, label = false, markerstrokewidth = 0.)
-        end;
-
-        push!(statefigures, idxfig)
-    end
-
-    l = @layout [° °; ° °; °]
-
-    statefig = plot(statefigures...; layout = l, size = 350 .* (2√2, 4), legend = :topleft, margins = 10Plots.mm)
-end
+quantilesdict = Dict{Float64, DiffEqArray}();
+for (threshold, sim) in simulations
+    quantilesdict[threshold] = timeseries_point_quantile(sim, quantiles, timesteps)
+end;
 
 # Extract control quantiles
-poldict = Dict{Union{Float64, Symbol}, Dict{Symbol, Matrix{Float64}}}();
-for threshold in figthresholds
-    itp = interpolations[threshold]
-
+poldict = SortedDict{Float64, Dict{Symbol, Matrix{Float64}}}();
+for (threshold, itp) in interpolations
     ε₁ = @closure (T₁, T₂, m, y₁, y₂, t) -> begin
         α = itp[oecdmodel][:α](T₁, m, t)
 
@@ -220,70 +175,271 @@ for threshold in figthresholds
     G = computeonsim(simulations[threshold], gap, timesteps);
 
     polquantiles = Dict{Symbol, Matrix{Float64}}()
-    polquantiles[:oecd] = Array{Float64}(undef, length(axes(A₁, 1)), length(qs))
-    polquantiles[:row] = Array{Float64}(undef, length(axes(A₂, 1)), length(qs))
-    polquantiles[:gap] = Array{Float64}(undef, length(axes(G, 1)), length(qs))
+    polquantiles[:oecd] = Array{Float64}(undef, length(axes(A₁, 1)), length(quantiles))
+    polquantiles[:row] = Array{Float64}(undef, length(axes(A₂, 1)), length(quantiles))
+    polquantiles[:gap] = Array{Float64}(undef, length(axes(G, 1)), length(quantiles))
 
     for tdx in axes(A₁, 1)
-        polquantiles[:oecd][tdx, :] .= Statistics.quantile(A₁[tdx, :], qs)
-        polquantiles[:row][tdx, :] .= Statistics.quantile(A₂[tdx, :], qs)
-        polquantiles[:gap][tdx, :] .= Statistics.quantile(G[tdx, :], qs)
+        polquantiles[:oecd][tdx, :] .= Statistics.quantile(A₁[tdx, :], quantiles)
+        polquantiles[:row][tdx, :] .= Statistics.quantile(A₂[tdx, :], quantiles)
+        polquantiles[:gap][tdx, :] .= Statistics.quantile(G[tdx, :], quantiles)
     end
 
     poldict[threshold] = polquantiles
 end
 
 begin # Control
-    policyfigures = Plots.Plot{Plots.GRBackend}[]
+    ytick = 0:0.2:1.0
+    yticklabels = [@sprintf("%.0f\\%%", 100y) for y in ytick]
+
+    policyfig = @pgf GroupPlot({
+        group_style = {
+            group_size = "2 by 1",
+            yticklabels_at = "edge left",
+            horizontal_sep = "10pt"
+        }
+    })
     
     for region in [:oecd, :row]
-        idxfig = deepcopy(defaultfig)
+        isoecd = region == :oecd
 
-        ylabel!(idxfig, L"\varepsilon_t")
-        title!(idxfig, region == :oecd ? "OECD" : "ROW")
+        regionopts = @pgf isoecd ? {
+            title = "OECD",
+            xlabel = "Year",
+            ylabel = L"Fraction of abated emissions $\varepsilon_i(\alpha_{i, t})$",
+            ytick = ytick, yticklabels = yticklabels,
+            xlabel_style = { anchor = "north", xshift = "105pt" },
+            xtick = decadetick[1:(end-1)], xticklabels = decadeticklabels[1:(end-1)]
+        } : {
+            title = "RoW", ytick = [],
+            xtick = decadetick, xticklabels = decadeticklabels
+        }
 
-        for threshold in figthresholds
-            quantiles = poldict[threshold][region]
+        abatementfig = @pgf Axis({
+            grid = "both",
+            ymin = 0., ymax = 1.05,
+            xmin = 0, xmax = PLOT_HORIZON,
+            xticklabel_style = { rotate = 45 },
+            legend_style = { at = "{(0.5, 0.95)}", font = raw"\small"},
+            regionopts...
+        })
 
-            median = quantiles[:, medianidx]
+        for (threshold, policies) in poldict
+            simquantiles = policies[region]
+            median = simquantiles[:, medianidx]
 
-            color = colors[threshold]
+            color = colorsbythreshold[threshold]
 
-            plot!(idxfig, timesteps, median; color, linewidth = LINE_WIDTH, label = "$threshold")
+            forget_plot = @pgf isoecd ? {} : {forget_plot}
+            
+            mediancoords = Coordinates(timesteps, median)
+            medianpath = @pgf Plot({ color = color, forget_plot..., line_width = LINE_WIDTH}, mediancoords)
+
+            if isoecd
+                label = isfinite(threshold) ? @sprintf("\$T^c = %.1f \\si{\\degree} \$", threshold) : "No Tipping"
+
+                push!(abatementfig, LegendEntry(label))
+            end
+            
+            markers = @pgf Plot({ only_marks, mark_options = {scale = 1.5, draw_opacity = 0 }, color = color, forget_plot, mark_repeat = 10}, mediancoords)
+
+            push!(abatementfig, medianpath, markers)
 
             qdx = medianidx
-            for dxstep in 1:(length(qs) ÷ 2)
-                fillalpha = 0.1 + 0.3 * (dxstep / length(qs))
+            for dxstep in 1:(length(quantiles) ÷ 2)
+                opacity = 0.1 + 0.3 * (dxstep / length(quantiles))
 
-                plot!(idxfig, timesteps, quantiles[:, qdx + dxstep]; fillrange = quantiles[:, qdx - dxstep], color, linewidth = 0, label = false, fillalpha)
+                lowerpath = @pgf Plot(
+                    {draw = "none", name_path = "lower", forget_plot}, 
+                    Coordinates(timesteps, simquantiles[:, qdx - dxstep]))
+            
+                upperpath = @pgf Plot(
+                    {draw = "none", name_path = "upper", forget_plot}, 
+                    Coordinates(timesteps, simquantiles[:, qdx + dxstep]))
+            
+                shading = @pgf Plot({opacity = opacity, fill = color, forget_plot}, "fill between [of=lower and upper]")
+
+                push!(abatementfig, lowerpath, upperpath, shading)
             end
         end;
 
-        push!(policyfigures, idxfig)
+        push!(policyfig, abatementfig)
+    end
+    
+    if SAVEFIG
+        PGFPlotsX.save(joinpath(plotpath, "optabatement.tikz"), policyfig; include_preamble=true)
     end
 
-    growthfig = deepcopy(defaultfig)
+    policyfig
+end
 
-    ylabel!(growthfig, L"\gamma_t - \alpha_{1,t} - \alpha_{2,t}")
+begin # Net growth of CO2
+    ytick = -0.01:0.005:0.01
+    yticklabels = [@sprintf("%.1f\\%%", 100y) for y in ytick]
 
-    for threshold in figthresholds
-        quantiles = poldict[threshold][:gap]
+    growthfig = @pgf Axis({
+        grid = "both",
+        xmin = 0, xmax = PLOT_HORIZON,
+        xtick = decadetick, xticklabels = decadeticklabels,
+        xticklabel_style = { rotate = 45 },
+        ylabel = L"Growth rate of CO$_2$ concentration",
+        ytick = ytick, yticklabels = yticklabels,
+        legend_style = { font = raw"\small"},
+        scaled_y_ticks = false
+    })
 
-        median = quantiles[:, medianidx]
+    zeroline = @pgf HLine({ color = "black", line_width = LINE_WIDTH }, 0.)
+    push!(growthfig, zeroline)
 
-        color = colors[threshold]
+    for (threshold, policies) in poldict
+        simquantiles = policies[:gap]
+        median = simquantiles[:, medianidx]
 
-        plot!(growthfig, timesteps, median; color, linewidth = LINE_WIDTH, label = "$threshold")
+        color = colorsbythreshold[threshold]
+
+        mediancoords = Coordinates(timesteps, median)
+        medianpath = @pgf Plot({ color = color, line_width = LINE_WIDTH }, mediancoords)
+
+        label = isfinite(threshold) ? @sprintf("\$T^c = %.1f \\si{\\degree} \$", threshold) : "No Tipping"
+
+        push!(growthfig, medianpath, LegendEntry(label))
+        
+        markers = @pgf Plot({ only_marks, mark_options = {scale = 1.5, draw_opacity = 0 }, color = color, forget_plot, mark_repeat = 10 }, mediancoords)
+
+        push!(growthfig, markers)
 
         qdx = medianidx
-        for dxstep in 1:(length(qs) ÷ 2)
-            fillalpha = 0.1 + 0.3 * (dxstep / length(qs))
+        for dxstep in 1:(length(quantiles) ÷ 2)
+            opacity = 0.1 + 0.3 * (dxstep / length(quantiles))
 
-            plot!(growthfig, timesteps, quantiles[:, qdx + dxstep]; fillrange = quantiles[:, qdx - dxstep], color, linewidth = 0, label = false, fillalpha)
+            lowerpath = @pgf Plot({ draw = "none", name_path = "lower", forget_plot }, Coordinates(timesteps, simquantiles[:, qdx - dxstep]))
+        
+            upperpath = @pgf Plot({ draw = "none", name_path = "upper", forget_plot }, Coordinates(timesteps, simquantiles[:, qdx + dxstep]))
+        
+            shading = @pgf Plot({ opacity = opacity, fill = color, forget_plot }, "fill between [of=lower and upper]")
+
+            push!(growthfig, lowerpath, upperpath, shading)
         end
-    end;
+    end
 
-    l = @layout [° °; °]
+    if SAVEFIG
+        PGFPlotsX.save(joinpath(plotpath, "growth.tikz"), growthfig; include_preamble=true)
+    end
 
-    policyfig = plot(policyfigures..., growthfig; layout = l, size = 350 .* (2√2, 2), margins = 10Plots.mm)
+    growthfig
 end
+
+begin # State
+    statesfig = @pgf GroupPlot({
+        group_style = {
+            group_size = "2 by 2",
+            yticklabels_at = "edge left",
+            horizontal_sep = "10pt",
+            vertical_sep = "10pt"
+        }
+    })
+    
+    for statedx in [1, 4], region in [:oecd, :row]
+        isoecd = region == :oecd
+        if !isoecd statedx += 1 end
+        istemperature = statedx < 3
+
+        isfirst = istemperature && isoecd
+        issecond = istemperature && !isoecd
+        isthird = !istemperature && isoecd
+        islast = !istemperature && !isoecd
+
+        stateopts = @pgf istemperature ? {
+            ymin = Tmin, ymax = Tmax, xtick = []
+        } : {
+            xtick = decadetick, xticklabels = decadeticklabels,
+            ymin = roweconomy.Y₀, ymax = 4roweconomy.Y₀
+        }
+
+        firstopts = @pgf isfirst ? {
+            ylabel = L"Temperature $T_{i, t} \; [\si{\degree}]$",
+            ytick = temperatureticks[1], yticklabels = temperatureticks[2], title = "OECD"
+        } : {}
+
+        secondopts = @pgf issecond ? {
+            title = "RoW"
+        } : {}
+
+        thirdopts = @pgf isthird ? {
+            ylabel = L"Output $Y_{i, t} \; [\si{\output}]$"
+        } : {}
+
+        regionopts = @pgf islast ? {
+            xlabel = "Year",
+            xlabel_style = { anchor = "north", xshift = "105pt" }
+        } : {}
+
+        statefig = @pgf Axis({
+            grid = "both",
+            xmin = 0, xmax = PLOT_HORIZON,
+            xticklabel_style = { rotate = 45 },
+            legend_style = { at = "{(0.5, 0.95)}", font = raw"\small" },
+            firstopts..., secondopts..., thirdopts..., 
+            stateopts..., regionopts...,
+        })
+
+        for (threshold, sim) in quantilesdict
+            statequantiles = getindex.(sim.u, statedx)
+
+            median = getindex.(statequantiles, medianidx)
+
+            if !istemperature median = exp.(median) end
+
+            color = colorsbythreshold[threshold]
+
+            forget_plot = @pgf isfirst ? {} : { forget_plot }
+            
+            mediancoords = Coordinates(timesteps, median)
+            medianpath = @pgf Plot({ color = color, forget_plot..., line_width = LINE_WIDTH}, mediancoords)
+
+            if isfirst
+                label = isfinite(threshold) ? @sprintf("\$T^c = %.1f \\si{\\degree} \$", threshold) : "No Tipping"
+
+                push!(statefig, LegendEntry(label))
+            end
+            
+            markers = @pgf Plot({ only_marks, mark_options = {scale = 1.5, draw_opacity = 0 }, color = color, forget_plot, mark_repeat = 10}, mediancoords)
+
+            push!(statefig, medianpath, markers)
+
+            qdx = medianidx
+            for dxstep in 1:(length(quantiles) ÷ 2)
+                opacity = 0.1 + 0.3 * (dxstep / length(quantiles))
+
+                lower = getindex.(statequantiles, qdx - dxstep)
+                upper = getindex.(statequantiles, qdx + dxstep)
+
+                if !istemperature
+                    lower = exp.(lower)
+                    upper = exp.(upper)
+                end
+
+                lowerpath = @pgf Plot(
+                    {draw = "none", name_path = "lower", forget_plot}, 
+                    Coordinates(timesteps, lower))
+            
+                upperpath = @pgf Plot(
+                    {draw = "none", name_path = "upper", forget_plot}, 
+                    Coordinates(timesteps, upper))
+            
+                shading = @pgf Plot({opacity = opacity, fill = color, forget_plot}, "fill between [of=lower and upper]")
+
+                push!(statefig, lowerpath, upperpath, shading)
+            end
+        end;
+
+        push!(statesfig, statefig)
+    end
+    
+    if SAVEFIG
+        PGFPlotsX.save(joinpath(plotpath, "statefig.tikz"), policyfig; include_preamble=true)
+    end
+
+    statesfig
+end
+
