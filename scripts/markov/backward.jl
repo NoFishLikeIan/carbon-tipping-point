@@ -22,8 +22,7 @@ Optimise `diffobjective` and stores the minimiser in u. If the optimisation does
 function fallbackoptimisation!(u,
     diffobjective, u₀, 
     idx, t, policy, 
-    constraints::TwiceDifferentiableConstraints, G::RegularGrid; 
-    optoptions = defaultoptoptions, verbose = 0)
+    constraints::TwiceDifferentiableConstraints, G::RegularGrid)
 
     if !Optim.isinterior(constraints, u₀)
         @warn "Initial guess is not in the interior of the constraints at t = $t and idx = $idx, using mean policy instead"
@@ -32,41 +31,36 @@ function fallbackoptimisation!(u,
         L = max(minimum(CartesianIndices(G)), idx - unit)
         R = min(maximum(CartesianIndices(G)), idx + unit)
 
-        u .= mean(policy[L:R, :])
+        u .= mean(@view policy[L:R, :])
     else
-        res = Optim.optimize(diffobjective, constraints, u₀, IPNewton(), optoptions)
+        res = Optim.optimize(diffobjective, constraints, u₀, IPNewton(), defaultoptoptions)
 
         if Optim.converged(res)
             u .= Optim.minimizer(res)
-
-            return u
-        else # If it does not converge we take the mean of the policy in the neighbourhood
-            if verbose ≥ 1 
-                @warn "Constrained optimisation has not converged at t = $t and idx = $idx"
-            end
+        else # If it does not converge we take the mean of the policy in the neighbourhood 
+            @warn "Constrained optimisation has not converged at t = $t and idx = $idx"
 
             unit = oneunit(idx)
             L = max(minimum(CartesianIndices(G)), idx - unit)
             R = min(maximum(CartesianIndices(G)), idx + unit)
 
-            u .= mean(policy[L:R, :])
-
-            return u
+            u .= mean(@view policy[L:R, :])
         end
     end
 end
 
-function backwardstep!(Δts, F::NTuple{2, Matrix{Float64}}, policy, cluster, model::AbstractModel, calibration::Calibration, G; αfactor = 1.5, allownegative = false, ᾱcalibration = calibration, optargs...)
+function backwardstep!(Δts, F::NTuple{2, Matrix{Float64}}, policy, cluster, model::AbstractModel, calibration::Calibration, G)
     Fₜ, Fₜ₊ₕ = F
 
     @threads for (i, δt) in cluster
+        @inbounds begin
         indices = CartesianIndices(G)
 
         idx = indices[i]
         t = model.economy.τ - δt
         M = exp(G.X[idx].m)
-        ᾱ = γ(t, ᾱcalibration) + δₘ(M, model.hogg)
-        u₀ = copy(policy[idx, :])
+        ᾱ = γ(t, calibration) + δₘ(M, model.hogg)
+        u₀ = copy(@view policy[idx, :])
 
         objective = @closure u -> begin
             Fᵉₜ, Δt = markovstep(t, idx, Fₜ₊ₕ, u[2], model, calibration, G)
@@ -76,26 +70,20 @@ function backwardstep!(Δts, F::NTuple{2, Matrix{Float64}}, policy, cluster, mod
         diffobjective = TwiceDifferentiable(objective, u₀; autodiff = :forward)
 
         # Solve first unconstrained problem
-        openinterval = TwiceDifferentiableConstraints([0., 0.], [1., Inf])
-        u₀[2] = αfactor * ᾱ
+        openinterval = TwiceDifferentiableConstraints([0., 0.], [1., ᾱ])
+        u₀[1] = 0.5
+        u₀[2] = ᾱ / 2.
         optimum = similar(u₀)
 
-        fallbackoptimisation!(optimum, diffobjective, u₀, idx, t, policy, openinterval, G; optargs...)
-
-        if !allownegative # Solve constrained problem with χ from unconstrained problem
-            u₀[1] = optimum[1]
-            u₀[2] = min(optimum[2], ᾱ / 2) # Guarantees u₀ ∈ U
-            constraints = TwiceDifferentiableConstraints([0., 0.], [1., ᾱ])
-
-            fallbackoptimisation!(optimum, diffobjective, u₀, idx, t, policy, constraints, G; optargs...)
-        end
-
+        fallbackoptimisation!(optimum, diffobjective, u₀, idx, t, policy, openinterval, G)
+        
         objectiveminimum = objective(optimum)
 
         policy[idx, :] .= optimum
         Fₜ[idx] = exp(objectiveminimum)
-        Δts[i] = last(markovstep(t, idx, Fₜ₊ₕ, policy[idx, 2], model, calibration, G))
-    end
+        Δts[i] = markovstep(t, idx, Fₜ₊ₕ, optimum[2], model, calibration, G)[2]
+        end
+    end 
 end
 
 function backwardsimulation!(F::NTuple{2, Matrix{Float64}}, policy, model::AbstractModel, calibration::Calibration, G; kwargs...)
@@ -103,7 +91,7 @@ function backwardsimulation!(F::NTuple{2, Matrix{Float64}}, policy, model::Abstr
     backwardsimulation!(queue, F, policy, model, calibration, G; kwargs...)
 end
 
-function backwardsimulation!(queue::PartialQueue, F::NTuple{2, Matrix{Float64}}, policy, model::AbstractModel, calibration::Calibration, G; verbose = 0, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = model.economy.τ, stepkwargs...)
+function backwardsimulation!(queue::PartialQueue, F::NTuple{2, Matrix{Float64}}, policy, model::AbstractModel, calibration::Calibration, G; verbose = 0, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = model.economy.τ)
     tcache = tcache # Just to make sure it is well defined in all paths.
 
     savecache = !isnothing(cachepath)
@@ -148,7 +136,7 @@ function backwardsimulation!(queue::PartialQueue, F::NTuple{2, Matrix{Float64}},
         
         clusters = dequeue!(queue)
         for cluster in clusters
-            backwardstep!(Δts, F, policy, cluster, model, calibration, G; verbose, stepkwargs...)
+            backwardstep!(Δts, F, policy, cluster, model, calibration, G)
 
             indices = first.(cluster)
 
@@ -189,7 +177,7 @@ function computebackward(terminalresults, model::AbstractModel, calibration::Cal
     Fₜ = similar(Fₜ₊ₕ)
     F = (Fₜ, Fₜ₊ₕ)
 
-    policy = Array{Float64}(undef, size(G)..., 2)
+    policy = Array{Float64}(undef, size(G, 1), size(G, 2), 2)
     policy[:, :, 1] .= interpolateovergrid(terminalG, G, terminalconsumption)
     policy[:, :, 2] .= γ(model.economy.τ, calibration)
 

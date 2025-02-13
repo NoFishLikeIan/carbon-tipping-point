@@ -41,3 +41,5 @@ end;
 
 backwardstep!(Δts, F, policy, cluster, model, calibration, G);
 @btime backwardstep!($Δts, $F, $policy, $cluster, $model, $calibration, $G);
+@profview backwardstep!(Δts, F, policy, cluster, model, calibration, G);
+@profview_allocs backwardstep!(Δts, F, policy, cluster, model, calibration, G);

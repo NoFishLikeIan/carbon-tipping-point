@@ -68,3 +68,5 @@ end;
 
 backwardstep!(Δts, Fs, policies, cluster, models, regionalcalibration, G)
 @benchmark backwardstep!($Δts, $Fs, $policies, $cluster, $models, $regionalcalibration, $G)
+@profview backwardstep!(Δts, Fs, policies, cluster, models, regionalcalibration, G)
+@profview_allocs backwardstep!(Δts, Fs, policies, cluster, models, regionalcalibration, G)

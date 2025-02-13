@@ -3,9 +3,10 @@ include("backward.jl") # Extends backward scripts to game model
 Values = Vector{NTuple{2, Matrix{Float64}}}
 Policies = Vector{Array{Float64, 3}}
 
-function backwardstep!(Δts, Fs::Values, policies::Policies, cluster, models::Vector{<:AbstractModel}, regionalcalibration, G; αfactor = 1.5, allownegative = false, optargs...)
+function backwardstep!(Δts, Fs::Values, policies::Policies, cluster, models::Vector{<:AbstractModel}, regionalcalibration, G)
 
     @threads for (i, δt) in cluster
+        @inbounds begin
         n = length(models) # Number of players
         indices = CartesianIndices(G)
 
@@ -19,9 +20,9 @@ function backwardstep!(Δts, Fs::Values, policies::Policies, cluster, models::Ve
             policy = policies[p]
             model = models[p]
 
-            ᾱ = γ(t, regionalcalibration)[p] + δₘ(M, model.hogg)
             α₋ᵢ = sum(policies[j][idx, 2] for j in 1:n if j ≠ p)
-            u₀ = copy(policy[idx, :])
+            u₀ = copy(@view policy[idx, :])
+            u₀[2] /= 2.
 
             objective = @closure u -> begin
                 Fᵉₜ, Δt = markovstep(t, idx, Fₜ₊ₕ, u[2], α₋ᵢ, model, regionalcalibration.calibration, G) # Transition uses the global calibration
@@ -31,29 +32,20 @@ function backwardstep!(Δts, Fs::Values, policies::Policies, cluster, models::Ve
 
             diffobjective = TwiceDifferentiable(objective, u₀; autodiff = :forward)
 
-            # Solve first unconstrained problem
-            openinterval = TwiceDifferentiableConstraints([0., 0.], [1., 2ᾱ])
-            u₀[2] = αfactor * ᾱ
+            ᾱ = γ(t, regionalcalibration)[p] + δₘ(M, model.hogg)
+            openinterval = TwiceDifferentiableConstraints([0., 0.], [1., ᾱ])
             optimum = similar(u₀)
-
-            fallbackoptimisation!(optimum, diffobjective, u₀, idx, t, policy, openinterval, G; optargs...)
-
-            if !allownegative # Solve constrained problem with χ from unconstrained problem
-                u₀[1] = optimum[1]
-                u₀[2] = min(optimum[2], ᾱ / 2) # Guarantees u₀ ∈ U
-                constraints = TwiceDifferentiableConstraints([0., 0.], [1., ᾱ])
-
-                fallbackoptimisation!(optimum, diffobjective, u₀, idx, t, policy, constraints, G; optargs...)
-            end
+            fallbackoptimisation!(optimum, diffobjective, u₀, idx, t, policy, openinterval, G)
 
             objectiveminimum = objective(optimum)
 
             policy[idx, :] .= optimum
             Fₜ[idx] = exp(objectiveminimum)
-            Δtᵢ = min(last(markovstep(t, idx, Fₜ₊ₕ, policy[idx, 2], model, regionalcalibration.calibration, G)), Δtᵢ)
+            Δtᵢ = min(markovstep(t, idx, Fₜ₊ₕ, policy[idx, 2], model, regionalcalibration.calibration, G)[2], Δtᵢ)
         end
 
         Δts[i] = Δtᵢ
+        end
     end
 end
 
@@ -62,7 +54,7 @@ function backwardsimulation!(Fs::Values, policies::Policies, models::Vector{<:Ab
     backwardsimulation!(queue, Fs, policies, models, regionalcalibration, G; kwargs...)
 end
 
-function backwardsimulation!(queue::PartialQueue, Fs::Values, policies::Policies, models::Vector{<:AbstractModel}, regionalcalibration::RegionalCalibration, G; verbose = 0, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = models[1].economy.τ, stepkwargs...)
+function backwardsimulation!(queue::PartialQueue, Fs::Values, policies::Policies, models::Vector{<:AbstractModel}, regionalcalibration::RegionalCalibration, G; verbose = 0, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = models[1].economy.τ)
     tcache = tcache # Just to make sure it is well defined in all paths.
 
     savecache = !isnothing(cachepath)
@@ -112,7 +104,7 @@ function backwardsimulation!(queue::PartialQueue, Fs::Values, policies::Policies
         
         clusters = dequeue!(queue)
         for cluster in clusters
-            backwardstep!(Δts, Fs, policies, cluster, models, regionalcalibration, G; verbose, stepkwargs...)
+            backwardstep!(Δts, Fs, policies, cluster, models, regionalcalibration, G)
 
             indices = first.(cluster)
 
