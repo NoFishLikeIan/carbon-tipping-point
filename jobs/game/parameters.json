@@ -1,19 +1,19 @@
 {
   "parameters": [
     {
-      "allownegative": false,
-      "eis": 0.75,
-      "rra": 10.0,
-      "threshold": -1.0
-    },
-    {
-      "threshold": 1.5,
+      "threshold": -1.0,
       "allownegative": false,
       "eis": 0.75,
       "rra": 10.0
     },
     {
-      "threshold": 2,
+      "threshold": 1.8,
+      "allownegative": false,
+      "eis": 0.75,
+      "rra": 10.0
+    },
+    {
+      "threshold": 2.0,
       "allownegative": false,
       "eis": 0.75,
       "rra": 10.0
