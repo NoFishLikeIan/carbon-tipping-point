@@ -43,11 +43,11 @@ mdomain = mstable.(Tdomain, hogg)
 G = RegularGrid([Tdomain, mdomain], N)
 
 if (verbose ≥ 1)
-    println("$(now()): ","Solving benchmark model with ψ = $eis, θ = $rra, and $(allownegative ? "with" : "without") negative emission and $(leveldamages ? "level" : "growth") damages...")
+    println("$(now()): ","Solving benchmark model with ψ = $eis, θ = $rra, and $(leveldamages ? "level" : "growth") damages...")
     flush(stdout)
 end
 
-outdir = joinpath(datapath, simulationpath, allownegative ? "negative" : "constrained")
+outdir = joinpath(datapath, simulationpath)
 
 if (verbose ≥ 1)
     println("$(now()): ","Running terminal...")
