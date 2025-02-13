@@ -1,13 +1,8 @@
-using PGFPlotsX
-using Plots
-using Roots
-using LaTeXStrings
+using Revise
+
 using DotEnv, JLD2
-using FastClosures
-
 using Random, DataStructures
-
-using Plots, PGFPlotsX
+using PGFPlotsX
 using LaTeXStrings, Printf
 using Colors, ColorSchemes
 
@@ -58,7 +53,7 @@ begin # Models definition
     oecdmodel = LinearModel(hogg, preferences, damages, oecdeconomy)
 
     rowmodels = SortedDict{Float64, AbstractModel}()    
-    thresholds = [1.8, 2., 2.5]
+    thresholds = [1.5, 2., 2.5]
 
     for threshold in thresholds
         rowmodels[threshold] = TippingModel(Albedo(threshold), hogg, preferences, damages, roweconomy);
@@ -73,7 +68,8 @@ begin # Load simulations and build interpolations
     interpolations = SortedDict{Float64, Interpolation}();
 
     for (threshold, rowmodel) in rowmodels
-        result = loadgame(AbstractModel[oecdmodel, rowmodel]; outdir = simulationpath)
+        models = AbstractModel[oecdmodel, rowmodel]
+        result = loadgame(models; outdir = simulationpath)
 
         interpolations[threshold] = buildinterpolations(result)
     end
@@ -102,7 +98,7 @@ end;
 
 # -- Make simulation of optimal trajectories
 begin
-    TRAJECTORIES = 100_000;
+    TRAJECTORIES = 10_000;
     simulations = SortedDict{Float64, EnsembleSolution}();
 
     # The initial state is given by (T₁, T₂, m, y₁, y₂)
