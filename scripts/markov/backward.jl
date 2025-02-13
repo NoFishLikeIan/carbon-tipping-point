@@ -59,23 +59,19 @@ function backwardstep!(Δts, F::NTuple{2, Matrix{Float64}}, policy, cluster, mod
         idx = indices[i]
         t = model.economy.τ - δt
         M = exp(G.X[idx].m)
-        ᾱ = γ(t, calibration) + δₘ(M, model.hogg)
-        u₀ = copy(@view policy[idx, :])
 
         objective = @closure u -> begin
             Fᵉₜ, Δt = markovstep(t, idx, Fₜ₊ₕ, u[2], model, calibration, G)
             return logcost(Fᵉₜ, t, G.X[idx], Δt, u, model, calibration)
         end
 
+        ᾱ = γ(t, calibration) + δₘ(M, model.hogg)
+        u₀ = [0.5, ᾱ / 2.]
         diffobjective = TwiceDifferentiable(objective, u₀; autodiff = :forward)
-
-        # Solve first unconstrained problem
-        openinterval = TwiceDifferentiableConstraints([0., 0.], [1., ᾱ])
-        u₀[1] = 0.5
-        u₀[2] = ᾱ / 2.
+        rectangle = TwiceDifferentiableConstraints([0., 0.], [1., ᾱ])
+        
         optimum = similar(u₀)
-
-        fallbackoptimisation!(optimum, diffobjective, u₀, idx, t, policy, openinterval, G)
+        fallbackoptimisation!(optimum, diffobjective, u₀, idx, t, policy, rectangle, G)
         
         objectiveminimum = objective(optimum)
 

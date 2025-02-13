@@ -21,8 +21,6 @@ function backwardstep!(Δts, Fs::Values, policies::Policies, cluster, models::Ve
             model = models[p]
 
             α₋ᵢ = sum(policies[j][idx, 2] for j in 1:n if j ≠ p)
-            u₀ = copy(@view policy[idx, :])
-            u₀[2] /= 2.
 
             objective = @closure u -> begin
                 Fᵉₜ, Δt = markovstep(t, idx, Fₜ₊ₕ, u[2], α₋ᵢ, model, regionalcalibration.calibration, G) # Transition uses the global calibration
@@ -30,12 +28,13 @@ function backwardstep!(Δts, Fs::Values, policies::Policies, cluster, models::Ve
                 return logcost(Fᵉₜ, t, G.X[idx], Δt, u, model, regionalcalibration, p) # Costs use the regional calibration
             end
 
-            diffobjective = TwiceDifferentiable(objective, u₀; autodiff = :forward)
-
             ᾱ = γ(t, regionalcalibration)[p] + δₘ(M, model.hogg)
-            openinterval = TwiceDifferentiableConstraints([0., 0.], [1., ᾱ])
+            u₀ = [0.5, ᾱ / 2.]
+            diffobjective = TwiceDifferentiable(objective, u₀; autodiff = :forward)
+            rectangle = TwiceDifferentiableConstraints([0., 0.], [1., ᾱ])
+        
             optimum = similar(u₀)
-            fallbackoptimisation!(optimum, diffobjective, u₀, idx, t, policy, openinterval, G)
+            fallbackoptimisation!(optimum, diffobjective, u₀, idx, t, policy, rectangle, G)
 
             objectiveminimum = objective(optimum)
 

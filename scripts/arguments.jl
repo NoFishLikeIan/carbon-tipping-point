@@ -55,9 +55,6 @@ argtable = ArgParseSettings()
     "--rra"
         arg_type = Float64
         default = 10.
-
-    "--allownegative"
-        action = :store_true
 end
 
 resumeargtable = ArgParseSettings()

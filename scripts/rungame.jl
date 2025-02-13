@@ -9,7 +9,7 @@ include("arguments.jl") # Import argument parser
 
 parsedargs = ArgParse.parse_args(argtable)
 
-@unpack overwrite, datapath, simulationpath, N, cachestep, tol, verbose, stopat, threshold, eis, rra, allownegative = parsedargs
+@unpack overwrite, datapath, simulationpath, N, cachestep, tol, verbose, stopat, threshold, eis, rra = parsedargs
 
 if (verbose ≥ 1)
     println("$(now()): ", "Running with $(nthreads()) threads...")
@@ -82,4 +82,4 @@ if (verbose ≥ 1)
     flush(stdout)
 end
 
-computebackward(models, regionalcalibration, G; verbose, outdir, overwrite, tstop = stopat, cachestep, allownegative, addpaths = ["oecd", "row"])
+computebackward(models, regionalcalibration, G; verbose, outdir, overwrite, tstop = stopat, cachestep, addpaths = ["oecd", "row"])

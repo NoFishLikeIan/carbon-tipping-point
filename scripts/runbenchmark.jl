@@ -9,7 +9,7 @@ include("arguments.jl") # Import argument parser
 
 parsedargs = ArgParse.parse_args(argtable)
 
-@unpack overwrite, datapath, simulationpath, N, cachestep, tol, verbose, stopat, leveldamages, eis, rra, allownegative = parsedargs
+@unpack overwrite, datapath, simulationpath, N, cachestep, tol, verbose, stopat, leveldamages, eis, rra = parsedargs
 
 if (verbose ≥ 1)
     println("$(now()): ", "Running with $(nthreads()) threads...")
@@ -62,5 +62,4 @@ if (verbose ≥ 1)
     flush(stdout)
 end
 
-# TODO: Test parallelisation
-computebackward(model, calibration, G; verbose, outdir, overwrite, tstop = stopat, cachestep, allownegative)
+computebackward(model, calibration, G; verbose, outdir, overwrite, tstop = stopat, cachestep)
