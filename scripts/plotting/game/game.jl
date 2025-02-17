@@ -2,7 +2,7 @@ using Revise
 
 using DotEnv, JLD2
 using Random, DataStructures
-using PGFPlotsX
+using PGFPlotsX, Plots
 using LaTeXStrings, Printf
 using Colors, ColorSchemes
 
@@ -17,7 +17,7 @@ using Statistics
 using Model, Grid
 using SciMLBase, DifferentialEquations, DiffEqBase
 using Interpolations: Extrapolation
-using Dierckx, ImageFiltering
+using Dierckx, FastClosures
 
 includet("../utils.jl")
 includet("../../utils/saving.jl")
@@ -30,7 +30,7 @@ begin # Environment variables
     simulationpath = get(env, "SIMULATIONPATH", "simulations")
 
     BASELINE_YEAR = 2020
-    PLOT_HORIZON = 60.
+    PLOT_HORIZON = 80.
     LINE_WIDTH = 2.5
     SAVEFIG = false
 
@@ -53,7 +53,7 @@ begin # Models definition
     oecdmodel = LinearModel(hogg, preferences, damages, oecdeconomy)
 
     rowmodels = SortedDict{Float64, AbstractModel}()    
-    thresholds = [1.5, 2., 2.5]
+    thresholds = [1.8, 2., 2.5]
 
     for threshold in thresholds
         rowmodels[threshold] = TippingModel(Albedo(threshold), hogg, preferences, damages, roweconomy);
@@ -88,7 +88,7 @@ begin # Labels, colors and axis
     ΔTspace = range(0.0, ΔTmax; length = 51)
     Tspace = ΔTspace .+ Hogg().Tᵖ
 
-    horizon = round(Int64, calibration.tspan[2])
+    horizon = PLOT_HORIZON
     yearlytime = 0:1:horizon
 
     temperatureticks = collect.(makedeviationtickz(0.0, ΔTmax, oecdmodel; step=1, digits=0))
@@ -115,14 +115,14 @@ begin
 
         parameters = (models, policies, calibration);
 
-        problem = SDEProblem(Fgame!, Ggame!, X₀, (0., PLOT_HORIZON), parameters)
+        problem = SDEProblem(Fgame!, Ggame!, X₀, (0., 2horizon), parameters)
 
         ensembleprob = EnsembleProblem(problem)
 
         simulation = solve(ensembleprob; trajectories = TRAJECTORIES);
-        println("Done with simulation of $threshold")
-
         simulations[threshold] = simulation
+        
+        println("Done with simulation of $threshold")
     end
 end
 
@@ -132,8 +132,8 @@ using DifferentialEquations.EnsembleAnalysis
 quantiles = [0.1, 0.3, 0.5, 0.7, 0.9];
 medianidx = findfirst(q -> q == 0.5, quantiles);
 
-timesteps = 0:0.5:PLOT_HORIZON;
-decades = 0:10:Int(PLOT_HORIZON);
+timesteps = 0:0.5:horizon;
+decades = 0:10:Int(horizon);
 
 # Extract quantiles
 quantilesdict = Dict{Float64, DiffEqArray}();
@@ -325,58 +325,32 @@ begin # Net growth of CO2
     growthfig
 end
 
-begin # State
-    statesfig = @pgf GroupPlot({
+begin # Temperature figure
+    temperaturefigure = @pgf GroupPlot({
         group_style = {
-            group_size = "2 by 2",
+            group_size = "2 by 1",
             yticklabels_at = "edge left",
             horizontal_sep = "10pt",
             vertical_sep = "10pt"
         }
     })
     
-    for statedx in [1, 4], region in [:oecd, :row]
+    for region in [:oecd, :row]
         isoecd = region == :oecd
-        if !isoecd statedx += 1 end
-        istemperature = statedx < 3
 
-        isfirst = istemperature && isoecd
-        issecond = istemperature && !isoecd
-        isthird = !istemperature && isoecd
-        islast = !istemperature && !isoecd
-
-        stateopts = @pgf istemperature ? {
-            ymin = Tmin, ymax = Tmax, xtick = []
-        } : {
-            xtick = decadetick, xticklabels = decadeticklabels,
-            ymin = roweconomy.Y₀, ymax = 4roweconomy.Y₀
-        }
-
-        firstopts = @pgf isfirst ? {
+        regionopts = @pgf isoecd ? {
             ylabel = L"Temperature $T_{i, t} \; [\si{\degree}]$",
             ytick = temperatureticks[1], yticklabels = temperatureticks[2], title = "OECD"
-        } : {}
+        } : { title = "RoW" }
 
-        secondopts = @pgf issecond ? {
-            title = "RoW"
-        } : {}
-
-        thirdopts = @pgf isthird ? {
-            ylabel = L"Output $Y_{i, t} \; [\si{\output}]$"
-        } : {}
-
-        regionopts = @pgf islast ? {
-            xlabel = "Year",
-            xlabel_style = { anchor = "north", xshift = "105pt" }
-        } : {}
+        statedx = isoecd ? 1 : 2
 
         statefig = @pgf Axis({
             grid = "both",
             xmin = 0, xmax = PLOT_HORIZON,
             xticklabel_style = { rotate = 45 },
             legend_style = { at = "{(0.5, 0.95)}", font = raw"\small" },
-            firstopts..., secondopts..., thirdopts..., 
-            stateopts..., regionopts...,
+            ymin = Tmin, ymax = Tmax, xtick = decadetick, xticklabels = decadeticklabels, regionopts...
         })
 
         for (threshold, sim) in quantilesdict
@@ -384,16 +358,14 @@ begin # State
 
             median = getindex.(statequantiles, medianidx)
 
-            if !istemperature median = exp.(median) end
-
             color = colorsbythreshold[threshold]
 
-            forget_plot = @pgf isfirst ? {} : { forget_plot }
+            forget_plot = @pgf isoecd ? {} : { forget_plot }
             
             mediancoords = Coordinates(timesteps, median)
             medianpath = @pgf Plot({ color = color, forget_plot..., line_width = LINE_WIDTH}, mediancoords)
 
-            if isfirst
+            if isoecd
                 label = isfinite(threshold) ? @sprintf("\$T^c = %.1f \\si{\\degree} \$", threshold) : "No Tipping"
 
                 push!(statefig, LegendEntry(label))
@@ -410,11 +382,6 @@ begin # State
                 lower = getindex.(statequantiles, qdx - dxstep)
                 upper = getindex.(statequantiles, qdx + dxstep)
 
-                if !istemperature
-                    lower = exp.(lower)
-                    upper = exp.(upper)
-                end
-
                 lowerpath = @pgf Plot(
                     {draw = "none", name_path = "lower", forget_plot}, 
                     Coordinates(timesteps, lower))
@@ -429,13 +396,116 @@ begin # State
             end
         end;
 
-        push!(statesfig, statefig)
+        push!(temperaturefigure, statefig)
     end
     
     if SAVEFIG
-        PGFPlotsX.save(joinpath(plotpath, "statefig.tikz"), policyfig; include_preamble=true)
+        PGFPlotsX.save(joinpath(plotpath, "temperature.tikz"), temperaturefigure; include_preamble=true)
     end
 
-    statesfig
+    temperaturefigure
 end
 
+begin # Cost to convergence
+    rowoutput = @pgf Axis({
+        grid = "both",
+        xmin = 0, xmax = PLOT_HORIZON,
+        xticklabel_style = { rotate = 45 },
+        legend_style = { at = "{(0.5, 0.95)}", font = raw"\small" },
+        ylabel = L"Output $Y_{RoW, t} \; [\si{\shortoutput}]$"
+    })
+
+    for (threshold, sim) in quantilesdict
+        statequantiles = getindex.(sim.u, 5)
+
+        median = exp.(getindex.(statequantiles, medianidx))
+
+        color = colorsbythreshold[threshold]
+        
+        mediancoords = Coordinates(timesteps, median)
+        medianpath = @pgf Plot({ color = color, line_width = LINE_WIDTH}, mediancoords)
+
+        label = isfinite(threshold) ? @sprintf("\$T^c = %.1f \\si{\\degree} \$", threshold) : "No Tipping"
+
+        push!(rowoutput, LegendEntry(label))
+        
+        markers = @pgf Plot({ only_marks, mark_options = {scale = 1.5, draw_opacity = 0 }, color = color, forget_plot, mark_repeat = 10}, mediancoords)
+
+        push!(rowoutput, medianpath, markers)
+
+        qdx = medianidx
+        for dxstep in 1:(length(quantiles) ÷ 2)
+            opacity = 0.1 + 0.3 * (dxstep / length(quantiles))
+
+            lower = exp.(getindex.(statequantiles, qdx - dxstep))
+            upper = exp.(getindex.(statequantiles, qdx + dxstep))
+
+            lowerpath = @pgf Plot(
+                {draw = "none", name_path = "lower", forget_plot}, 
+                Coordinates(timesteps, lower))
+        
+            upperpath = @pgf Plot(
+                {draw = "none", name_path = "upper", forget_plot}, 
+                Coordinates(timesteps, upper))
+        
+            shading = @pgf Plot({opacity = opacity, fill = color, forget_plot}, "fill between [of=lower and upper]")
+
+            push!(rowoutput, lowerpath, upperpath, shading)
+        end
+    end;
+    
+    if SAVEFIG
+        PGFPlotsX.save(joinpath(plotpath, "rowoutput.tikz"), rowoutput; include_preamble=true)
+    end
+
+    rowoutput
+end
+
+# --- Cost attribution
+# -- Favourable OECD in 1.8 degrees scenario
+
+begin # Simulate the favourable OECD scenario
+    rowmodel = rowmodels[1.8]
+
+    oecditp = interpolations[Inf][oecdmodel]
+    rowitp = interpolations[1.8][rowmodel]
+
+    oecdfavourablepolicies = (oecditp[:χ], oecditp[:α]);
+    rowpolicies = (rowitp[:χ], rowitp[:α]);
+
+    policies = (oecdfavourablepolicies, rowpolicies);
+    models = (oecdmodel, rowmodel);
+
+    parameters = (models, policies, calibration);
+
+    problem = SDEProblem(Fgame!, Ggame!, X₀, (0., 2PLOT_HORIZON), parameters)
+
+    ensembleprob = EnsembleProblem(problem)
+
+    favourablesimulation = solve(ensembleprob; trajectories = TRAJECTORIES);
+end
+
+begin # Extract policies in favourable OECD scenario
+    favourablepolsquantiles = Dict{Symbol, Matrix{Float64}}();
+    εoecdfav = @closure (T₁, T₂, m, y₁, y₂, t) -> begin
+        α = oecditp[:α](T₁, m, t)
+        return ε(t, exp(m), α, oecdmodel, regionalcalibration, 1)
+    end
+
+    εrow = @closure (T₁, T₂, m, y₁, y₂, t) -> begin
+        α = rowitp[:α](T₂, m, t)
+        return ε(t, exp(m), α, rowmodel, regionalcalibration, 2)
+    end
+
+        
+    A₁ = computeonsim(favourablesimulation, εoecdfav, timesteps);
+    A₂ = computeonsim(favourablesimulation, εrow, timesteps);
+
+    favourablepolsquantiles[:oecd] = Array{Float64}(undef, length(axes(A₁, 1)), length(quantiles))
+    favourablepolsquantiles[:row] = Array{Float64}(undef, length(axes(A₂, 1)), length(quantiles))
+
+    for tdx in axes(A₁, 1)
+        favourablepolsquantiles[:oecd][tdx, :] .= Statistics.quantile(A₁[tdx, :], quantiles)
+        favourablepolsquantiles[:row][tdx, :] .= Statistics.quantile(A₂[tdx, :], quantiles)
+    end
+end;
