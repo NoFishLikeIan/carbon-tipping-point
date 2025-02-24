@@ -12,7 +12,7 @@ PoliciesFunctions = NTuple{2, PolicyFunction};
 GameParameters = Tuple{Tuple{M1, M2}, NTuple{2, PoliciesFunctions}, Calibration} where {M1 <: AbstractModel, M2 <: AbstractModel}
 
 function Fgame!(du, u, parameters::GameParameters, t)
-    models, policies = parameters
+    models, policies, calibration = parameters
     oecdmodel, rowmodel = models
     oecdpolicies, rowpolicies = policies
 
