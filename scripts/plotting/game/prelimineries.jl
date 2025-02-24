@@ -22,10 +22,11 @@ includet("../utils.jl")
 
 begin # Global variables
     BASELINE_YEAR = 2020
-    PLOT_HORIZON = 60.
+    PLOT_HORIZON = 80.
     DATAPATH = "data"
     PLOTPATH = "plots/game"
     PRESENTATIONPATH = joinpath(PLOTPATH, "presentation")
+    THESISPATH = "../phd-thesis/climate-plots/game"
 
     SAVEFIG = false
     LINE_WIDTH = 2.5
@@ -108,7 +109,9 @@ begin # Albedo plot
     })
 
     if SAVEFIG
-        PGFPlotsX.save(joinpath(PLOTPATH, "skeleton-albedo.tikz"), albedofig; include_preamble=true)
+        for path in (PLOTPATH, THESISPATH)
+            PGFPlotsX.save(joinpath(path, "skeleton-albedo.tikz"), albedofig; include_preamble = true)
+        end
     end
 
     @pgf for (threshold, model) in rowmodels
@@ -133,7 +136,9 @@ begin # Albedo plot
     @pgf albedofig["legend style"] = raw"at = {(0.95, 0.95)}"
 
     if SAVEFIG
-        PGFPlotsX.save(joinpath(PLOTPATH, "albedo.tikz"), albedofig; include_preamble=true)
+        for path in (PLOTPATH, THESISPATH)
+            PGFPlotsX.save(joinpath(path, "albedo.tikz"), albedofig; include_preamble=true)
+        end
     end
 
     albedofig
@@ -141,7 +146,7 @@ end
 
 begin
     sims = Dict{AbstractModel, DiffEqArray}()
-    quantiles = [0.05, 0.1, 0.3, 0.5, 0.7, 0.9, 0.95]
+    quantiles = [0.1, 0.5, 0.9]
     mediandx = findfirst(q -> q == 0.5, quantiles)
 
     for (threshold, rowmodel) in rowmodels
@@ -198,26 +203,30 @@ begin
             yticklabels = []
         }
 
-        xopts = @pgf pdx > 2 ? {
+        thirdopts = @pgf pdx == 3 ? {
+            xtick = Mticks[1:(end - 1)],
+            xticklabels = Mtickslabels[1:(end - 1)],
+            xticklabel_style = {align = "center"}
+        } : {}
+
+        lastops = @pgf pdx == 4 ? {
             xlabel = MLABEL,
             xtick = Mticks,
             xticklabels = Mtickslabels,
-            xticklabel_style = {align = "center"}
-        } : {
-            xtick = Mticks,
-            xticklabels = []
-        }
+            xticklabel_style = {align = "center"},
+            xlabel_style = {xshift = raw"-0.25\textwidth", align = "center"}
+        } : {}
 
-        title = isfinite(threshold) ? @sprintf("\$T^c = %.1f \\si{\\degree} \$", threshold) : "Linear model"
+        title = isfinite(threshold) ? @sprintf("\$T^c = %.1f \\si{\\degree} \$", threshold) : "No Tipping"
 
         @pgf push!(baufig, {
-            width = raw"0.6\textwidth",
-            height = raw"0.4\textwidth",
+            width = raw"0.5\textwidth",
+            height = raw"0.5\textwidth",
             grid = "both",
             ymin = Tmin, ymax = Tmax,
             xmin = 380, xmax = 845,
             title = title,
-            xopts..., yopts...
+            yopts..., thirdopts..., lastops...
         })
 
         for jdx in 1:2
@@ -255,7 +264,9 @@ begin
     @pgf baufig["legend style"] = raw"at = {(0.95, 0.3)}"
 
     if SAVEFIG
-        PGFPlotsX.save(joinpath(PLOTPATH, "baufig.tikz"), baufig; include_preamble=true)
+        for path in (PLOTPATH, THESISPATH)
+            PGFPlotsX.save(joinpath(path, "baufig.tikz"), baufig; include_preamble=true)
+        end
     end
 
     baufig
@@ -307,7 +318,9 @@ begin # Growth of carbon concentration
     push!(γfig, oecdbar, LegendEntry("OECD"), rowbar, LegendEntry("RoW"))
     
     if SAVEFIG
-        PGFPlotsX.save(joinpath(PLOTPATH, "growthmfig.tikz"), γfig; include_preamble=true)
+        for path in (PLOTPATH, THESISPATH)
+            PGFPlotsX.save(joinpath(path, "growthmfig.tikz"), γfig; include_preamble=true)
+        end
     end
 
     γfig
@@ -345,7 +358,9 @@ begin
     push!(mfig, medianplot, markers, lowerpath, upperpath, shading)
 
     if SAVEFIG
-        PGFPlotsX.save(joinpath(PLOTPATH, "mbaufig.tikz"), mfig; include_preamble=true)
+        for path in (PLOTPATH, THESISPATH)
+            PGFPlotsX.save(joinpath(path, "mbaufig.tikz"), mfig; include_preamble=true)
+        end
     end
 
     mfig
@@ -388,7 +403,9 @@ begin # Marginal abatement curve
     end
 
     if SAVEFIG
-        PGFPlotsX.save(joinpath(PLOTPATH, "macfigure.tikz"), macfigure; include_preamble=true)
+        for path in (PLOTPATH, THESISPATH)
+            PGFPlotsX.save(joinpath(path, "macfigure.tikz"), macfigure; include_preamble=true)
+        end
     end
     
     macfigure
