@@ -78,7 +78,7 @@ function F!(du, u, parameters::SimulationParameters, t)
     du[3] = b(t, Point(T, m), (χitp(T, m, t), αitp(T, m, t)), model, calibration)
 end
 
-function F!(du, u, parameters::Tuple{AbstractModel, PolicyFunction}, t)
+function F!(du, u, parameters::SimulationParameters, t)
     model, αitp, calibration  = parameters
     T, m = u
 
@@ -86,9 +86,11 @@ function F!(du, u, parameters::Tuple{AbstractModel, PolicyFunction}, t)
 	du[2] = γ(t, calibration) - αitp(T, m, t)
 end
 
-function Fbau!(du, u, model::AbstractModel, t)
+BAUParameters = Tuple{AbstractModel, Calibration}
+function Fbau!(du, u, parameters::BAUParameters, t)
+    model, calibration = parameters
 	du[1] = μ(u[1], u[2], model) / model.hogg.ϵ
-	du[2] = γ(t, model.calibration)
+	du[2] = γ(t, calibration)
 end
 
 BAUGameParameters = Tuple{NTuple{2, AbstractModel}, Calibration}
@@ -102,7 +104,7 @@ function Fbau!(du, u, parameters::BAUGameParameters, t)
     du[3] = γ(t, calibration)
 end
 
-function G!(Σ, u, model::AbstractModel, t)    
+function G!(Σ, u, parameters::BAUParameters, t)    
 	Σ[1] = model.hogg.σₜ / model.hogg.ϵ
 	Σ[2] = model.hogg.σₘ
 end

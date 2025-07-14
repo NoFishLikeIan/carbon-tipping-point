@@ -44,13 +44,13 @@ begin # Construct models and grids
     jump = Jump()
     hogg = Hogg()
 
-    linearmodel = LinearModel(hogg, preferences, damages, economy, calibration)
-    jumpmodel = JumpModel(jump, hogg, preferences, damages, economy, calibration)
+    linearmodel = LinearModel(hogg, preferences, damages, economy)
+    jumpmodel = JumpModel(jump, hogg, preferences, damages, economy)
 
     tippingmodels = TippingModel[]
     for Tᶜ ∈ thresholds
         albedo = Albedo(Tᶜ)
-        model = TippingModel(albedo, hogg, preferences, damages, economy, calibration)
+        model = TippingModel(albedo, hogg, preferences, damages, economy)
 
         push!(tippingmodels, model)
     end
@@ -138,9 +138,10 @@ end
 begin
     simmodels = models[1:3]
     sims = Dict{AbstractModel, DiffEqArray}()
-
+    
     for model in simmodels
-        prob = SDEProblem(Fbau!, G!, X₀, (0.0, 200.0), model)
+        bauparameters = (model, calibration)
+        prob = SDEProblem(Fbau!, G!, X₀, (0.0, 200.0), bauparameters)
         sol = solve(EnsembleProblem(prob), trajectories = 1000)
 
         simpath = timeseries_point_quantile(sol, [0.2, 0.5, 0.8], yearlytime)
@@ -175,7 +176,7 @@ begin # Nullcline plot
 
     Mmax = 1000.
     
-    Mmedianpath = @. exp(getindex(getindex(simpath.u, 2), 2))
+    Mmedianpath = exp.(getindex.(getindex.(sims[first(simmodels)].u, 2), 2))
     Mticks = Mmedianpath[1:10:end]
 
     Mtickslabels = [

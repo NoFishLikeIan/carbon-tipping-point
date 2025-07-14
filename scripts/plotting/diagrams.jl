@@ -28,6 +28,10 @@ function f(T, m; params...)
     m - λ(T; params...) * T
 end
 
+function flinear(T, m)
+    m - λ(0) * T
+end
+
 function f′(T, m; params...)
     -λ′(T; params...) * T - λ(T; params...)
 end
@@ -75,16 +79,16 @@ begin
             line_width = LINE_WIDTH, color = colors[1], dotted
         }, Coordinates(timesteps, first.(sol(timesteps).u)))
 
-        push!(trajaxis, trajplot, LegendEntry(raw"\footnotesize Without feedback"))
+        push!(trajaxis, trajplot, LegendEntry(raw"\footnotesize Linear"))
     end
 
     trajplot = @pgf Plot({
         line_width = LINE_WIDTH, color = colors[1]
     }, Coordinates(timesteps, Ttraj))
 
-    push!(trajaxis, trajplot, LegendEntry(raw"\footnotesize With feedback"))
+    push!(trajaxis, trajplot, LegendEntry(raw"\footnotesize Feedback"))
 
-    @pgf trajaxis["legend style"] = raw"at = {(0.5, 0.98)}"
+    @pgf trajaxis["legend style"] = raw"at = {(0.4, 0.98)}"
 
     PGFPlotsX.save(joinpath(plotpath, "trajfig_feedback.tikz"), trajaxis; include_preamble = true)
 
@@ -144,11 +148,20 @@ begin # Phase diagram
         fₐ = T -> f(T, m; a)
         f′ₐ = T -> f′(T, m; a)
 
-        line = @pgf Plot({
+        curve = @pgf Plot({
             line_width = 2.,
-        }, Coordinates(Tspace, fₐ.(Tspace)))
+        }, Coordinates(Tspace, fₐ.(Tspace)))        
+        @pgf push!(axis, curve)
 
+        (i == 1) && @pgf push!(axis, LegendEntry(raw"\footnotesize Feedback"))
+
+        line = @pgf Plot({
+            line_width = 2., dotted
+        }, Coordinates(Tspace, flinear.(Tspace, m)))
         @pgf push!(axis, line)
+
+        (i == 1) && @pgf push!(axis, LegendEntry(raw"\footnotesize Linear"))
+        
 
         steadystates = find_zeros(fₐ, (-1., 8.))
 
@@ -194,6 +207,38 @@ end
 
 # Optimisation of τ
 d(T) = exp(T)
+T̄linear(τ) = log(1 + E * τ) / λ(0)
+function Jlinear(τ; ρ = 0.1, β = 2., c = 1., params...)
+    T̄ = T̄linear(τ)
+    w = exp(-ρ * τ)
+
+    β * E * (1 - w) - c * d(T̄) / ρ
+end
+begin # Plot marginal benefit and marginal cost
+    a = 0.02
+    timesteps = range(0., 3., length = 101)
+
+    objvalues = Jlinear.(timesteps; β = 4.7, c = 2.9, ρ = 1.)
+
+    Jfig = @pgf Axis({
+        xmin = 0., xmax = maximum(timesteps),
+        xlabel = L"Emissions stopping time $\tau$", grid = "both",
+        yticklabels = raw"\empty", ylabel = L"Social objective $J(\tau)$",
+        scaled_y_ticks = false,
+    })
+
+
+    coords = Coordinates(timesteps, objvalues)
+
+    fig = @pgf Plot({ line_width = LINE_WIDTH, color = colors[2] }, coords)
+
+    push!(Jfig, fig)
+
+    PGFPlotsX.save(joinpath(plotpath, "maximisation_feedback_linear.tikz"), Jfig; include_preamble = true)
+
+    Jfig
+end
+
 Tsteadystate(τ; params...) = find_zeros(
     T -> T * λ(T; params...) - log(1 + E * τ),
     (0., 100.)
@@ -210,9 +255,10 @@ end
 
 begin # Plot marginal benefit and marginal cost
     a = 0.02
-    timesteps = range(0, 3., length = 101)
+    timesteps = range(0., 3., length = 101)
 
-    objvalues = J.(timesteps; a, ρ = 0.1, β = 50_000., c = 1.)
+    objvalues = J.(timesteps; a, ρ = 0.1, β = 30_000., c = 1.)
+
     bifurcation = findlast(v -> length(v) > 1, objvalues)
 
     triple = objvalues[1:bifurcation]
@@ -225,13 +271,10 @@ begin # Plot marginal benefit and marginal cost
         scaled_y_ticks = false,
     })
 
-    upperpath = first.(triple)
+    upperpath = getindex.(triple, 1)
     lowerpath = last.(objvalues)
 
-    uppercoords = Coordinates(
-        timesteps[1:bifurcation],
-        upperpath
-    )
+    uppercoords = Coordinates(timesteps[1:bifurcation], upperpath)
 
     upperplot = @pgf Plot({ line_width = LINE_WIDTH, color = colors[2] }, uppercoords)
 

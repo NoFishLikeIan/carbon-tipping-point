@@ -21,7 +21,7 @@ includet("../utils.jl")
 includet("../../utils/saving.jl")
 includet("../../utils/simulating.jl")
 
-SAVEFIG = false;
+SAVEFIG = true;
 ALLOWNEGATIVE = false;
 datapath = "data/simulation-large";
 experimentpath = "data/experiments/simulation-large";
@@ -31,21 +31,31 @@ begin # Default parameters
     θ = 10.
     ψ = 0.75
     damages = GrowthDamages
+    thresholds = [1.5, 3.5]
 
     ismodel = @closure model -> begin
         model.preferences.θ == θ &&
         model.preferences.ψ == ψ &&
-        model.damages isa damages
+        model.damages isa damages && 
+        model.albedo.Tᶜ in thresholds 
     end
 
-    plotpath = joinpath("plots", damages == LevelDamages ? "damage-robust" : "")
-    calibration = load_object("data/calibration.jld2")
+    robustpath = if damages == LevelDamages
+        "robust/damage"
+    elseif maximum(thresholds) > 2.5
+        "robust/tipping"
+    else
+        ""
+    end
+
+    plotpath = joinpath("plots", robustpath)
 end
 
 begin # Import results and interpolations
     simulationfilespath = joinpath(datapath, ALLOWNEGATIVE ? "negative" : "constrained")
 
     simulationfiles = listfiles(simulationfilespath)
+    calibration = load_object("data/calibration.jld2")
 
     models = AbstractModel[]
     interpolations = Dict{AbstractModel, Dict{Symbol, Extrapolation}}();
