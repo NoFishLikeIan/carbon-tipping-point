@@ -57,7 +57,14 @@
       "withnegative": false
     },
     {
-      "threshold": 10.0,
+      "threshold": 3.0,
+      "eis": 0.75,
+      "leveldamages": false,
+      "rra": 10.0,
+      "withnegative": false
+    },
+    {
+      "threshold": 3.5,
       "eis": 0.75,
       "leveldamages": false,
       "rra": 10.0,
@@ -106,7 +113,14 @@
       "withnegative": true
     },
     {
-      "threshold": 10.0,
+      "threshold": 3.0,
+      "eis": 0.75,
+      "leveldamages": false,
+      "rra": 10.0,
+      "withnegative": true
+    },
+    {
+      "threshold": 3.5,
       "eis": 0.75,
       "leveldamages": false,
       "rra": 10.0,

@@ -2,7 +2,7 @@ using JSON
 
 rras = [10.0];
 eiss = [0.75];
-thresholds = [1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 10.];
+thresholds = [1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0, 3.5];
 withleveldamages = [false];
 withnegatives = [false, true];
 
