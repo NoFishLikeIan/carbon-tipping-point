@@ -1,16 +1,18 @@
 #!/bin/bash
 
-#SBATCH --job-name=testtipping
-#SBATCH --array=0-15
+#SBATCH --job-name=tipping
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=12
-#SBATCH --time=01:00:00
+#SBATCH --cpus-per-task=64
+#SBATCH --array=4,12
+#SBATCH --time=24:00:00
 #SBATCH --partition=rome
 #SBATCH --mail-type=BEGIN,END,FAIL,TIME_LIMIT_80
-#SBATCH -o ./logs/out/TEST%A_%a.out 
-#SBATCH -e ./logs/error/TEST%A_%a.out
+#SBATCH -o ./logs/out/TIPPING%A_%a.out 
+#SBATCH -e ./logs/error/TIPPING%A_%a.out
 #SBATCH --mail-user=a.titton@uva.nl
+
+# There are 16 parameter sets
 
 module load 2023
 module load Julia/1.9.2-linux-x86_64
@@ -24,17 +26,17 @@ rsync data/calibration.jld2 $SCRATCHDATA # Copy calibration data to scratch
 # Extract parameters at the SLURM_ARRAY_TASK_ID from parameters.json
 jq_command='
 .tippingparameters[$id | tonumber] | 
-"--threshold \(.threshold) --rra \(.rra) --eis \(.eis)" +
+"--rra \(.rra) --eis \(.eis) --threshold \(.threshold)" +
 (if .leveldamages then " --leveldamages" else "" end) +
 (if .withnegative then " --withnegative" else "" end)
 '
 
 params=$(jq -r --arg id "$SLURM_ARRAY_TASK_ID" "$jq_command" jobs/simulations/parameters.json)
 
-# Run script
-julia --threads ${SLURM_CPUS_PER_TASK} --project scripts/runtipping.jl -N 11 \
+# Run script 
+julia --threads ${SLURM_CPUS_PER_TASK} --project scripts/runtipping.jl -N 101 \
     --cachestep 0.25 --verbose 1 \
-    --datapath "$SCRATCHDATA"  --simulationpath "simulation-test" --overwrite \
+    --datapath "$SCRATCHDATA"  --simulationpath "simulation-grid-robustness" --overwrite \
     $params
 
 # Copy results back to home
