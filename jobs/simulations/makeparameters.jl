@@ -1,8 +1,8 @@
 using JSON
 
-rras = [2.0, 10.0];
-eiss = [0.75, 1.5];
-thresholds = [1.5, 2.5, 3.5];
+rras = [10.0];
+eiss = [0.75];
+thresholds = [1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 10.];
 withleveldamages = [false];
 withnegatives = [false, true];
 
