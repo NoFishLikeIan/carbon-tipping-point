@@ -3,13 +3,10 @@ const defaultoptoptions = Optim.Options(g_tol = 1e-12, iterations = 100_000)
 """
 Optimise `diffobjective` and stores the minimiser in u. If the optimisation does not converge, it takes the mean of the policy in the neighbourhood.
 """
-function fallbackoptimisation!(u,
-    diffobjective, u₀, 
-    idx, t, policy, 
-    constraints::TwiceDifferentiableConstraints, G::RegularGrid)
+function fallbackoptimisation!(u, diffobjective, u₀, idx, t, policy, constraints::TwiceDifferentiableConstraints, G::RegularGrid)
 
     if !Optim.isinterior(constraints, u₀)
-        @warn "Initial guess is not in the interior of the constraints at t = $t and idx = $idx, using mean policy instead"
+        @warn "Initial guess $u₀ is not in the interior of the constraints $constraints at t = $t and idx = $idx, using mean policy instead"
         
         unit = oneunit(idx)
         L = max(minimum(CartesianIndices(G)), idx - unit)
@@ -33,7 +30,7 @@ function fallbackoptimisation!(u,
     end
 end
 
-function backwardstep!(Δts, F::NTuple{2, Matrix{Float64}}, policy, cluster, model::AbstractModel, calibration::Calibration, G; constrained = true)
+function backwardstep!(Δts, F::NTuple{2, Matrix{Float64}}, policy, cluster, model::AbstractModel, calibration::Calibration, G; withnegative = false)
     Fₜ, Fₜ₊ₕ = F
 
     lb = [0., 0.]
@@ -51,13 +48,12 @@ function backwardstep!(Δts, F::NTuple{2, Matrix{Float64}}, policy, cluster, mod
             return logcost(Fᵉₜ, t, Xᵢ, Δt, u, model, calibration)
         end
 
-        ᾱ = constrained ? γ(t, calibration) + δₘ(M, model.hogg) : Inf
-        u₀ = policy[idx, :]
-        u₀[2] = clamp(u₀[2], 0., ᾱ * 0.99)
+        ᾱ = γ(t, calibration) + δₘ(M, model.hogg)
+        ub = [ 1., ifelse(withnegative, Inf, ᾱ) ]
+        u₀ = [ 1 / 2, ᾱ / 2 ]
 
         diffobjective = TwiceDifferentiable(objective, u₀; autodiff = :forward)
-
-        rectangle = TwiceDifferentiableConstraints(lb, [1., ᾱ])
+        rectangle = TwiceDifferentiableConstraints(lb, ub)
         
         optimum = similar(u₀)
         fallbackoptimisation!(optimum, diffobjective, u₀, idx, t, policy, rectangle, G)
@@ -120,7 +116,7 @@ function backwardsimulation!(queue::PartialQueue, F::NTuple{2, Matrix{Float64}},
         
         clusters = ZigZagBoomerang.dequeue!(queue)
         for cluster in clusters
-            backwardstep!(Δts, F, policy, cluster, model, calibration, G; constrained = !withnegative)
+            backwardstep!(Δts, F, policy, cluster, model, calibration, G; withnegative)
 
             indices = first.(cluster)
 

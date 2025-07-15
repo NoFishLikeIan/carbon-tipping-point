@@ -32,16 +32,27 @@ begin
 end
 
 # Testing the backward step
-begin
-	F̄, terminalpolicy, G = loadterminal(model; outdir = "data/simulation-local/constrained");
-	policy = Array{Float64}(undef, size(G)..., 2)
-	policy[:, :, 1] .= terminalpolicy
-	policy[:, :, 2] .= γ(economy.τ, calibration)
+F̄, terminalpolicy, G = try
+	loadterminal(model; outdir = "data/simulation-local/constrained");
+catch error
+	@warn "Could not load terminal data, running terminal grid and VFI instead."
 
-	Fₜ₊ₕ = copy(F̄);
+	N = 40
+	G = terminalgrid(N, model)
+	errors = Inf .* ones(size(G));
+	F₀ = ones(size(G));
+
+	F̄, terminalpolicy = vfi(F₀, model, G; maxiter = 10_000, verbose = 2)
+
+	return F̄, terminalpolicy, G
 end;
 
 begin
+	policy = Array{Float64}(undef, size(G)..., 2)
+	policy[:, :, 1] .= terminalpolicy
+	policy[:, :, 2] .= γ(economy.τ, calibration)
+	Fₜ₊ₕ = copy(F̄);
+
 	queue = DiagonalRedBlackQueue(G)
 	Δts = zeros(prod(size(G)))
 	cluster = first(ZigZagBoomerang.dequeue!(queue))
@@ -50,7 +61,8 @@ begin
 	F = (Fₜ, Fₜ₊ₕ)
 end;
 
-backwardstep!(Δts, F, policy, cluster, model, calibration, G; constrained = true);
-@benchmark backwardstep!($Δts, $F, $policy, $cluster, $model, $calibration, $G; constrained = $(false))
+withnegative = true
+backwardstep!(Δts, F, policy, cluster, model, calibration, G; withnegative = withnegative);
+@benchmark backwardstep!($Δts, $F, $policy, $cluster, $model, $calibration, $G; withnegative = $withnegative)
 @profview backwardstep!(Δts, F, policy, cluster, model, calibration, G);
 @profview_allocs backwardstep!(Δts, F, policy, cluster, model, calibration, G);

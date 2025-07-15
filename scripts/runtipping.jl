@@ -62,7 +62,7 @@ if (verbose ≥ 1)
     flush(stdout)
 end
 
-outdir = joinpath(datapath, simulationpath, withnegative ? "negative" : "constrained", leveldamages ? "level" : "growth")
+outdir = joinpath(datapath, simulationpath, withnegative ? "negative" : "constrained")
 
 if (verbose ≥ 1)
     println("$(now()): ","Running terminal...")

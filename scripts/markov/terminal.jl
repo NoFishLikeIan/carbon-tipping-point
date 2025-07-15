@@ -56,7 +56,6 @@ function terminalmarkovstep(idx, F̄, model::JumpModel, G)
 end
 
 function terminaljacobi!(F̄, policy, errors, model::AbstractModel, G; indices = CartesianIndices(F̄))
-
     @inbounds @threads for idx in indices
         Fᵢ′, Δt = terminalmarkovstep(idx, F̄, model, G)
         Tᵢ = G.X[idx].T
@@ -70,7 +69,6 @@ function terminaljacobi!(F̄, policy, errors, model::AbstractModel, G; indices =
         F̄[idx] = Fᵢ
         policy[idx] = χ
     end
-
 end
 
 function vfi(F₀, model::AbstractModel, G; tol = 1e-3, maxiter = 10_000, verbose = 0, indices = CartesianIndices(G), alternate = false)

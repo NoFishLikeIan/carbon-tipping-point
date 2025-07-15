@@ -57,8 +57,7 @@ argtable = ArgParseSettings()
         default = 10.
 
     "--withnegative"
-        arg_type = Bool
-        default = false
+        action = :store_true
 end
 
 resumeargtable = ArgParseSettings()
