@@ -1,8 +1,16 @@
-using Revise
-using Test: @test
-using BenchmarkTools: @btime
+using Test, BenchmarkTools, Revise, UnPack
 
 using Model, Grid
+using FastClosures
+using ZigZagBoomerang
+using Base.Threads
+using SciMLBase
+using Optim
+using Statistics
+using StaticArrays
+
+using JLD2
+using Dates, Printf
 
 includet("../utils/saving.jl")
 includet("../markov/terminal.jl")
@@ -18,7 +26,7 @@ end;
 # --- Albedo
 damages = GrowthDamages()
 model = TippingModel(albedo, hogg, preferences, damages, economy);
-N = 6
+N = 60
 G = terminalgrid(N, model)
 
 # F̄, terminalpolicy = loadterminal(model; outdir = "data/simulation/planner")

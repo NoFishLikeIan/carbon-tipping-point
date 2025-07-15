@@ -101,7 +101,7 @@ function backwardsimulation!(queue::PartialQueue, Fs::Values, policies::Policies
 
         passcounter += 1
         
-        clusters = dequeue!(queue)
+        clusters = ZigZagBoomerang.dequeue!(queue)
         for cluster in clusters
             backwardstep!(Δts, Fs, policies, cluster, models, regionalcalibration, G)
 

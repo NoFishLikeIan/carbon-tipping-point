@@ -1,11 +1,3 @@
-using Model
-using Grid: Policy, RegularGrid
-using Printf: @sprintf
-using UnPack: @unpack
-using JLD2: jldopen
-using FileIO: load
-
-
 const SIMPATHS = Dict(
     LinearModel{LevelDamages, EpsteinZin}  => "linear/level",
     LinearModel{GrowthDamages, EpsteinZin} => "linear/growth",

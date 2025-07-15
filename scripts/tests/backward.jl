@@ -1,10 +1,21 @@
-using Revise
-using Test: @test
-using UnPack: @unpack
-using BenchmarkTools
+using Test, BenchmarkTools, Revise, UnPack
+
 using JLD2
+using Printf
+
+using Model, Grid
+using FastClosures
+using ZigZagBoomerang
+using Base.Threads
+using SciMLBase
+using Optim
+using Statistics
+using StaticArrays
+
+using Dates
 
 includet("../utils/saving.jl")
+include("../markov/chain.jl")
 includet("../markov/terminal.jl")
 includet("../markov/backward.jl")
 
@@ -33,13 +44,13 @@ end;
 begin
 	queue = DiagonalRedBlackQueue(G)
 	Δts = zeros(prod(size(G)))
-	cluster = first(dequeue!(queue))
+	cluster = first(ZigZagBoomerang.dequeue!(queue))
 
 	Fₜ = similar(Fₜ₊ₕ)
 	F = (Fₜ, Fₜ₊ₕ)
 end;
 
-backwardstep!(Δts, F, policy, cluster, model, calibration, G);
-@btime backwardstep!($Δts, $F, $policy, $cluster, $model, $calibration, $G);
+backwardstep!(Δts, F, policy, cluster, model, calibration, G; constrained = true);
+@benchmark backwardstep!($Δts, $F, $policy, $cluster, $model, $calibration, $G; constrained = $(false))
 @profview backwardstep!(Δts, F, policy, cluster, model, calibration, G);
 @profview_allocs backwardstep!(Δts, F, policy, cluster, model, calibration, G);

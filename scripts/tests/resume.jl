@@ -19,7 +19,7 @@ begin
     queue = DiagonalRedBlackQueue(G; initialvector = (model.economy.τ - minimum(timesteps)) * ones(totalsize))
 
 	Δts = zeros(size(G, 1) * size(G, 2))
-	cluster = first(dequeue!(queue))
+	cluster = first(ZigZagBoomerang.dequeue!(queue))
 end;
 
 begin

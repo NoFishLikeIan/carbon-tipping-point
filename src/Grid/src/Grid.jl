@@ -14,7 +14,7 @@ using StaticArrays: FieldVector, MVector
 using Statistics: mean, middle
 using Interpolations: interpolate, extrapolate, scale
 using Interpolations: BSpline, Linear, Line
-using ZigZagBoomerang: PartialQueue, dequeue!, saturate, rkey, div1, peek
+using ZigZagBoomerang: PartialQueue, ZigZagBoomerang.dequeue!, saturate, rkey, div1, peek
 using Graphs: Edge, Graph, SimpleGraphs
 
 include("routines/bisection.jl")

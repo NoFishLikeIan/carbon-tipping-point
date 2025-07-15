@@ -1,19 +1,3 @@
-using JLD2
-using Printf: @printf
-
-using Model, Grid
-using FastClosures: @closure
-using Printf: @printf
-using ZigZagBoomerang: dequeue!, PartialQueue
-using Base.Threads: @threads
-using SciMLBase: successful_retcode
-using Optim
-using Statistics: mean
-
-using Dates: now
-
-include("chain.jl")
-
 const defaultoptoptions = Optim.Options(g_tol = 1e-12, iterations = 100_000)
 
 """
@@ -49,26 +33,31 @@ function fallbackoptimisation!(u,
     end
 end
 
-function backwardstep!(Δts, F::NTuple{2, Matrix{Float64}}, policy, cluster, model::AbstractModel, calibration::Calibration, G)
+function backwardstep!(Δts, F::NTuple{2, Matrix{Float64}}, policy, cluster, model::AbstractModel, calibration::Calibration, G; constrained = true)
     Fₜ, Fₜ₊ₕ = F
 
-    @threads for (i, δt) in cluster
-        @inbounds begin
-        indices = CartesianIndices(G)
+    lb = [0., 0.]
 
+    @inbounds @threads for (i, δt) in cluster
+        indices = CartesianIndices(G)
+        
         idx = indices[i]
+        Xᵢ = G.X[idx]
         t = model.economy.τ - δt
-        M = exp(G.X[idx].m)
+        M = exp(Xᵢ.m)
 
         objective = @closure u -> begin
             Fᵉₜ, Δt = markovstep(t, idx, Fₜ₊ₕ, u[2], model, calibration, G)
-            return logcost(Fᵉₜ, t, G.X[idx], Δt, u, model, calibration)
+            return logcost(Fᵉₜ, t, Xᵢ, Δt, u, model, calibration)
         end
 
-        ᾱ = γ(t, calibration) + δₘ(M, model.hogg)
-        u₀ = [0.5, ᾱ / 2.]
+        ᾱ = constrained ? γ(t, calibration) + δₘ(M, model.hogg) : Inf
+        u₀ = policy[idx, :]
+        u₀[2] = clamp(u₀[2], 0., ᾱ * 0.99)
+
         diffobjective = TwiceDifferentiable(objective, u₀; autodiff = :forward)
-        rectangle = TwiceDifferentiableConstraints([0., 0.], [1., ᾱ])
+
+        rectangle = TwiceDifferentiableConstraints(lb, [1., ᾱ])
         
         optimum = similar(u₀)
         fallbackoptimisation!(optimum, diffobjective, u₀, idx, t, policy, rectangle, G)
@@ -78,7 +67,6 @@ function backwardstep!(Δts, F::NTuple{2, Matrix{Float64}}, policy, cluster, mod
         policy[idx, :] .= optimum
         Fₜ[idx] = exp(objectiveminimum)
         Δts[i] = markovstep(t, idx, Fₜ₊ₕ, optimum[2], model, calibration, G)[2]
-        end
     end 
 end
 
@@ -87,7 +75,7 @@ function backwardsimulation!(F::NTuple{2, Matrix{Float64}}, policy, model::Abstr
     backwardsimulation!(queue, F, policy, model, calibration, G; kwargs...)
 end
 
-function backwardsimulation!(queue::PartialQueue, F::NTuple{2, Matrix{Float64}}, policy, model::AbstractModel, calibration::Calibration, G; verbose = 0, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = model.economy.τ)
+function backwardsimulation!(queue::PartialQueue, F::NTuple{2, Matrix{Float64}}, policy, model::AbstractModel, calibration::Calibration, G; verbose = 0, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = model.economy.τ, withnegative = false)
     tcache = tcache # Just to make sure it is well defined in all paths.
 
     savecache = !isnothing(cachepath)
@@ -130,9 +118,9 @@ function backwardsimulation!(queue::PartialQueue, F::NTuple{2, Matrix{Float64}},
 
         passcounter += 1
         
-        clusters = dequeue!(queue)
+        clusters = ZigZagBoomerang.dequeue!(queue)
         for cluster in clusters
-            backwardstep!(Δts, F, policy, cluster, model, calibration, G)
+            backwardstep!(Δts, F, policy, cluster, model, calibration, G; constrained = !withnegative)
 
             indices = first.(cluster)
 
@@ -167,7 +155,7 @@ function computebackward(model::AbstractModel, calibration::Calibration, G; outd
     terminalresults = loadterminal(model; outdir)
     computebackward(terminalresults, model, calibration, G; outdir, kwargs...)
 end
-function computebackward(terminalresults, model::AbstractModel, calibration::Calibration, G; verbose = 0, withsave = true, outdir = "data", iterkwargs...)
+function computebackward(terminalresults, model::AbstractModel, calibration::Calibration, G; verbose = 0, withsave = true, outdir = "data", withnegative = false, iterkwargs...)
     F̄, terminalconsumption, terminalG = terminalresults
     Fₜ₊ₕ = interpolateovergrid(terminalG, G, F̄);
     Fₜ = similar(Fₜ₊ₕ)
@@ -187,7 +175,7 @@ function computebackward(terminalresults, model::AbstractModel, calibration::Cal
 
     cachepath = withsave ? joinpath(cachefolder, filename) : nothing
 
-    backwardsimulation!(F, policy, model, calibration, G; verbose, cachepath, iterkwargs...)
+    backwardsimulation!(F, policy, model, calibration, G; verbose, cachepath, withnegative, iterkwargs...)
 
     return F, policy
 end

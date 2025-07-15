@@ -1,10 +1,3 @@
-using Model, Grid
-using JLD2
-
-using FastClosures: @closure
-using Printf: @printf, @sprintf
-using Base.Threads: @threads
-
 function terminalcost(Fᵢ′, Tᵢ, Δt, χ, model::AbstractModel{GrowthDamages, P}) where P
     δ = terminaloutputfct(Tᵢ, Δt, χ, model)
 
@@ -64,7 +57,7 @@ end
 
 function terminaljacobi!(F̄, policy, errors, model::AbstractModel, G; indices = CartesianIndices(F̄))
 
-    @threads for idx in indices
+    @inbounds @threads for idx in indices
         Fᵢ′, Δt = terminalmarkovstep(idx, F̄, model, G)
         Tᵢ = G.X[idx].T
 

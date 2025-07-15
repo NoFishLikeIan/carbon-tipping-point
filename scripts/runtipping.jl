@@ -9,7 +9,7 @@ include("arguments.jl") # Import argument parser
 
 parsedargs = ArgParse.parse_args(argtable)
 
-@unpack overwrite, datapath, simulationpath, N, cachestep, tol, verbose, stopat, threshold, leveldamages, eis, rra = parsedargs
+@unpack overwrite, datapath, simulationpath, N, cachestep, tol, verbose, stopat, threshold, leveldamages, eis, rra, withnegative = parsedargs
 
 if (verbose ≥ 1)
     println("$(now()): ", "Running with $(nthreads()) threads...")
@@ -22,12 +22,23 @@ end
 
 # Begin script
 using JLD2
+using Printf
+
 using Model, Grid
+using FastClosures
+using ZigZagBoomerang
+using Base.Threads
+using SciMLBase
+using Optim
+using Statistics
+using StaticArrays
+
+using Dates
 
 include("utils/saving.jl")
+include("markov/chain.jl")
 include("markov/terminal.jl")
 include("markov/backward.jl")
-
 
 # Construct model
 calibrationdirectory = joinpath(datapath, "calibration.jld2")
@@ -47,11 +58,11 @@ mdomain = mstable.(Tdomain, hogg)
 G = RegularGrid([Tdomain, mdomain], N)
 
 if (verbose ≥ 1)
-    println("$(now()): ","Solving tipping model with Tᶜ = $threshold, ψ = $eis, θ = $rra, and $(leveldamages ? "level" : "growth") damages...")
+    println("$(now()): ","Solving tipping model with Tᶜ = $threshold, ψ = $eis, θ = $rra, $(withnegative ? "with" : "without") negative emissions and $(leveldamages ? "level" : "growth") damages...")
     flush(stdout)
 end
 
-outdir = joinpath(datapath, simulationpath)
+outdir = joinpath(datapath, simulationpath, withnegative ? "negative" : "constrained", leveldamages ? "level" : "growth")
 
 if (verbose ≥ 1)
     println("$(now()): ","Running terminal...")
@@ -66,4 +77,4 @@ if (verbose ≥ 1)
     flush(stdout)
 end
 
-computebackward(model, calibration, G; verbose, outdir, overwrite, tstop = stopat, cachestep)
+computebackward(model, calibration, G; verbose, outdir, overwrite, tstop = stopat, cachestep, withnegative)

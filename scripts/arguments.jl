@@ -55,6 +55,10 @@ argtable = ArgParseSettings()
     "--rra"
         arg_type = Float64
         default = 10.
+
+    "--withnegative"
+        arg_type = Bool
+        default = false
 end
 
 resumeargtable = ArgParseSettings()

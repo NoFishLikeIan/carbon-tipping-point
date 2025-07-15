@@ -63,7 +63,7 @@ end
 begin
 	queue = DiagonalRedBlackQueue(G)
 	Δts = zeros(prod(size(G)))
-	cluster = first(dequeue!(queue))
+	cluster = first(ZigZagBoomerang.dequeue!(queue))
 end;
 
 backwardstep!(Δts, Fs, policies, cluster, models, regionalcalibration, G)

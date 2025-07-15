@@ -1,16 +1,3 @@
-using JLD2
-using Printf: @printf
-
-using Model, Grid
-using ZigZagBoomerang: dequeue!, PartialQueue
-using Base.Threads: @threads
-
-using Statistics: mean
-using Dates: now
-using Interpolations: Extrapolation
-
-include("chain.jl")
-
 function backwardstep!(Δts, F::Matrix{Float64}, χitp::Extrapolation, αitp::Extrapolation, cluster, model::AbstractModel, calibration::Calibration, G)
     @threads for (i, δt) in cluster
         indices = CartesianIndices(G)
@@ -41,7 +28,7 @@ function backwardsimulation!(queue::PartialQueue, F::Matrix{Float64}, χitp::Ext
 
         passcounter += 1
         
-        clusters = dequeue!(queue)
+        clusters = ZigZagBoomerang.dequeue!(queue)
         for cluster in clusters
             backwardstep!(Δts, F, χitp, αitp, cluster, model, calibration, G)
 

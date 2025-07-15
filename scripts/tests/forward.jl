@@ -5,7 +5,19 @@ using BenchmarkTools
 using JLD2
 using Interpolations
 
+using Model, Grid
+using FastClosures
+using ZigZagBoomerang
+using Base.Threads
+using SciMLBase
+using Optim
+using Statistics
+using StaticArrays
+
+using Dates
+
 includet("../utils/saving.jl")
+includet("../markov/chain.jl")
 includet("../markov/forward.jl")
 
 begin
