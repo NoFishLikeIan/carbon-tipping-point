@@ -29,7 +29,7 @@ rsync data/regionalcalibration.jld2 $SCRATCHDATA
 jq_command='
 .parameters[$id | tonumber] | 
 "--rra \(.rra) --eis \(.eis) --threshold \(.threshold)" +
-(if .allownegative then " --allownegative" else "" end)
+(if .withnegative then " --withnegative" else "" end)
 '
 
 params=$(jq -r --arg id "$SLURM_ARRAY_TASK_ID" "$jq_command" jobs/game/parameters.json)

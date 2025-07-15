@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #SBATCH --job-name=testtipping
-#SBATCH --array=3-4
+#SBATCH --array=0-13
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=12
@@ -26,7 +26,7 @@ jq_command='
 .tippingparameters[$id | tonumber] | 
 "--rra \(.rra) --eis \(.eis)" +
 (if .leveldamages then " --leveldamages" else "" end) +
-(if .allownegative then " --allownegative" else "" end)
+(if .withnegative then " --withnegative" else "" end)
 '
 
 params=$(jq -r --arg id "$SLURM_ARRAY_TASK_ID" "$jq_command" jobs/simulations/parameters.json)

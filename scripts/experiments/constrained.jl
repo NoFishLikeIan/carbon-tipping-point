@@ -8,13 +8,13 @@ using FastClosures
 include("../utils/saving.jl")
 include("../utils/simulating.jl")
 
-ALLOWNEGATIVE = false;
+withnegative = false;
 trajectories = 5_000;
 datapath = "data/simulation-small";
 
 println("Loading interpolations...")
 begin
-    filepaths = joinpath(datapath, ALLOWNEGATIVE ? "negative" : "constrained")
+    filepaths = joinpath(datapath, withnegative ? "negative" : "constrained")
 
     simulationfiles = listfiles(filepaths)
 
@@ -36,10 +36,10 @@ if !isdir(experimentdir)
     mkdir(experimentdir)
 end
 
-experimentpath = joinpath(experimentdir, ALLOWNEGATIVE ? "negative.jld2" : "constrained.jld2");
+experimentpath = joinpath(experimentdir, withnegative ? "negative.jld2" : "constrained.jld2");
 if isdir(experimentpath)
     unix = round(Int, time())
-    newfilepath = joinpath(experimentdir, ALLOWNEGATIVE ? "negative_$unix.jld2" : "constrained_$unix.jld2")
+    newfilepath = joinpath(experimentdir, withnegative ? "negative_$unix.jld2" : "constrained_$unix.jld2")
 
     mv(experimentpath, newfilepath)
     rm(experimentpath; recursive = true)

@@ -28,7 +28,7 @@ jq_command='
 .benchmarkparameters[$id | tonumber] | 
 "--rra \(.rra) --eis \(.eis)" +
 (if .leveldamages then " --leveldamages" else "" end) +
-(if .allownegative then " --allownegative" else "" end)
+(if .withnegative then " --withnegative" else "" end)
 '
 
 params=$(jq -r --arg id "$SLURM_ARRAY_TASK_ID" "$jq_command" jobs/simulations/parameters.json)

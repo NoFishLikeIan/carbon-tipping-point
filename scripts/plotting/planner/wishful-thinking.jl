@@ -22,7 +22,7 @@ includet("../../utils/saving.jl")
 includet("../../utils/simulating.jl")
 
 SAVEFIG = true;
-ALLOWNEGATIVE = false;
+withnegative = false;
 datapath = "data/simulation-large";
 experimentpath = "data/experiments/simulation-large";
 PLOT_HORIZON = 80.
@@ -52,7 +52,7 @@ begin # Default parameters
 end
 
 begin # Import results and interpolations
-    simulationfilespath = joinpath(datapath, ALLOWNEGATIVE ? "negative" : "constrained")
+    simulationfilespath = joinpath(datapath, withnegative ? "negative" : "constrained")
 
     simulationfiles = listfiles(simulationfilespath)
     calibration = load_object("data/calibration.jld2")
