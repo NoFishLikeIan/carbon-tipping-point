@@ -1,6 +1,6 @@
 Base.@kwdef struct GrowthDamages
-    ξ::Float64 = 0.000075
-    υ::Float64 = 3.25
+    ξ₁::Float64 = 0.0357 # Linear term in damage function
+    ξ₂::Float64 = 0.0018 # Quadratic term in damage function
 end
 
 Base.@kwdef struct LevelDamages
@@ -8,6 +8,7 @@ Base.@kwdef struct LevelDamages
 end
 
 Damages = Union{GrowthDamages, LevelDamages}
+Base.broadcastable(damages::Damages) = Ref(damages)
 
 Base.@kwdef struct Economy
     # Technology
@@ -22,7 +23,7 @@ Base.@kwdef struct Economy
     Y₀::Float64 = 75.8
     σₖ::Float64 = 0.0162 # Variance of GDP
 
-    τ::Float64 = 500. # Steady state horizon
+    τ::Float64 = 307. # Steady state horizon, such that `exp(-ϱ * τ) = 1%.`
 end
 
 "Cost of abatement as a fraction of GDP"
@@ -34,19 +35,28 @@ function β′(t, e, economy::Economy)
     exp(-economy.ωᵣ * t) * e
 end
 
-function d(T, damages::GrowthDamages, hogg::Hogg)
-    damages.ξ * max(T - hogg.Tᵖ, 0.)^damages.υ
+function d(T, m, damages::GrowthDamages, hogg::Hogg, albedo::Albedo)
+    ΔT = max(T - hogg.Tᵖ, 0.)
+    return (damages.ξ₁ + damages.ξ₂ * ΔT) * μ(T, m, hogg, albedo) / hogg.ϵ
+end
+function d(T, m, damages::GrowthDamages, hogg::Hogg)
+    ΔT = max(T - hogg.Tᵖ, 0.)
+    return (damages.ξ₁ + damages.ξ₂ * ΔT) * μ(T, m, hogg) / hogg.ϵ
+end
+function d(T, damages::LevelDamages, hogg::Hogg)
+    ΔT = max(T - hogg.Tᵖ, 0.)
+    return inv(1 + damages.ξ * ΔT^2)
 end
 
-function d(T, damages::LevelDamages, hogg::Hogg)
-    inv(1 + damages.ξ * max(T - hogg.Tᵖ, 0.)^2)
+function D(ΔT, damages::GrowthDamages)
+    damages.ξ₁ * ΔT + damages.ξ₂ * ΔT^2 / 2.
 end
 
 function ϕ(t, χ, economy::Economy)
     productivity = (1 - χ) * A(t, economy)
     adjcosts = economy.κ * productivity^2 / 2.
         
-    productivity - adjcosts
+    return productivity - adjcosts
 end
 
 function A(t, economy::Economy)

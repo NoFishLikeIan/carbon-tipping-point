@@ -11,22 +11,31 @@ Tstable(m, model::TippingModel) = Tstable(m, model.hogg, model.albedo)
 Tstable(m, model::JumpModel) = Tstable(m, model.hogg)
 Tstable(m, model::LinearModel) = Tstable(m, model.hogg)
 
-function bterminal(χ::Float64, economy::Economy)
-    growth = economy.ϱ - economy.δₖᵖ
-    investments = ϕ(economy.τ, χ, economy)
+function d(Xᵢ::Point, model::TippingModel{GrowthDamages})
+    d(Xᵢ.T, Xᵢ.m, model.damages, model.hogg, model.albedo)
+end
+function d(Xᵢ::Point, model::LinearModel{GrowthDamages})
+    d(Xᵢ.T, Xᵢ.m, model.damages, model.hogg)
+end
+function d(Xᵢ::Point, model::AbstractModel{LevelDamages})
+    d(Xᵢ.T, model.damages, model.hogg)
+end
+
+"Drift of log output y for `t ≥ τ`"
+function bterminal(Xᵢ::Point, χ, model::AbstractModel{GrowthDamages})
+    growth = model.economy.ϱ - model.economy.δₖᵖ
+    investments = ϕ(model.economy.τ, χ, model.economy)
+    damage = d(Xᵢ, model)
+
+    return growth + investments - damage
+end
+function bterminal(χ, model::AbstractModel{LevelDamages})
+    growth = model.economy.ϱ - model.economy.δₖᵖ
+    investments = ϕ(model.economy.τ, χ, model.economy)
 
     return growth + investments
 end
-function bterminal(χ::Float64, model::AbstractModel{LevelDamages, P}) where P <: Preferences
-    bterminal(χ, model.economy)
-end
-
-function bterminal(_, χ, model::AbstractModel{LevelDamages, P}) where P <: Preferences # This is kept for compatibility, TODO: There is probably a better way to do it.
-    bterminal(χ, model)
-end
-function bterminal(T::Float64, χ::Float64, model::AbstractModel{GrowthDamages, P}) where P <: Preferences
-    bterminal(χ, model.economy) - d(T, model.damages, model.hogg)
-end
+bterminal(_, χ, model::AbstractModel{LevelDamages}) = bterminal(χ, model) # For compatibility
 
 "Emissivity rate implied by abatement `α` at time `t` and carbon concentration `M`"
 function ε(t, M, α, model::AbstractModel, calibration::Calibration) 
@@ -43,29 +52,28 @@ function b(t, Xᵢ::Point, emissivity, investments, model::AbstractModel{GrowthD
     abatement = Aₜ * β(t, emissivity, model.economy)
 
     growth = model.economy.ϱ - model.economy.δₖᵖ
-    damage = d(Xᵢ.T, model.damages, model.hogg)
+    damage = d(Xᵢ, model)
 
     return growth + investments - abatement - damage
 end
 function b(t, Xᵢ::Point, emissivity, investments, model::AbstractModel{LevelDamages, P}) where P <: Preferences
     Aₜ = A(t, model.economy)
-
     abatement = Aₜ * β(t, emissivity, model.economy)
-
-    growth = model.economy.ϱ - model.economy.δₖᵖ
 
     return growth + investments - abatement
 end
-function b(t, Xᵢ::Point, u, model::AbstractModel, calibration::Calibration)
+function b(t, Xᵢ::Point, u, model::AbstractModel{GrowthDamages}, calibration::Calibration)
     χ, α = u
-    εₜ = ε(t, exp(Xᵢ.m), α, model, calibration) 
+    M = exp(Xᵢ.m) * model.hogg.Mᵖ
+    εₜ = ε(t, M, α, model, calibration) 
     investments = ϕ(t, χ, model.economy)
     
     return b(t, Xᵢ, εₜ, investments, model)
 end
 function b(t, Xᵢ::Point, u, model::AbstractModel, calibration::RegionalCalibration, p)
     χ, α = u
-    εₜ = ε(t, exp(Xᵢ.m), α, model, calibration, p) 
+    M = exp(Xᵢ.m) * model.hogg.Mᵖ
+    εₜ = ε(t, M, α, model, calibration, p) 
     investments = ϕ(t, χ, model.economy)
     
     return b(t, Xᵢ, εₜ, investments, model)
@@ -74,7 +82,8 @@ end
 # TODO: Update the cost breakdown for the game model
 function costbreakdown(t, Xᵢ::Point, u,  model::AbstractModel{GrowthDamages, P}, calibration) where P <: Preferences
     χ, α = u
-    εₜ = ε(t, exp(Xᵢ.m), α, model, calibration)
+    M = exp(Xᵢ.m) * model.hogg.Mᵖ
+    εₜ = ε(t, M, α, model, calibration)
     Aₜ = A(t, model.economy)
 
     abatement = β(t, εₜ, model.economy)
@@ -85,14 +94,16 @@ function costbreakdown(t, Xᵢ::Point, u,  model::AbstractModel{GrowthDamages, P
     damage, adjcosts, abatement
 end
 
-function terminaloutputfct(Tᵢ, Δt, χ, model::AbstractModel)
-    drift = bterminal(Tᵢ, χ, model) - model.preferences.θ * model.economy.σₖ^2 / 2
+"δ-factor for output at time `t ≥ τ`"
+function terminaloutputfct(Xᵢ::Point, Δt, χ, model::AbstractModel)
+    drift = bterminal(Xᵢ, χ, model) - model.preferences.θ * model.economy.σₖ^2 / 2
      
     adj = Δt * (1 - model.preferences.θ) * drift
 
     return max(1 + adj, 0.)
 end
 
+"δ-factor for output at time `t < τ`"
 function outputfct(t, Xᵢ::Point, Δt, u, model::AbstractModel, calibration::Calibration)
     drift = b(t, Xᵢ, u, model, calibration) - model.preferences.θ * model.economy.σₖ^2 / 2
 
@@ -100,7 +111,6 @@ function outputfct(t, Xᵢ::Point, Δt, u, model::AbstractModel, calibration::Ca
 
     return max(1 + adj, 0.)
 end
-
 function outputfct(t, Xᵢ::Point, Δt, u, model::AbstractModel, calibration::RegionalCalibration, p)
     drift = b(t, Xᵢ, u, model, calibration, p) - model.preferences.θ * model.economy.σₖ^2 / 2
 
@@ -109,28 +119,11 @@ function outputfct(t, Xᵢ::Point, Δt, u, model::AbstractModel, calibration::Re
     return max(1 + adj, 0.)
 end
 
-
-function criticaltemperature(model::AbstractModel{GrowthDamages, P}) where P <: Preferences
-    maximumgrowth = Tᵢ -> begin
-        rate, _ = gss(χ -> bterminal(Tᵢ, χ, model), 0., 1.)
-        return rate
-    end
-
-    find_zero(maximumgrowth, model.hogg.Tᵖ .+ (0., 15.))
-end
-
 "Computes the temperature level for which it is impossible to achieve positive output growth"
-function terminalgrid(N, model::AbstractModel{GrowthDamages, P}) where P <: Preferences
-    T̄ = criticaltemperature(model)
-
+function terminalgrid(N, model::AbstractModel; ΔTmax = 6.5)
+    T̄ = model.hogg.Tᵖ + ΔTmax
     Tdomain = (model.hogg.Tᵖ, T̄)
     mdomain = mstable.(Tdomain, model)
-
-    RegularGrid([Tdomain, mdomain], N)
-end
-function terminalgrid(N, model::AbstractModel{LevelDamages, P}) where P <: Preferences
-    Tdomain = model.hogg.Tᵖ .+ (0., 9.)
-    mdomain = (mstable(Tdomain[1], model), mstable(Tdomain[2], model))
 
     RegularGrid([Tdomain, mdomain], N)
 end

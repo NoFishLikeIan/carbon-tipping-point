@@ -4,9 +4,9 @@ module Model
 export Economy, Hogg, Albedo, Jump
 export Calibration, RegionalCalibration
 export Damages, GrowthDamages, LevelDamages
-export equilibriumHogg
+export equilibriumHogg, updateTᶜ
 export intensity, increase, d
-export μ, b, bterminal, costbreakdown, γ, mstable, δₘ, ϕ
+export μ, b, bterminal, costbreakdown, γ, mstable, δₘ, ϕ, endogenousgrowth
 export β, ε
 export criticaltemperature
 export potential, density

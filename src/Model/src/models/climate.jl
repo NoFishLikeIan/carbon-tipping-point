@@ -1,28 +1,17 @@
 const secondstoyears = 60 * 60 * 24 * 365.25
 const Gtonoverppm = 1 / 7.821
 
-struct Albedo
+
+@Base.kwdef struct Albedo
 	Tᶜ::Float64  # Initiation of Albedo from pre industrial levels
-    ΔT::Float64  # Temperature change until ice loss
-     
-    λ₁::Float64 # Pre-transition albedo
-    Δλ::Float64 # Albedo loss
+    ΔT::Float64 = 0.18 # [K] Speed of transition
+    λ₁::Float64 = 0.31 # Initial radiation reflection coefficient
+    Δλ::Float64 = 0.015454304088339633 # Loss in reflection coefficient
+    β::Float64 = 8.24 # Adjustment speed of reflection loss
+end
 
-    function Albedo(Tᶜ; sensitivity = 4.5, boundaries = [0., 0.1], λ₁ = 0.31, ΔT = 1.8)
-        hogg = Hogg()
-        function deviation(Δλ)
-            albedo = new(Tᶜ, ΔT, λ₁, Δλ)
-            T =  maximum(find_zeros(T -> mstable(T, hogg, albedo) - log(2hogg.Mᵖ), hogg.Tᵖ .+ (0., 12.))) - hogg.Tᵖ
-
-            return T - sensitivity
-        end
-        
-        Δλ = find_zero(deviation, boundaries)
-        
-        return new(Tᶜ, ΔT, λ₁, Δλ)
-    end
-
-    Albedo(Tᶜ, ΔT, λ₁, Δλ) = new(Tᶜ, ΔT, λ₁, Δλ)
+function updateTᶜ(Tᶜ, albedo::Albedo)
+    Albedo(Tᶜ = Tᶜ, ΔT = albedo.ΔT, λ₁ = albedo.λ₁, Δλ = albedo.Δλ, β = albedo.β)
 end
 
 Base.@kwdef struct Jump
@@ -39,10 +28,10 @@ end
 
 Base.@kwdef struct Hogg
     # Current and pre-industrial data temperature and carbon concentration
-    T₀::Float64 = 288.29 # [K]
+    T₀::Float64 = 288.22214675250292 # [K]
     Tᵖ::Float64 = 287.15 # [K]
-    M₀::Float64 = 412.21 # [p.p.m.]
-    Mᵖ::Float64 = 280 # [p.p.m.]
+    M₀::Float64 = 558.748949198944 # [p.p.m. CO₂-eq]
+    Mᵖ::Float64 = 383.149374377142 # [p.p.m. CO₂-eq]
 
     N₀::Float64 = 286.65543 # [p.p.m.]
     
@@ -90,22 +79,22 @@ function δₘ⁻¹(δ, hogg::Hogg)
 end
 
 # Albedo functions
-sigmoid(x; β = 3.5) = inv(1 + exp(-x * β))
-sigmoid′(x; β = 3.5) = β * sigmoid(x; β) * (1 - sigmoid(x; β))
+sigmoid(x, β) = inv(1 + exp(-x * β))
+sigmoid′(x, β) = β * sigmoid(x, β) * (1 - sigmoid(x, β))
 
 function L(T, hogg::Hogg, albedo::Albedo)
     T₁ = albedo.Tᶜ + hogg.Tᵖ
     T₂ = T₁ + albedo.ΔT
     inflexion = (T₁ + T₂) / 2
 
-    sigmoid(T - inflexion)
+    sigmoid(T - inflexion, albedo.β)
 end
 function L′(T, hogg::Hogg, albedo::Albedo)
     T₁ = albedo.Tᶜ + hogg.Tᵖ
     T₂ = T₁ + albedo.ΔT
     inflexion = (T₁ + T₂) / 2
 
-    sigmoid′(T - inflexion)
+    sigmoid′(T - inflexion, albedo.β)
 end
 
 λ(T, hogg::Hogg, albedo::Albedo) = albedo.λ₁ - albedo.Δλ * L(T, hogg, albedo)
@@ -117,8 +106,8 @@ radiativeforcing(T, hogg::Hogg) = hogg.S₀ * 0.69 - hogg.η * T^4
 radiativeforcing′(T, hogg::Hogg, albedo::Albedo) = -hogg.S₀ * λ′(T, hogg, albedo) - 4hogg.η * T^3
 
 "Greenhouse gases"
-ghgforcing(m, hogg::Hogg) = hogg.G₀ + hogg.G₁ * (m - log(hogg.Mᵖ))
-ghgforcing⁻¹(r, hogg::Hogg) = log(hogg.Mᵖ) + (r - hogg.G₀) / hogg.G₁
+ghgforcing(m, hogg::Hogg) = hogg.G₀ + hogg.G₁ * m
+ghgforcing⁻¹(r, hogg::Hogg) = (r - hogg.G₀) / hogg.G₁
 
 
 "Drift temperature dynamics"
@@ -128,14 +117,20 @@ ghgforcing⁻¹(r, hogg::Hogg) = log(hogg.Mᵖ) + (r - hogg.G₀) / hogg.G₁
 "Compute CO₂ concentration consistent with temperature T"
 mstable(T, hogg::Hogg, albedo::Albedo) = ghgforcing⁻¹(-radiativeforcing(T, hogg, albedo), hogg)
 mstable(T, hogg::Hogg) = ghgforcing⁻¹(-radiativeforcing(T, hogg), hogg)
-Mstable(T, args...) = exp(mstable(T, args...))
 
 function Tstable(m, hogg::Hogg, albedo::Albedo)
     find_zeros(T -> mstable(T, hogg, albedo) - m, hogg.Tᵖ, 1.2hogg.Tᵖ)
 end
-
 function Tstable(m, hogg::Hogg)
     find_zeros(T -> mstable(T, hogg) - m, hogg.Tᵖ, 1.2hogg.Tᵖ)
+end
+
+"Compute equilibrium climate sensitivity"
+function ecs(hogg::Hogg)
+    Tstable(log(2), hogg) .- hogg.Tᵖ
+end
+function ecs(hogg::Hogg, albedo::Albedo)
+    Tstable(log(2), hogg, albedo) .- hogg.Tᵖ
 end
 
 function potential(T, m, hogg::Hogg, albedo::Albedo)

@@ -1,11 +1,8 @@
-struct Calibration
-    years::Vector{Int} # Years of the ipcc data
-    emissions::Vector{Float64} # Emissions in gton / year
-    γparameters::NTuple{3, Float64} # Paramters for γ
-    r::Float64 # Decay rate for t > t₁
-
-    # Domain 
-    tspan::NTuple{2, Float64} # Span of the IPCC data wrt to 2020
+struct Calibration{N}
+    baselineyear::Float64 # Baseline year of the calibration
+    emissions::Vector{Float64} # Emissions data in GtCO₂ / year
+    γparameters::NTuple{N, Float64} # Paramters for γ
+    τ::Float64 # End of calibration
 end
 
 struct RegionalCalibration
@@ -16,17 +13,72 @@ end
 Base.broadcastable(c::Calibration) = Ref(c)
 Base.broadcastable(c::RegionalCalibration) = Ref(c)
 
-
 "Growth rate of carbon concentration in BAU"
-function γ(t, calibration::Calibration)
-    tmin, tmax = calibration.tspan
+function γ(t, calibration::Calibration{2})
+    year = calibration.baselineyear + min(t, calibration.τ)
     p = calibration.γparameters
-    Δt = min(t, tmax) - tmin
 
-    pol = p[1] + p[2] * Δt + p[3] * Δt^2
-    decay = exp(-calibration.r * max(0, t  - tmax))
+    return p[1] + p[2] * year
+end
+function γ(t, calibration::Calibration{3})
+    year = calibration.baselineyear + min(t, calibration.τ)
+    p = calibration.γparameters
 
-    return pol * decay
+    return p[1] + p[2] * year + p[3] * year^2
+end
+function γ(t, calibration::Calibration{4})
+    year = calibration.baselineyear + min(t, calibration.τ)
+    p = calibration.γparameters
+
+    return p[1] + p[2] * year + p[3] * year^2 + p[4] * year^3
+end
+function γ(t, calibration::Calibration{5})
+    year = calibration.baselineyear + min(t, calibration.τ)
+    p = calibration.γparameters
+
+    return p[1] + p[2] * year + p[3] * year^2 + p[4] * year^3 + p[5] * year^4
+end
+function γ(t, calibration::Calibration{6})
+    year = calibration.baselineyear + min(t, calibration.τ)
+    p = calibration.γparameters
+
+    return p[1] + p[2] * year + p[3] * year^2 + p[4] * year^3 + p[5] * year^4 + p[6] * year^5
+end
+function γ(t, calibration::Calibration{7})
+    year = calibration.baselineyear + min(t, calibration.τ)
+    p = calibration.γparameters
+
+    return p[1] + p[2] * year + p[3] * year^2 + p[4] * year^3 + p[5] * year^4 + p[6] * year^5 + p[7] * year^6
+end
+function γ(t, calibration::Calibration{8})
+    year = calibration.baselineyear + min(t, calibration.τ)
+    p = calibration.γparameters
+
+    return p[1] + p[2] * year + p[3] * year^2 + p[4] * year^3 + p[5] * year^4 + p[6] * year^5 + p[7] * year^6 + p[8] * year^7
+end
+function γ(t, calibration::Calibration{9})
+    year = calibration.baselineyear + min(t, calibration.τ)
+    p = calibration.γparameters
+
+    return p[1] + p[2] * year + p[3] * year^2 + p[4] * year^3 + p[5] * year^4 + p[6] * year^5 + p[7] * year^6 + p[8] * year^7 + p[9] * year^8
+end
+function γ(t, calibration::Calibration{10})
+    year = calibration.baselineyear + min(t, calibration.τ)
+    p = calibration.γparameters
+
+    return p[1] + p[2] * year + p[3] * year^2 + p[4] * year^3 + p[5] * year^4 + p[6] * year^5 + p[7] * year^6 + p[8] * year^7 + p[9] * year^8 + p[10] * year^9
+end
+function γ(t, calibration::Calibration{11})
+    year = calibration.baselineyear + min(t, calibration.τ)
+    p = calibration.γparameters
+
+    return p[1] + p[2] * year + p[3] * year^2 + p[4] * year^3 + p[5] * year^4 + p[6] * year^5 + p[7] * year^6 + p[8] * year^7 + p[9] * year^8 + p[10] * year^9 + p[11] * year^10
+end
+function γ(t, calibration::Calibration{12})
+    year = calibration.baselineyear + min(t, calibration.τ)
+    p = calibration.γparameters
+
+    return p[1] + p[2] * year + p[3] * year^2 + p[4] * year^3 + p[5] * year^4 + p[6] * year^5 + p[7] * year^6 + p[8] * year^7 + p[9] * year^8 + p[10] * year^9 + p[11] * year^10 + p[12] * year^11
 end
 
 function γ(t, regionalcalibration::RegionalCalibration)
