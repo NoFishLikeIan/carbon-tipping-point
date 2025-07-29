@@ -1,39 +1,5 @@
-const defaultoptoptions = Optim.Options(g_tol = 1e-12, iterations = 100_000)
-
-"""
-Optimise `diffobjective` and stores the minimiser in u. If the optimisation does not converge, it takes the mean of the policy in the neighbourhood.
-"""
-function fallbackoptimisation!(u, diffobjective, u₀, idx, t, policy, constraints::TwiceDifferentiableConstraints, G::RegularGrid)
-
-    if !Optim.isinterior(constraints, u₀)
-        @warn "Initial guess $u₀ is not in the interior of the constraints $constraints at t = $t and idx = $idx, using mean policy instead"
-        
-        unit = oneunit(idx)
-        L = max(minimum(CartesianIndices(G)), idx - unit)
-        R = min(maximum(CartesianIndices(G)), idx + unit)
-
-        u .= mean(@view policy[L:R, :])
-    else
-        res = Optim.optimize(diffobjective, constraints, u₀, IPNewton(), defaultoptoptions)
-
-        if Optim.converged(res)
-            u .= Optim.minimizer(res)
-        else # If it does not converge we take the mean of the policy in the neighbourhood 
-            @warn "Constrained optimisation has not converged at t = $t and idx = $idx"
-
-            unit = oneunit(idx)
-            L = max(minimum(CartesianIndices(G)), idx - unit)
-            R = min(maximum(CartesianIndices(G)), idx + unit)
-
-            u .= mean(@view policy[L:R, :])
-        end
-    end
-end
-
-function backwardstep!(Δts, F::NTuple{2, Matrix{Float64}}, policy, cluster, model::AbstractModel, calibration::Calibration, G; withnegative = false)
+function backwardstep!(Δts, F::NTuple{2, Matrix}, policy, cluster, model::AbstractModel, calibration::Calibration, G; withnegative = true)
     Fₜ, Fₜ₊ₕ = F
-
-    lb = [0., 0.]
 
     @inbounds @threads for (i, δt) in cluster
         indices = CartesianIndices(G)
@@ -41,28 +7,27 @@ function backwardstep!(Δts, F::NTuple{2, Matrix{Float64}}, policy, cluster, mod
         idx = indices[i]
         Xᵢ = G.X[idx]
         t = model.economy.τ - δt
-        M = exp(Xᵢ.m)
+        M = exp(Xᵢ.m) * hogg.Mᵖ
 
         objective = @closure u -> begin
             Fᵉₜ, Δt = markovstep(t, idx, Fₜ₊ₕ, u[2], model, calibration, G)
-            return logcost(Fᵉₜ, t, Xᵢ, Δt, u, model, calibration)
+            return cost(Fᵉₜ, t, Xᵢ, Δt, u, model, calibration)
         end
 
-        ᾱ = γ(t, calibration) + δₘ(M, model.hogg)
-        ub = [ 1., ifelse(withnegative, Inf, ᾱ) ]
-        u₀ = [ 1 / 2, ᾱ / 2 ]
+        ᾱ = withnegative ? Inf : γ(t, calibration) + δₘ(M, model.hogg)
 
-        diffobjective = TwiceDifferentiable(objective, u₀; autodiff = :forward)
-        rectangle = TwiceDifferentiableConstraints(lb, ub)
-        
-        optimum = similar(u₀)
-        fallbackoptimisation!(optimum, diffobjective, u₀, idx, t, policy, rectangle, G)
-        
-        objectiveminimum = objective(optimum)
+        lb = MVector{2}(0., 0.)
+        ub = MVector{2}(1., ᾱ)
 
-        policy[idx, :] .= optimum
-        Fₜ[idx] = exp(objectiveminimum)
-        Δts[i] = markovstep(t, idx, Fₜ₊ₕ, optimum[2], model, calibration, G)[2]
+        if !withnegative # Ensure α₀ < ᾱ
+            policy[idx][2] = ᾱ / 2
+        end
+        
+        result = Optim.optimize(objective, lb, ub, policy[idx], Fminbox(NelderMead()))
+
+        policy[idx] .= result.minimizer
+        Fₜ[idx] = result.minimum
+        Δts[i] = timestep(t, Xᵢ, result.minimizer[2], model, calibration, G)
     end 
 end
 
@@ -71,7 +36,7 @@ function backwardsimulation!(F::NTuple{2, Matrix{Float64}}, policy, model::Abstr
     backwardsimulation!(queue, F, policy, model, calibration, G; kwargs...)
 end
 
-function backwardsimulation!(queue::PartialQueue, F::NTuple{2, Matrix{Float64}}, policy, model::AbstractModel, calibration::Calibration, G; verbose = 0, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = model.economy.τ, withnegative = false)
+function backwardsimulation!(queue::ZigZagBoomerang.PartialQueue, F::NTuple{2, Matrix{Float64}}, policy, model::AbstractModel, calibration::Calibration, G; verbose = 0, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = model.economy.τ, withnegative = false)
     tcache = tcache # Just to make sure it is well defined in all paths.
 
     savecache = !isnothing(cachepath)

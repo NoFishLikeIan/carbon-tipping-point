@@ -53,7 +53,7 @@ function backwardsimulation!(Fs::Values, policies::Policies, models::Vector{<:Ab
     backwardsimulation!(queue, Fs, policies, models, regionalcalibration, G; kwargs...)
 end
 
-function backwardsimulation!(queue::PartialQueue, Fs::Values, policies::Policies, models::Vector{<:AbstractModel}, regionalcalibration::RegionalCalibration, G; verbose = 0, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = models[1].economy.τ)
+function backwardsimulation!(queue::ZigZagBoomerang.PartialQueue, Fs::Values, policies::Policies, models::Vector{<:AbstractModel}, regionalcalibration::RegionalCalibration, G; verbose = 0, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = models[1].economy.τ)
     tcache = tcache # Just to make sure it is well defined in all paths.
 
     savecache = !isnothing(cachepath)

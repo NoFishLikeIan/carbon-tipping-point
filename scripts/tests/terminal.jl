@@ -1,4 +1,4 @@
-using Test, BenchmarkTools, Revise, UnPack
+using Test, BenchmarkTools, Revise
 
 using Model, Grid
 using FastClosures
@@ -9,29 +9,30 @@ using Optim
 using Statistics
 using StaticArrays
 
-using JLD2
+using JLD2, UnPack
 using Dates, Printf
 
 includet("../utils/saving.jl")
+includet("../markov/chain.jl")
 includet("../markov/terminal.jl")
 
 begin
-	calibration = load_object("data/calibration.jld2")
-	hogg = Hogg()
+	calibrationfilepath = "data/calibration.jld2"; @assert isfile(calibrationfilepath)
+
+	calibrationfile = jldopen(calibrationfilepath, "r+")
+	@unpack hogg, calibration, albedo = calibrationfile
+	close(calibrationfile)
+	
+	damages = GrowthDamages()
+	preferences = EpsteinZin()
 	economy = Economy()
-	preferences = EpsteinZin(ψ = 1.5, θ = 2.)
-	albedo = Albedo(1.5)
 end;
 
-# --- Albedo
-damages = GrowthDamages()
 model = TippingModel(albedo, hogg, preferences, damages, economy);
-N = 60
+N = 100
 G = terminalgrid(N, model)
 
-# F̄, terminalpolicy = loadterminal(model; outdir = "data/simulation/planner")
-
-F₀ = ones(size(G)); 
+F₀ = ones(size(G));
 F̄ = copy(F₀);
 terminalpolicy = similar(F̄);
 errors = Inf .* ones(size(G));

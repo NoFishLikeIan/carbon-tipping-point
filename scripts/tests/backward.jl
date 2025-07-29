@@ -20,16 +20,18 @@ includet("../markov/terminal.jl")
 includet("../markov/backward.jl")
 
 begin
-    calibration = load_object("data/calibration.jld2")
-    damages = GrowthDamages()
-    hogg = Hogg()
-    preferences = EpsteinZin()
-    economy = Economy()
+	calibrationfilepath = "data/calibration.jld2"; @assert isfile(calibrationfilepath)
 
-    albedo = Albedo(1.5)
+	calibrationfile = jldopen(calibrationfilepath, "r+")
+	@unpack hogg, calibration, albedo = calibrationfile
+	close(calibrationfile)
+	
+	damages = GrowthDamages()
+	preferences = EpsteinZin()
+	economy = Economy()
 
-    model = TippingModel(albedo, hogg, preferences, damages, economy)
-end
+	model = TippingModel(albedo, hogg, preferences, damages, economy)
+end;
 
 # Testing the backward step
 F̄, terminalpolicy, G = try
@@ -37,7 +39,7 @@ F̄, terminalpolicy, G = try
 catch error
 	@warn "Could not load terminal data, running terminal grid and VFI instead."
 
-	N = 40
+	N = 100
 	G = terminalgrid(N, model)
 	errors = Inf .* ones(size(G));
 	F₀ = ones(size(G));
@@ -48,10 +50,7 @@ catch error
 end;
 
 begin
-	policy = Array{Float64}(undef, size(G)..., 2)
-	policy[:, :, 1] .= terminalpolicy
-	policy[:, :, 2] .= γ(economy.τ, calibration)
-	Fₜ₊ₕ = copy(F̄);
+	policy = [MVector{2}(terminalpolicy[idx], γ(economy.τ, calibration)) for idx in CartesianIndices(G)]
 
 	queue = DiagonalRedBlackQueue(G)
 	Δts = zeros(prod(size(G)))
@@ -62,7 +61,5 @@ begin
 end;
 
 withnegative = true
-backwardstep!(Δts, F, policy, cluster, model, calibration, G; withnegative = withnegative);
-@benchmark backwardstep!($Δts, $F, $policy, $cluster, $model, $calibration, $G; withnegative = $withnegative)
-@profview backwardstep!(Δts, F, policy, cluster, model, calibration, G);
-@profview_allocs backwardstep!(Δts, F, policy, cluster, model, calibration, G);
+backwardstep!(Δts, F, policy, cluster, model, calibration, G; withnegative = false)
+@benchmark backwardstep!($Δts, $F, $policy, $cluster, $model, $calibration, $G; withnegative = $(true))

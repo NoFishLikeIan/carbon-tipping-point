@@ -1,13 +1,13 @@
-function terminalcost(Fᵢ′, Tᵢ, Δt, χ, model::AbstractModel{GrowthDamages, P}) where P
-    δ = terminaloutputfct(Tᵢ, Δt, χ, model)
+function terminalcost(Fᵢ′, Xᵢ::Point, Δt, χ, model::AbstractModel{GrowthDamages})
+    δ = terminaloutputfct(Xᵢ, Δt, χ, model)
 
-    g(χ, δ * Fᵢ′, Δt, model.preferences)
+    return g(χ, δ * Fᵢ′, Δt, model.preferences)
 end
-function terminalcost(Fᵢ′, Tᵢ, Δt, χ, model::AbstractModel{LevelDamages, P}) where P
-    δ = terminaloutputfct(Tᵢ, Δt, χ, model)
-    damage = d(Tᵢ, model.damages, model.hogg)
+function terminalcost(Fᵢ′, Xᵢ::Point, Δt, χ, model::AbstractModel{LevelDamages})
+    δ = terminaloutputfct(Xᵢ, Δt, χ, model)
+    damage = d(Xᵢ, model)
 
-    g(damage * χ, δ * Fᵢ′, Δt, model.preferences)
+    return g(damage * χ, δ * Fᵢ′, Δt, model.preferences)
 end
 
 function terminaldriftstep(idx, F̄, model::AbstractModel, G)
@@ -33,8 +33,9 @@ function terminaldriftstep(idx, F̄, model::AbstractModel, G)
     return F′, Δt
 end
 
-terminalmarkovstep(idx, F̄, model::LinearModel, G) = terminaldriftstep(idx, F̄, model, G)
-terminalmarkovstep(idx, F̄, model::TippingModel, G) = terminaldriftstep(idx, F̄, model, G)
+function terminalmarkovstep(idx, F̄, model::Union{TippingModel, LinearModel}, G) 
+    terminaldriftstep(idx, F̄, model, G)
+end
 function terminalmarkovstep(idx, F̄, model::JumpModel, G)
     Fᵈ, Δt = terminaldriftstep(idx, F̄, model, G)
 
@@ -58,10 +59,10 @@ end
 function terminaljacobi!(F̄, policy, errors, model::AbstractModel, G; indices = CartesianIndices(F̄))
     @inbounds @threads for idx in indices
         Fᵢ′, Δt = terminalmarkovstep(idx, F̄, model, G)
-        Tᵢ = G.X[idx].T
+        Xᵢ = G.X[idx]
 
         # Optimal control
-        objective = @closure χ -> terminalcost(Fᵢ′, Tᵢ, Δt, χ, model)
+        objective = @closure χ -> terminalcost(Fᵢ′, Xᵢ, Δt, χ, model)
         Fᵢ, χ = gssmin(objective, 0., 1.; tol = eps(Float64))
         
         errors[idx] = Fᵢ ≈ F̄[idx] ? 0. : abs(Fᵢ - F̄[idx]) / F̄[idx]

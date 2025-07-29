@@ -14,7 +14,7 @@ function backwardstep!(Δts, F::Matrix{Float64}, χitp::Extrapolation, αitp::Ex
     end
 end
 
-function backwardsimulation!(queue::PartialQueue, F::Matrix{Float64}, χitp::Extrapolation, αitp::Extrapolation, model::AbstractModel, calibration::Calibration, G; verbose = 0, tstop = 0.)
+function backwardsimulation!(queue::ZigZagBoomerang.PartialQueue, F::Matrix{Float64}, χitp::Extrapolation, αitp::Extrapolation, model::AbstractModel, calibration::Calibration, G; verbose = 0, tstop = 0.)
     Δts = Vector{Float64}(undef, prod(size(G)))
     passcounter = 1
 

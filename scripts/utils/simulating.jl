@@ -104,7 +104,8 @@ function Fbau!(du, u, parameters::BAUGameParameters, t)
     du[3] = γ(t, calibration)
 end
 
-function G!(Σ, u, parameters::BAUParameters, t)    
+function G!(Σ, u, parameters::BAUParameters, t)
+    model = first(parameters)
 	Σ[1] = model.hogg.σₜ / model.hogg.ϵ
 	Σ[2] = model.hogg.σₘ
 end

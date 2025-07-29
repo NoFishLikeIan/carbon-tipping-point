@@ -1,12 +1,16 @@
-using Model
-using Grid
+function timestep(t, Xᵢ::Point, α, model::AbstractModel, calibration::Calibration, G)
+    σₜ² = (model.hogg.σₜ / (model.hogg.ϵ * G.Δ.T))^2
+    σₘ² = (model.hogg.σₘ / G.Δ.m)^2
 
-using ZigZagBoomerang: PartialQueue
+    dT = μ(Xᵢ.T, Xᵢ.m, model) / (model.hogg.ϵ * G.Δ.T)
+    dm = (γ(t, calibration) - α) / G.Δ.m
+
+    Q = σₘ² + σₜ² + G.h * (abs(dT) + abs(dm))
+
+    return G.h^2 / Q
+end
 
 function driftstep(t, idx, F, α, model::AbstractModel, calibration::Calibration, G)
-    driftstep(t, idx, F, α, 0., model, calibration, G)
-end
-function driftstep(t, idx, F, αᵢ, α₋ᵢ, model::AbstractModel, calibration::Calibration, G)
     L, R = extrema(CartesianIndices(F))
 
     σₜ² = (model.hogg.σₜ / (model.hogg.ϵ * G.Δ.T))^2
@@ -14,7 +18,7 @@ function driftstep(t, idx, F, αᵢ, α₋ᵢ, model::AbstractModel, calibration
 
     Xᵢ = G.X[idx]
     dT = μ(Xᵢ.T, Xᵢ.m, model) / (model.hogg.ϵ * G.Δ.T)
-    dm = (γ(t, calibration) - αᵢ - α₋ᵢ) / G.Δ.m
+    dm = (γ(t, calibration) - α) / G.Δ.m
 
     # -- Temperature
     FᵢT₊ = F[min(idx + I[1], R)]
@@ -34,10 +38,9 @@ function driftstep(t, idx, F, αᵢ, α₋ᵢ, model::AbstractModel, calibration
     return F′, Δt
 end
 
-markovstep(t, idx, F, α, model, calibration, G) = markovstep(t, idx, F, α, 0., model, calibration, G)
-markovstep(t, idx, F, αᵢ, α₋ᵢ, model::Union{LinearModel, TippingModel}, calibration::Calibration, G) = driftstep(t, idx, F, αᵢ, α₋ᵢ, model, calibration, G)
-function markovstep(t, idx, F, αᵢ, α₋ᵢ, model::JumpModel, calibration::Calibration, G)
-    Fᵈ, Δt = driftstep(t, idx, F, αᵢ, α₋ᵢ, model, calibration, G)
+markovstep(t, idx, F, α, model::Union{LinearModel, TippingModel}, calibration::Calibration, G) = driftstep(t, idx, F, α, model, calibration, G)
+function markovstep(t, idx, F, α, model::JumpModel, calibration::Calibration, G)
+    Fᵈ, Δt = driftstep(t, idx, F, α, model, calibration, G)
 
     # Update with jump
     R = maximum(CartesianIndices(F))
@@ -63,10 +66,10 @@ function logcost(F′, t, Xᵢ::Point, Δt, u, model::AbstractModel, calibration
     δ = outputfct(t, Xᵢ, Δt, u, model, calibration)
     logcost(F′, δ, Xᵢ, Δt, u, model)
 end
-function logcost(F′, δ, _, Δt, u, model::AbstractModel{GrowthDamages, P}) where P
+function logcost(F′, δ, Xᵢ::Point, Δt, u, model::AbstractModel{GrowthDamages})
     logg(u[1], δ * F′, Δt, model.preferences)
 end
-function logcost(F′, δ, Xᵢ::Point, Δt, u, model::AbstractModel{LevelDamages, P}) where P
+function logcost(F′, δ, Xᵢ::Point, Δt, u, model::AbstractModel{LevelDamages})
     damage = d(Xᵢ.T, model.damages, model.hogg)
     logg(u[1] * damage, δ * F′, Δt, model.preferences)
 end
@@ -88,6 +91,6 @@ function cost(F′, δ, Xᵢ::Point, Δt, u, model::AbstractModel{LevelDamages, 
 end
 
 
-function Base.isempty(q::PartialQueue)
+function Base.isempty(q::ZigZagBoomerang.PartialQueue)
     all((isempty(m) for m in q.minima))
 end
