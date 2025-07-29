@@ -11,6 +11,7 @@ using SciMLBase
 using Optim
 using Statistics
 using StaticArrays
+using ForwardDiff
 
 using Dates
 
@@ -51,6 +52,7 @@ end;
 
 begin
 	policy = [MVector{2}(terminalpolicy[idx], γ(economy.τ, calibration)) for idx in CartesianIndices(G)]
+	foc = [MVector{2}(Inf, Inf) for idx in CartesianIndices(G)]
 
 	queue = DiagonalRedBlackQueue(G)
 	Δts = zeros(prod(size(G)))
@@ -61,5 +63,5 @@ begin
 end;
 
 withnegative = true
-backwardstep!(Δts, F, policy, cluster, model, calibration, G; withnegative = false)
-@benchmark backwardstep!($Δts, $F, $policy, $cluster, $model, $calibration, $G; withnegative = $(true))
+backwardstep!(Δts, F, policy, cluster, foc, model, calibration, G; withnegative = withnegative)
+@benchmark backwardstep!($Δts, $F, $policy, $cluster, $foc, $model, $calibration, $G; withnegative = $(true))

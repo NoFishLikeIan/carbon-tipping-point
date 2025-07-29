@@ -1,4 +1,4 @@
-function backwardstep!(Δts, F::NTuple{2, Matrix}, policy, cluster, model::AbstractModel, calibration::Calibration, G; withnegative = true)
+function backwardstep!(Δts, F::NTuple{2, Matrix}, policy, cluster, foc, model::AbstractModel, calibration::Calibration, G; withnegative = true)
     Fₜ, Fₜ₊ₕ = F
 
     @inbounds @threads for (i, δt) in cluster
@@ -24,19 +24,20 @@ function backwardstep!(Δts, F::NTuple{2, Matrix}, policy, cluster, model::Abstr
         end
         
         result = Optim.optimize(objective, lb, ub, policy[idx], Fminbox(NelderMead()))
-
+        
+        foc[idx] .= ForwardDiff.gradient(objective, result.minimizer)
         policy[idx] .= result.minimizer
         Fₜ[idx] = result.minimum
         Δts[i] = timestep(t, Xᵢ, result.minimizer[2], model, calibration, G)
     end 
 end
 
-function backwardsimulation!(F::NTuple{2, Matrix{Float64}}, policy, model::AbstractModel, calibration::Calibration, G; kwargs...)
+function backwardsimulation!(F::NTuple{2, Matrix{Float64}}, policy, foc, model::AbstractModel, calibration::Calibration, G; kwargs...)
     queue = DiagonalRedBlackQueue(G)
     backwardsimulation!(queue, F, policy, model, calibration, G; kwargs...)
 end
 
-function backwardsimulation!(queue::ZigZagBoomerang.PartialQueue, F::NTuple{2, Matrix{Float64}}, policy, model::AbstractModel, calibration::Calibration, G; verbose = 0, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = model.economy.τ, withnegative = false)
+function backwardsimulation!(queue::ZigZagBoomerang.PartialQueue, F::NTuple{2, Matrix{Float64}}, policy, foc, model::AbstractModel, calibration::Calibration, G; verbose = 0, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = model.economy.τ, withnegative = false)
     tcache = tcache # Just to make sure it is well defined in all paths.
 
     savecache = !isnothing(cachepath)
@@ -51,6 +52,7 @@ function backwardsimulation!(queue::ZigZagBoomerang.PartialQueue, F::NTuple{2, M
             cachefile = jldopen(cachepath, "w+")
             cachefile["G"] = G
             cachefile["model"] = model
+
         elseif isfile(cachepath) && !overwrite 
             if (verbose ≥ 1)
                 println("File $cachepath already exists and mode is not overwrite. Will resume from cache.")
@@ -59,7 +61,6 @@ function backwardsimulation!(queue::ZigZagBoomerang.PartialQueue, F::NTuple{2, M
             cachefile = jldopen(cachepath, "a+")
             tcache = model.economy.τ - minimum(queue.vals) - cachestep
         else
-            
             cachefile = jldopen(cachepath, "w+")
             cachefile["G"] = G
             cachefile["model"] = model
@@ -81,7 +82,7 @@ function backwardsimulation!(queue::ZigZagBoomerang.PartialQueue, F::NTuple{2, M
         
         clusters = ZigZagBoomerang.dequeue!(queue)
         for cluster in clusters
-            backwardstep!(Δts, F, policy, cluster, model, calibration, G; withnegative)
+            backwardstep!(Δts, F, policy, cluster, foc, model, calibration, G; withnegative)
 
             indices = first.(cluster)
 
@@ -122,9 +123,8 @@ function computebackward(terminalresults, model::AbstractModel, calibration::Cal
     Fₜ = similar(Fₜ₊ₕ)
     F = (Fₜ, Fₜ₊ₕ)
 
-    policy = Array{Float64}(undef, size(G, 1), size(G, 2), 2)
-    policy[:, :, 1] .= interpolateovergrid(terminalG, G, terminalconsumption)
-    policy[:, :, 2] .= γ(model.economy.τ, calibration)
+    policy = [MVector{2}(terminalconsumption[idx], γ(economy.τ, calibration)) for idx in CartesianIndices(G)]
+	foc = [MVector{2}(Inf, Inf) for idx in CartesianIndices(G)]
 
     if withsave
         folder = SIMPATHS[typeof(model)]
@@ -136,7 +136,7 @@ function computebackward(terminalresults, model::AbstractModel, calibration::Cal
 
     cachepath = withsave ? joinpath(cachefolder, filename) : nothing
 
-    backwardsimulation!(F, policy, model, calibration, G; verbose, cachepath, withnegative, iterkwargs...)
+    backwardsimulation!(F, policy, foc, model, calibration, G; verbose, cachepath, withnegative, iterkwargs...)
 
     return F, policy
 end
