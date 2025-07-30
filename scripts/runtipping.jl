@@ -41,19 +41,23 @@ include("markov/terminal.jl")
 include("markov/backward.jl")
 
 # Construct model
-calibrationdirectory = joinpath(datapath, "calibration.jld2")
-calibration = load_object(calibrationdirectory);
+calibrationfilepath = joinpath(datapath, "calibration.jld2"); @assert isfile(calibrationfilepath)
 
-hogg = Hogg()
+begin
+    calibrationfile = jldopen(calibrationfilepath, "r+")
+    @unpack hogg, calibration, albedo = calibrationfile
+    close(calibrationfile)
+end
+
 preferences = EpsteinZin(θ = rra, ψ = eis);
 economy = Economy()
 damages = leveldamages ? LevelDamages() : GrowthDamages()
 
-albedo = Albedo(threshold)
+albedo = updateTᶜ(threshold, albedo)
 model = TippingModel(albedo, hogg, preferences, damages, economy)
 
 # Construct Grid
-Tdomain = hogg.Tᵖ .+ (0., 6.);
+Tdomain = hogg.Tᵖ .+ (0., 6.5);
 mdomain = mstable.(Tdomain, hogg)
 G = RegularGrid([Tdomain, mdomain], N)
 
@@ -69,8 +73,7 @@ if (verbose ≥ 1)
     flush(stdout)
 end
 
-Gterminal = terminalgrid(N, model)
-computeterminal(model, Gterminal; verbose, outdir, alternate = true, tol, overwrite)
+computeterminal(model, G; verbose, outdir, alternate = true, tol, overwrite)
 
 if (verbose ≥ 1)
     println("$(now()): ","Running backward...")
