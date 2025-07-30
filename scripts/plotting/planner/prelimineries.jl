@@ -31,7 +31,7 @@ begin # Global variables
     SEED = 11148705
 
     TLABEL = L"Temperature $T_t \; [\si{\degree}]$"
-    MLABEL = L"Carbon concentration $M_t \; [\si{\ppm}]$"
+    MLABEL = L"\si{CO2}e $M_t \; [\si{\ppm}]$"
 end;
 
 begin # Construct models and grids
@@ -81,7 +81,7 @@ begin # Labels, colors and axis
     Tmin, Tmax = extrema(temperatureticks[1])
 
     m₀ = log(hogg.M₀ / hogg.Mᵖ)
-    X₀ = [first(Model.Tstable(m₀, hogg)), m₀]
+    X₀ = [hogg.T₀, m₀]
 
     const defalg = ImplicitRKMil()
 end;
@@ -200,7 +200,7 @@ begin # Nullcline plot
         grid = "both",
         ylabel = TLABEL,
         xlabel_style = {align = "center"},
-        xlabel = L"Carbon concentration $M_t \; [\si{\ppm}]$ \\ and (year) reached in business-as-usual",
+        xlabel = L"\si{CO2}e concentration $M_t \; [\si{\ppm}]$ \\ and (year) reached in the no-policy scenario",
         yticklabels = temperatureticks[2],
         ytick = temperatureticks[1],
         ymin = Tmin, ymax = Tmax,

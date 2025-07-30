@@ -1,5 +1,5 @@
 function backwardstep!(Δts, F::Matrix{Float64}, χitp::Extrapolation, αitp::Extrapolation, cluster, model::AbstractModel, calibration::Calibration, G)
-    @threads for (i, δt) in cluster
+    @inbounds @threads for (i, δt) in cluster
         indices = CartesianIndices(G)
 
         idx = indices[i]

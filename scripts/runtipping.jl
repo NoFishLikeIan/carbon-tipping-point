@@ -21,19 +21,22 @@ if (verbose ≥ 1)
 end
 
 # Begin script
-using JLD2
-using Printf
-
 using Model, Grid
-using FastClosures
-using ZigZagBoomerang
+
 using Base.Threads
+
 using SciMLBase
-using Optim
+using ZigZagBoomerang
 using Statistics
 using StaticArrays
+using FastClosures
+using LinearAlgebra: norm
 
-using Dates
+using Optimization, OptimizationOptimJL
+using ForwardDiff
+
+using JLD2
+using Printf, Dates
 
 include("utils/saving.jl")
 include("markov/chain.jl")

@@ -1,40 +1,45 @@
-function backwardstep!(Δts, F::NTuple{2, Matrix}, policy, cluster, foc, model::AbstractModel, calibration::Calibration, G; withnegative = true)
+function pointminimisation(u, parameters)
+    t, idx, Fₜ₊ₕ, model, calibration, G = parameters
+    Xᵢ = G.X[idx]
+    Fᵉₜ, Δt = markovstep(t, idx, Fₜ₊ₕ, u[2], model, calibration, G)
+    return logcost(Fᵉₜ, t, Xᵢ, Δt, u, model, calibration)
+end
+
+function backwardstep!(Δts, F::NTuple{2, Matrix}, policy, cluster, foc, model::AbstractModel, calibration::Calibration, G; withnegative = true, ad = Optimization.AutoForwardDiff())
+
+    itpε = ifelse(withnegative, 0.95, 0.0) # Interpolation epsilon, how much to interpolate the policy with the bounds.
     Fₜ, Fₜ₊ₕ = F
+    fn = OptimizationFunction(pointminimisation, ad)
 
     @inbounds @threads for (i, δt) in cluster
         indices = CartesianIndices(G)
-        
         idx = indices[i]
         Xᵢ = G.X[idx]
         t = model.economy.τ - δt
         M = exp(Xᵢ.m) * hogg.Mᵖ
-
-        objective = @closure u -> begin
-            Fᵉₜ, Δt = markovstep(t, idx, Fₜ₊ₕ, u[2], model, calibration, G)
-            return cost(Fᵉₜ, t, Xᵢ, Δt, u, model, calibration)
-        end
-
-        ᾱ = withnegative ? Inf : γ(t, calibration) + δₘ(M, model.hogg)
-
-        lb = MVector{2}(0., 0.)
-        ub = MVector{2}(1., ᾱ)
-
-        if !withnegative # Ensure α₀ < ᾱ
-            policy[idx][2] = ᾱ / 2
-        end
         
-        result = Optim.optimize(objective, lb, ub, policy[idx], Fminbox(NelderMead()))
+        ᾱ = withnegative ? 1. : γ(t, calibration) + δₘ(M, model.hogg)
         
-        foc[idx] .= ForwardDiff.gradient(objective, result.minimizer)
-        policy[idx] .= result.minimizer
-        Fₜ[idx] = result.minimum
-        Δts[i] = timestep(t, Xᵢ, result.minimizer[2], model, calibration, G)
-    end 
+        lb = SVector{2}(0.01, 0.)
+        ub = SVector{2}(1., ᾱ)
+
+        @. policy[idx] = itpε * policy[idx] + (1 - itpε) * (lb + ub) / 2
+        
+        parameters = (t, idx, Fₜ₊ₕ, model, calibration, G)
+        prob = Optimization.OptimizationProblem(fn, policy[idx], parameters; lb = lb, ub = ub)
+        
+        sol = solve(prob, Optim.LBFGS(); time_limit = 0.5)
+
+        foc[idx] .= ForwardDiff.gradient(u -> fn(u, parameters), sol.u)
+        policy[idx] .= sol.u
+        Fₜ[idx] = exp(sol.objective)
+        Δts[i] = timestep(t, Xᵢ, sol.u[2], model, calibration, G)
+    end
 end
 
 function backwardsimulation!(F::NTuple{2, Matrix{Float64}}, policy, foc, model::AbstractModel, calibration::Calibration, G; kwargs...)
     queue = DiagonalRedBlackQueue(G)
-    backwardsimulation!(queue, F, policy, model, calibration, G; kwargs...)
+    backwardsimulation!(queue, F, policy, foc, model, calibration, G; kwargs...)
 end
 
 function backwardsimulation!(queue::ZigZagBoomerang.PartialQueue, F::NTuple{2, Matrix{Float64}}, policy, foc, model::AbstractModel, calibration::Calibration, G; verbose = 0, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = model.economy.τ, withnegative = false)
@@ -120,7 +125,7 @@ end
 function computebackward(terminalresults, model::AbstractModel, calibration::Calibration, G; verbose = 0, withsave = true, outdir = "data", withnegative = false, iterkwargs...)
     F̄, terminalconsumption, terminalG = terminalresults
     Fₜ₊ₕ = interpolateovergrid(terminalG, G, F̄);
-    Fₜ = similar(Fₜ₊ₕ)
+    Fₜ = copy(Fₜ₊ₕ)
     F = (Fₜ, Fₜ₊ₕ)
 
     policy = [MVector{2}(terminalconsumption[idx], γ(economy.τ, calibration)) for idx in CartesianIndices(G)]
@@ -135,7 +140,6 @@ function computebackward(terminalresults, model::AbstractModel, calibration::Cal
     end
 
     cachepath = withsave ? joinpath(cachefolder, filename) : nothing
-
     backwardsimulation!(F, policy, foc, model, calibration, G; verbose, cachepath, withnegative, iterkwargs...)
 
     return F, policy

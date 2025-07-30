@@ -1,26 +1,28 @@
 using Test, BenchmarkTools, Revise, UnPack
 
-using JLD2
-using Printf
-
 using Model, Grid
-using FastClosures
-using ZigZagBoomerang
+
 using Base.Threads
+
 using SciMLBase
-using Optim
+using ZigZagBoomerang
 using Statistics
 using StaticArrays
+using FastClosures
+using LinearAlgebra: norm
+
+using Optimization, OptimizationOptimJL
 using ForwardDiff
 
-using Dates
+using JLD2
+using Printf, Dates
 
 includet("../utils/saving.jl")
-include("../markov/chain.jl")
+includet("../markov/chain.jl")
 includet("../markov/terminal.jl")
 includet("../markov/backward.jl")
 
-begin
+begin # Construct the model
 	calibrationfilepath = "data/calibration.jld2"; @assert isfile(calibrationfilepath)
 
 	calibrationfile = jldopen(calibrationfilepath, "r+")
@@ -34,23 +36,16 @@ begin
 	model = TippingModel(albedo, hogg, preferences, damages, economy)
 end;
 
-# Testing the backward step
-F̄, terminalpolicy, G = try
-	loadterminal(model; outdir = "data/simulation-local/constrained");
-catch error
-	@warn "Could not load terminal data, running terminal grid and VFI instead."
-
-	N = 100
+begin # Setup terminal value function
+	N = 101
 	G = terminalgrid(N, model)
 	errors = Inf .* ones(size(G));
 	F₀ = ones(size(G));
 
-	F̄, terminalpolicy = vfi(F₀, model, G; maxiter = 10_000, verbose = 2)
-
-	return F̄, terminalpolicy, G
+	F̄, terminalpolicy = vfi(F₀, model, G; maxiter = 10_000, verbose = 2, tol = 1e-5)
 end;
 
-begin
+begin # Setup problem
 	policy = [MVector{2}(terminalpolicy[idx], γ(economy.τ, calibration)) for idx in CartesianIndices(G)]
 	foc = [MVector{2}(Inf, Inf) for idx in CartesianIndices(G)]
 
@@ -58,10 +53,15 @@ begin
 	Δts = zeros(prod(size(G)))
 	cluster = first(ZigZagBoomerang.dequeue!(queue))
 
-	Fₜ = similar(Fₜ₊ₕ)
-	F = (Fₜ, Fₜ₊ₕ)
+	ad = Optimization.AutoForwardDiff()
+	withnegative = true
+	Fₜ = copy(F̄); Fₜ₊ₕ = copy(F̄); F = (Fₜ, Fₜ₊ₕ);
 end;
 
-withnegative = true
 backwardstep!(Δts, F, policy, cluster, foc, model, calibration, G; withnegative = withnegative)
-@benchmark backwardstep!($Δts, $F, $policy, $cluster, $foc, $model, $calibration, $G; withnegative = $(true))
+@benchmark backwardstep!($Δts, $F, $policy, $cluster, $foc, $model, $calibration, $G; withnegative = $withnegative)
+
+Fₜ = copy(F̄); Fₜ₊ₕ = copy(F̄)
+F = (Fₜ, Fₜ₊ₕ)
+
+backwardsimulation!(F, policy, foc, model, calibration, G; verbose = 2, withnegative = withnegative, tstop = model.economy.τ - 0.05)
