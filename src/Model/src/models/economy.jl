@@ -1,29 +1,30 @@
-Base.@kwdef struct GrowthDamages
-    ξ₁::Float64 = 0.0357 # Linear term in damage function
-    ξ₂::Float64 = 0.0018 # Quadratic term in damage function
+abstract type Damages{T <: Real} end
+
+Base.@kwdef struct GrowthDamages{T} <: Damages{T}
+    ξ₁::T = 0.0357 # Linear term in damage function
+    ξ₂::T = 0.0018 # Quadratic term in damage function
 end
 
-Base.@kwdef struct LevelDamages
-    ξ::Float64 = 0.00266
+Base.@kwdef struct LevelDamages{T} <: Damages{T}
+    ξ::T = 0.00266
 end
 
-Damages = Union{GrowthDamages, LevelDamages}
 Base.broadcastable(damages::Damages) = Ref(damages)
 
-Base.@kwdef struct Economy
+Base.@kwdef struct Economy{T <: Real}
     # Technology
-    ωᵣ::Float64 = 0.017558043747351086 # Speed of abatement technology cost reduction
-    ω₀::Float64 = 2 * 0.11 # Fraction of GDP required today to abate
-    ϱ::Float64 = 1e-3 # Growth of TFP
-    κ::Float64 = 11.2 # Adjustment costs of abatement technology
-    δₖᵖ::Float64 = 0.0162 # Initial depreciation rate of capital
+    ωᵣ::T = 0.017558043747351086 # Speed of abatement technology cost reduction
+    ω₀::T = 2 * 0.11 # Fraction of GDP required today to abate
+    ϱ::T = 1e-3 # Growth of TFP
+    κ::T = 11.2 # Adjustment costs of abatement technology
+    δₖᵖ::T = 0.0162 # Initial depreciation rate of capital
 
     # Output
-    A₀::Float64 = 0.113 # Initial TFP
-    Y₀::Float64 = 75.8
-    σₖ::Float64 = 0.0162 # Variance of GDP
+    A₀::T = 0.113 # Initial TFP
+    Y₀::T = 75.8
+    σₖ::T = 0.0162 # Variance of GDP
 
-    τ::Float64 = 307. # Steady state horizon, such that `exp(-ϱ * τ) = 1%.`
+    τ::T = 307. # Steady state horizon, such that `exp(-ϱ * τ) = 1%.`
 end
 
 "Cost of abatement as a fraction of GDP"
@@ -35,9 +36,9 @@ function β′(t, e, economy::Economy)
     exp(-economy.ωᵣ * t) * e
 end
 
-function d(T, m, damages::GrowthDamages, hogg::Hogg, albedo::Albedo)
+function d(T, m, damages::GrowthDamages, hogg::Hogg, feedback::Feedback)
     ΔT = max(T - hogg.Tᵖ, 0.)
-    return (damages.ξ₁ + damages.ξ₂ * ΔT) * μ(T, m, hogg, albedo) / hogg.ϵ
+    return (damages.ξ₁ + damages.ξ₂ * ΔT) * μ(T, m, hogg, feedback) / hogg.ϵ
 end
 function d(T, m, damages::GrowthDamages, hogg::Hogg)
     ΔT = max(T - hogg.Tᵖ, 0.)

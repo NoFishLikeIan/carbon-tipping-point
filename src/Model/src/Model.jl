@@ -1,69 +1,28 @@
 module Model
 
-# Models
-export Economy, Hogg, Albedo, Jump
-export Calibration, RegionalCalibration
-export Damages, GrowthDamages, LevelDamages
-export equilibriumHogg, updateTᶜ
-export intensity, increase, d
-export μ, b, bterminal, costbreakdown, γ, mstable, δₘ, ϕ, endogenousgrowth
-export β, ε
-export criticaltemperature
-export potential, density
-export terminaloutputfct, outputfct
-export Preferences, EpsteinZin, LogSeparable, CRRA, LogUtility
-export f, g, logg
-export TippingModel, LinearModel, JumpModel
-export AbstractModel
-export terminalgrid
-export RegionalEconomies, RegionalCalibration
-
-# Packages
-using Grid: Point, Policy, RegularGrid, gss
+using Roots: find_zero
 using UnPack: @unpack
-using Roots: find_zero, find_zeros
-using FastClosures: @closure
+using LogExpFunctions: logistic
 
 include("models/calibration.jl")
 include("models/climate.jl")
 include("models/economy.jl")
 include("models/preferences.jl")
-
-struct LinearModel{D <: Damages, P <: Preferences}
-    hogg::Hogg
-
-    preferences::P
-    damages::D
-
-    economy::Economy
-end
-
-struct TippingModel{D <: Damages, P <: Preferences}
-    albedo::Albedo
-    hogg::Hogg
-
-    preferences::P
-    damages::D
-
-    economy::Economy
-end
-
-struct JumpModel{D <: Damages, P <: Preferences}
-    jump::Jump
-    hogg::Hogg
-
-    preferences::P
-    damages::D
-
-    economy::Economy
-end
-
-AbstractModel{D, P} = Union{
-    TippingModel{D, P}, JumpModel{D, P}, LinearModel{D, P}
-} where {D <: Damages, P <: Preferences}
-
-Base.broadcastable(m::AbstractModel) = Ref(m)
-
+include("models/models.jl")
 include("models/functions.jl")
+
+export Calibration, RegionalCalibration
+export γ, Eᵇ
+
+export Feedback, Jump, Hogg
+export δₘ, L, λ, μ, Tstable, intensity
+
+export Damages, GrowthDamages, LevelDamages, Economy, RegionalEconomies
+export β, β′, d, D, ϕ, A
+
+export AbstractModel, LinearModel, TippingModel, JumpModel
+export Preferences, LogUtility, CRRA, LogSeparable, EpsteinZin
+export b, bterminal, outputfct, terminaloutputfct
+
 
 end # module Model

@@ -1,39 +1,25 @@
-struct LogUtility
-    ρ::Float64  # Discount rate 
+abstract type Preferences{T <: Real} end
+
+Base.@kwdef struct LogUtility{T} <: Preferences{T}
+    ρ::T = 0.015 # Discount rate
 end
 
-struct CRRA
-    ρ::Float64  # Discount rate 
-    θ::Float64  # Relative risk aversion
+Base.@kwdef struct CRRA{T} <: Preferences{T}
+    ρ::T = 0.015  # Discount rate 
+    θ::T = 10.  # Relative risk aversion
 end
 
-struct LogSeparable
-    ρ::Float64  # Discount rate 
-    θ::Float64  # Relative risk aversion
+Base.@kwdef struct LogSeparable{T} <: Preferences{T}
+    ρ::T = 0.015  # Discount rate 
+    θ::T = 10.  # Relative risk aversion
 end
 
-struct EpsteinZin
-    ρ::Float64 # Discount rate 
-    θ::Float64 # Relative Risk Aversion
-    ψ::Float64 # Elasticity of Intertemporal Complementarity
-
-    function EpsteinZin(; ρ = 0.015, θ = 10., ψ = 0.75)
-        inelastic = ψ ≈ 1.
-        timeadditive = ψ ≈ 1 / θ
-
-        if inelastic && timeadditive
-            LogUtility(ρ)
-        elseif inelastic && !timeadditive
-            LogSeparable(ρ, θ)
-        elseif !inelastic && timeadditive
-            CRRA(ρ, θ)
-        else
-            new(ρ, θ, ψ)
-        end
-    end
+Base.@kwdef struct EpsteinZin{T} <: Preferences{T}
+    ρ::T = 0.015 # Discount rate
+    θ::T = 10. # Relative Risk Aversion
+    ψ::T = 0.75 # Elasticity of Intertemporal Complementarity
 end
 
-Preferences = Union{CRRA, EpsteinZin, LogUtility}
 Base.broadcastable(p::Preferences) = Ref(p)
 
 function f(c, v, Δt, p::EpsteinZin)
@@ -48,9 +34,7 @@ function f(c, v, Δt, p::EpsteinZin)
     return ((consumption + value)^aggregator) / (1 - p.θ)
 end
 
-"""
-Climate damage aggregator. `χ` is the consumtpion rate, `F′` is the expected value of `F` at `t + Δt` and `Δt` is the time step
-"""
+"Climate damage aggregator. `χ` is the consumtpion rate, `F′` is the expected value of `F` at `t + Δt` and `Δt` is the time step"
 function g(χ, F′, Δt, p::EpsteinZin)
     ψ⁻¹ = inv(p.ψ)
     agg = (1 - ψ⁻¹) / (1 - p.θ)

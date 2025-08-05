@@ -6,7 +6,7 @@ using StaticArrays
 using DifferentialEquations, DifferentialEquations.EnsembleAnalysis
 using DiffEqParamEstim, Optimization, OptimizationOptimJL, OptimizationPolyalgorithms
 using Roots, FastClosures
-using Statistics
+using Statistics, LinearAlgebra
 
 using Plots, Printf, PGFPlotsX, Colors, ColorSchemes, LaTeXStrings
 pgfplotsx()
@@ -18,6 +18,8 @@ push!(PGFPlotsX.CUSTOM_PREAMBLE, raw"\DeclareSIUnit{\ppm}{p.p.m.}")
 default(label = false, dpi = 180, linewidth = 2.5)
 
 using Model, Grid
+
+includet("../utils/simulating.jl")
 
 PLOTPATH = "papers/job-market-paper/submission/plots"
 DATAPATH = "data"
@@ -213,166 +215,215 @@ let # Figure fraction of forcing
 end
 
 # --- Computing parametric emissions form
-const ppmtoGt = 2.13 * 3.664;
-baselineyear = 2020;
-τ = 140.;
-co2calibrationend = baselineyear + τ;
+begin # Setup CO₂e maximisation problem
+    baselineyear = 2020.; τ = 2500. - baselineyear;
+    co2tspan = baselineyear .+ (0., τ);
 
-co2calibrationtime = baselineyear:co2calibrationend;
-tdxs = baselineyear .≤ co2equivalence.Year .≤ co2calibrationend;
-calibrationdf = co2equivalence[tdxs, :]
+    tdxs = baselineyear .≤ co2equivalence.Year .≤ (baselineyear + τ);
+    co2calibrationdf = co2equivalence[tdxs, :]
 
-Mᵖ = mean(co2equivalence[1800 .≤ co2equivalence.Year .≤ 1900, "Concentration"])
-m = log.(calibrationdf.Concentration ./ Mᵖ)
+    Mᵖ = mean(co2equivalence[1800 .≤ co2equivalence.Year .≤ 1900, "Concentration"])
+    m = @. log(co2calibrationdf.Concentration / Mᵖ)
+    m₀ = m[1]
+end;
 
-function parametricemissions(m, p, t)
-    order = length(p) - 1
-    γ = zero(m)
-    for n in 0:order
-        γ += p[n + 1] * t^n
-    end
-
-    return γ
+"Growth rate of emissions in the form of a parametric function `γₜ : baselineyear + [0, τ] -> [0, ∞)`."
+function parametricemissions(m, parameters, x)
+    p, defaults = parameters
+    baselineyear = first(defaults)
+    t = x - baselineyear # Shift as t starts at baselineyear
+    
+    return γ(t, Tuple(p))
 end
 
-begin k = 4
-    degree = k + 1; # Degree of the polynomial
-    p₀ = zeros(degree); # Initial guess for the parameters
-    co2calibrationprob = ODEProblem{false}(parametricemissions, m[1], extrema(co2calibrationtime), p₀); solve(co2calibrationprob, Tsit5())
+function concentrationloss(p, optparams)
+    concentrationprob, defaults, Mᵖ, targetM, α = optparams
 
-    loss = build_loss_objective(co2calibrationprob, Tsit5(), L2Loss(co2calibrationtime, m), Optimization.AutoForwardDiff(); maxiters = 1_000_000, saveat = co2calibrationtime)
+    t₀, t₁ = concentrationprob.tspan
+    sol = solve(concentrationprob, Tsit5(); p = (p, defaults), saveat = t₀:t₁)
 
-    optprob = Optimization.OptimizationProblem(loss, p₀)
-    sol = solve(optprob, BFGS()); p̂ = sol.u;
+    M = @. Mᵖ * exp(sol.u)
+    weights = @. exp(-α * (0:(t₁ - t₀)))
 
-    calibratedpath = solve(co2calibrationprob, Tsit5(); p = p̂);
-    @printf "Calibrated error %e\n" maximum(abs, calibratedpath(co2calibrationtime) .- m);
-    γparameters = Tuple(sol.u)
+    return sum(abs2, @. weights * (M - targetM))
+end
+
+begin # Initialize the CO₂e calibration problem
+    p₀ = MVector{6}(0.0003, 0.02, 0.002, 0.005, 0.002, 1e-6)
+    defaults = (baselineyear, );
+
+    concentrationprob = ODEProblem(parametricemissions, m₀, co2tspan, (p₀, defaults)); solve(concentrationprob, Tsit5())
+
+    α = 0.005
+    optparams = (concentrationprob, defaults, Mᵖ, co2calibrationdf.Concentration, α);
+    concentrationlossfunction = Optimization.OptimizationFunction(concentrationloss, Optimization.AutoForwardDiff());
+    optprob = Optimization.OptimizationProblem(concentrationlossfunction, p₀, optparams)
+    result = solve(optprob, PolyOpt(); iterations = 100_000)
 end;
 
 # --- Implied emissions
 begin
+    γparameters = Tuple(result.u)
+    γfn = @closure (m, γparameters, t) -> γ(t - baselineyear, γparameters)
+    γprob = ODEProblem(γfn, m₀, co2tspan, γparameters)
+
+    calibratedpath = solve(γprob, Tsit5(), saveat = range(γprob.tspan...; step = 1.))
+
+    @printf "Calibrated error %e\n" maximum(abs, calibratedpath.u .- m);
+
     m₀ = calibratedpath(baselineyear)
     M₀ = Mᵖ * exp(m₀)
-    Mₜ = Mᵖ * exp.(calibratedpath(co2calibrationtime).u)
-    Eₜ = diff(Mₜ) * ppmtoGt
-    calibration = Calibration{degree}(baselineyear, Eₜ, γparameters, τ)
+    Mₜ = Mᵖ * exp.(calibratedpath.u)
+
+    ppmoverGt = 2.13 * 3.664
+    Eₜ = diff(Mₜ) * ppmoverGt
+
+    calibration = Calibration(baselineyear, Eₜ, γparameters, τ)
 end
 
-let # Check simulated fit
-    parametricemissions(m, p::Calibration, t) = γ(t - baselineyear, p)
-    prob = ODEProblem{false}(parametricemissions, m[1], extrema(co2calibrationtime), calibration)
+begin # Check simulated fit
+    Mfig = plot(co2calibrationdf.Year, Mₜ; c = :black, linestyle = :dash, ylabel = L"Concentration $[\si{\ppm}]$", label = L"Fitted $M_t$")
+
+    plot!(Mfig, co2calibrationdf.Year, co2calibrationdf.Concentration; c = :black, label = L"SSP5-8.5 $\hat{M}_t$", alpha = 0.5)
+
+    error = @. (Mₜ - co2calibrationdf.Concentration)
+
+    errorfig = plot(co2calibrationdf.Year, error; c = :black, ylabel = L"Concentration $[\si{\ppm}]$", label = L"Error $M_t - \hat{M_t} \; [\si{\ppm}]$", xlabel = "Year")
+
+    co2errorfig = plot(Mfig, errorfig; layout = (2, 1), size = 300 .* (√2, 2),legend = :bottomright, link = :x)
     
-    sol = solve(prob, Tsit5())
-    Msimulated =  Mᵖ * exp.(sol(co2calibrationtime).u)
+    if SAVEFIG
+        savefig(co2errorfig, joinpath(PLOTPATH, "co2error.tikz"))
+    end
 
-    co2fig = plot(co2calibrationtime, Mₜ; label = "Fitted ", c = :darkred, alpha = 0.5)
-    plot!(co2fig, co2calibrationtime, Msimulated; label = "Simulated", c = :darkblue, alpha = 0.5)
-    plot!(co2fig, co2calibrationtime, calibrationdf.Concentration; label = "True", c = :black)
-
-    γfig = plot(co2calibrationtime, t -> γ(t - baselineyear, calibration); c = :black)
-
-    plot(γfig, co2fig; size = 500 .* (2√2, 1))
+    co2errorfig
 end
 
 # CALIBRATION OF TEMPERATURE
 begin # --- Extract lower and upper bounds for the temperature
-    tdxs = baselineyear .≤ temperature[1].Year
-    nptemperature = copy(temperature[(npscenario, 0.5)][tdxs, :])
+    nptemperature = copy(temperature[(npscenario, 0.5)])
     
     # Temperature without tipping elements
-    nptemperature[!, "T lower"] = temperature[(npscenario, 0.05)][tdxs, "T_Uncoupled"]
-    nptemperature[!, "T upper"] = temperature[(npscenario, 0.95)][tdxs, "T_Uncoupled"]
+    nptemperature[!, "T lower"] = temperature[(npscenario, 0.05)][:, "T_Uncoupled"]
+    nptemperature[!, "T upper"] = temperature[(npscenario, 0.95)][:, "T_Uncoupled"]
     rename!(nptemperature, :T_Uncoupled => "T")
     
     # Temperature with tipping elements
-    nptemperature[!, "T TE lower"] = temperature[(npscenario, 0.05)][tdxs, "T_Coupled"]
-    nptemperature[!, "T TE upper"] = temperature[(npscenario, 0.95)][tdxs, "T_Coupled"]
+    nptemperature[!, "T TE lower"] = temperature[(npscenario, 0.05)][:, "T_Coupled"]
+    nptemperature[!, "T TE upper"] = temperature[(npscenario, 0.95)][:, "T_Coupled"]
     rename!(nptemperature, :T_Coupled => "T TE")
 
     select!(nptemperature, Not([:Quantile, :Scenario]))
-end
+end;
 
-const ϵ = 15.844043907014475;
 const kelvintocelsius = 273.15;
 const deviationtokelvin = 287.15;
 
-function Fnp!(du, u, parameters, t)
+begin
+    η = 5.67e-8 # Stefan-Boltzmann constant in Wm⁻²K⁻⁴
+    S = 239.75 # Incoming radiative forcing
+
+    ghgcalibrationhorizon = 80.
+    ghgspan = baselineyear .+ (0, ghgcalibrationhorizon)
+    t₀, t₁ = ghgspan
+
+    m̂ = log.(co2calibrationdf[t₀ .≤ co2calibrationdf.Year .≤ t₁, "Concentration"] ./ Mᵖ)
+    T̂ = nptemperature[t₀ .≤ nptemperature.Year .≤ t₁, "T"] .+ deviationtokelvin # Temperature in Kelvin
+
+    X = hcat(ones(length(m̂)), m̂)
+    y = η * T̂.^4 .- S
+    G₀, G₁ = (X'X) \ (X'y)
+
+    error = sum(abs2, X * [G₀, G₁] - y)
+
+    @printf "G₀ = %.3f, G₁ = %.3f; residual = %.3f \n" G₀ G₁ error
+end
+
+function Flinear(u, parameters, t)
+    ϵ, defaults = parameters
+    calibration, baselineyear, η, S, G₀, G₁ = defaults
+
     m, T = u
-    G₀, G₁ = parameters
+    r = S - η * T^4 # Forcing with tipping element
+    ghgforcing = G₀ + G₁ * m
+
+    dm = γ(t - baselineyear, calibration)
+    dT = (r + ghgforcing) / ϵ
+
+    return SVector(dm, dT)
+end
+
+# --- Define the loss function
+function temperatureloss(ϵ, optparams)
+    linearprob, defaults, matchtemperature = optparams
+
+    t₀, t₁ = linearprob.tspan
+    sol = solve(linearprob, AutoVern9(Rodas5P()); p = (ϵ, defaults), saveat = t₀:t₁)
     
-    # Forcing with tipping element
-    λ₁ = 0.31; S₀ = 340.5; η = 5.67e-8;
-    r = S₀ * (1 - λ₁) - η * T^4
-
-    # Greenhouse gas forcing
-    G = G₀ + G₁ * m
-
-    du[1] = γ(t - baselineyear, calibration)
-    du[2] = (r + G) / ϵ
+    if SciMLBase.successful_retcode(sol.retcode)
+        T = getindex.(sol.u, 2) .- deviationtokelvin
+        return sum(abs2, @. T - matchtemperature)
+    else
+        return Inf
+    end
 end
 
-T₀ = nptemperature[nptemperature.Year .== baselineyear, "T"][1] .+ deviationtokelvin
-u₀ = [m₀, T₀];
-p₀ = [150., 20.5];
-Tcalibrationtime = (2020., 2100.);
-npprob = ODEProblem(Fnp!, u₀, Tcalibrationtime, p₀); solve(npprob, AutoVern9(Rosenbrock23()))
+begin # Initialize the temperature matching problem 
+    defaults = (calibration, Float64(baselineyear), η, S, G₀, G₁)
+    
+    T₀ = 1.4 + deviationtokelvin
+    u₀ = SVector{2}(m₀, T₀)
+    ϵ₀ = 0.15
+    linearprob = ODEProblem(Flinear, u₀, ghgspan, (ϵ₀, defaults))
+    testsol = solve(linearprob, AutoVern9(Rodas5P()); saveat = t₀:t₁) # Ensure the problem is well-posed
+    
+    tdx = t₀ .≤ nptemperature.Year .≤ t₁;
+    matchtemperature = nptemperature[tdx, "T"]
 
-tdxs = Tcalibrationtime[1] .≤ nptemperature.Year .≤ Tcalibrationtime[2];
-matchyears = nptemperature.Year[tdxs];
-matchtemperature = nptemperature.T[tdxs] .+ deviationtokelvin;
-function matchtemperatureloss(p)
-    sol = solve(npprob, AutoVern9(Rosenbrock23()); p = p, saveat = matchyears)
+    optparams = (linearprob, defaults, matchtemperature);
 
-    return mean(abs2, last.(sol.u) .- matchtemperature)
+    lossfn = @closure ϵ -> temperatureloss(ϵ, optparams)
+
+    _, ϵ = gssmin(lossfn, 0., 100.)
 end
-
-tmatchf = Optimization.OptimizationFunction((p, _) -> matchtemperatureloss(p), Optimization.AutoForwardDiff())
-tmatchprob = Optimization.OptimizationProblem(tmatchf, p₀)
-result = Optimization.solve(tmatchprob, PolyOpt())
 
 begin # Check calibration
-    p̂ = result.u
-    ts = co2calibrationtime
-    npprob = ODEProblem(Fnp!, u₀, extrema(ts), p̂)
+    t₀ = ghgspan[1]
+    t₁ = min(ghgspan[2] + 50., nptemperature.Year[end])
+    tdx = t₀ .≤ nptemperature.Year .≤ t₁
+    checkprob = ODEProblem(Flinear, u₀, (t₀, t₁), (ϵ, defaults))
+    sol = solve(checkprob, AutoVern9(Rodas5P()); saveat = t₀:t₁)
     
-    sol = solve(npprob, AutoVern9(Rosenbrock23()))
-end
+    Tfitfig = vspan(collect(ghgspan); alpha = 0.4, c = :lightgray, label = "Calibration period", ylabel = L"Temperature $[\si{\degree}]$", legend = :topleft, xlims = extrema(sol.t))
 
-begin # Plot temperature calibration
-    T̂ = sol(ts).u
+    plot!(Tfitfig, nptemperature[tdx, "Year"], nptemperature[tdx, "T"]; label = L"FaIRv2 SSP5-8.5 $\hat{T}_t$", c = :black, linewidth = 2.5, alpha = 0.5)
+    plot!(Tfitfig, nptemperature[tdx, "Year"], nptemperature[tdx, "T lower"]; fillrange = nptemperature[tdx, "T upper"], c = :black, linewidth = 0., alpha = 0.1)
+
+    T = getindex.(sol.u, 2) .- deviationtokelvin; # Extract temperature
+    plot!(Tfitfig, sol.t, T; label = L"Temperature $T_t$", c =:black, linestyle = :dash, linewidth = 2.5)
+
+    error = @. T - nptemperature[tdx, "T"]
+
+    errorfig = hline([0.]; linestyle = :dash, color = :black, linewidth = 1.5, ylabel = L"Temperature $[\si{\degree}]$", xlabel = L"Year, $t$", legend = :topright, xlims = extrema(sol.t))
     
-    tdx = first(ts) .≤ nptemperature.Year .≤ last(ts)
+    vspan!(errorfig, collect(ghgspan); alpha = 0.4, c = :lightgray)
+    plot!(errorfig, sol.t, error; c = :black, ylabel = L"Temperature $[\si{\degree}]$", label = L"Error $T_t - \hat{T_t}$", xlabel = L"Year, $t$", legend = :topright)
 
-    fig = vspan(collect(Tcalibrationtime); alpha = 0.4, c = :lightgray, label = "Calibration period", xlabel = L"Year, $t$", ylabel = raw"Temperature [°C]", xlims = extrema(ts), legend = :topleft, xticks = 2020:20:2150)
 
-    plot!(fig, nptemperature[tdx, "Year"], nptemperature[tdx, "T"]; label = "FaIRv2 SSP5-8.5", c = :black, linewidth = 2.5, alpha = 0.5)
-    plot!(fig, nptemperature[tdx, "Year"], nptemperature[tdx, "T lower"]; fillrange = nptemperature[tdx, "T upper"], c = :black, linewidth = 0., alpha = 0.1)
+    Tcalfig = plot(Tfitfig, errorfig; layout = (2, 1), size = 300 .* (√2, 2), link = :x)
 
-    plot!(fig, ts, getindex.(T̂, 2) .- deviationtokelvin; label = "Median fit", c =:black, linestyle = :dash, linewidth = 2.5)
 
     if SAVEFIG
-        savefig(fig, joinpath(PLOTPATH, "temperaturecalibration.tikz"))
+        savefig(Tcalfig, joinpath(PLOTPATH, "temperaturecalibration.tikz"))
     end
 
-    fig
-end
-
-let # Compute error
-    error = @. (getindex(T̂, 2) - deviationtokelvin) - nptemperature[tdx, "T"]
-    indx = first(Tcalibrationtime) .≤ nptemperature.Year[tdx] .≤ last(Tcalibrationtime)
-    insampleerror = maximum(abs, error[indx])
-    outerror = maximum(abs, error[.!indx])
-
-    @printf "Maximum in-sample error: %.5f °C, out-of-sample error: %.5f °C" insampleerror outerror
+    Tcalfig
 end
 
 begin # Hogg calibration
     todaydx = findfirst(co2equivalence.Year .== baselineyear)
     frac = co2equivalence[todaydx, "CO2 Concentration"] ./ co2equivalence[todaydx, "Concentration"]
     N₀ = 286.65543 / frac[1]
-
-    G₀, G₁ = result.u
 
     hogg = Hogg(
         T₀ = T₀, M₀ = M₀, Mᵖ = Mᵖ, N₀ = N₀, 
@@ -454,7 +505,7 @@ function system!(du, u, albedo, t)
 end
 
 u₀ = [log(hogg.M₀ / hogg.Mᵖ), hogg.T₀, hogg.T₀]; # Initial conditions
-albedo = Albedo(Tᶜ = 1.5)
+albedo = Albedo(Tᶜ = 2.5)
 tspan = (2020., 2150.); # Time span in years
 
 du = similar(u₀); # Allocate memory for the derivative
@@ -462,7 +513,7 @@ system!(du, u₀, albedo, 2020.); # Call the system to ensure it works
 prob = ODEProblem(system!, u₀, tspan, albedo);
 probsol = solve(prob, AutoVern9(Rosenbrock23()))
 
-mediandf = modeldfs[3];
+mediandf = modeldfs[2];
 row = mediandf[mediandf.Year .== 2100, :];
 const targetΔT = row.T_Coupled[1] - row.T_Uncoupled[1]
 
@@ -475,7 +526,7 @@ function terminalΔTloss(sim)::Float64
 end
 
 lossbyparam = @closure Δλ -> begin
-    albedo = Albedo(Tᶜ = 1.5, Δλ = Δλ)
+    albedo = Albedo(Tᶜ = 2., Δλ = Δλ)
     sol = solve(prob, AutoVern9(Rosenbrock23()); p = albedo)
 
     return terminalΔTloss(sol)
@@ -487,7 +538,7 @@ plot(0:0.001:0.05, lossbyparam; ylabel = "Loss", xlabel = L"\Delta\lambda", line
 sol = solve(prob, AutoVern9(Rosenbrock23()); p = Albedo(Tᶜ = 2.0, Δλ = Δλ))
 
 begin
-    solfig = plot(xlabel = "Year", ylabel = "Temperature [°C]", title = "Temperature Dynamics with Tipping Element", xticks = (0:10:80, 2020:10:2100))
+    solfig = plot(xlabel = "Year", ylabel = L"Temperature $[\si{\degree}]$", title = "Temperature Dynamics with Tipping Element", xticks = (0:10:80, 2020:10:2100))
 
     plot!(solfig, sol; idxs = [2, 3], labels = ["T" "Tˡ"], margins = 5Plots.mm, c = [:darkred :darkblue], linewidth = 2.5)
 end
@@ -524,14 +575,66 @@ let
     Tticks = range(0, 6, length = 10) .+ hogg.Tᵖ
     Tlabels = [Printf.@sprintf("%.1f", T - hogg.Tᵖ) for T in Tticks]
 
-    nullclinefig = plot(xlabel = "CO2 concentration [p.p.m.]", xticks = (mticks, mlabels), ylabel = "Temperature [°C]", yticks = (Tticks, Tlabels))
+    nullclinefig = plot(xlabel = "CO2 concentration [p.p.m.]", xticks = (mticks, mlabels), ylabel = L"Temperature $[\si{\degree}]$", yticks = (Tticks, Tlabels))
 
     plot!(nullclinefig, last.(mstable), Tspace; label = "With tipping element", color = :darkred, linewidth = 2.5, linestyle = :dash)
     plot!(nullclinefig, first.(mstable), Tspace; label = "Without tipping element", color = :darkblue, linewidth = 2.5, linestyle = :dash)
+end
 
+function noise!(Σ, u, albedo, t)
+    # Noise is not used in this model
+    Σ[1] = 0.0; 
+    Σ[2] = Σ[3] = 0.0999744768;
+end
+
+
+function adjspeed(sim)
+    albedo = sim.prob.p
+    T₀ = albedo.Tᶜ + 287.15
+    
+    t₀ = find_zero(t -> sim(t)[2] - T₀, sim.prob.tspan)
+    
+    timepost = range(t₀, sim.prob.tspan[end]; step = 1/12)
+    trajectory = sim(timepost).u
+    warming = getindex.(trajectory, 2) .- getindex.(trajectory, 3)
+    
+    tdx = findfirst(ΔTₜ -> ΔTₜ > 1., warming)
+    return timepost[tdx] - t₀
+end
+
+function terminalwarming(sim)
+    _, T, Tˡ = sim.u[end]
+    return T - Tˡ
+end
+
+sdeprob = SDEProblem(system!, noise!, u₀, tspan, Albedo(Tᶜ = 2.5));
+ensemble = EnsembleProblem(sdeprob);
+simulations = solve(ensemble, ImplicitRKMil(); trajectories = 1_000)
+speeds = map(adjspeed, simulations)
+warmings = map(terminalwarming, simulations)
+
+begin
+    speedhistfig = histogram(speeds; bins = 60, linewidth = 1, c = :white,  normalize = true, xlims = (0, Inf), xlabel = "Years", ylabel = "Frequency")
+
+    if SAVEFIG
+        savefig(speedhistfig, joinpath(PLOTPATH, "speedhistfig.tikz"))
+    end
+
+    speedhistfig
+end
+
+begin
+    warminghistfig = histogram(warmings; bins = 50, linewidth = 1, c = :white,  normalize = true, xlims = (0, Inf), ylabel = "Frequency")
+
+    if SAVEFIG
+        savefig(warminghistfig, joinpath(PLOTPATH, "warminghistfig.tikz"))
+    end
+
+    warminghistfig
 end
 
 # Save outcome of calibration in file
+
 jldopen(calibrationpath, "w+") do file
     @pack! file = hogg, calibration, albedo
 end
