@@ -47,7 +47,7 @@ Base.@kwdef struct Hogg{T <: Real}
     # Parameters of decay rate of carbon concentration
     aδ::T = 0.0176
     bδ::T = -27.63
-    cδ::T = 506.32
+    cδ::T = 408.3226
 end
 
 Base.broadcastable(m::Feedback) = Ref(m)

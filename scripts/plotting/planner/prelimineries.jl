@@ -383,8 +383,6 @@ end
 # TODO: Finish the comparison of density plots between jump and tipping models.
 densmodels = AbstractModel[last(tippingmodels), jumpmodel];
 begin # Simulates the two models    
-    m₀ = log(540)
-
     temperaturedrift! = @closure (du, u, model, t) -> begin
         du[1] = μ(u[1], m₀, model) / model.hogg.ϵ
     end
@@ -485,11 +483,10 @@ begin
 end
 
 begin # Carbon decay calibration
-    sinkspace = range(linearmodel.hogg.N₀, 2linearmodel.hogg.N₀; length=51)
-    decay = [Model.δₘ(n, linearmodel.hogg) for n in sinkspace]
+    sinkspace = range(hogg.N₀, 2hogg.N₀; length=51)
+    decay = [Model.δₘ(n, hogg) for n in sinkspace]
 
-    decayfig = @pgf Axis(
-        {
+    decayfig = @pgf Axis({
         width = raw"0.5\textwidth",
         height = raw"0.5\textwidth",
         grid = "both",
@@ -497,11 +494,9 @@ begin # Carbon decay calibration
         ylabel = raw"Decay of CO$_2$ in the atmosphere $\delta_m$",
         xmin = first(sinkspace), xmax = last(sinkspace),
         ymin = 0
-    }
-    )
+    })
 
-    @pgf push!(decayfig, Plot({line_width = LINE_WIDTH}, Coordinates(zip(sinkspace, decay))))
-
+    @pgf push!(decayfig, Plot({line_width = LINE_WIDTH}, Coordinates(sinkspace, decay)))
 
     if SAVEFIG
         PGFPlotsX.save(joinpath(PLOTPATH, "decay.tikz"), decayfig; include_preamble=true)
@@ -514,8 +509,8 @@ begin # Carbon decay path
     npmprob = ODEProblem((m, calibration, t) -> γ(t, calibration), m₀, simtspan, calibration)
 
     npsim = solve(npmprob, AutoVern9(Rodas5P()); saveat = 1.)
-    npM = linearmodel.hogg.Mᵖ * exp.(npm)
-    mediandecay = Model.δₘ.(npM, tippingmodel.hogg)
+    npM = hogg.Mᵖ * exp.(npsim.u)
+    mediandecay = δₘ.(npM, hogg)
 
     decaypathfig = @pgf Axis({
         width = raw"0.7\textwidth",
@@ -523,14 +518,13 @@ begin # Carbon decay path
         grid = "both",
         xlabel = raw"Carbon concentration $M$",
         ylabel = raw"Decay of CO$_2$ in the atmosphere $\delta_m$",
-        xmin = tippingmodel.hogg.M₀, xmax = 800,
+        xmin = hogg.M₀, xmax = 800.,
         scaled_y_ticks = false
     })
 
     @pgf push!(decaypathfig,
         Plot({line_width = LINE_WIDTH}, Coordinates(npM, mediandecay))
     )
-
 
     if SAVEFIG
         PGFPlotsX.save(joinpath(PLOTPATH, "decaypathfig.tikz"), decaypathfig; include_preamble=true)
