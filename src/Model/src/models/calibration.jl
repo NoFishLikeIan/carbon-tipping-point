@@ -13,7 +13,7 @@ end
 Base.broadcastable(c::Calibration) = Ref(c)
 Base.broadcastable(c::RegionalCalibration) = Ref(c)
 
-function γ(t::T, p::NTuple{6, T}) where T <: Real
+function γ(t, p::NTuple{6, T}) where T <: Real
     firstexp = p[1] * t * exp(-p[2] * t)
     secondexp = p[3] * exp(-p[4] * t)
 

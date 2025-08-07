@@ -1,13 +1,15 @@
-const SIMPATHS = Dict(
-    LinearModel{LevelDamages, EpsteinZin}  => "linear/level",
-    LinearModel{GrowthDamages, EpsteinZin} => "linear/growth",
-    TippingModel{LevelDamages, EpsteinZin}  => "albedo/level",
-    TippingModel{GrowthDamages, EpsteinZin} => "albedo/growth",
-    JumpModel{LevelDamages, EpsteinZin}  => "jump/level",
-    JumpModel{GrowthDamages, EpsteinZin}  => "jump/growth"
-)
+function simpaths(T)
+    Dict(
+        LinearModel{T, LevelDamages, EpsteinZin}  => "linear/level",
+        LinearModel{T, GrowthDamages, EpsteinZin} => "linear/growth",
+        TippingModel{T, LevelDamages, EpsteinZin}  => "albedo/level",
+        TippingModel{T, GrowthDamages, EpsteinZin} => "albedo/growth",
+        JumpModel{T, LevelDamages, EpsteinZin}  => "jump/level",
+        JumpModel{T, GrowthDamages, EpsteinZin}  => "jump/growth"
+    )
+end
 
-function makefilename(model::LinearModel{LevelDamages, EpsteinZin})
+function makefilename(model::LinearModel{T, LevelDamages, EpsteinZin}) where T
     @unpack ρ, θ, ψ = model.preferences
     @unpack ωᵣ = model.economy
     @unpack σₜ, σₘ = model.hogg
@@ -18,7 +20,7 @@ function makefilename(model::LinearModel{LevelDamages, EpsteinZin})
     return "$(replace(filename, "." => ",")).jld2"
 end
 
-function makefilename(model::LinearModel{GrowthDamages, EpsteinZin})
+function makefilename(model::LinearModel{T, GrowthDamages, EpsteinZin}) where T
     @unpack ρ, θ, ψ = model.preferences
     @unpack ωᵣ = model.economy
     @unpack σₜ, σₘ = model.hogg
@@ -28,7 +30,7 @@ function makefilename(model::LinearModel{GrowthDamages, EpsteinZin})
     return "$(replace(filename, "." => ",")).jld2"
 end
 
-function makefilename(model::TippingModel{LevelDamages, EpsteinZin})
+function makefilename(model::TippingModel{T, LevelDamages, EpsteinZin}) where T
     @unpack ρ, θ, ψ = model.preferences
     @unpack ωᵣ = model.economy
     @unpack σₜ, σₘ = model.hogg
@@ -40,7 +42,7 @@ function makefilename(model::TippingModel{LevelDamages, EpsteinZin})
     return "$(replace(filename, "." => ",")).jld2"
 end
 
-function makefilename(model::TippingModel{GrowthDamages, EpsteinZin})
+function makefilename(model::TippingModel{T, GrowthDamages, EpsteinZin}) where T
     @unpack ρ, θ, ψ = model.preferences
     @unpack ωᵣ = model.economy
     @unpack σₜ, σₘ = model.hogg
@@ -51,7 +53,7 @@ function makefilename(model::TippingModel{GrowthDamages, EpsteinZin})
     return "$(replace(filename, "." => ",")).jld2"
 end
 
-function makefilename(model::JumpModel{GrowthDamages, EpsteinZin})
+function makefilename(model::JumpModel{T, GrowthDamages, EpsteinZin}) where T
     @unpack ρ, θ, ψ = model.preferences
     @unpack ωᵣ = model.economy
     @unpack σₜ, σₘ = model.hogg
@@ -61,7 +63,7 @@ function makefilename(model::JumpModel{GrowthDamages, EpsteinZin})
     return "$(replace(filename, "." => ",")).jld2"
 end
 
-function makefilename(model::JumpModel{LevelDamages, EpsteinZin})
+function makefilename(model::JumpModel{T, LevelDamages, EpsteinZin}) where T
     @unpack ρ, θ, ψ = model.preferences
     @unpack ωᵣ = model.economy
     @unpack σₜ, σₘ = model.hogg
@@ -85,8 +87,8 @@ function makefilename(models::Vector{<:AbstractModel})
     return "$(join(filenames, "-")).jld2"
 end
 
-function loadterminal(model::AbstractModel; outdir = "data/simulation", addpath = "")
-    folder = SIMPATHS[typeof(model)]
+function loadterminal(model::AbstractModel{T}; outdir = "data/simulation", addpath = "") where T
+    folder = get(simpaths(T), typeof(model))
     filename = makefilename(model)
     
     savedir = joinpath(outdir, folder, "terminal", addpath)
@@ -107,8 +109,8 @@ function loadterminal(models::Vector{<:AbstractModel}; outdir = "data/simulation
 end
 
 
-function loadtotal(model::AbstractModel; outdir = "data/simulation")
-    folder = SIMPATHS[typeof(model)]
+function loadtotal(model::AbstractModel{T}; outdir = "data/simulation") where T
+    folder = get(simpaths(T), typeof(model))
     cachefolder = joinpath(outdir, folder)
     filename = makefilename(model)
     cachepath = joinpath(cachefolder, filename)

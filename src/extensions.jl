@@ -1,28 +1,15 @@
-# TODO: break up these functions
-μ(T, m, model::TippingModel) = μ(T, m, model.hogg, model.feedback)
-μ(T, m, model::JumpModel) = μ(T, m, model.hogg)
-μ(T, m, model::LinearModel) = μ(T, m, model.hogg)
-
-mstable(T, model::TippingModel) = mstable(T, model.hogg, model.feedback)
-mstable(T, model::JumpModel) = mstable(T, model.hogg)
-mstable(T, model::LinearModel) = mstable(T, model.hogg)
-
-Tstable(m, model::TippingModel) = Tstable(m, model.hogg, model.feedback)
-Tstable(m, model::JumpModel) = Tstable(m, model.hogg)
-Tstable(m, model::LinearModel) = Tstable(m, model.hogg)
-
-function d(Xᵢ, model::TippingModel{T, GrowthDamages}) where T
-    d(Xᵢ.T, Xᵢ.m, model.damages, model.hogg, model.feedback)
+function Model.d(Xᵢ::Point{T}, model::TippingModel{T, GrowthDamages}) where T
+    Model.d(Xᵢ.T, Xᵢ.m, model.damages, model.hogg, model.feedback)
 end
-function d(Xᵢ, model::LinearModel{T, GrowthDamages}) where T
-    d(Xᵢ.T, Xᵢ.m, model.damages, model.hogg)
+function Model.d(Xᵢ::Point{T}, model::LinearModel{T, GrowthDamages}) where T
+    Model.d(Xᵢ.T, Xᵢ.m, model.damages, model.hogg)
 end
-function d(Xᵢ, model::AbstractModel{T, LevelDamages}) where T
-    d(Xᵢ.T, model.damages, model.hogg)
+function Model.d(Xᵢ::Point{T}, model::AbstractModel{T, LevelDamages}) where T
+    Model.d(Xᵢ.T, model.damages, model.hogg)
 end
 
 "Drift of log output y for `t ≥ τ`"
-function bterminal(Xᵢ, χ, model::AbstractModel{T, GrowthDamages}) where T
+function bterminal(Xᵢ::Point{T}, χ, model::AbstractModel{T, GrowthDamages}) where T
     growth = model.economy.ϱ - model.economy.δₖᵖ
     investments = ϕ(model.economy.τ, χ, model.economy)
     damage = d(Xᵢ, model)
@@ -46,7 +33,7 @@ function ε(t, M, α, model::AbstractModel, regionalcalibration::RegionalCalibra
 end
 
 "Drift of log output y for `t < τ`"
-function b(t, Xᵢ, emissivity, investments, model::AbstractModel{T, GrowthDamages, P}) where { T, P <: Preferences } 
+function b(t, Xᵢ::Point{T}, emissivity, investments, model::AbstractModel{T, GrowthDamages, P}) where { T, P <: Preferences } 
     Aₜ = A(t, model.economy)
 
     abatement = Aₜ * β(t, emissivity, model.economy)
@@ -56,13 +43,13 @@ function b(t, Xᵢ, emissivity, investments, model::AbstractModel{T, GrowthDamag
 
     return growth + investments - abatement - damage
 end
-function b(t, Xᵢ, emissivity, investments, model::AbstractModel{T, LevelDamages, P}) where { T, P <: Preferences }
+function b(t, Xᵢ::Point{T}, emissivity, investments, model::AbstractModel{T, LevelDamages, P}) where { T, P <: Preferences }
     Aₜ = A(t, model.economy)
     abatement = Aₜ * β(t, emissivity, model.economy)
 
     return growth + investments - abatement
 end
-function b(t, Xᵢ, u, model::AbstractModel{T, GrowthDamages}, calibration::Calibration) where T
+function b(t, Xᵢ::Point{T}, u, model::AbstractModel{T, GrowthDamages}, calibration::Calibration) where T
     χ, α = u
     M = exp(Xᵢ.m) * model.hogg.Mᵖ
     εₜ = ε(t, M, α, model, calibration) 
@@ -70,7 +57,7 @@ function b(t, Xᵢ, u, model::AbstractModel{T, GrowthDamages}, calibration::Cali
     
     return b(t, Xᵢ, εₜ, investments, model)
 end
-function b(t, Xᵢ, u, model::AbstractModel, calibration::RegionalCalibration, p)
+function b(t, Xᵢ::Point{T}, u, model::AbstractModel{T, GrowthDamages}, calibration::RegionalCalibration, p) where T
     χ, α = u
     M = exp(Xᵢ.m) * model.hogg.Mᵖ
     εₜ = ε(t, M, α, model, calibration, p) 
@@ -80,7 +67,7 @@ function b(t, Xᵢ, u, model::AbstractModel, calibration::RegionalCalibration, p
 end
 
 # TODO: Update the cost breakdown for the game model
-function costbreakdown(t, Xᵢ, u,  model::AbstractModel{T, GrowthDamages, P}, calibration) where {T, P <: Preferences}
+function costbreakdown(t, Xᵢ::Point{T}, u,  model::AbstractModel{T, GrowthDamages, P}, calibration) where {T, P <: Preferences}
     χ, α = u
     M = exp(Xᵢ.m) * model.hogg.Mᵖ
     εₜ = ε(t, M, α, model, calibration)
@@ -95,26 +82,26 @@ function costbreakdown(t, Xᵢ, u,  model::AbstractModel{T, GrowthDamages, P}, c
 end
 
 "δ-factor for output at time `t ≥ τ`"
-function terminaloutputfct(Xᵢ, Δt, χ, model::AbstractModel)
+function terminaloutputfct(Xᵢ::Point{T}, Δt, χ, model::AbstractModel{T}) where T
     drift = bterminal(Xᵢ, χ, model) - model.preferences.θ * model.economy.σₖ^2 / 2
      
     adj = Δt * (1 - model.preferences.θ) * drift
 
-    return max(1 + adj, 0.)
+    return max(1 + adj, zero(T))
 end
 
 "δ-factor for output at time `t < τ`"
-function outputfct(t, Xᵢ, Δt, u, model::AbstractModel, calibration::Calibration)
+function outputfct(t, Xᵢ::Point{T}, Δt, u, model::AbstractModel{T}, calibration::Calibration) where T
     drift = b(t, Xᵢ, u, model, calibration) - model.preferences.θ * model.economy.σₖ^2 / 2
 
     adj = Δt * (1 - model.preferences.θ) * drift
 
-    return max(1 + adj, 0.)
+    return max(1 + adj, zero(T))
 end
-function outputfct(t, Xᵢ, Δt, u, model::AbstractModel, calibration::RegionalCalibration, p)
+function outputfct(t, Xᵢ::Point{T}, Δt, u, model::AbstractModel{T}, calibration::RegionalCalibration, p) where T
     drift = b(t, Xᵢ, u, model, calibration, p) - model.preferences.θ * model.economy.σₖ^2 / 2
 
     adj = Δt * (1 - model.preferences.θ) * drift
 
-    return max(1 + adj, 0.)
+    return max(1 + adj, zero(T))
 end

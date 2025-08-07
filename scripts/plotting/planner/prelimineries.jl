@@ -1,9 +1,10 @@
 using Revise
-using JLD2, CSV
-using UnPack
-using DataFrames, DataStructures
+
 using FastClosures
+using JLD2, CSV, UnPack
+using DataFrames, DataStructures
 using StatsBase
+using Interpolations
 
 using DifferentialEquations, DifferentialEquations.EnsembleAnalysis
 
@@ -16,12 +17,12 @@ push!(PGFPlotsX.CUSTOM_PREAMBLE, raw"\DeclareSIUnit{\ppm}{p.p.m.}")
 
 using Model, Grid
 
+includet("../../../src/extensions.jl")
 includet("../../utils/saving.jl")
 includet("../../utils/simulating.jl")
 includet("../utils.jl")
 
 begin # Global variables
-    BASELINE_YEAR = 2020
     DATAPATH = "data"
     PLOTPATH = "papers/job-market-paper/submission/plots"
     PRESENTATIONPATH = joinpath(PLOTPATH, "presentation")
@@ -30,17 +31,18 @@ begin # Global variables
     LINE_WIDTH = 2.5
     SEED = 11148705
 
+    trajectories = 10_000
+
     TLABEL = L"Temperature $T_t \; [\si{\degree}]$"
     MLABEL = L"\si{CO2}e $M_t \; [\si{\ppm}]$"
 end;
 
 begin # Construct models and grids
-    thresholds = [2.3, 3.3]
     calibrationpath = joinpath(DATAPATH, "calibration.jld2")
     @assert isfile(calibrationpath) "Calibration file not found at $calibrationpath"
     
     calibrationfile = jldopen(calibrationpath, "r+")
-    @unpack calibration, hogg, albedo = calibrationfile
+    @unpack calibration, hogg, feedbacklower, feedback, feedbackhigher = calibrationfile
     close(calibrationfile)
 
     preferences = EpsteinZin()
@@ -49,15 +51,12 @@ begin # Construct models and grids
     jump = Jump()
 
     linearmodel = LinearModel(hogg, preferences, damages, economy)
-    jumpmodel = JumpModel(jump, hogg, preferences, damages, economy)
+    jumpmodel = JumpModel(hogg, preferences, damages, economy, jump)
 
-    tippingmodels = TippingModel[]
-    for Tᶜ ∈ thresholds
-        albedo = updateTᶜ(Tᶜ, albedo)
-        model = TippingModel(albedo, hogg, preferences, damages, economy)
-
-        push!(tippingmodels, model)
-    end
+    tippingmodels = [
+        TippingModel(hogg, preferences, damages, economy, Model.updateTᶜ(2.5 + hogg.Tᵖ, feedbackhigher)),
+        TippingModel(hogg, preferences, damages, economy, Model.updateTᶜ(feedbackhigher.Tᶜ, feedbacklower))
+    ]
 
     models = AbstractModel[tippingmodels..., linearmodel, jumpmodel]
     labels = ["Imminent", "Remote", "No Feedback", "Benchmark"]
@@ -70,11 +69,12 @@ begin # Labels, colors and axis
 
     colorsbymodel = Dict(models .=> colors)
     ΔTmax = 6.5
-    ΔTspace = range(0.0, ΔTmax; length = 51)
+    ΔTspace = range(0.0, ΔTmax; length = 101)
     Tspace = ΔTspace .+ Hogg().Tᵖ
 
-    horizon = 80.
+    horizon = 2100. - calibration.baselineyear
     yearlytime = 0:1:horizon
+    simtspan = (0, horizon)
 
     temperatureticks = collect.(makedeviationtickz(1., ΔTmax, first(tippingmodels); step=1, digits=0))
 
@@ -82,78 +82,57 @@ begin # Labels, colors and axis
 
     m₀ = log(hogg.M₀ / hogg.Mᵖ)
     X₀ = [hogg.T₀, m₀]
-
-    const defalg = ImplicitRKMil()
 end;
 
-begin # Load IPCC data
-    IPCCDATAPATH = joinpath(DATAPATH, "climate-data", "proj-median.csv")
-    ipccproj = CSV.read(IPCCDATAPATH, DataFrame)
+begin # Feedback plot
+    additionalradiation = [λ(T, model.feedback) for T in Tspace, model in tippingmodels]
 
-    getscenario(s) = filter(:Scenario => isequal("SSP$(s) - Baseline"), ipccproj)
-
-    bauscenario = getscenario(5)
-end;
-
-begin # Albedo plot
-    albedovariation = [[Model.λ(T, model.hogg, model.albedo) for T in Tspace] for model in tippingmodels]
-
-    ytick = 0.29:0.005:0.31
-
-    albedofig = @pgf Axis(
-        {
+    feedbackfig = @pgf Axis({
         width = raw"0.6\textwidth",
         height = raw"0.5\textwidth",
         grid = "both",
         xlabel = TLABEL,
-        ylabel = "Positive feedback \$\\lambda(T_t)\$",
+        ylabel = raw"Positive feedback $\lambda(T_t) \; [\si{W.m^{-2}}]$",
         xticklabels = temperatureticks[2],
         xtick = temperatureticks[1],
         xmin = Tmin, xmax = Tmax,
-        # ymin = ytick[1] - step(ytick) / 2, 
-        # ymax = ytick[end] + step(ytick) / 2,
-        ytick = ytick,
-        yticklabels = [@sprintf("%.3f", x) for x in ytick],
-        legend_cell_align = "left"
+        legend_cell_align = "left",
+        legend_style = { at = {"(0.025, 0.975)"}, anchor = "north west", nodes = {scale = 0.7} }
     })
 
     if SAVEFIG
-        PGFPlotsX.save(joinpath(PLOTPATH, "skeleton-albedo.tikz"), albedofig; include_preamble=true)
+        PGFPlotsX.save(joinpath(PLOTPATH, "skeleton-albedo.tikz"), feedbackfig; include_preamble=true)
     end
 
-    @pgf for (model, loss) in zip(tippingmodels, albedovariation)
-        Tᶜ = model.albedo.Tᶜ
-        curve = Plot({
-                color = colorsbymodel[model], 
-                line_width = LINE_WIDTH, opacity = 0.8
-            }, Coordinates(zip(Tspace, loss)))
+    for mdx in axes(additionalradiation, 2)
+        rad = @view additionalradiation[:, mdx]
+        model = tippingmodels[mdx]
+        
+        curve = @pgf Plot({ color = colorsbymodel[model], line_width = LINE_WIDTH, opacity = 0.8 }, Coordinates(Tspace, rad))
 
-        label = labelsbymodel[model]
-        legend = LegendEntry(label)
-
-        push!(albedofig, curve, legend)
+        push!(feedbackfig, curve, LegendEntry(labelsbymodel[model]))
     end
-
-    @pgf albedofig["legend style"] = raw"at = {(0.975, 0.975)}"
 
     if SAVEFIG
-        PGFPlotsX.save(joinpath(PLOTPATH, "albedo.tikz"), albedofig; include_preamble=true)
+        PGFPlotsX.save(joinpath(PLOTPATH, "feedbackfig.tikz"), feedbackfig; include_preamble=true)
     end
 
-    albedofig
+    feedbackfig
 end
 
 begin
     simmodels = models[1:3]
     sims = Dict{AbstractModel, DiffEqArray}()
-    
+
+    npprob = SDEProblem(Fnp!, G!, X₀, simtspan, (linearmodel, calibration)) |> EnsembleProblem
+
     for model in simmodels
-        bauparameters = (model, calibration)
-        prob = SDEProblem(Fbau!, G!, X₀, (0.0, 80.0), bauparameters)
-        sol = solve(EnsembleProblem(prob), defalg, trajectories = 10_000)
+        npparameters = (model, calibration)
+        sol = solve(npprob, SOSRI(); trajectories, p = npparameters)
+
         @printf "Done with simulation of %s\n" labelsbymodel[model]
 
-        simpath = timeseries_point_quantile(sol, [0.1, 0.5, 0.9], yearlytime)
+        simpath = timeseries_point_quantile(sol, (0.05, 0.5, 0.95), yearlytime)
 
         sims[model] = simpath
     end
@@ -168,8 +147,9 @@ begin # Nullcline plot
         currentlystable = true
 
         for T in Tspace
-            M = hogg.Mᵖ * exp(Model.mstable(T, model))
-            isstable = model isa LinearModel || Model.radiativeforcing′(T, model.hogg, model.albedo) < 0
+            m = mstable(T, model)
+            M = hogg.Mᵖ * exp(m)
+            isstable = model isa LinearModel || ∂μ∂T(T, m, model.hogg, model.feedback) < 0
             if isstable == currentlystable
                 push!(currentM, (M, T - 0.1))
             else
@@ -237,7 +217,7 @@ begin # Nullcline plot
         color = colorsbymodel[model]
         simpath = sims[model]
 
-        Tpath = @. getindex(simpath.u, 1)
+        Tpath = getindex.(simpath.u, 1)
         lower, median, upper = (getindex.(Tpath, i) for i in 1:3)
 
         mediancoords = Coordinates(Mmedianpath, median)
@@ -319,7 +299,7 @@ begin # Simulate carbon concentrations
     parameters = (hogg, calibration)
     mbauprob = SDEProblem(mfn, log(hogg.M₀ / hogg.Mᵖ), (0.0, 80.0), parameters)
     mensemble = EnsembleProblem(mbauprob)
-    mbausims = solve(mensemble, defalg; trajectories = 10_000)
+    mbausims = solve(mensemble, SOSRI(); trajectories = 10_000)
 end
 
 begin # Growth of carbon concentration 
@@ -437,7 +417,7 @@ begin # Simulates the two models
             ratejump = VariableRateJump(onedrate, onedtipping!);
             jumpprob = JumpProblem(densprob, ratejump)
 
-            simulation = solve(densprob, defalg)
+            simulation = solve(densprob, SOSRI())
         end
         
         simulation = solve(densprob)
@@ -504,107 +484,9 @@ begin
     densfig
 end
 
-function simulatebau(model::TippingModel; trajectories=100, X₀=[model.hogg.T₀, log(model.hogg.M₀)], calibration = calibration)
-    prob = SDEProblem(Fbau!, G!, X₀, (0.0, 80.0), (model, calibration))
-    ensemble = EnsembleProblem(prob)
-
-    sol = solve(ensemble, defalg; trajectories)
-
-    return sol
-end
-
-function simulatebau(model::JumpModel; trajectories=100, X₀=[model.hogg.T₀, log(model.hogg.M₀)])
-    diffprob = SDEProblem(Fbau!, G!, X₀, (0.0, 80.0), model)
-    varjump = VariableRateJump(rate, affect!)
-    prob = JumpProblem(diffprob, Direct(), varjump)
-
-    ensemble = EnsembleProblem(prob)
-
-    solve(ensemble, defalg; trajectories)
-end
-
-bautime = 0:80
-
-begin # Side by side BAU Δλ = 0.8
-    baumodels = tippingmodels
-
-    yeartickstep = 10
-
-    baufig = @pgf GroupPlot(
-        {
-        group_style = {
-            group_size = "1 by $(length(baumodels))",
-            horizontal_sep = "1pt",
-            xticklabels_at = "edge bottom"
-        },
-        width = raw"\textwidth",
-        height = raw"0.6\textwidth",
-        ymin = Tmin, ymax = Tmax,
-        xmin = 0, xmax = maximum(bautime),
-        xtick = 0:yeartickstep:maximum(bautime),
-        xticklabels = (0:yeartickstep:maximum(bautime)) .+ BASELINE_YEAR,
-        grid = "both", xticklabel_style = {rotate = 45}
-    }
-    )
-
-    if SAVEFIG
-        PGFPlotsX.save(joinpath(PLOTPATH, "baufig.tikz"), baufig; include_preamble=true)
-    end
-
-    for (i, model) in enumerate(baumodels)
-        nextgroup = @pgf if i == 1
-            {
-                ylabel = TLABEL,
-                yticklabels = temperatureticks[2],
-                ytick = temperatureticks[1]
-            }
-        elseif i == length(baumodels)
-            {
-                ylabel = TLABEL,
-                xlabel = "Year",
-                yticklabels = temperatureticks[2][1:(end-1)],
-                ytick = temperatureticks[1][1:(end-1)]
-            }
-        else
-            {
-                ylabel = TLABEL,
-                yticklabels = temperatureticks[2][1:(end-1)],
-                ytick = temperatureticks[1][1:(end-1)]
-            }
-        end
-
-        push!(baufig, nextgroup)
-
-        bausim = simulatebau(model; trajectories=10_000)
-        medianpath = first.(timeseries_point_median(bausim, bautime).u)
-        lower = first.(timeseries_point_quantile(bausim, 0.05, bautime).u)
-        upper = first.(timeseries_point_quantile(bausim, 0.95, bautime).u)
-
-        medianplot = @pgf Plot({line_width = LINE_WIDTH}, Coordinates(zip(bautime, medianpath)))
-
-        lowerplot = @pgf Plot({draw = "none", "name path=lower"}, Coordinates(zip(bautime, lower)))
-        upperplot = @pgf Plot({draw = "none", "name path=upper"}, Coordinates(zip(bautime, upper)))
-        confidencebands = @pgf Plot({fill = "gray", opacity = 0.4}, raw"fill between [of=lower and upper]")
-
-        push!(baufig, lowerplot, upperplot, confidencebands, medianplot)
-
-    end
-
-    @pgf baufig["legend style"] = raw"at = {(0.45, 0.95)}"
-
-
-    if SAVEFIG
-        PGFPlotsX.save(joinpath(PLOTPATH, "baufig.tikz"), baufig; include_preamble=true)
-    end
-
-    baufig
-end
-
 begin # Carbon decay calibration
-    tippingmodel = last(tippingmodels)
-
-    sinkspace = range(tippingmodel.hogg.N₀, 2 * tippingmodel.hogg.N₀; length=51)
-    decay = [Model.δₘ(n, tippingmodel.hogg) for n in sinkspace]
+    sinkspace = range(linearmodel.hogg.N₀, 2linearmodel.hogg.N₀; length=51)
+    decay = [Model.δₘ(n, linearmodel.hogg) for n in sinkspace]
 
     decayfig = @pgf Axis(
         {
@@ -629,9 +511,11 @@ begin # Carbon decay calibration
 end
 
 begin # Carbon decay path
-    bausim = simulatebau(tippingmodel)
-    bauM = exp.(getindex.(timeseries_point_median(bausim, bautime).u, 2))
-    mediandecay = [Model.δₘ(M, tippingmodel.hogg) for M in bauM]
+    npmprob = ODEProblem((m, calibration, t) -> γ(t, calibration), m₀, simtspan, calibration)
+
+    npsim = solve(npmprob, AutoVern9(Rodas5P()); saveat = 1.)
+    npM = linearmodel.hogg.Mᵖ * exp.(npm)
+    mediandecay = Model.δₘ.(npM, tippingmodel.hogg)
 
     decaypathfig = @pgf Axis({
         width = raw"0.7\textwidth",
@@ -644,7 +528,7 @@ begin # Carbon decay path
     })
 
     @pgf push!(decaypathfig,
-        Plot({line_width = LINE_WIDTH}, Coordinates(bauM, mediandecay))
+        Plot({line_width = LINE_WIDTH}, Coordinates(npM, mediandecay))
     )
 
 

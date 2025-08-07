@@ -1,11 +1,3 @@
-using Model, Grid
-using Dierckx: Spline2D
-using Interpolations
-using FiniteDiff
-using DifferentialEquations
-using Statistics
-using Random: default_rng
-
 PolicyFunction = Union{Interpolations.Extrapolation, Function};
 PoliciesFunctions = NTuple{2, PolicyFunction};
 
@@ -86,15 +78,15 @@ function F!(du, u, parameters::SimulationParameters, t)
 	du[2] = γ(t, calibration) - αitp(T, m, t)
 end
 
-BAUParameters = Tuple{AbstractModel, Calibration}
-function Fbau!(du, u, parameters::BAUParameters, t)
+NpParamaters = Tuple{AbstractModel, Calibration}
+function Fnp!(du, u, parameters::NpParamaters, t)
     model, calibration = parameters
 	du[1] = μ(u[1], u[2], model) / model.hogg.ϵ
 	du[2] = γ(t, calibration)
 end
 
-BAUGameParameters = Tuple{NTuple{2, AbstractModel}, Calibration}
-function Fbau!(du, u, parameters::BAUGameParameters, t)
+NpGameParameters = Tuple{NTuple{2, AbstractModel}, Calibration}
+function Fnp!(du, u, parameters::NpGameParameters, t)
     models, calibration = parameters
     oecdmodel, rowmodel = models
     T₁, T₂, m = @view u[1:3]
@@ -104,7 +96,7 @@ function Fbau!(du, u, parameters::BAUGameParameters, t)
     du[3] = γ(t, calibration)
 end
 
-function G!(Σ, u, parameters::BAUParameters, t)
+function G!(Σ, u, parameters::NpParamaters, t)
     model = first(parameters)
 	Σ[1] = model.hogg.σₜ / model.hogg.ϵ
 	Σ[2] = model.hogg.σₘ
@@ -116,7 +108,7 @@ function G!(Σ, u, parameters::SimulationParameters, t)
 	Σ[2] = model.hogg.σₘ
     Σ[3] = model.economy.σₖ
 end
-function G!(Σ, u, parameters::BAUGameParameters, t)
+function G!(Σ, u, parameters::NpGameParameters, t)
     oecdmodel, rowmodel = first(parameters)
 
     Σ[1] = oecdmodel.hogg.σₜ / oecdmodel.hogg.ϵ
