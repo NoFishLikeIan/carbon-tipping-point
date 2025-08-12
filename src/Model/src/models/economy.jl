@@ -1,12 +1,48 @@
 abstract type Damages{T <: Real} end
+abstract type GrowthDamages{T} <: Damages{T} end
+abstract type LevelDamages{T} <: Damages{T} end
 
-Base.@kwdef struct GrowthDamages{T} <: Damages{T}
+Base.@kwdef struct WeitzmanGrowth{T} <: GrowthDamages{T}
+    ξ::T = 2.6e-4
+    ν::T = 3.25
+end
+
+Base.@kwdef struct Kalkuhl{T} <: GrowthDamages{T}
     ξ₁::T = 0.0357 # Linear term in damage function
     ξ₂::T = 0.0018 # Quadratic term in damage function
 end
 
-Base.@kwdef struct LevelDamages{T} <: Damages{T}
+Base.@kwdef struct WeitzmanLevel{T} <: Damages{T}
     ξ::T = 0.00266
+end
+
+function d(T, m, damages::Kalkuhl, hogg::Hogg, feedback::Feedback)
+    ΔT = max(T - hogg.Tᵖ, 0)
+    return (damages.ξ₁ + damages.ξ₂ * ΔT) * μ(T, m, hogg, feedback) / hogg.ϵ
+end
+function d(T, m, damages::Kalkuhl, hogg::Hogg)
+    ΔT = max(T - hogg.Tᵖ, 0)
+    return (damages.ξ₁ + damages.ξ₂ * ΔT) * μ(T, m, hogg) / hogg.ϵ
+end
+
+function d(T, m, damages::WeitzmanGrowth, hogg::Hogg)
+    ΔT = max(T - hogg.Tᵖ, 0)
+    return damages.ξ * ΔT^damages.ν
+end
+function d(T, m, damages::WeitzmanGrowth, hogg::Hogg, feedback::Feedback)
+    d(T, m, damages, hogg)
+end
+
+function d(T, m, damages::D, hogg::Hogg) where D <: LevelDamages
+    d(T, damages, hogg)
+end
+function d(T, damages::WeitzmanLevel, hogg::Hogg)
+    ΔT = max(T - hogg.Tᵖ, 0)
+    return inv(1 + damages.ξ * ΔT^2)
+end
+
+function D(ΔT, damages::Kalkuhl)
+    damages.ξ₁ * ΔT + damages.ξ₂ * ΔT^2 / 2.
 end
 
 Base.broadcastable(damages::Damages) = Ref(damages)
@@ -34,23 +70,6 @@ end
 
 function β′(t, e, economy::Economy)
     exp(-economy.ωᵣ * t) * e
-end
-
-function d(T, m, damages::GrowthDamages, hogg::Hogg, feedback::Feedback)
-    ΔT = max(T - hogg.Tᵖ, 0.)
-    return (damages.ξ₁ + damages.ξ₂ * ΔT) * μ(T, m, hogg, feedback) / hogg.ϵ
-end
-function d(T, m, damages::GrowthDamages, hogg::Hogg)
-    ΔT = max(T - hogg.Tᵖ, 0.)
-    return (damages.ξ₁ + damages.ξ₂ * ΔT) * μ(T, m, hogg) / hogg.ϵ
-end
-function d(T, damages::LevelDamages, hogg::Hogg)
-    ΔT = max(T - hogg.Tᵖ, 0.)
-    return inv(1 + damages.ξ * ΔT^2)
-end
-
-function D(ΔT, damages::GrowthDamages)
-    damages.ξ₁ * ΔT + damages.ξ₂ * ΔT^2 / 2.
 end
 
 function ϕ(t, χ, economy::Economy)

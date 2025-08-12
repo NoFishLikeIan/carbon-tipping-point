@@ -9,15 +9,17 @@ using ZigZagBoomerang
 using Statistics
 using StaticArrays
 using FastClosures
-using LinearAlgebra: norm
+using LinearAlgebra
 
-using Optimization, OptimizationOptimJL
+using Optimization, OptimizationOptimJL, OptimizationPolyalgorithms
 using ForwardDiff
 
 using JLD2
 using Printf, Dates
 
+includet("../../src/extensions.jl")
 includet("../utils/saving.jl")
+includet("../utils/logging.jl")
 includet("../markov/chain.jl")
 includet("../markov/terminal.jl")
 includet("../markov/backward.jl")
@@ -26,28 +28,34 @@ begin # Construct the model
 	calibrationfilepath = "data/calibration.jld2"; @assert isfile(calibrationfilepath)
 
 	calibrationfile = jldopen(calibrationfilepath, "r+")
-	@unpack hogg, calibration, albedo = calibrationfile
+	@unpack calibration, hogg, feedbacklower, feedback, feedbackhigher = calibrationfile
 	close(calibrationfile)
 	
-	damages = GrowthDamages()
-	preferences = EpsteinZin()
-	economy = Economy()
+	damages = Kalkuhl()
+	preferences = Preferences(ρ = 0.015, θ = 10., ψ = 1)
+	economy = Economy(τ = calibration.τ)
 
-	model = TippingModel(albedo, hogg, preferences, damages, economy)
+	model = TippingModel(hogg, preferences, damages, economy, feedbackhigher)
+	
+	N = 101
+	Tdomain = hogg.Tᵖ .+ (0., 5.5);
+	mdomain = mstable.(Tdomain, model)
+	
+	G = RegularGrid((Tdomain, mdomain), N, hogg)
 end;
 
 begin # Setup terminal value function
-	N = 101
-	G = terminalgrid(N, model)
-	errors = Inf .* ones(size(G));
-	F₀ = ones(size(G));
+	F̄ = ones(size(G))
+	terminalconsumption = similar(F̄)
+	errors = fill(Inf, size(G))
 
-	F̄, terminalpolicy = vfi(F₀, model, G; maxiter = 10_000, verbose = 2, tol = 1e-5)
+	vfi!(F̄, terminalconsumption, errors, model, G; maxiter = 10_000, verbose = 2, tol = 1e-6, alternate = true)
 end;
 
 begin # Setup problem
-	policy = [MVector{2}(terminalpolicy[idx], γ(economy.τ, calibration)) for idx in CartesianIndices(G)]
-	foc = [MVector{2}(Inf, Inf) for idx in CartesianIndices(G)]
+	ᾱ = max(γ(calibration.τ, calibration), 0)
+	policy = [ Policy(terminalconsumption[idx], ᾱ) for idx in CartesianIndices(G) ]
+	foc = fill(Inf, size(G))
 
 	queue = DiagonalRedBlackQueue(G)
 	Δts = zeros(prod(size(G)))
@@ -58,10 +66,10 @@ begin # Setup problem
 	Fₜ = copy(F̄); Fₜ₊ₕ = copy(F̄); F = (Fₜ, Fₜ₊ₕ);
 end;
 
-backwardstep!(Δts, F, policy, cluster, foc, model, calibration, G; withnegative = withnegative)
-@benchmark backwardstep!($Δts, $F, $policy, $cluster, $foc, $model, $calibration, $G; withnegative = $withnegative)
+backwardstep!(F, policy, cluster, foc, Δts, model, calibration, G; withnegative = withnegative)
+@benchmark backwardstep!($F, $policy, $cluster, $foc, $Δts, $model, $calibration, $G; withnegative = $withnegative)
 
-Fₜ = copy(F̄); Fₜ₊ₕ = copy(F̄)
+Fₜ = copy(F̄); Fₜ₊ₕ = copy(F̄);
 F = (Fₜ, Fₜ₊ₕ)
 
-backwardsimulation!(F, policy, foc, model, calibration, G; verbose = 2, withnegative = withnegative, tstop = model.economy.τ - 0.05)
+backwardsimulation!(F, policy, foc, model, calibration, G; verbose = 1, withnegative = withnegative, tstop = 0., tcacheinit = 10.)

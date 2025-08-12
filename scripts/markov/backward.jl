@@ -1,49 +1,59 @@
 function pointminimisation(u, parameters)
-    t, idx, Fₜ₊ₕ, model, calibration, G = parameters
-    Xᵢ = G.X[idx]
-    Fᵉₜ, Δt = markovstep(t, idx, Fₜ₊ₕ, u[2], model, calibration, G)
-    return logcost(Fᵉₜ, t, Xᵢ, Δt, u, model, calibration)
+    t, idx, Fₜ₊ₕ, Xᵢ, model, calibration, G = parameters
+    Fᵉₜ, Δt = markovstep(t, idx, Fₜ₊ₕ, u.α, model, calibration, G)
+
+    return cost(Fᵉₜ, t, Xᵢ, Δt, u, model, calibration)
 end
 
-function backwardstep!(Δts, F::NTuple{2, Matrix}, policy, cluster, foc, model::AbstractModel, calibration::Calibration, G; withnegative = true, ad = Optimization.AutoForwardDiff())
+function backwardstep!(F, policy, cluster, foc, Δts, model, calibration, G; withnegative = true, ad = Optimization.AutoForwardDiff(), itpε = 0.5, optkwargs...)
 
-    itpε = ifelse(withnegative, 0.95, 0.0) # Interpolation epsilon, how much to interpolate the policy with the bounds.
     Fₜ, Fₜ₊ₕ = F
     fn = OptimizationFunction(pointminimisation, ad)
+    indices = CartesianIndices(G)
 
-    @inbounds @threads for (i, δt) in cluster
-        indices = CartesianIndices(G)
+    @inline @threads for (i, δt) in cluster
         idx = indices[i]
         Xᵢ = G.X[idx]
         t = model.economy.τ - δt
-        M = exp(Xᵢ.m) * hogg.Mᵖ
+        parameters = (t, idx, Fₜ₊ₕ, Xᵢ, model, calibration, G)
         
-        ᾱ = withnegative ? 1. : γ(t, calibration) + δₘ(M, model.hogg)
-        
-        lb = SVector{2}(0.01, 0.)
-        ub = SVector{2}(1., ᾱ)
+        ᾱ = withnegative ? 2.0 : γ(t, calibration) + δₘ(Xᵢ.M, model.hogg)
 
-        @. policy[idx] = itpε * policy[idx] + (1 - itpε) * (lb + ub) / 2
-        
-        parameters = (t, idx, Fₜ₊ₕ, model, calibration, G)
-        prob = Optimization.OptimizationProblem(fn, policy[idx], parameters; lb = lb, ub = ub)
-        
-        sol = solve(prob, Optim.LBFGS(); time_limit = 0.5)
+        if ᾱ ≥ 0
+            lb = Policy(0.1, 0.)
+            ub = Policy(0.9, ᾱ)
 
-        foc[idx] .= ForwardDiff.gradient(u -> fn(u, parameters), sol.u)
-        policy[idx] .= sol.u
-        Fₜ[idx] = exp(sol.objective)
-        Δts[i] = timestep(t, Xᵢ, sol.u[2], model, calibration, G)
+            α₀ = (1 - itpε) * clamp(policy[idx].α, 0, ᾱ) + itpε * ᾱ / 2
+            u₀ = Policy(0.5, α₀)
+
+            prob = Optimization.OptimizationProblem(fn, u₀, parameters; lb = lb, ub = ub)
+
+            sol = solve(prob, LBFGS(); iterations = 10_000, time_limit = 0.5, optkwargs...)
+
+            policy[idx] .= sol.u
+            foc[idx] = sol.original.g_residual
+            Fₜ[idx] = sol.objective
+            Δts[i] = timestep(t, Xᵢ, sol.u.α, model, calibration, G)
+        else
+            obj = @closure χ -> pointminimisation(Policy(χ, ᾱ), parameters)
+            y, χ = gssmin(obj, 0.1, 0.9)
+            
+            policy[idx][1] = χ
+            policy[idx][2] = ᾱ
+            foc[idx] = zero(χ)
+            Fₜ[idx] = y
+            Δts[i] = timestep(t, Xᵢ, ᾱ, model, calibration, G)
+        end
     end
 end
 
-function backwardsimulation!(F::NTuple{2, Matrix{Float64}}, policy, foc, model::AbstractModel, calibration::Calibration, G; kwargs...)
+function backwardsimulation!(F, policy, foc, model, calibration, G; kwargs...)
     queue = DiagonalRedBlackQueue(G)
     backwardsimulation!(queue, F, policy, foc, model, calibration, G; kwargs...)
 end
 
-function backwardsimulation!(queue::ZigZagBoomerang.PartialQueue, F::NTuple{2, Matrix{Float64}}, policy, foc, model::AbstractModel, calibration::Calibration, G; verbose = 0, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., tcache = model.economy.τ, withnegative = false)
-    tcache = tcache # Just to make sure it is well defined in all paths.
+function backwardsimulation!(queue::ZigZagBoomerang.PartialQueue, F, policy, foc, model, calibration, G; verbose = 0, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., withnegative = false, tcacheinit = model.economy.τ)
+    tcache = tcacheinit # Just to make sure it is well defined in all paths.
 
     savecache = !isnothing(cachepath)
     if savecache
@@ -64,7 +74,7 @@ function backwardsimulation!(queue::ZigZagBoomerang.PartialQueue, F::NTuple{2, M
             end
 
             cachefile = jldopen(cachepath, "a+")
-            tcache = model.economy.τ - minimum(queue.vals) - cachestep
+            tcache = tcacheinit - minimum(queue.vals) - cachestep
         else
             cachefile = jldopen(cachepath, "w+")
             cachefile["G"] = G
@@ -76,9 +86,9 @@ function backwardsimulation!(queue::ZigZagBoomerang.PartialQueue, F::NTuple{2, M
     passcounter = 1
 
     while !isempty(queue)
-        tmin = model.economy.τ - minimum(queue.vals)
+        tmin = tcacheinit - minimum(queue.vals)
 
-        if (verbose ≥ 2) || ((verbose ≥ 1) && (passcounter % 500 == 0))
+        if (verbose ≥ 2) || ((verbose ≥ 1) && (passcounter % 1_000 == 0))
             @printf("%s: pass %i, cluster minimum time = %.4f\n", now(), passcounter, tmin)
             flush(stdout)
         end
@@ -87,12 +97,12 @@ function backwardsimulation!(queue::ZigZagBoomerang.PartialQueue, F::NTuple{2, M
         
         clusters = ZigZagBoomerang.dequeue!(queue)
         for cluster in clusters
-            backwardstep!(Δts, F, policy, cluster, foc, model, calibration, G; withnegative)
+            backwardstep!(F, policy, cluster, foc, Δts, model, calibration, G; withnegative)
 
             indices = first.(cluster)
 
             for i in indices
-                if queue[i] ≤ model.economy.τ - tstop
+                if queue[i] ≤ tcacheinit - tstop
                     queue[i] += Δts[i]
                 end
             end
@@ -106,6 +116,7 @@ function backwardsimulation!(queue::ZigZagBoomerang.PartialQueue, F::NTuple{2, M
             group = JLD2.Group(cachefile, "$tcache")
             group["F"] = first(F)
             group["policy"] = policy
+            group["foc"] = foc
             tcache = tcache - cachestep 
         end
     end
@@ -118,21 +129,24 @@ function backwardsimulation!(queue::ZigZagBoomerang.PartialQueue, F::NTuple{2, M
     end
 end
 
-function computebackward(model::AbstractModel, calibration::Calibration, G; outdir = "data", kwargs...)
+function computebackward(model, calibration, G; outdir = "data", kwargs...)
     terminalresults = loadterminal(model; outdir)
     computebackward(terminalresults, model, calibration, G; outdir, kwargs...)
 end
-function computebackward(terminalresults, model::AbstractModel, calibration::Calibration, G; verbose = 0, withsave = true, outdir = "data", withnegative = false, iterkwargs...)
+function computebackward(terminalresults, model, calibration, G; verbose = 0, withsave = true, outdir = "data", withnegative = false, iterkwargs...)
     F̄, terminalconsumption, terminalG = terminalresults
-    Fₜ₊ₕ = interpolateovergrid(terminalG, G, F̄);
+    Fₜ₊ₕ = interpolateovergrid(F̄, terminalG, G)
     Fₜ = copy(Fₜ₊ₕ)
     F = (Fₜ, Fₜ₊ₕ)
+    
+    ᾱ = max(γ(calibration.τ, calibration), 0)
+    terminalpolicy = [Policy(terminalconsumption[idx], ᾱ) for idx in CartesianIndices(terminalG)]
 
-    policy = [MVector{2}(terminalconsumption[idx], γ(economy.τ, calibration)) for idx in CartesianIndices(G)]
-	foc = [MVector{2}(Inf, Inf) for idx in CartesianIndices(G)]
+    policy = interpolateovergrid(terminalpolicy, terminalG, G)
+	foc = fill(Inf, size(G))
 
     if withsave
-        folder = SIMPATHS[typeof(model)]
+        folder = simpaths(model)
         cachefolder = joinpath(outdir, folder)
         if !isdir(cachefolder) mkpath(cachefolder) end
         
@@ -142,5 +156,5 @@ function computebackward(terminalresults, model::AbstractModel, calibration::Cal
     cachepath = withsave ? joinpath(cachefolder, filename) : nothing
     backwardsimulation!(F, policy, foc, model, calibration, G; verbose, cachepath, withnegative, iterkwargs...)
 
-    return F, policy
+    return F, policy, foc
 end

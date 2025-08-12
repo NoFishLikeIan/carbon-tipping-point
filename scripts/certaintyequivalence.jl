@@ -29,10 +29,10 @@ include("markov/forward.jl")
 calibrationdirectory = joinpath(datapath, "calibration.jld2")
 calibration = load_object(calibrationdirectory)
 
-damages = GrowthDamages()
+damages = Kalkuhl()
 hogg = Hogg()
 preferences = EpsteinZin(θ = rra, ψ = eis);
-economy = Economy()
+economy = Economy(τ = calibration.τ)
 
 imminentmodel = TippingModel(Albedo(1.5), hogg, preferences, damages, economy)
 remotemodel = TippingModel(Albedo(remotethreshold), hogg, preferences, damages, economy)

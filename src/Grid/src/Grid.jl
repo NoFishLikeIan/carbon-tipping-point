@@ -3,7 +3,7 @@ module Grid
 using Base.Iterators: product, flatten
 
 using StaticArraysCore: StaticArray
-using StaticArrays: FieldVector, SMatrix
+using StaticArrays
 
 using Statistics: mean, middle
 using Interpolations: interpolate, extrapolate, scale

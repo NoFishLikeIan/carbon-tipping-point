@@ -31,8 +31,8 @@ calibration = load_object(calibrationdirectory);
 
 hogg = Hogg()
 preferences = EpsteinZin(θ = rra, ψ = eis);
-economy = Economy()
-damages = leveldamages ? LevelDamages() : GrowthDamages()
+economy = Economy(τ = calibration.τ)
+damages = leveldamages ? WeitzmanLevel() : Kalkuhl()
 
 jump = Jump()
 model = JumpModel(jump, hogg, preferences, damages, economy, calibration)

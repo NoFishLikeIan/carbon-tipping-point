@@ -1,76 +1,104 @@
-function simpaths(T)
-    Dict(
-        LinearModel{T, LevelDamages, EpsteinZin}  => "linear/level",
-        LinearModel{T, GrowthDamages, EpsteinZin} => "linear/growth",
-        TippingModel{T, LevelDamages, EpsteinZin}  => "albedo/level",
-        TippingModel{T, GrowthDamages, EpsteinZin} => "albedo/growth",
-        JumpModel{T, LevelDamages, EpsteinZin}  => "jump/level",
-        JumpModel{T, GrowthDamages, EpsteinZin}  => "jump/growth"
-    )
-end
+function simpaths(model::AbstractModel)
 
-function makefilename(model::LinearModel{T, LevelDamages, EpsteinZin}) where T
-    @unpack ρ, θ, ψ = model.preferences
+    basedir = if model isa TippingModel
+        "tipping"
+    elseif model isa LinearModel
+        "linear"
+    elseif model isa JumpModel
+        "jump"
+    else
+        throw("Directory not specified for model $(typeof(model))")
+    end
+
+    damagedir = if model.damages isa Kalkuhl
+        "growth"
+    elseif model.damages isa WeitzmanLevel 
+        "level"
+    else
+        throw("Directory not specified for damages $(typeof(model.damages))")
+    end
+
+    preferencedir = if model.preferences isa EpsteinZin
+        "epsteinzin"
+    elseif model.preferences isa CRRA
+        "crra"
+    elseif model.preferences isa LogSeparable
+        "logseparable"
+    elseif model.preferences isa LogUtility
+        "logutility"
+    else
+        throw("Directory not specified for preferences $(typeof(model.preferences))")
+    end
+
+
+    return joinpath(basedir, damagedir, preferencedir)
+end
+function makefilename(model::AbstractModel)
+    # Get model-specific parameters
+    modelparameters = if model isa TippingModel
+        @unpack Tᶜ = model.feedback
+        Printf.Format("Tc=%.2f_") => (Tᶜ,)
+    else
+        Printf.Format("") => ()
+    end
+    
+    # Get preference parameters
+    preferenceparameters = if model.preferences isa EpsteinZin
+        @unpack ρ, θ, ψ = model.preferences
+        Printf.Format("ρ=%.5f_θ=%.2f_ψ=%.2f_") => (ρ, θ, ψ)
+    elseif model.preferences isa LogSeparable
+        @unpack ρ, θ = model.preferences
+        ψ = one(ρ)
+        Printf.Format("ρ=%.5f_θ=%.2f_ψ=%.2f_") => (ρ, θ, ψ)
+    elseif model.preferences isa CRRA
+        @unpack ρ, θ = model.preferences
+        Printf.Format("ρ=%.5f_θ=%.2f_") => (ρ, θ)
+    elseif model.preferences isa LogUtility
+        @unpack ρ = model.preferences
+        Printf.Format("ρ=%.5f_") => (ρ,)
+    else
+        throw("Filename not implemented for preferences $(typeof(model.preferences))")
+    end
+    
+    # Get economy parameters
     @unpack ωᵣ = model.economy
     @unpack σₜ, σₘ = model.hogg
-    @unpack ξ = model.damages
-
-    filename = @sprintf("ρ=%.5f_θ=%.2f_ψ=%.2f_σT=%.4f_σm=%.4f_ωr=%.5f_ξ=%.6f", ρ, θ, ψ, σₜ, σₘ, ωᵣ, ξ)
-
-    return "$(replace(filename, "." => ",")).jld2"
-end
-
-function makefilename(model::LinearModel{T, GrowthDamages, EpsteinZin}) where T
-    @unpack ρ, θ, ψ = model.preferences
-    @unpack ωᵣ = model.economy
-    @unpack σₜ, σₘ = model.hogg
-
-    filename = @sprintf("ρ=%.5f_θ=%.2f_ψ=%.2f_σT=%.4f_σm=%.4f_ωr=%.5f", ρ, θ, ψ, σₜ, σₘ, ωᵣ)
-
-    return "$(replace(filename, "." => ",")).jld2"
-end
-
-function makefilename(model::TippingModel{T, LevelDamages, EpsteinZin}) where T
-    @unpack ρ, θ, ψ = model.preferences
-    @unpack ωᵣ = model.economy
-    @unpack σₜ, σₘ = model.hogg
-    @unpack Tᶜ = model.albedo
-    @unpack ξ = model.damages
-
-    filename = @sprintf("Tc=%.2f_ρ=%.5f_θ=%.2f_ψ=%.2f_σT=%.4f_σm=%.4f_ωr=%.5f_ξ=%.6f", Tᶜ, ρ, θ, ψ, σₜ, σₘ, ωᵣ, ξ)
-
-    return "$(replace(filename, "." => ",")).jld2"
-end
-
-function makefilename(model::TippingModel{T, GrowthDamages, EpsteinZin}) where T
-    @unpack ρ, θ, ψ = model.preferences
-    @unpack ωᵣ = model.economy
-    @unpack σₜ, σₘ = model.hogg
-    @unpack Tᶜ = model.albedo
-
-    filename = @sprintf("Tc=%.2f_ρ=%.5f_θ=%.2f_ψ=%.2f_σT=%.4f_σm=%.4f_ωr=%.5f", Tᶜ, ρ, θ, ψ, σₜ, σₘ, ωᵣ)
-
-    return "$(replace(filename, "." => ",")).jld2"
-end
-
-function makefilename(model::JumpModel{T, GrowthDamages, EpsteinZin}) where T
-    @unpack ρ, θ, ψ = model.preferences
-    @unpack ωᵣ = model.economy
-    @unpack σₜ, σₘ = model.hogg
-
-    filename = @sprintf("ρ=%.5f_θ=%.2f_ψ=%.2f_σT=%.4f_σm=%.4f_ωr=%.5f", ρ, θ, ψ, σₜ, σₘ, ωᵣ)
-
-    return "$(replace(filename, "." => ",")).jld2"
-end
-
-function makefilename(model::JumpModel{T, LevelDamages, EpsteinZin}) where T
-    @unpack ρ, θ, ψ = model.preferences
-    @unpack ωᵣ = model.economy
-    @unpack σₜ, σₘ = model.hogg
-    @unpack ξ = model.damages
-
-    filename = @sprintf("ρ=%.5f_θ=%.2f_ψ=%.2f_σT=%.4f_σm=%.4f_ωr=%.5f_ξ=%.6f", ρ, θ, ψ, σₜ, σₘ, ωᵣ, ξ)
-
+    economyparameters = Printf.Format("σT=%.4f_σm=%.4f_ωr=%.5f") => (σₜ, σₘ, ωᵣ)
+    
+    # Get damage parameters
+    damageparameters = if model.damages isa WeitzmanLevel
+        @unpack ξ = model.damages
+        Printf.Format("_ξ=%.6f") => (ξ,)
+    elseif model.damages isa Kalkuhl
+        @unpack ξ₁, ξ₂ = model.damages
+        Printf.Format("_ξ1=%.6f_ξ2=%.6f") => (ξ₁, ξ₂)
+    else
+        Printf.Format("") => ()
+    end
+    
+    # Build filename string
+    filenameparameters = String[]
+    
+    # Add model-specific part
+    if !isempty(modelparameters.first.str)
+        push!(filenameparameters, Printf.format(modelparameters.first, modelparameters.second...))
+    end
+    
+    # Add preference part
+    push!(filenameparameters, Printf.format(preferenceparameters.first, preferenceparameters.second...))
+    
+    # Add economy part
+    push!(filenameparameters, Printf.format(economyparameters.first, economyparameters.second...))
+    
+    # Add damage part
+    if !isempty(string(damageparameters.first))
+        push!(filenameparameters, Printf.format(damageparameters.first, damageparameters.second...))
+    end
+    
+    # Join and clean up
+    filename = join(filenameparameters, "")
+    filename = rstrip(filename, '_')  # Remove trailing underscore
+    
     return "$(replace(filename, "." => ",")).jld2"
 end
 
@@ -88,7 +116,7 @@ function makefilename(models::Vector{<:AbstractModel})
 end
 
 function loadterminal(model::AbstractModel{T}; outdir = "data/simulation", addpath = "") where T
-    folder = get(simpaths(T), typeof(model))
+    folder = simpaths(model)
     filename = makefilename(model)
     
     savedir = joinpath(outdir, folder, "terminal", addpath)
@@ -110,7 +138,7 @@ end
 
 
 function loadtotal(model::AbstractModel{T}; outdir = "data/simulation") where T
-    folder = get(simpaths(T), typeof(model))
+    folder = simpaths(model)
     cachefolder = joinpath(outdir, folder)
     filename = makefilename(model)
     cachepath = joinpath(cachefolder, filename)

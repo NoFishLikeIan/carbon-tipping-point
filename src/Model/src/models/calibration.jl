@@ -1,7 +1,7 @@
-struct Calibration{T <: Real}
+struct Calibration{T <: Real, N}
     baselineyear::T # Baseline year of the calibration
     emissions::Vector{T} # Emissions data in GtCO₂ / year
-    γparameters::NTuple{6, T} # Paramters for γ
+    γparameters::NTuple{N, T} # Paramters for γ
     τ::T # End of calibration
 end
 
@@ -13,16 +13,22 @@ end
 Base.broadcastable(c::Calibration) = Ref(c)
 Base.broadcastable(c::RegionalCalibration) = Ref(c)
 
-function γ(t, p::NTuple{6, T}) where T <: Real
-    firstexp = p[1] * t * exp(-p[2] * t)
-    secondexp = p[3] * exp(-p[4] * t)
-
-    linear = p[5] + p[6] * t
-
-    return firstexp + secondexp + linear
-end
 
 "Growth rate of carbon concentration in the no-policy scenario `γₜ : [0, τ] -> [0, ∞)`."
+function γ(t, p::NTuple{6})
+    growth = p[1] * exp(p[2] * t)
+    decay = p[3] * exp(p[4] * t)
+    linear = p[5] + p[6] * t
+
+    return linear + growth - decay
+end
+function γ(t, p::NTuple{8})
+    num = p[1] * t^2 + p[2] * t + p[3]
+    den = t^3 + p[4] * t^2 + p[5] * t + p[6]
+    offset = p[7] * exp(-p[8] * t)
+    
+    return num / den + offset
+end
 function γ(t, calibration::Calibration)
     γ(min(t, calibration.τ), calibration.γparameters)
 end

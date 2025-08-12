@@ -40,7 +40,7 @@ hogg = Hogg()
 # -- Economy and Preferences
 preferences = EpsteinZin(θ = rra, ψ = eis);
 oecdeconomy, roweconomy = RegionalEconomies()
-damages = GrowthDamages()
+damages = Kalkuhl()
 
 oecdmodel = LinearModel(hogg, preferences, damages, oecdeconomy)
 

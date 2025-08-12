@@ -55,7 +55,7 @@ begin # Models definition
     # -- Economy and Preferences
     preferences = EpsteinZin();
     oecdeconomy, roweconomy = RegionalEconomies()
-    damages = GrowthDamages()
+    damages = Kalkuhl()
 
     oecdmodel = LinearModel(hogg, preferences, damages, oecdeconomy)
 

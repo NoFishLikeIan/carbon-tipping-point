@@ -12,7 +12,7 @@ function backwardstep!(Δts, Fs::Values, policies::Policies, cluster, models::Ve
 
         idx = indices[i]
         t = models[1].economy.τ - δt
-        M = exp(G.X[idx].m)
+        M = G.X[idx].M
         Δtᵢ = Inf
         
         for p in 1:n

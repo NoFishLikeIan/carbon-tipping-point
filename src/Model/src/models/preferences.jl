@@ -20,31 +20,46 @@ Base.@kwdef struct EpsteinZin{T} <: Preferences{T}
     ψ::T = 0.75 # Elasticity of Intertemporal Complementarity
 end
 
-Base.broadcastable(p::Preferences) = Ref(p)
-
-function f(c, v, Δt, p::EpsteinZin)
-    ψ⁻¹ = 1 / p.ψ
-    aggregator = (1 - p.θ) / (1 - ψ⁻¹)
-
-    β = exp(-p.ρ * Δt)
-
-    consumption = Δt * c^(1 - ψ⁻¹)
-    value = β * ((1 - p.θ) * v)^inv(aggregator)
-
-    return ((consumption + value)^aggregator) / (1 - p.θ)
+function Preferences(; ρ = 0.015, θ = 10., ψ = 1.)
+    if ψ ≈ θ ≈ 1.
+        LogUtility(ρ)
+    elseif ψ ≈ 1.
+        LogSeparable(ρ, θ)
+    elseif ψ ≈ 1 / θ
+        CRRA(ρ, θ)
+    else
+        EpsteinZin(ρ, θ, ψ)
+    end
 end
+
+discount(ρ, Δt) = exp(-ρ * Δt)
 
 "Climate damage aggregator. `χ` is the consumtpion rate, `F′` is the expected value of `F` at `t + Δt` and `Δt` is the time step"
 function g(χ, F′, Δt, p::EpsteinZin)
+    β = discount(p.ρ, Δt)
     ψ⁻¹ = inv(p.ψ)
     agg = (1 - ψ⁻¹) / (1 - p.θ)
 
     consumption = χ^(1 - ψ⁻¹)
-
-    β = exp(-p.ρ * Δt)
-    value = max(F′, 0.)^agg
+    value = (F′)^agg
 
     return ((1 -  β) * consumption + β * value)^inv(agg)
+end
+function g(χ, F′, Δt, p::LogSeparable)
+    β = discount(p.ρ, Δt)
+    consumption = χ^((1 - p.θ) * (1 - β))
+
+    return consumption * max(F′, 0)^β
+end
+function g(χ, F′, Δt, p::CRRA)
+    β = discount(p.ρ, Δt)
+
+    return (1 - β) * χ^(1 - p.θ) + β * F′
+end
+function g(χ, F′, Δt, p::LogUtility)
+   β = discount(p.ρ, Δt)
+   
+   return (1 - β) * log(χ) + β * F′
 end
 
 function logg(χ, F′, Δt, p::EpsteinZin)
@@ -53,12 +68,35 @@ function logg(χ, F′, Δt, p::EpsteinZin)
 
     consumption = χ^(1 - ψ⁻¹)
 
-    β = exp(-p.ρ * Δt)
+    β = discount(p.ρ, Δt)
     value = max(F′, 0.)^agg
 
     return inv(agg) * log((1 -  β) * consumption + β * value)
 end
+function logg(χ, F′, Δt, p::LogSeparable)
+    β = discount(p.ρ, Δt)
+    return (1 - β) * (1 - p.θ) * log(χ) + β * log(max(F′, 0.))
+end
+function logg(χ, F′, Δt, p::CRRA)
+    log(g(χ, F′, Δt, p)) # TODO: Fix this
+end
+function logg(χ, F′, Δt, p::LogUtility)
+   log(g(χ, F′, Δt, p)) # TODO: Fix this
+end
 
+
+"Epstein-Zin aggregator"
+function f(c, v, Δt, p::EpsteinZin)
+    ψ⁻¹ = 1 / p.ψ
+    aggregator = (1 - p.θ) / (1 - ψ⁻¹)
+
+    β = discount(p.ρ, Δt)
+
+    consumption = Δt * c^(1 - ψ⁻¹)
+    value = β * ((1 - p.θ) * v)^inv(aggregator)
+
+    return ((consumption + value)^aggregator) / (1 - p.θ)
+end
 function f(c, v, Δt, p::CRRA)
     u = (c^(1 - p.θ)) / (1 - p.θ)
 
@@ -72,11 +110,4 @@ function f(c, v, Δt, p::LogUtility)
     βᵢ * v + Δt * log(c)
 end
 
-function f(c, v, p::EpsteinZin)
-    u = (1 - p.θ) * v
-    eis = 1 - 1 / p.ψ
-
-    cratio = (c / (u)^inv(1 - p.θ))^eis
-
-    return (p.ρ * u / eis) * (cratio - 1) 
-end
+Base.broadcastable(p::Preferences) = Ref(p)

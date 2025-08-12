@@ -12,39 +12,45 @@ using StaticArrays
 using JLD2, UnPack
 using Dates, Printf
 
+includet("../../src/extensions.jl")
 includet("../utils/saving.jl")
+includet("../utils/logging.jl")
 includet("../markov/chain.jl")
 includet("../markov/terminal.jl")
 
-begin
+begin # Construct the model
 	calibrationfilepath = "data/calibration.jld2"; @assert isfile(calibrationfilepath)
 
 	calibrationfile = jldopen(calibrationfilepath, "r+")
-	@unpack hogg, calibration, albedo = calibrationfile
+	@unpack calibration, hogg, feedbacklower, feedback, feedbackhigher = calibrationfile
 	close(calibrationfile)
 	
-	damages = GrowthDamages()
-	preferences = EpsteinZin()
-	economy = Economy()
+	damages = Kalkuhl()
+	preferences = Preferences(ρ = 0.015, θ = 10., ψ = 1)
+	economy = Economy(τ = calibration.τ)
+	
+	model = TippingModel(hogg, preferences, damages, economy, feedbackhigher)
+	
+	N = 101
+	Tdomain = hogg.Tᵖ .+ (0., 5.5);
+	mdomain = mstable.(Tdomain, model)
+	
+	G = RegularGrid((Tdomain, mdomain), N, hogg)
 end;
 
-model = TippingModel(albedo, hogg, preferences, damages, economy);
-N = 100
-G = terminalgrid(N, model)
-
-F₀ = ones(size(G));
-F̄ = copy(F₀);
-terminalpolicy = similar(F̄);
-errors = Inf .* ones(size(G));
+begin
+	F̄ = ones(size(G))
+	terminalpolicy = similar(F̄)
+	errors = fill(Inf, size(G))
+end;
 
 terminaljacobi!(F̄, terminalpolicy, errors, model, G)
-F̄, policy = vfi(F₀, model, G; maxiter = 10_000, verbose = 2)
+vfi!(F̄, terminalpolicy, errors, model, G; maxiter = 10_000, verbose = 2, tol = 1e-10, alternate = true)
 
-# --- Jump
-jump = Jump()
-model = JumpModel(jump,  hogg, preferences, damages, economy);
+if isinteractive()
+	using Plots
+	Tspace = range(G.domains[1]...; length = size(G, 1))
+	mspace = range(G.domains[2]...; length = size(G, 2))
 
-F̄ = [(X.T / hogg.T₀)^2 + (X.m / log(hogg.M₀))^2 for X in G.X]
-policy = zeros(size(G));
-
-F̄, policy = vfi(F₀, model, G; maxiter = 10_000, verbose = true, alternate = true)
+	contourf(mspace, Tspace, log.(F̄); c = :viridis)
+end

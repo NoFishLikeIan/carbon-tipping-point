@@ -2,7 +2,7 @@ module Model
 
 using Roots: find_zero, find_zeros
 using UnPack: @unpack
-using LogExpFunctions: logistic, logit
+using LogExpFunctions: logistic, logit, xexpx, xexpy
 
 include("models/calibration.jl")
 include("models/climate.jl")
@@ -17,8 +17,13 @@ export Feedback, Jump, Hogg
 export δₘ, L, λ, μ, ∂μ∂T
 export mstable, Tstable
 
-export Damages, GrowthDamages, LevelDamages, Economy, RegionalEconomies
+export Damages
+export GrowthDamages, WeitzmanGrowth, Kalkuhl
+export LevelDamages, WeitzmanLevel
+export Economy, RegionalEconomies
 export β, β′, d, D, ϕ, A
+
+export g, f, logg, discount
 
 export AbstractModel, LinearModel, TippingModel, JumpModel
 export Preferences, LogUtility, CRRA, LogSeparable, EpsteinZin

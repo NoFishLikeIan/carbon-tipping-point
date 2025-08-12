@@ -27,7 +27,7 @@ begin # Global variables
     PLOTPATH = "papers/job-market-paper/submission/plots"
     PRESENTATIONPATH = joinpath(PLOTPATH, "presentation")
 
-    SAVEFIG = false
+    SAVEFIG = true
     LINE_WIDTH = 2.5
     SEED = 11148705
 
@@ -46,16 +46,16 @@ begin # Construct models and grids
     close(calibrationfile)
 
     preferences = EpsteinZin()
-    damages = GrowthDamages()
-    economy = Economy()
+    damages = Kalkuhl()
+    economy = Economy(τ = calibration.τ)
     jump = Jump()
 
     linearmodel = LinearModel(hogg, preferences, damages, economy)
     jumpmodel = JumpModel(hogg, preferences, damages, economy, jump)
 
     tippingmodels = [
-        TippingModel(hogg, preferences, damages, economy, Model.updateTᶜ(2.5 + hogg.Tᵖ, feedbackhigher)),
-        TippingModel(hogg, preferences, damages, economy, Model.updateTᶜ(feedbackhigher.Tᶜ, feedbacklower))
+        TippingModel(hogg, preferences, damages, economy, Model.updateTᶜ(2.5 + hogg.Tᵖ, feedback)),
+        TippingModel(hogg, preferences, damages, economy, Model.updateTᶜ(feedback.Tᶜ, feedback))
     ]
 
     models = AbstractModel[tippingmodels..., linearmodel, jumpmodel]
@@ -68,7 +68,7 @@ begin # Labels, colors and axis
     colors = get(PALETTE, range(0., 1.; length = length(models)), (0., 1.))
 
     colorsbymodel = Dict(models .=> colors)
-    ΔTmax = 6.5
+    ΔTmax = 6.
     ΔTspace = range(0.0, ΔTmax; length = 101)
     Tspace = ΔTspace .+ Hogg().Tᵖ
 
@@ -81,7 +81,8 @@ begin # Labels, colors and axis
     Tmin, Tmax = extrema(temperatureticks[1])
 
     m₀ = log(hogg.M₀ / hogg.Mᵖ)
-    X₀ = [hogg.T₀, m₀]
+    T₀ = Tstable(m₀, linearmodel) |> only
+    X₀ = [T₀, m₀]
 end;
 
 begin # Feedback plot
@@ -200,14 +201,14 @@ begin # Nullcline plot
         
         stableleft, rest... = nullclinevariation[model]
 
-        leftcurve = @pgf Plot({color = color, line_width = LINE_WIDTH / 2, forget_plot}, Coordinates(stableleft))
+        leftcurve = @pgf Plot({color = color, line_width = LINE_WIDTH / 4, forget_plot}, Coordinates(stableleft))
 
         push!(nullclinefig, leftcurve)
 
         if !isempty(rest)
             unstable, stableright = rest
-            unstablecurve = @pgf Plot({color = color, line_width = LINE_WIDTH / 2, forget_plot, dotted}, Coordinates(unstable))
-            rightcurve = @pgf Plot({color = color, line_width = LINE_WIDTH / 2, forget_plot}, Coordinates(stableright))
+            unstablecurve = @pgf Plot({color = color, line_width = LINE_WIDTH / 4, forget_plot, dotted}, Coordinates(unstable))
+            rightcurve = @pgf Plot({color = color, line_width = LINE_WIDTH / 4, forget_plot}, Coordinates(stableright))
 
             push!(nullclinefig, unstablecurve, rightcurve)
         end
@@ -290,10 +291,10 @@ begin # Pure nullcline figure
     nullclinefig
 end
 
-# --- Business-as-usual dynamics
+# --- No Policy dynamics
 begin # Simulate carbon concentrations
-    mbau(m, parameters, t) = γ(t, parameters[2])
-    σₘbau(m, parameters, t) = parameters[1].σₘ
+    mbau(m, (hogg, calibration), t) = γ(t, calibration)
+    σₘbau(m, (hogg, calibration), t) = hogg.σₘ
     mfn = SDEFunction(mbau, σₘbau)
     
     parameters = (hogg, calibration)

@@ -29,7 +29,7 @@ includet("../utils/simulating.jl")
 
 PLOTPATH = "papers/job-market-paper/submission/plots"
 DATAPATH = "data"
-SAVEFIG = false
+SAVEFIG = true
 PALETTE = colorschemes[:grays]
 RUNESTIMATE = false
 calibrationpath = joinpath(DATAPATH, "calibration.jld2")
@@ -50,6 +50,7 @@ function safeparse(Type, value)
         return parse(Type, value)
     end
 end
+
 function loadhierdataframe(variablepathpair::Pair{K, String}; groupkeys = [:Group]) where K <: Union{String, Symbol}
     ngroups = length(groupkeys)
     variablename, filepath = variablepathpair
@@ -101,7 +102,7 @@ begin # Load emissions and GHGs dataframes
     concentration = groupby(concentrationdf, [:Scenario, :Particle, :Quantile])
 end;
 
-if false # Figure CO₂ concentration
+if isinteractive() # Figure CO₂ concentration
     qs = [0.05, 0.5, 0.95];
     figscenarios = ["SSP1 1.9", "SSP2 4.5", "SSP4 3.4", "SSP5 8.5"]
     cmap = palette(:viridis, length(figscenarios); rev = true)
@@ -160,7 +161,7 @@ begin
     co2equivalenceupper = computeco2equivalence(concentration, 0.95, gwp)
 end;
 
-if false # Figure CO₂ concentration in the no policy scenario
+if isinteractive() # Figure CO₂ concentration in the no policy scenario
     co2equivalencefig = plot(xlabel = "Year", yaxis = "Concentration (ppm)", title = "Carbon Dioxide Concentration in SSP5 8.5", xlims = (1900, 2150))
 
     concentrationnames = filter(m -> occursin("Concentration", m), names(co2equivalence))
@@ -175,7 +176,7 @@ if false # Figure CO₂ concentration in the no policy scenario
     co2equivalencefig
 end
 
-if false # Figure fraction of forcing
+if isinteractive() # Figure fraction of forcing
     yearbound = (1980, 2200)
     tdxs = @. yearbound[1] ≤ co2equivalence.Year ≤ yearbound[2]
     
@@ -225,49 +226,44 @@ begin # Setup CO₂e maximisation problem
 
     Mᵖ = mean(co2equivalence[1800 .≤ co2equivalence.Year .≤ 1900, "Concentration"])
     m = @. log(co2calibrationdf.Concentration / Mᵖ)
-    m₀ = m[1]
 end;
 
-"Growth rate of emissions in the form of a parametric function `γₜ : baselineyear + [0, τ] -> [0, ∞)`."
-function parametricemissions(m, parameters, x)
-    p, defaults = parameters
-    baselineyear = first(defaults)
-    t = x - baselineyear # Shift as t starts at baselineyear
-    
-    return γ(t, Tuple(p))
-end
-
 function concentrationloss(p, optparams)
-    concentrationprob, defaults, Mᵖ, targetM, α = optparams
+    ts, γ̂ = optparams
 
-    t₀, t₁ = concentrationprob.tspan
-    sol = solve(concentrationprob, AutoVern9(Rodas5P()); p = (p, defaults), saveat = t₀:t₁)
-
-    if SciMLBase.successful_retcode(sol)
-        M = @. Mᵖ * exp(sol.u)
-        weights = @. exp(-α * (0:(t₁ - t₀)))
-
-        return sum(abs2, @. weights * (M - targetM))
-    else
-        return Inf
+    loss = zero(eltype(γ̂))
+    for (i, t) in enumerate(ts)
+        loss += abs2(γ(t, Tuple(p)) - γ̂[i])
     end
+
+    return loss
 end
 
 begin # Initialize the CO₂e calibration problem
-    p₀ = MVector{6}(0.0003, 0.02, 0.002, 0.005, 0.002, 1e-6)
-    defaults = (baselineyear, );
+    p₀ = MVector(
+        0.005,   # p[1] - t² coefficient in numerator
+        0.05,    # p[2] - t coefficient in numerator
+        0.006,   # p[3] - constant term in numerator (≈ starting value)
+        0.1,     # p[4] - t² coefficient in denominator
+        1.0,     # p[5] - t coefficient in denominator
+        1.0,     # p[6] - constant term in denominator
+        0.0001,  # p[7] - offset amplitude
+        0.005    # p[8] - offset decay rate
+    )
 
-    concentrationprob = ODEProblem(parametricemissions, m₀, co2tspan, (p₀, defaults)); solve(concentrationprob, Tsit5())
+    ts = range(0, τ - 1.; step = 1.)
+    γ̂ = diff(m)
+    optparams = (ts, γ̂)
 
-    α = 0.005
-    optparams = (concentrationprob, defaults, Mᵖ, co2calibrationdf.Concentration, α);
-    concentrationlossfunction = Optimization.OptimizationFunction(concentrationloss, Optimization.AutoForwardDiff());
-    optprob = Optimization.OptimizationProblem(concentrationlossfunction, p₀, optparams)
-    result = solve(optprob, PolyOpt(); iterations = 100_000)
+    γfn = Optimization.OptimizationFunction(concentrationloss, AutoForwardDiff())
+    γprob = Optimization.OptimizationProblem(γfn, p₀, optparams)
+
+    result = solve(γprob, PolyOpt(); g_tol = 1e-10)
 end
 
 # --- Implied emissions
 begin
+    m₀ = first(m)
     γparameters = Tuple(result.u)
     γfn = @closure (m, γparameters, t) -> γ(t - baselineyear, γparameters)
     γprob = ODEProblem(γfn, m₀, co2tspan, γparameters)
@@ -286,7 +282,7 @@ begin
     calibration = Calibration(baselineyear, Eₜ, γparameters, τ)
 end
 
-begin # Check simulated fit
+if isinteractive() # Check simulated fit
     Mfig = plot(co2calibrationdf.Year, Mₜ; c = :black, linestyle = :dash, ylabel = L"Concentration $[\si{\ppm}]$", label = L"Fitted $M_t$")
 
     plot!(Mfig, co2calibrationdf.Year, co2calibrationdf.Concentration; c = :black, label = L"SSP5-8.5 $\hat{M}_t$", alpha = 0.5)
@@ -392,7 +388,7 @@ begin # Initialize the temperature matching problem
     _, ϵ = gssmin(lossfn, 0., 100.)
 end
 
-let # Check calibration
+if isinteractive() # Check calibration
     u₀ = SVector(m₀, T₀)
     t₀ = ghgspan[1]
     t₁ = min(ghgspan[2] + 50., nptemperature.Year[end])
@@ -432,12 +428,12 @@ begin # Hogg definition
 
     hogg = Hogg(
         T₀ = T₀, M₀ = M₀, Mᵖ = Mᵖ, N₀ = N₀,
-        ϵ = ϵ, G₀ = G₀, G₁ = G₁
+        ϵ = ϵ, G₀ = G₀, G₁ = G₁, σₜ = ϵ / 10
     )
 end
 
 # TIPPING POINT CALIBRATION
-let
+if isinteractive()
     excesstfig = plot(xlabel = L"Year, $t$", yaxis = "Temperature [°]", xlims = (2020, 2150), legend = :topleft, xticks = 2020:20:2150)
 
     plot!(excesstfig, nptemperature.Year, nptemperature."T TE upper" - nptemperature."T upper"; color = :black, fillrange = nptemperature."T TE lower" - nptemperature."T lower", fillalpha = 0.05, linewidth = 0., label = false)
@@ -506,7 +502,7 @@ function tippingelementloss(p, optparameters)
     hogg, calibration = coupledprob.p[1:2]
 
     parameters = (hogg, calibration, Tᶜ, ΔS, L)
-    sol = solve(coupledprob, AutoVern9(Rodas5P()); p = parameters, saveat = 1., verbose = false)
+    sol = solve(coupledprob, RadauIIA5(); p = parameters, saveat = 1., verbose = false, reltol = 1e-8)
 
     if SciMLBase.successful_retcode(sol)
         ΔT = getindex.(sol.u, 3) .- getindex.(sol.u, 2)
@@ -517,20 +513,24 @@ function tippingelementloss(p, optparameters)
     end
 end
 
+function constraints(p, optparameters)
+    res = Vector{Float64}(undef, 4)
+    return constraints!(res, p, optparameters)
+end
 function constraints!(res, p, optparameters)
     coupledprob = first(optparameters)
     hogg = first(coupledprob.p)
 
     Tᶜ, ΔS, L = p
     
-    res[1] = L * ΔS - 16hogg.η * Tᶜ^3 # > 0 Fold constraint
+    res[1] = (L * ΔS * 2 / 3) - 16hogg.η * (Tᶜ)^3 # > 0 Fold constraint
 
     # > 0 Parameter constraints
     res[2] = Tᶜ - hogg.T₀
     res[3] = L
     res[4] = ΔS
 
-    return nothing
+    return res
 end
 
 begin # Calibrate adjustment speed
@@ -540,11 +540,13 @@ begin # Calibrate adjustment speed
     centurydx = findfirst(==(tecalibrationhorizon), co2calibrationdf.Year)
     mtarget = log(co2calibrationdf[centurydx, "Concentration"] / Mᵖ)
 
-    Tᶜ₀ = 3. + hogg.T₀; L₀ = 4.05; ΔS₀ = 8.
-
+    Tᶜ₀ = 4. + hogg.T₀; L₀ = 7.; ΔS₀ = 10.
     p₀ = [Tᶜ₀, ΔS₀, L₀]
-    adtype = SecondOrder(AutoForwardDiff(), AutoForwardDiff())
     
+    adtype = SecondOrder(AutoForwardDiff(), AutoForwardDiff())
+    lcons = [0., 0., 0., 0.]
+    ucons = [Inf, Inf, Inf, Inf]
+
     feedbacks = Feedback{Float64}[]
     for (i, df) in enumerate(tedfs)
         subdf = df[baselineyear .≤ df.Year .≤ tecalibrationhorizon, :]
@@ -556,17 +558,23 @@ begin # Calibrate adjustment speed
         optparameters = (coupledprob, ΔTtrajectory)
 
         objfunction = Optimization.OptimizationFunction(tippingelementloss, adtype; cons = constraints!)
-        optproblem = Optimization.OptimizationProblem(objfunction, p₀, optparameters; lcons = fill(0., 4), ucons = fill(Inf, 4))
+        optproblem = Optimization.OptimizationProblem(objfunction, p₀, optparameters; lcons, ucons)
 
-        result = solve(optproblem, IPNewton(); iterations = 10_000)
+        teresult = solve(optproblem, IPNewton(); iterations = 10_000)
         
-        if !SciMLBase.successful_retcode(result)
+        if !SciMLBase.successful_retcode(teresult)
             @warn @sprintf "Result %i not converged.\n" i
         else
-            @printf "Result %i has converged with parameters Tᶜ - Tᵖ=%.3f, ΔS=%.3f, L=%.3f, error=%.3e.\n" i (result.u[1] - hogg.Tᵖ) result.u[2] result.u[3] result.objective
+            @printf "Problem %i converged with ΔTᶜ=%.3f, ΔS=%.3f, L=%.3f, error=%.3e.\n" i (teresult.u[1] - hogg.Tᵖ) teresult.u[2] teresult.u[3] teresult.objective
+            
+            res = constraints(teresult.u, optparameters)
+    
+            if !all(lcons .< res .< ucons)
+                @warn @sprintf "Problem %i: constraints not satisfied. Residuals: %.3f, %.3f, %.3f, %.3f" i res[1] res[2] res[3] res[4]
+            end
         end
 
-        Tᶜ, ΔS, L = result.u
+        Tᶜ, ΔS, L = teresult.u
         feedback = Feedback(Tᶜ, ΔS, L)
 
         push!(feedbacks, feedback)
@@ -585,42 +593,42 @@ function extendedcoupledsystem!(du, u, parameters, t)
     end
 end;
 
-begin
+if isinteractive()
     u₀ = [m₀, T₀, T₀, T₀, T₀]
     parameters = (hogg, calibration, feedbacks)
 
     extenedcoupledprob = ODEProblem(extendedcoupledsystem!, u₀, (baselineyear, tecalibrationhorizon), parameters)
 
-    sol = solve(extenedcoupledprob, AutoVern9(Rodas5P()))
-
-    Tspace = range(extrema(getindex.(sol.u, 4))...; length = 101)
-    nullclines = Vector{Float64}[]
-
-    for feedback in feedbacks
-        mnullcline = [mstable(T, hogg, feedback) for T in Tspace]
-        push!(nullclines, mnullcline)
-    end
-end
-
-let
-    ts = range(sol.t[1], sol.t[end]; step = 1/24)
-    traj = sol(ts)
+    sol = solve(extenedcoupledprob, RadauIIA5(); saveat = 1., reltol = 1e-8)
 
     solfig = plot(xlabel = "Year", ylabel = L"Temperature $[\si{\degree}]$", title = "Temperature Dynamics with Tipping Element", legendtitle = "Quantile")
 
-    plot!(solfig, traj.t, getindex.(traj.u, 2); c = :black, label = "Linear")
+    plot!(solfig, sol.t, getindex.(sol.u, 2); c = :black, label = "Linear")
     
     qs = (0.05, 0.5, 0.95)
     c = palette(:reds, 3)
     for i in 1:3
-        plot!(solfig, traj.t, getindex.(traj.u, i + 2); labels = qs[i], c = c[i])
+        plot!(solfig, sol.t, getindex.(sol.u, i + 2); labels = qs[i], c = c[i])
     end
     
     solfig
 end
 
+# Check Nullclines
+if isinteractive()
+    Tspace = range(hogg.T₀, hogg.T₀ + 6.; length = 101)
+    nullclinefig = plot(ylabel = "Temperature [°]", xlabel = "CO2e concentration (ppm)")
+    
+    for (i, feedback) in enumerate(feedbacks)
+        mnullcline = [mstable(T, hogg, feedback) for T in Tspace]
+        plot!(nullclinefig, mnullcline, Tspace; label = qs[i], c = c[i])
+    end
+
+    nullclinefig
+end
+
 # Save outcome of calibration in file
-feedbacklower, feedback, feedbackhigher = feedbacks
 jldopen(calibrationpath, "w+") do file
+    feedbacklower, feedback, feedbackhigher = feedbacks
     @pack! file = hogg, calibration, feedbacklower, feedback, feedbackhigher
 end

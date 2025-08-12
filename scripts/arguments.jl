@@ -14,7 +14,7 @@ argtable = ArgParseSettings()
     
     "-N"
         arg_type = Int
-        default = 51
+        default = 21
         help = "Size of grid"
 
     "--verbose" , "-v"
@@ -27,7 +27,7 @@ argtable = ArgParseSettings()
 
     "--tol"
         arg_type = Float64
-        default = 1e-5
+        default = 1e-3
     
     "--stopat"
         arg_type = Float64
@@ -43,14 +43,14 @@ argtable = ArgParseSettings()
 
     "--threshold"
         arg_type = Float64
-        default = 1.5
+        default = 2.0
 
     "--leveldamages"
         action = :store_true
     
     "--eis"
         arg_type = Float64
-        default = 0.75
+        default = 1.0
 
     "--rra"
         arg_type = Float64

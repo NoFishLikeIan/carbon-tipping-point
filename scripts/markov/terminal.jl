@@ -1,27 +1,38 @@
-function terminalcost(Fᵢ′, Xᵢ::Point, Δt, χ, model::AbstractModel{GrowthDamages})
+function terminalcost(Fᵢ′, Xᵢ::Point, Δt, χ, model::AbstractModel{T, D, P}) where {T, D <: GrowthDamages{T}, P <: Preferences{T}}
     δ = terminaloutputfct(Xᵢ, Δt, χ, model)
-
     return g(χ, δ * Fᵢ′, Δt, model.preferences)
 end
-function terminalcost(Fᵢ′, Xᵢ::Point, Δt, χ, model::AbstractModel{LevelDamages})
+function terminalcost(Fᵢ′, Xᵢ::Point, Δt, χ, model::AbstractModel{T, D, P}) where {T, D <: LevelDamages{T}, P <: Preferences{T}}
     δ = terminaloutputfct(Xᵢ, Δt, χ, model)
-    damage = d(Xᵢ, model)
-
+    damage = d(Xᵢ.T, Xᵢ.m, model)
     return g(damage * χ, δ * Fᵢ′, Δt, model.preferences)
 end
 
-function terminaldriftstep(idx, F̄, model::AbstractModel, G)
-    L, R = extrema(CartesianIndices(F̄))
-
-    σₜ² = (model.hogg.σₜ / (model.hogg.ϵ * G.Δ.T))^2
-    σₘ² = (model.hogg.σₘ / G.Δ.m)^2
+function terminaltimestep(idx, model::AbstractModel, G)
+    ΔT, Δm = G.Δ
+    σₜ² = (model.hogg.σₜ / (model.hogg.ϵ * ΔT))^2
+    σₘ² = (model.hogg.σₘ / Δm)^2
 
     Xᵢ = G.X[idx]
-    dT = μ(Xᵢ.T, Xᵢ.m, model) / (model.hogg.ϵ * G.Δ.T)
+    dT = μ(Xᵢ.T, Xᵢ.m, model) / (model.hogg.ϵ * ΔT)
+    Q = σₘ² + σₜ² + G.h * abs(dT)
+
+    return G.h^2 / Q
+end
+
+function terminaldriftstep(idx, F̄, model::AbstractModel, G)
+    L, R = extrema(G)
+
+    ΔT, Δm = G.Δ
+
+    σₜ² = (model.hogg.σₜ / (model.hogg.ϵ * ΔT))^2
+    σₘ² = (model.hogg.σₘ / Δm)^2
+
+    Xᵢ = G.X[idx]
+    dT = μ(Xᵢ.T, Xᵢ.m, model) / (model.hogg.ϵ * ΔT)
 
     # Neighbouring nodes
-    FᵢT₊, FᵢT₋ = F̄[min(idx + I[1], R)], F̄[max(idx - I[1], L)]
-    Fᵢm₊, Fᵢm₋ = F̄[min(idx + I[2], R)], F̄[max(idx - I[2], L)]
+    FᵢT₊, FᵢT₋, Fᵢm₊, Fᵢm₋ = getneighours(F̄, idx, L, R)
 
     dTF = G.h * abs(dT) * ifelse(dT > 0, FᵢT₊, FᵢT₋) + σₜ² * (FᵢT₊ + FᵢT₋) / 2
     dmF = σₘ² * (Fᵢm₊ + Fᵢm₋) / 2
@@ -33,7 +44,7 @@ function terminaldriftstep(idx, F̄, model::AbstractModel, G)
     return F′, Δt
 end
 
-function terminalmarkovstep(idx, F̄, model::Union{TippingModel, LinearModel}, G) 
+function terminalmarkovstep(idx, F̄, model::M, G) where M <: Union{TippingModel, LinearModel} 
     terminaldriftstep(idx, F̄, model, G)
 end
 function terminalmarkovstep(idx, F̄, model::JumpModel, G)
@@ -48,68 +59,71 @@ function terminalmarkovstep(idx, F̄, model::JumpModel, G)
     steps = floor(Int, div(qᵢ, G.Δ.T * G.h))
     weight = qᵢ / (G.Δ.T * G.h)
 
-    Fʲ = F̄[min(idx + steps * I[1], R)] * (1 - weight) + 
-            F̄[min(idx + (steps + 1) * I[1], R)] * weight
+    Fʲ = F̄[min(idx + steps * Idx[1], R)] * (1 - weight) + 
+            F̄[min(idx + (steps + 1) * Idx[1], R)] * weight
 
     F′ = Fᵈ + πᵢ * Δt * (Fʲ - Fᵈ)
 
     return F′, Δt
 end
 
-function terminaljacobi!(F̄, policy, errors, model::AbstractModel, G; indices = CartesianIndices(F̄))
+function terminaljacobi!(F, policy, errors, model, G; indices = CartesianIndices(F))
+    T = eltype(F)
     @inbounds @threads for idx in indices
-        Fᵢ′, Δt = terminalmarkovstep(idx, F̄, model, G)
+        F′, Δt = terminalmarkovstep(idx, F, model, G)
         Xᵢ = G.X[idx]
 
         # Optimal control
-        objective = @closure χ -> terminalcost(Fᵢ′, Xᵢ, Δt, χ, model)
-        Fᵢ, χ = gssmin(objective, 0., 1.; tol = eps(Float64))
+        objective = @closure χ -> terminalcost(F′, Xᵢ, Δt, χ, model)
+        Fᵢ, χ = gssmin(objective, zero(T), one(T); tol = eps(T))
         
-        errors[idx] = Fᵢ ≈ F̄[idx] ? 0. : abs(Fᵢ - F̄[idx]) / F̄[idx]
-
-        F̄[idx] = Fᵢ
+        errors[idx] = abs(Fᵢ - F[idx]) / F[idx]
+        
+        F[idx] = Fᵢ
         policy[idx] = χ
     end
 end
 
-function vfi(F₀, model::AbstractModel, G; tol = 1e-3, maxiter = 10_000, verbose = 0, indices = CartesianIndices(G), alternate = false)
-    Fᵢ = deepcopy(F₀)
-    pᵢ = similar(F₀)
-
-    errors = (Inf .* ones(size(F₀)))
-    
+function vfi(model::AbstractModel, G; kwargs...)
+    F = ones(size(G))
+    p = similar(F)
+    errors = fill(Inf, size(G))
+    return vfi!(F, p, errors, model, G; kwargs...)
+end
+function vfi!(F, p, errors, model::AbstractModel, G; tol = 1e-3, maxiter = 10_000, verbose = 0, indices = CartesianIndices(G), alternate = false)
     (verbose ≥ 1) && println("Starting iterations...")
+    magnitude = floor(Int, -log10(tol))
 
     for iter in 1:maxiter
         iterindices = (alternate && isodd(iter)) ? indices : reverse(indices)
 
-        terminaljacobi!(Fᵢ, pᵢ, errors, model, G; indices = iterindices)
+        terminaljacobi!(F, p, errors, model, G; indices = iterindices)
 
-        max_error = maximum(errors)
+        maxerror = maximum(errors)
 
-        if isnan(max_error)
+        if isnan(maxerror)
             @warn "NaN error detected. Exiting."
-            return Fᵢ, pᵢ
+            return F, p, errors
         end
 
-        if max_error < tol
-            (verbose ≥ 1) && @printf("Converged in %i iterations, ε = %.8f \n", iter, max_error)
-            return Fᵢ, pᵢ
+        if maxerror < tol
+            (verbose ≥ 1) && printjacobiterminal(maxerror, iter, magnitude)
+            return F, p, errors
         end
 
         if (verbose ≥ 2) && (!alternate || isodd(iter))
-            @printf("Iteration %i / %i, ε = %.8f...\r", iter, maxiter, max_error)
+            printjacobi(maxerror, iter, maxiter, magnitude)
         end
     end
 
-    (verbose ≥ 1) && @warn "Convergence failed."
-    return Fᵢ, pᵢ
+    (verbose ≥ 1) && @warn @sprintf "Convergence failed, did not reach %f tolerance in %i iterations." tol maxiter
+    return F, p, errors
 end
 
 function computeterminal(model, G::RegularGrid; verbose = 0, withsave = true, outdir = "data", overwrite = false, addpath = "", iterkwargs...)
 
     if withsave
-        folder = SIMPATHS[typeof(model)]
+        folder = simpaths(model)
         savefolder = joinpath(outdir, folder, "terminal", addpath)
         if !isdir(savefolder) mkpath(savefolder) end
         
@@ -132,8 +146,7 @@ function computeterminal(model, G::RegularGrid; verbose = 0, withsave = true, ou
 
     end
 
-    F₀ = ones(size(G))
-    F̄, policy = vfi(F₀, model, G; verbose, iterkwargs...)
+    F̄, policy, _ = vfi(model, G; verbose, iterkwargs...)
     
     if withsave
         (verbose ≥ 1) && println("Saving solution into $savepath...")
