@@ -35,8 +35,9 @@ begin # Construct the model
 	damages = Kalkuhl()
 	preferences = Preferences(ρ = 0.015, θ = 10., ψ = 1)
 	economy = Economy()
+	feedback = Model.updateTᶜ(2.0 + hogg.Tᵖ, feedback)
 
-	model = TippingModel(hogg, preferences, damages, economy, feedbackhigher)
+	model = TippingModel(hogg, preferences, damages, economy, feedback)
 	
 	N = 101
 	Tdomain = hogg.Tᵖ .+ (0., 5.5);

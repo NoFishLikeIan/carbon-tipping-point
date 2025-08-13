@@ -59,7 +59,7 @@ preferences = Preferences(θ = rra, ψ = eis);
 economy = Economy()
 damages = leveldamages ? WeitzmanLevel() : Kalkuhl()
 
-feedback = Model.updateTᶜ(threshold, feedback)
+feedback = Model.updateTᶜ(threshold + hogg.Tᵖ, feedback)
 model = TippingModel(hogg, preferences, damages, economy, feedback)
 
 # Construct Grid

@@ -136,14 +136,27 @@ function loadterminal(models::Vector{<:AbstractModel}; outdir = "data/simulation
 end
 
 function loadtotal(model::AbstractModel{T}; outdir = "data/simulation") where T
+    
+    if !isdir(outdir)
+        error("Output directory does not exist: $(outdir)\nHave you not solved the constrained or negative problem?")
+    end
+
     folder = simpaths(model)
     cachefolder = joinpath(outdir, folder)
+    
+    if !isdir(cachefolder)
+        error("Cache folder does not exist: $(folder)\nHave you solved this combination of problems?")
+    end
+    
     filename = makefilename(model)
     cachepath = joinpath(cachefolder, filename)
+    
+    if !isfile(cachepath)
+        error("Cache file does not exist: $filename\nHave you solved the problem for these parameters?")
+    end
 
     return loadtotal(cachepath)
 end
-
 function loadtotal(cachepath::String)
     cachefile = jldopen(cachepath, "r")
     G = cachefile["G"]
@@ -155,18 +168,15 @@ function loadtotal(cachepath::String)
     timesteps = timesteps[ix]
     timekeys = timekeys[ix]
 
-    T = length(timesteps)
-    F = Array{Float64, 3}(undef, size(G)..., T)
-    policy = Array{Float64, 4}(undef, size(G)..., 2, T)
-
-    for (k, key) ∈ enumerate(timekeys)
-        F[:, :, k] .= cachefile[key]["F"]
-        policy[:, :, :, k] .= cachefile[key]["policy"]
+    states = DPState[]
+    for key ∈ timekeys
+        push!(states, cachefile[key]["state"])
     end
-
     close(cachefile)
 
-    return timesteps, F, policy, G, model
+    outdict = Dict(timesteps .=> states)
+
+    return outdict, G, model
 end
 
 function loadgame(models::Vector{<:AbstractModel}; outdir = "data/simulation")
