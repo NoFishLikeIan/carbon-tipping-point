@@ -62,28 +62,10 @@ function g(χ, F′, Δt, p::LogUtility)
    return (1 - β) * log(χ) + β * F′
 end
 
-function logg(χ, F′, Δt, p::EpsteinZin)
-    ψ⁻¹ = inv(p.ψ)
-    agg = (1 - ψ⁻¹) / (1 - p.θ)
-
-    consumption = χ^(1 - ψ⁻¹)
-
+function logg(χ, logF′, Δt, p::LogSeparable)
     β = discount(p.ρ, Δt)
-    value = max(F′, 0.)^agg
 
-    return inv(agg) * log((1 -  β) * consumption + β * value)
-end
-function logg(χ, F′, Δt, p::LogSeparable)
-    β = discount(p.ρ, Δt)
-    a = (1 - p.θ) * (1 - β)
-
-    return a * log(χ) + β * log(max(F′, eps(F′)))
-end
-function logg(χ, F′, Δt, p::CRRA)
-    log(g(χ, F′, Δt, p)) # TODO: Fix this
-end
-function logg(χ, F′, Δt, p::LogUtility)
-   log(g(χ, F′, Δt, p)) # TODO: Fix this
+    return (1 - p.θ) * (1 - β) * log(χ) + β * logF′
 end
 
 

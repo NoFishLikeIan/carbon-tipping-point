@@ -86,4 +86,4 @@ if (verbose ≥ 1)
     flush(stdout)
 end
 
-F, policy, foc = computebackward((state, Gterminal), model, calibration, G; verbose, outdir, overwrite, tstop = stopat, cachestep, withnegative)
+state = computebackward((state, Gterminal), model, calibration, G; verbose, outdir, overwrite, tstop = stopat, cachestep, withnegative)

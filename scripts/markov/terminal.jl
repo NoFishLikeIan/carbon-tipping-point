@@ -8,6 +8,12 @@ function terminalcost(τ, Fᵢ′, Xᵢ::Point, Δt, χ, model::M) where {T, D <
     return g(damage * χ, δ * Fᵢ′, Δt, model.preferences)
 end
 
+function logterminalcost(τ, Fᵢ′, Xᵢ::Point, Δt, χ, model::M) where {T, D <: GrowthDamages{T}, P <: Preferences{T}, M <: AbstractModel{T, D, P}}
+    δ = logterminaloutputfct(τ, Xᵢ, Δt, χ, model)
+    logF′ = δ + Fᵢ′
+    return logg(χ, logF′, Δt, model.preferences)
+end
+
 function terminaltimestep(idx, model::M, G) where M <: AbstractModel
     ΔT, Δm = G.Δ
     σₜ² = (model.hogg.σₜ / (model.hogg.ϵ * ΔT))^2
@@ -74,10 +80,10 @@ function terminaljacobi!(τ, F::Matrix{T}, policy::Matrix{Policy{T}}, errors, mo
         Xᵢ = G.X[idx]
 
         # Optimal control
-        objective = @closure χ -> terminalcost(τ, F′, Xᵢ, Δt, χ, model)
+        objective = @closure χ -> logterminalcost(τ, F′, Xᵢ, Δt, χ, model)
         Fᵢ, χ = gssmin(objective, zero(T), one(T); tol = eps(T))
         
-        errors[idx] = abs(Fᵢ - F[idx]) / F[idx]
+        errors[idx] = abs(Fᵢ - F[idx])
         F[idx] = Fᵢ
         policy[idx].χ = χ
     end

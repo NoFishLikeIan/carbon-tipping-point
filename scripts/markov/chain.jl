@@ -84,9 +84,10 @@ function markovstep(t, idx, F, α, model::JumpModel, calibration::Calibration, G
     return F′, Δt
 end
 
-function logcost(F′, t, Xᵢ::Point, Δt, u, model::AbstractModel{T, D}, calibration::Calibration) where {T, D <: GrowthDamages{T}}
-    δ = outputfct(t, Xᵢ, Δt, u, model, calibration)
-    return logg(u.χ, δ * F′, Δt, model.preferences)
+function logcost(logF′, t, Xᵢ::Point, Δt, u, model::AbstractModel{T, D}, calibration::Calibration) where {T, D <: GrowthDamages{T}}
+    δ = logoutputfct(t, Xᵢ, Δt, u, model, calibration)
+    logδF′ = δ + logF′
+    return logg(u.χ, logδF′, Δt, model.preferences)
 end
 function cost(F′, t, Xᵢ::Point, Δt, u::Policy, model::AbstractModel{T, D}, calibration::Calibration) where {T, D <: GrowthDamages{T}}
     δ = outputfct(t, Xᵢ, Δt, u, model, calibration)

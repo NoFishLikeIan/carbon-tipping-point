@@ -84,6 +84,14 @@ function terminaloutputfct(τ, Xᵢ::Point{T}, Δt, χ, model::M) where { T, M <
 
     return max(1 + adj, 0)
 end
+function logterminaloutputfct(τ, Xᵢ::Point{T}, Δt, χ, model::M) where { T, M <: AbstractModel{T}}
+    drift = bterminal(τ, Xᵢ, χ, model) - model.preferences.θ * model.economy.σₖ^2 / 2
+     
+    adj = Δt * (1 - model.preferences.θ) * drift
+
+    return log1p(max(adj, -0.999))
+end
+
 
 "δ-factor for output at time `t < τ`"
 function outputfct(t, Xᵢ::Point, Δt, u, model, calibration::Calibration)
@@ -100,6 +108,15 @@ function outputfct(t, Xᵢ::Point, Δt, u, model, calibration::RegionalCalibrati
 
     return max(1 + adj, 0)
 end
+
+function logoutputfct(t, Xᵢ::Point, Δt, u, model, calibration::Calibration)
+    drift = b(t, Xᵢ, u, model, calibration) - model.preferences.θ * model.economy.σₖ^2 / 2
+    
+    adj = Δt * (1 - model.preferences.θ) * drift
+    
+    return log1p(max(adj, -0.999))
+end
+
 
 
 function Grid.RegularGrid(domains::NTuple{2, Domain{R}}, N::Int, hogg::Hogg) where R
