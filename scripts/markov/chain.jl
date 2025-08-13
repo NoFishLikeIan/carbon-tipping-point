@@ -93,7 +93,6 @@ function cost(F′, t, Xᵢ::Point, Δt, u::Policy, model::AbstractModel{T, D}, 
     return g(u.χ, δ * F′, Δt, model.preferences)
 end
 
-
 function Base.isempty(q::ZigZagBoomerang.PartialQueue)
     all((isempty(m) for m in q.minima))
 end

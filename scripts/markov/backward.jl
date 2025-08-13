@@ -5,55 +5,66 @@ function pointminimisation(u, parameters)
     return cost(Fᵉₜ, t, Xᵢ, Δt, u, model, calibration)
 end
 
-function backwardstep!(F, policy, cluster, foc, Δts, model, calibration, G; withnegative = true, ad = Optimization.AutoForwardDiff(), itpε = 0.5, optkwargs...)
+function backwardstep!(state::DPState, cluster, Δts, model, calibration, G; iterkwargs...)
+    backwardstep!(state.valuefunction, state.policystate, state.timestate, cluster, Δts, model, calibration, G; iterkwargs...)
+end
+function backwardstep!(valuefunction::ValueFunction{T}, policystate::PolicyState{T}, timestate::Time{T}, cluster, Δts, model, calibration, G; withnegative = true, ad = Optimization.AutoForwardDiff(), prevweight = 0.5, optkwargs...) where T
 
-    Fₜ, Fₜ₊ₕ = F
     fn = OptimizationFunction(pointminimisation, ad)
     indices = CartesianIndices(G)
+    lb = Policy(0.1, 0.)
 
-    @inline @threads for (i, δt) in cluster
+    @inbounds @threads for (i, δt) in cluster
         idx = indices[i]
         Xᵢ = G.X[idx]
-        t = model.economy.τ - δt
-        parameters = (t, idx, Fₜ₊ₕ, Xᵢ, model, calibration, G)
+        t = timestate.τ - δt
+        pₜ = policystate.policy[idx]
         
-        ᾱ = withnegative ? 2.0 : γ(t, calibration) + δₘ(Xᵢ.M, model.hogg)
+        parameters = (t, idx, valuefunction.Fₜ₊ₕ, Xᵢ, model, calibration, G)
+        
+        ᾱ = withnegative ? one(T) : γ(t, calibration) + δₘ(Xᵢ.M, model.hogg)
 
         if ᾱ ≥ 0
-            lb = Policy(0.1, 0.)
             ub = Policy(0.9, ᾱ)
 
-            α₀ = (1 - itpε) * clamp(policy[idx].α, 0, ᾱ) + itpε * ᾱ / 2
-            u₀ = Policy(0.5, α₀)
+            α₀ = prevweight * clamp(pₜ.α, 0, ᾱ) + (1 - prevweight) * ᾱ / 2
+            u₀ = Policy(pₜ.χ, α₀)
 
             prob = Optimization.OptimizationProblem(fn, u₀, parameters; lb = lb, ub = ub)
 
-            sol = solve(prob, LBFGS(); iterations = 10_000, time_limit = 0.5, optkwargs...)
+            sol = solve(prob, LBFGS(); optkwargs...)
 
-            policy[idx] .= sol.u
-            foc[idx] = sol.original.g_residual
-            Fₜ[idx] = sol.objective
+            pₜ .= sol.u
+            policystate.foc[idx] = sol.original.g_residual
+
+            valuefunction.Fₜ[idx] = sol.objective
             Δts[i] = timestep(t, Xᵢ, sol.u.α, model, calibration, G)
+            timestate.t[idx] = t
         else
             obj = @closure χ -> pointminimisation(Policy(χ, ᾱ), parameters)
             y, χ = gssmin(obj, 0.1, 0.9)
             
-            policy[idx][1] = χ
-            policy[idx][2] = ᾱ
-            foc[idx] = zero(χ)
-            Fₜ[idx] = y
+            pₜ.χ = χ
+            pₜ.α = ᾱ
+            policystate.foc[idx] = zero(χ)
+
+            valuefunction.Fₜ[idx] = y
             Δts[i] = timestep(t, Xᵢ, ᾱ, model, calibration, G)
+            timestate.t[idx] = t
         end
     end
+
+    valuefunction.Fₜ₊ₕ .= valuefunction.Fₜ
 end
 
-function backwardsimulation!(F, policy, foc, model, calibration, G; kwargs...)
+function backwardsimulation!(state, model, calibration, G; kwargs...)
     queue = DiagonalRedBlackQueue(G)
-    backwardsimulation!(queue, F, policy, foc, model, calibration, G; kwargs...)
+    backwardsimulation!(queue, state, model, calibration, G; kwargs...)
 end
 
-function backwardsimulation!(queue::ZigZagBoomerang.PartialQueue, F, policy, foc, model, calibration, G; verbose = 0, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., withnegative = false, tcacheinit = model.economy.τ)
-    tcache = tcacheinit # Just to make sure it is well defined in all paths.
+function backwardsimulation!(queue::ZigZagBoomerang.PartialQueue, state, model, calibration, G; verbose = 0, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., withnegative = false, tcacheinit = state.timestate.τ, printevery = 10_000, iterkwargs...)
+    tcache = tcacheinit
+    inittime = time()
 
     savecache = !isnothing(cachepath)
     if savecache
@@ -87,24 +98,21 @@ function backwardsimulation!(queue::ZigZagBoomerang.PartialQueue, F, policy, foc
 
     while !isempty(queue)
         tmin = tcacheinit - minimum(queue.vals)
-
-        if (verbose ≥ 2) || ((verbose ≥ 1) && (passcounter % 1_000 == 0))
-            @printf("%s: pass %i, cluster minimum time = %.4f\n", now(), passcounter, tmin)
+        cluster = ZigZagBoomerang.dequeue!(queue) |> only
+        
+        if (verbose ≥ 2) || ((verbose ≥ 1) && (passcounter % printevery == 0))
+            elapsed = time() - inittime
+            @printf "%.2f: pass %i, cluster (size %i) minimum time = %.4f\n" elapsed passcounter length(cluster) tmin
             flush(stdout)
         end
 
+        backwardstep!(state, cluster, Δts, model, calibration, G; withnegative = withnegative, iterkwargs...)
+
         passcounter += 1
         
-        clusters = ZigZagBoomerang.dequeue!(queue)
-        for cluster in clusters
-            backwardstep!(F, policy, cluster, foc, Δts, model, calibration, G; withnegative)
-
-            indices = first.(cluster)
-
-            for i in indices
-                if queue[i] ≤ tcacheinit - tstop
-                    queue[i] += Δts[i]
-                end
+        for (i, _) in cluster
+            if queue[i] ≤ tcacheinit - tstop
+                queue[i] += Δts[i]
             end
         end
         

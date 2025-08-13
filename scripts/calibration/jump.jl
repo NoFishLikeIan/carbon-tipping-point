@@ -16,7 +16,7 @@ begin
 
     const calibration = load_object(joinpath(DATAPATH, "calibration.jld2"))
     const preferences = EpsteinZin()
-    const economy = Economy(τ = calibration.τ)
+    const economy = Economy()
     const damages = Kalkuhl()
     const hogg = Hogg()
     const albedo = Albedo()

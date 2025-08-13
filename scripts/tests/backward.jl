@@ -17,6 +17,7 @@ using ForwardDiff
 using JLD2
 using Printf, Dates
 
+includet("../../src/valuefunction.jl")
 includet("../../src/extensions.jl")
 includet("../utils/saving.jl")
 includet("../utils/logging.jl")
@@ -33,11 +34,11 @@ begin # Construct the model
 	
 	damages = Kalkuhl()
 	preferences = Preferences(ρ = 0.015, θ = 10., ψ = 1)
-	economy = Economy(τ = calibration.τ)
+	economy = Economy()
 
 	model = TippingModel(hogg, preferences, damages, economy, feedbackhigher)
 	
-	N = 101
+	N = 31
 	Tdomain = hogg.Tᵖ .+ (0., 5.5);
 	mdomain = mstable.(Tdomain, model)
 	
@@ -45,31 +46,36 @@ begin # Construct the model
 end;
 
 begin # Setup terminal value function
-	F̄ = ones(size(G))
-	terminalconsumption = similar(F̄)
-	errors = fill(Inf, size(G))
-
-	vfi!(F̄, terminalconsumption, errors, model, G; maxiter = 10_000, verbose = 2, tol = 1e-6, alternate = true)
+	state = vfi(model, calibration, G; maxiter = 10_000, verbose = 2, tol = 1e-3, alternate = true)
 end;
 
 begin # Setup problem
-	ᾱ = max(γ(calibration.τ, calibration), 0)
-	policy = [ Policy(terminalconsumption[idx], ᾱ) for idx in CartesianIndices(G) ]
-	foc = fill(Inf, size(G))
-
 	queue = DiagonalRedBlackQueue(G)
 	Δts = zeros(prod(size(G)))
 	cluster = first(ZigZagBoomerang.dequeue!(queue))
 
 	ad = Optimization.AutoForwardDiff()
 	withnegative = true
-	Fₜ = copy(F̄); Fₜ₊ₕ = copy(F̄); F = (Fₜ, Fₜ₊ₕ);
 end;
 
-backwardstep!(F, policy, cluster, foc, Δts, model, calibration, G; withnegative = withnegative)
-@benchmark backwardstep!($F, $policy, $cluster, $foc, $Δts, $model, $calibration, $G; withnegative = $withnegative)
+backwardstep!(state, cluster, Δts, model, calibration, G; withnegative = withnegative)
+@benchmark backwardstep!($state, $cluster, $Δts, $model, $calibration, $G; withnegative = $withnegative)
 
-Fₜ = copy(F̄); Fₜ₊ₕ = copy(F̄);
-F = (Fₜ, Fₜ₊ₕ)
+queue = DiagonalRedBlackQueue(G)
+backwardsimulation!(queue, state, model, calibration, G; verbose = 1, withnegative = withnegative, tstop = 300., prevweight = 0.75, printevery = 1_000)
 
-backwardsimulation!(F, policy, foc, model, calibration, G; verbose = 1, withnegative = withnegative, tstop = 0., tcacheinit = 10.)
+if isinteractive()
+	using Plots
+	Tspace = range(G.domains[1]...; length = size(G, 1))
+	mspace = range(G.domains[2]...; length = size(G, 2))
+
+	default(c = :viridis, label = false, dpi = 180)
+	Ffig = contourf(Tspace, mspace, log.(state.valuefunction.Fₜ); title = "log(F)")
+
+	αgrid = last.(state.policystate.policy)
+	αfig = contourf(Tspace, mspace, αgrid ./ maximum(αgrid); title = "α")
+	tfig = contourf(Tspace, mspace, state.timestate.t; title = "t")
+	focfig = contourf(Tspace, mspace, state.policystate.foc; title = "FOC")
+
+	plot(Ffig, αfig, tfig, focfig; layout = (2, 2), size = (800, 600))
+end

@@ -25,7 +25,7 @@ begin
     damages = Kalkuhl()
     hogg = Hogg()
     preferences = EpsteinZin(ψ = 0.75, θ = 10.)
-    economy = Economy(τ = calibration.τ)
+    economy = Economy()
 
     imminentmodel = TippingModel(Albedo(1.5), hogg, preferences, damages, economy)
     remotemodel = TippingModel(Albedo(2.5), hogg, preferences, damages, economy)

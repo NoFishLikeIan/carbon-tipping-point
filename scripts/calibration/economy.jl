@@ -10,5 +10,5 @@ using Model
 
 env = DotEnv.config()
 
-economy = Economy(τ = calibration.τ)
+economy = Economy()
 

@@ -47,7 +47,7 @@ begin # Construct models and grids
 
     preferences = EpsteinZin()
     damages = Kalkuhl()
-    economy = Economy(τ = calibration.τ)
+    economy = Economy()
     jump = Jump()
 
     linearmodel = LinearModel(hogg, preferences, damages, economy)

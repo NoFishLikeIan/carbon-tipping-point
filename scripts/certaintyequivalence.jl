@@ -32,7 +32,7 @@ calibration = load_object(calibrationdirectory)
 damages = Kalkuhl()
 hogg = Hogg()
 preferences = EpsteinZin(θ = rra, ψ = eis);
-economy = Economy(τ = calibration.τ)
+economy = Economy()
 
 imminentmodel = TippingModel(Albedo(1.5), hogg, preferences, damages, economy)
 remotemodel = TippingModel(Albedo(remotethreshold), hogg, preferences, damages, economy)

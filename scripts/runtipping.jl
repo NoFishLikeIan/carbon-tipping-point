@@ -55,7 +55,7 @@ begin
 end
 
 preferences = Preferences(θ = rra, ψ = eis);
-economy = Economy(τ = calibration.τ)
+economy = Economy()
 damages = leveldamages ? WeitzmanLevel() : Kalkuhl()
 
 feedback = Model.updateTᶜ(threshold, feedback)

@@ -1,9 +1,9 @@
-function terminalcost(Fᵢ′, Xᵢ::Point, Δt, χ, model::AbstractModel{T, D, P}) where {T, D <: GrowthDamages{T}, P <: Preferences{T}}
-    δ = terminaloutputfct(Xᵢ, Δt, χ, model)
+function terminalcost(τ, Fᵢ′, Xᵢ::Point, Δt, χ, model::AbstractModel{T, D, P}) where {T, D <: GrowthDamages{T}, P <: Preferences{T}}
+    δ = terminaloutputfct(τ, Xᵢ, Δt, χ, model)
     return g(χ, δ * Fᵢ′, Δt, model.preferences)
 end
-function terminalcost(Fᵢ′, Xᵢ::Point, Δt, χ, model::AbstractModel{T, D, P}) where {T, D <: LevelDamages{T}, P <: Preferences{T}}
-    δ = terminaloutputfct(Xᵢ, Δt, χ, model)
+function terminalcost(τ, Fᵢ′, Xᵢ::Point, Δt, χ, model::AbstractModel{T, D, P}) where {T, D <: LevelDamages{T}, P <: Preferences{T}}
+    δ = terminaloutputfct(τ, Xᵢ, Δt, χ, model)
     damage = d(Xᵢ.T, Xᵢ.m, model)
     return g(damage * χ, δ * Fᵢ′, Δt, model.preferences)
 end
@@ -19,7 +19,6 @@ function terminaltimestep(idx, model::AbstractModel, G)
 
     return G.h^2 / Q
 end
-
 function terminaldriftstep(idx, F̄, model::AbstractModel, G)
     L, R = extrema(G)
 
@@ -43,7 +42,6 @@ function terminaldriftstep(idx, F̄, model::AbstractModel, G)
 
     return F′, Δt
 end
-
 function terminalmarkovstep(idx, F̄, model::M, G) where M <: Union{TippingModel, LinearModel} 
     terminaldriftstep(idx, F̄, model, G)
 end
@@ -67,48 +65,47 @@ function terminalmarkovstep(idx, F̄, model::JumpModel, G)
     return F′, Δt
 end
 
-function terminaljacobi!(F, policy, errors, model, G; indices = CartesianIndices(F))
-    T = eltype(F)
+function terminaljacobi!(state::DPState, model, G; iterkwargs...) 
+   terminaljacobi!(state.timestate.τ, state.valuefunction.Fₜ, state.policystate.policy, state.valuefunction.error, model, G; iterkwargs...)
+end
+function terminaljacobi!(τ, F::Matrix{T}, policy::Matrix{Policy{T}}, errors, model, G; indices = CartesianIndices(F)) where T
     @inbounds @threads for idx in indices
         F′, Δt = terminalmarkovstep(idx, F, model, G)
         Xᵢ = G.X[idx]
 
         # Optimal control
-        objective = @closure χ -> terminalcost(F′, Xᵢ, Δt, χ, model)
+        objective = @closure χ -> terminalcost(τ, F′, Xᵢ, Δt, χ, model)
         Fᵢ, χ = gssmin(objective, zero(T), one(T); tol = eps(T))
         
         errors[idx] = abs(Fᵢ - F[idx]) / F[idx]
-        
         F[idx] = Fᵢ
-        policy[idx] = χ
+        policy[idx].χ = χ
     end
 end
 
-function vfi(model::AbstractModel, G; kwargs...)
-    F = ones(size(G))
-    p = similar(F)
-    errors = fill(Inf, size(G))
-    return vfi!(F, p, errors, model, G; kwargs...)
+function vfi(model::AbstractModel, calibration, G; kwargs...)
+    state = DPState(calibration, G)
+    return vfi!(state, model, G; kwargs...)
 end
-function vfi!(F, p, errors, model::AbstractModel, G; tol = 1e-3, maxiter = 10_000, verbose = 0, indices = CartesianIndices(G), alternate = false)
+function vfi!(state::DPState, model::AbstractModel, G; tol = 1e-3, maxiter = 10_000, verbose = 0, indices = CartesianIndices(G), alternate = false)
     (verbose ≥ 1) && println("Starting iterations...")
     magnitude = floor(Int, -log10(tol))
 
     for iter in 1:maxiter
         iterindices = (alternate && isodd(iter)) ? indices : reverse(indices)
 
-        terminaljacobi!(F, p, errors, model, G; indices = iterindices)
+        terminaljacobi!(state, model, G; indices = iterindices)
 
-        maxerror = maximum(errors)
+        maxerror = maximum(state.valuefunction.error)
 
         if isnan(maxerror)
             @warn "NaN error detected. Exiting."
-            return F, p, errors
+            return state
         end
 
         if maxerror < tol
             (verbose ≥ 1) && printjacobiterminal(maxerror, iter, magnitude)
-            return F, p, errors
+            return state
         end
 
         if (verbose ≥ 2) && (!alternate || isodd(iter))
@@ -117,7 +114,7 @@ function vfi!(F, p, errors, model::AbstractModel, G; tol = 1e-3, maxiter = 10_00
     end
 
     (verbose ≥ 1) && @warn @sprintf "Convergence failed, did not reach %f tolerance in %i iterations." tol maxiter
-    return F, p, errors
+    return state
 end
 
 function computeterminal(model, G::RegularGrid; verbose = 0, withsave = true, outdir = "data", overwrite = false, addpath = "", iterkwargs...)

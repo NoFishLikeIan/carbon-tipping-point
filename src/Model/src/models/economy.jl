@@ -59,8 +59,6 @@ Base.@kwdef struct Economy{T <: Real}
     A₀::T = 0.113 # Initial TFP
     Y₀::T = 75.8
     σₖ::T = 0.0162 # Variance of GDP
-
-    τ::T = 307. # Steady state horizon, such that `exp(-ϱ * τ) = 1%.`
 end
 
 "Cost of abatement as a fraction of GDP"

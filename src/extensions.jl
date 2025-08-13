@@ -6,21 +6,21 @@ function Model.d(T, m, model::LinearModel)
 end
 
 "Drift of log output y for `t ≥ τ`"
-function bterminal(Xᵢ::Point{T}, χ, model::AbstractModel{T, D}) where {T, D <: GrowthDamages{T}}
+function bterminal(τ, Xᵢ::Point{T}, χ, model::AbstractModel{T, D}) where {T, D <: GrowthDamages{T}}
     growth = model.economy.ϱ - model.economy.δₖᵖ
-    investments = ϕ(model.economy.τ, χ, model.economy)
+    investments = ϕ(τ, χ, model.economy)
     damage = d(Xᵢ.T, Xᵢ.m, model)
 
     return growth + investments - damage
 end
-function bterminal(χ, model::AbstractModel{T, D}) where {T, D <:  LevelDamages{T}}
+function bterminal(τ, χ, model::AbstractModel{T, D}) where {T, D <:  LevelDamages{T}}
     growth = model.economy.ϱ - model.economy.δₖᵖ
-    investments = ϕ(model.economy.τ, χ, model.economy)
+    investments = ϕ(τ, χ, model.economy)
 
     return growth + investments
 end
-function bterminal(_, χ, model::AbstractModel{T, D}) where {T, D <:  LevelDamages{T}}
-    bterminal(χ, model) # For compatibility
+function bterminal(τ, _, χ, model::AbstractModel{T, D}) where {T, D <:  LevelDamages{T}}
+    bterminal(τ, χ, model) # For compatibility
 end
 
 "Emissivity rate implied by abatement `α` at time `t` and carbon concentration `M`"
@@ -77,8 +77,8 @@ function costbreakdown(t, Xᵢ::Point{T}, u,  model::AbstractModel{T, D, P}, cal
 end
 
 "δ-factor for output at time `t ≥ τ`"
-function terminaloutputfct(Xᵢ::Point{T}, Δt, χ, model::AbstractModel{T}) where T
-    drift = bterminal(Xᵢ, χ, model) - model.preferences.θ * model.economy.σₖ^2 / 2
+function terminaloutputfct(τ, Xᵢ::Point{T}, Δt, χ, model::AbstractModel{T}) where T
+    drift = bterminal(τ, Xᵢ, χ, model) - model.preferences.θ * model.economy.σₖ^2 / 2
      
     adj = Δt * (1 - model.preferences.θ) * drift
 
