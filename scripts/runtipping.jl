@@ -38,6 +38,7 @@ using ForwardDiff
 using JLD2
 using Printf, Dates
 
+include("../src/valuefunction.jl")
 include("../src/extensions.jl")
 include("utils/saving.jl")
 include("utils/logging.jl")
@@ -78,11 +79,11 @@ if (verbose ≥ 1)
     flush(stdout)
 end
 
-terminalresults = computeterminal(model, G; verbose, outdir, alternate = true, tol, overwrite)
+state, Gterminal = computeterminal(model, calibration, G; verbose, outdir, alternate = true, tol, overwrite)
 
 if (verbose ≥ 1)
     println("$(now()): ","Running backward...")
     flush(stdout)
 end
 
-F, policy, foc = computebackward(terminalresults, model, calibration, G; verbose, outdir, overwrite, tstop = stopat, cachestep, withnegative)
+F, policy, foc = computebackward((state, Gterminal), model, calibration, G; verbose, outdir, overwrite, tstop = stopat, cachestep, withnegative)

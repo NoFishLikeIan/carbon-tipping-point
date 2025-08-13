@@ -37,12 +37,14 @@ begin # Construct the model
 	mdomain = mstable.(Tdomain, model)
 	
 	G = RegularGrid((Tdomain, mdomain), N, hogg)
-	state = DPState(calibration, G)
 end;
 
+begin
+	state = DPState(calibration, G)
+	terminaljacobi!(state, model, G)
+end
 
-terminaljacobi!(state, model, G)
-vfi!(state, model, G; maxiter = 10_000, verbose = 2, tol = 1e-10, alternate = true)
+vfi(model, calibration, G; maxiter = 10_000, verbose = 0, tol = 1e-10, alternate = true)
 
 if isinteractive()
 	using Plots

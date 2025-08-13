@@ -2,7 +2,8 @@ module Model
 
 using Roots: find_zero, find_zeros
 using UnPack: @unpack
-using LogExpFunctions: logistic, logit, xexpx, xexpy
+using LogExpFunctions: logistic
+using FastPow: @fastpow
 
 include("models/calibration.jl")
 include("models/climate.jl")

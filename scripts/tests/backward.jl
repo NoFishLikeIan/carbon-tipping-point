@@ -38,7 +38,7 @@ begin # Construct the model
 
 	model = TippingModel(hogg, preferences, damages, economy, feedbackhigher)
 	
-	N = 31
+	N = 101
 	Tdomain = hogg.Tᵖ .+ (0., 5.5);
 	mdomain = mstable.(Tdomain, model)
 	
@@ -62,7 +62,7 @@ backwardstep!(state, cluster, Δts, model, calibration, G; withnegative = withne
 @benchmark backwardstep!($state, $cluster, $Δts, $model, $calibration, $G; withnegative = $withnegative)
 
 queue = DiagonalRedBlackQueue(G)
-backwardsimulation!(queue, state, model, calibration, G; verbose = 1, withnegative = withnegative, tstop = 300., prevweight = 0.75, printevery = 1_000)
+backwardsimulation!(queue, state, model, calibration, G; verbose = 1, withnegative = withnegative, tstop = 200., prevweight = 0.99, printevery = 1_000)
 
 if isinteractive()
 	using Plots

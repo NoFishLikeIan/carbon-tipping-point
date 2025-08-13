@@ -45,11 +45,11 @@ function driftstep(t, idx, F, α, model::AbstractModel, calibration::Calibration
     L, R = extrema(G)
 
     σₜ² = (model.hogg.σₜ / (model.hogg.ϵ * ΔT))^2
-    σₘ² = (model.hogg.σₘ /Δm)^2
+    σₘ² = (model.hogg.σₘ / Δm)^2
 
     Xᵢ = G.X[idx]
     dT = μ(Xᵢ.T, Xᵢ.m, model) / (model.hogg.ϵ * ΔT)
-    dm = (γ(t, calibration) - α) /Δm
+    dm = (γ(t, calibration) - α) / Δm
 
     FᵢT₊, FᵢT₋, Fᵢm₊, Fᵢm₋ = getneighours(F, idx, L, R)
 
@@ -86,7 +86,7 @@ end
 
 function logcost(F′, t, Xᵢ::Point, Δt, u, model::AbstractModel{T, D}, calibration::Calibration) where {T, D <: GrowthDamages{T}}
     δ = outputfct(t, Xᵢ, Δt, u, model, calibration)
-    return logg(u[1], δ * F′, Δt, model.preferences)
+    return logg(u.χ, δ * F′, Δt, model.preferences)
 end
 function cost(F′, t, Xᵢ::Point, Δt, u::Policy, model::AbstractModel{T, D}, calibration::Calibration) where {T, D <: GrowthDamages{T}}
     δ = outputfct(t, Xᵢ, Δt, u, model, calibration)

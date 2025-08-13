@@ -1,18 +1,22 @@
 function pointminimisation(u, parameters)
     t, idx, Fₜ₊ₕ, Xᵢ, model, calibration, G = parameters
-    Fᵉₜ, Δt = markovstep(t, idx, Fₜ₊ₕ, u.α, model, calibration, G)
+    F′, Δt = markovstep(t, idx, Fₜ₊ₕ, u.α, model, calibration, G)
 
-    return cost(Fᵉₜ, t, Xᵢ, Δt, u, model, calibration)
+    return logcost(F′, t, Xᵢ, Δt, u, model, calibration)
 end
 
 function backwardstep!(state::DPState, cluster, Δts, model, calibration, G; iterkwargs...)
     backwardstep!(state.valuefunction, state.policystate, state.timestate, cluster, Δts, model, calibration, G; iterkwargs...)
 end
-function backwardstep!(valuefunction::ValueFunction{T}, policystate::PolicyState{T}, timestate::Time{T}, cluster, Δts, model, calibration, G; withnegative = true, ad = Optimization.AutoForwardDiff(), prevweight = 0.5, optkwargs...) where T
+
+function inverseidentity(::Policy{T}) where T <: Real
+    MMatrix{2, 2, T}(1, 0, 0, 1)
+end
+
+function backwardstep!(valuefunction::ValueFunction{T}, policystate::PolicyState{T}, timestate::Time{T}, cluster, Δts, model, calibration, G; withnegative = true, ad = Optimization.AutoForwardDiff(), prevweight = 0.5, lb = Policy(0.1, 0.), optkwargs...) where T
 
     fn = OptimizationFunction(pointminimisation, ad)
     indices = CartesianIndices(G)
-    lb = Policy(0.1, 0.)
 
     @inbounds @threads for (i, δt) in cluster
         idx = indices[i]
@@ -32,12 +36,11 @@ function backwardstep!(valuefunction::ValueFunction{T}, policystate::PolicyState
 
             prob = Optimization.OptimizationProblem(fn, u₀, parameters; lb = lb, ub = ub)
 
-            sol = solve(prob, LBFGS(); optkwargs...)
+            sol = solve(prob, BFGS(initial_invH = inverseidentity); optkwargs...)
 
             pₜ .= sol.u
             policystate.foc[idx] = sol.original.g_residual
-
-            valuefunction.Fₜ[idx] = sol.objective
+            valuefunction.Fₜ[idx] = exp(sol.objective)
             Δts[i] = timestep(t, Xᵢ, sol.u.α, model, calibration, G)
             timestate.t[idx] = t
         else
@@ -48,13 +51,15 @@ function backwardstep!(valuefunction::ValueFunction{T}, policystate::PolicyState
             pₜ.α = ᾱ
             policystate.foc[idx] = zero(χ)
 
-            valuefunction.Fₜ[idx] = y
+            valuefunction.Fₜ[idx] = exp(y)
             Δts[i] = timestep(t, Xᵢ, ᾱ, model, calibration, G)
             timestate.t[idx] = t
         end
     end
 
     valuefunction.Fₜ₊ₕ .= valuefunction.Fₜ
+
+    return nothing
 end
 
 function backwardsimulation!(state, model, calibration, G; kwargs...)
@@ -122,9 +127,7 @@ function backwardsimulation!(queue::ZigZagBoomerang.PartialQueue, state, model, 
             end
 
             group = JLD2.Group(cachefile, "$tcache")
-            group["F"] = first(F)
-            group["policy"] = policy
-            group["foc"] = foc
+            group["state"] = state
             tcache = tcache - cachestep 
         end
     end
@@ -138,20 +141,11 @@ function backwardsimulation!(queue::ZigZagBoomerang.PartialQueue, state, model, 
 end
 
 function computebackward(model, calibration, G; outdir = "data", kwargs...)
-    terminalresults = loadterminal(model; outdir)
-    computebackward(terminalresults, model, calibration, G; outdir, kwargs...)
+    computebackward(loadterminal(model; outdir), model, calibration, G; outdir, kwargs...)
 end
 function computebackward(terminalresults, model, calibration, G; verbose = 0, withsave = true, outdir = "data", withnegative = false, iterkwargs...)
-    F̄, terminalconsumption, terminalG = terminalresults
-    Fₜ₊ₕ = interpolateovergrid(F̄, terminalG, G)
-    Fₜ = copy(Fₜ₊ₕ)
-    F = (Fₜ, Fₜ₊ₕ)
-    
-    ᾱ = max(γ(calibration.τ, calibration), 0)
-    terminalpolicy = [Policy(terminalconsumption[idx], ᾱ) for idx in CartesianIndices(terminalG)]
-
-    policy = interpolateovergrid(terminalpolicy, terminalG, G)
-	foc = fill(Inf, size(G))
+    terminalstate, terminalG = terminalresults
+    state = interpolateovergrid(terminalstate, terminalG, G)
 
     if withsave
         folder = simpaths(model)
@@ -162,7 +156,8 @@ function computebackward(terminalresults, model, calibration, G; verbose = 0, wi
     end
 
     cachepath = withsave ? joinpath(cachefolder, filename) : nothing
-    backwardsimulation!(F, policy, foc, model, calibration, G; verbose, cachepath, withnegative, iterkwargs...)
 
-    return F, policy, foc
+    backwardsimulation!(state, model, calibration, G; verbose, cachepath, withnegative, iterkwargs...)
+
+    return state
 end

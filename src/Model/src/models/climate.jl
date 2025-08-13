@@ -92,7 +92,7 @@ function ghgforcinginverse(r, hogg::Hogg)
 end
 
 "Forcing due to incoming solar radiation."
-function radiativeforcing(T, hogg::Hogg)
+@fastpow function radiativeforcing(T, hogg::Hogg)
     hogg.S₀ - hogg.η * T^4
 end
 
@@ -104,7 +104,7 @@ function μ(T, m, hogg::Hogg, feedback::Feedback)
     μ(T, m, hogg) + λ(T, feedback)
 end
 
-function ∂μ∂T(T, m, hogg::Hogg)
+@fastpow function ∂μ∂T(T, m, hogg::Hogg)
     -4hogg.η * T^3 
 end
 function ∂μ∂T(T, m, hogg::Hogg, feedback::Feedback)
@@ -134,15 +134,17 @@ function Tstable(m, hogg::Hogg, feedback::Feedback)
     find_zeros(T -> mstable(T, hogg, feedback) - m, hogg.Tᵖ, 1.2hogg.Tᵖ)
 end
 
+const log2 = log(2)
+
 "Compute equilibrium climate sensitivity"
 function ecs(hogg::Hogg)
-    only(Tstable(log(2), hogg)) - hogg.Tᵖ
+    only(Tstable(log2, hogg)) - hogg.Tᵖ
 end
 function ecs(hogg::Hogg, feedback::Feedback)
-    Tstable(log(2), hogg, feedback) .- hogg.Tᵖ
+    Tstable(log2, hogg, feedback) .- hogg.Tᵖ
 end
 
-function potential(T, m, hogg::Hogg, feedback::Feedback)
+@fastpow function potential(T, m, hogg::Hogg, feedback::Feedback)
 	@unpack λ₁, Δλ = feedback
     T₁ = feedback.Tᶜ + hogg.Tᵖ
     T₂ = T₁ + feedback.ΔT

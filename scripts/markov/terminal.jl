@@ -1,14 +1,14 @@
-function terminalcost(τ, Fᵢ′, Xᵢ::Point, Δt, χ, model::AbstractModel{T, D, P}) where {T, D <: GrowthDamages{T}, P <: Preferences{T}}
+function terminalcost(τ, Fᵢ′, Xᵢ::Point, Δt, χ, model::M) where {T, D <: GrowthDamages{T}, P <: Preferences{T}, M <: AbstractModel{T, D, P}}
     δ = terminaloutputfct(τ, Xᵢ, Δt, χ, model)
     return g(χ, δ * Fᵢ′, Δt, model.preferences)
 end
-function terminalcost(τ, Fᵢ′, Xᵢ::Point, Δt, χ, model::AbstractModel{T, D, P}) where {T, D <: LevelDamages{T}, P <: Preferences{T}}
+function terminalcost(τ, Fᵢ′, Xᵢ::Point, Δt, χ, model::M) where {T, D <: LevelDamages{T}, P <: Preferences{T}, M <: AbstractModel{T, D, P}}
     δ = terminaloutputfct(τ, Xᵢ, Δt, χ, model)
     damage = d(Xᵢ.T, Xᵢ.m, model)
     return g(damage * χ, δ * Fᵢ′, Δt, model.preferences)
 end
 
-function terminaltimestep(idx, model::AbstractModel, G)
+function terminaltimestep(idx, model::M, G) where M <: AbstractModel
     ΔT, Δm = G.Δ
     σₜ² = (model.hogg.σₜ / (model.hogg.ϵ * ΔT))^2
     σₘ² = (model.hogg.σₘ / Δm)^2
@@ -19,7 +19,7 @@ function terminaltimestep(idx, model::AbstractModel, G)
 
     return G.h^2 / Q
 end
-function terminaldriftstep(idx, F̄, model::AbstractModel, G)
+function terminaldriftstep(idx, F̄, model::M, G) where M <: AbstractModel
     L, R = extrema(G)
 
     ΔT, Δm = G.Δ
@@ -83,11 +83,11 @@ function terminaljacobi!(τ, F::Matrix{T}, policy::Matrix{Policy{T}}, errors, mo
     end
 end
 
-function vfi(model::AbstractModel, calibration, G; kwargs...)
+function vfi(model::M, calibration::Calibration, G; kwargs...) where M <: AbstractModel
     state = DPState(calibration, G)
     return vfi!(state, model, G; kwargs...)
 end
-function vfi!(state::DPState, model::AbstractModel, G; tol = 1e-3, maxiter = 10_000, verbose = 0, indices = CartesianIndices(G), alternate = false)
+function vfi!(state::DPState, model::M, G; tol = 1e-3, maxiter = 10_000, verbose = 0, indices = CartesianIndices(G), alternate = false) where M <: AbstractModel
     (verbose ≥ 1) && println("Starting iterations...")
     magnitude = floor(Int, -log10(tol))
 
@@ -114,10 +114,11 @@ function vfi!(state::DPState, model::AbstractModel, G; tol = 1e-3, maxiter = 10_
     end
 
     (verbose ≥ 1) && @warn @sprintf "Convergence failed, did not reach %f tolerance in %i iterations." tol maxiter
+    
     return state
 end
 
-function computeterminal(model, G::RegularGrid; verbose = 0, withsave = true, outdir = "data", overwrite = false, addpath = "", iterkwargs...)
+function computeterminal(model::M, calibration::Calibration, G::RegularGrid; verbose = 0, withsave = true, outdir = "data", overwrite = false, addpath = "", iterkwargs...) where M <: AbstractModel
 
     if withsave
         folder = simpaths(model)
@@ -135,20 +136,19 @@ function computeterminal(model, G::RegularGrid; verbose = 0, withsave = true, ou
             else
                 (verbose ≥ 1) && @warn "File $savepath already exists. If you want to overwrite it pass overwrite = true. Will copy the results into `F` and `policy`.\n"
 
-                F̄, policy, G = loadterminal(model; outdir, addpath)
+                state, G = loadterminal(model; outdir, addpath)
 
-                return F̄, policy, G
+                return state, G
             end
         end
-
     end
 
-    F̄, policy, _ = vfi(model, G; verbose, iterkwargs...)
+    state = vfi(model, calibration, G; verbose = verbose, iterkwargs...)
     
     if withsave
         (verbose ≥ 1) && println("Saving solution into $savepath...")
-        jldsave(savepath; F̄, policy, G)
+        jldsave(savepath; state, G)
     end
 
-    return F̄, policy, G
+    return state, G
 end

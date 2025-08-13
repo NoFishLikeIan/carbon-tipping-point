@@ -126,16 +126,14 @@ function loadterminal(model::AbstractModel{T}; outdir = "data/simulation", addpa
         error("File $filename does not exist in $savedir.\nAvailable files are:\n$(join(readdir(savedir), "\n"))")
     end
 
-    F̄ = load(savepath, "F̄")
-    policy = load(savepath, "policy")
+    state = load(savepath, "state")
     G = load(savepath, "G")
 
-    return F̄, policy, G
+    return state, G
 end
 function loadterminal(models::Vector{<:AbstractModel}; outdir = "data/simulation", addpaths = repeat([""], length(models)))
     return [loadterminal(model; outdir = outdir, addpath = addpaths[i]) for (i, model) ∈ enumerate(models)] 
 end
-
 
 function loadtotal(model::AbstractModel{T}; outdir = "data/simulation") where T
     folder = simpaths(model)

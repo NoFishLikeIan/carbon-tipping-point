@@ -32,7 +32,7 @@ function Preferences(; ρ = 0.015, θ = 10., ψ = 1.)
     end
 end
 
-discount(ρ, Δt) = exp(-ρ * Δt)
+discount(ρ, Δt) = inv(1 + ρ * Δt)
 
 "Climate damage aggregator. `χ` is the consumtpion rate, `F′` is the expected value of `F` at `t + Δt` and `Δt` is the time step"
 function g(χ, F′, Δt, p::EpsteinZin)
@@ -49,7 +49,7 @@ function g(χ, F′, Δt, p::LogSeparable)
     β = discount(p.ρ, Δt)
     consumption = χ^((1 - p.θ) * (1 - β))
 
-    return consumption * max(F′, 0)^β
+    return consumption * max(F′, eps(F′))^β
 end
 function g(χ, F′, Δt, p::CRRA)
     β = discount(p.ρ, Δt)
@@ -75,7 +75,9 @@ function logg(χ, F′, Δt, p::EpsteinZin)
 end
 function logg(χ, F′, Δt, p::LogSeparable)
     β = discount(p.ρ, Δt)
-    return (1 - β) * (1 - p.θ) * log(χ) + β * log(max(F′, 0.))
+    a = (1 - p.θ) * (1 - β)
+
+    return a * log(χ) + β * log(max(F′, eps(F′)))
 end
 function logg(χ, F′, Δt, p::CRRA)
     log(g(χ, F′, Δt, p)) # TODO: Fix this
