@@ -13,7 +13,7 @@ function inverseidentity(::Policy{T}) where T <: Real
     MMatrix{2, 2, T}(1, 0, 0, 1)
 end
 
-function backwardstep!(valuefunction::ValueFunction{T}, policystate::PolicyState{T}, timestate::Time{T}, cluster, Δts, model::M, calibration, G; withnegative = true, ad = Optimization.AutoForwardDiff(), prevweight = 0.5, lb = Policy(0.1, 0.), optkwargs...) where {T, D <: Damages{T}, P <: LogSeparable{T}, M <: AbstractModel{T, D, P}}
+function backwardstep!(valuefunction::ValueFunction{T}, policystate::PolicyState{T}, timestate::Time{T}, cluster, Δts, model::M, calibration, G; withnegative = true, ad = Optimization.AutoForwardDiff(), prevweight = 0.5, lb = Policy(0., 0.), optkwargs...) where {T, D <: Damages{T}, P <: LogSeparable{T}, M <: AbstractModel{T, D, P}}
 
     fn = OptimizationFunction(logminimisation, ad)
     indices = CartesianIndices(G)
@@ -27,10 +27,9 @@ function backwardstep!(valuefunction::ValueFunction{T}, policystate::PolicyState
         parameters = (t, idx, valuefunction.Fₜ₊ₕ, Xᵢ, model, calibration, G)
         
         ᾱ = withnegative ? one(T) : γ(t, calibration) + δₘ(Xᵢ.M, model.hogg)
+        ub = Policy(1.0, ᾱ)
 
-        if ᾱ ≥ 0
-            ub = Policy(0.9, ᾱ)
-
+        if ᾱ > 0
             α₀ = prevweight * clamp(pₜ.α, 0, ᾱ) + (1 - prevweight) * ᾱ / 2
             u₀ = Policy(pₜ.χ, α₀)
 
@@ -38,14 +37,22 @@ function backwardstep!(valuefunction::ValueFunction{T}, policystate::PolicyState
 
             sol = solve(prob, BFGS(initial_invH = inverseidentity); optkwargs...)
 
+            if !SciMLBase.successful_retcode(sol)
+                @warn @sprintf "Minimisation failed at t=%.2f, idx=%s, retcode=%s" t Tuple(idx) sol.retcode
+            end
+
+            if isnan(sol.objective)
+                @error @sprintf "NaN objective at t=%.2f, idx=%s" t Tuple(idx)
+            end
+
             pₜ .= sol.u
             policystate.foc[idx] = sol.original.g_residual
             valuefunction.Fₜ[idx] = sol.objective
             Δts[i] = timestep(t, Xᵢ, sol.u.α, model, calibration, G)
             timestate.t[idx] = t
         else
-            obj = @closure χ -> pointminimisation(Policy(χ, ᾱ), parameters)
-            y, χ = gssmin(obj, 0.1, 0.9)
+            obj = @closure χ -> logminimisation(Policy(χ, ᾱ), parameters)
+            y, χ = gssmin(obj, lb.χ, ub.χ)
             
             pₜ.χ = χ
             pₜ.α = ᾱ
