@@ -1,4 +1,4 @@
-function pointminimisation(u, parameters)
+function logminimisation(u, parameters)
     t, idx, Fₜ₊ₕ, Xᵢ, model, calibration, G = parameters
     F′, Δt = markovstep(t, idx, Fₜ₊ₕ, u.α, model, calibration, G)
 
@@ -13,9 +13,9 @@ function inverseidentity(::Policy{T}) where T <: Real
     MMatrix{2, 2, T}(1, 0, 0, 1)
 end
 
-function backwardstep!(valuefunction::ValueFunction{T}, policystate::PolicyState{T}, timestate::Time{T}, cluster, Δts, model, calibration, G; withnegative = true, ad = Optimization.AutoForwardDiff(), prevweight = 0.5, lb = Policy(0.1, 0.), optkwargs...) where T
+function backwardstep!(valuefunction::ValueFunction{T}, policystate::PolicyState{T}, timestate::Time{T}, cluster, Δts, model::M, calibration, G; withnegative = true, ad = Optimization.AutoForwardDiff(), prevweight = 0.5, lb = Policy(0.1, 0.), optkwargs...) where {T, D <: Damages{T}, P <: LogSeparable{T}, M <: AbstractModel{T, D, P}}
 
-    fn = OptimizationFunction(pointminimisation, ad)
+    fn = OptimizationFunction(logminimisation, ad)
     indices = CartesianIndices(G)
 
     @inbounds @threads for (i, δt) in cluster
@@ -40,7 +40,7 @@ function backwardstep!(valuefunction::ValueFunction{T}, policystate::PolicyState
 
             pₜ .= sol.u
             policystate.foc[idx] = sol.original.g_residual
-            valuefunction.Fₜ[idx] = exp(sol.objective)
+            valuefunction.Fₜ[idx] = sol.objective
             Δts[i] = timestep(t, Xᵢ, sol.u.α, model, calibration, G)
             timestate.t[idx] = t
         else
@@ -51,7 +51,7 @@ function backwardstep!(valuefunction::ValueFunction{T}, policystate::PolicyState
             pₜ.α = ᾱ
             policystate.foc[idx] = zero(χ)
 
-            valuefunction.Fₜ[idx] = exp(y)
+            valuefunction.Fₜ[idx] = y
             Δts[i] = timestep(t, Xᵢ, ᾱ, model, calibration, G)
             timestate.t[idx] = t
         end

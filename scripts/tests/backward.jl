@@ -39,7 +39,7 @@ begin # Construct the model
 
 	model = TippingModel(hogg, preferences, damages, economy, feedback)
 	
-	N = 101
+	N = 41
 	Tdomain = hogg.Tᵖ .+ (0., 5.5);
 	mdomain = mstable.(Tdomain, model)
 	
@@ -63,7 +63,7 @@ backwardstep!(state, cluster, Δts, model, calibration, G; withnegative = withne
 @benchmark backwardstep!($state, $cluster, $Δts, $model, $calibration, $G; withnegative = $withnegative)
 
 queue = DiagonalRedBlackQueue(G)
-backwardsimulation!(queue, state, model, calibration, G; verbose = 1, withnegative = withnegative, tstop = 200., prevweight = 0.99, printevery = 1_000)
+backwardsimulation!(queue, state, model, calibration, G; verbose = 1, withnegative = withnegative, tstop = 350., prevweight = 0.99, printevery = 100)
 
 if isinteractive()
 	using Plots
@@ -71,7 +71,7 @@ if isinteractive()
 	mspace = range(G.domains[2]...; length = size(G, 2))
 
 	default(c = :viridis, label = false, dpi = 180)
-	Ffig = contourf(Tspace, mspace, log.(state.valuefunction.Fₜ); title = "log(F)")
+	Ffig = contourf(Tspace, mspace, state.valuefunction.Fₜ; title = "log(F)")
 
 	αgrid = last.(state.policystate.policy)
 	αfig = contourf(Tspace, mspace, αgrid ./ maximum(αgrid); title = "α")
