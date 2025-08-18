@@ -2,7 +2,6 @@ abstract type AbstractModel{T <: Real, D <: Damages{T}, P <: Preferences{T}} end
 
 abstract type FirstOrderLinearModel{T, D, P} <: AbstractModel{T, D, P} end
 
-
 struct LinearModel{T, D, P} <: FirstOrderLinearModel{T, D, P}
     hogg::Hogg{T}
     preferences::P

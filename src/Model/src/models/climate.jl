@@ -34,14 +34,14 @@ Base.@kwdef struct Hogg{T <: Real}
     # Climate sensitwivity
     S₀::T = 235.0 # [W m⁻²] Mean solar radiation
 
-    ϵ::T = 0.5072691349108767 # [yr J m⁻² K⁻¹] Speed of temperature
+    ϵ::T = 1.441620917527504 # [yr J m⁻² K⁻¹] Speed of temperature
     η::T = 5.67e-8 # Stefan-Boltzmann constant 
     
     G₁::T = 22.685575408165214 # [W m⁻²] Effect of CO₂ on radiation budget
     G₀::T = 149.62958104691003 # [W m⁻²] Pre-industrial GHG radiation budget
 
     # Noise
-    σₜ::T = 0.05356762064658858 # Standard deviation of temperature
+    σₜ::T = 0.1441620917527504 # Standard deviation of temperature
     σₘ::T = 0.0078 # Standard deviation of CO₂e growth
     
     # Parameters of decay rate of carbon concentration
@@ -128,10 +128,10 @@ end
 
 "Temperature(s) consistent with CO₂e log-concentration m"
 function Tstable(m, hogg::Hogg)
-    find_zeros(T -> mstable(T, hogg) - m, hogg.Tᵖ, 1.2hogg.Tᵖ)
+    find_zeros(T -> mstable(T, hogg) - m, 0.8hogg.Tᵖ, 2hogg.Tᵖ)
 end
 function Tstable(m, hogg::Hogg, feedback::Feedback)
-    find_zeros(T -> mstable(T, hogg, feedback) - m, hogg.Tᵖ, 1.2hogg.Tᵖ)
+    find_zeros(T -> mstable(T, hogg, feedback) - m, 0.8hogg.Tᵖ, 2hogg.Tᵖ)
 end
 
 const log2 = log(2)

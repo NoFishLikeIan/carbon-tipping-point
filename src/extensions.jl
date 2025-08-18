@@ -23,103 +23,62 @@ function bterminal(τ, _, χ, model::M) where {T, D <:  LevelDamages{T}, M <: Ab
     bterminal(τ, χ, model) # For compatibility
 end
 
-"Emissivity rate implied by abatement `α` at time `t` and carbon concentration `M`"
-function ε(t, M, α, model, calibration::Calibration) 
-    α / (δₘ(M, model.hogg) + γ(t, calibration))
-end
-function ε(t, M, α, model, regionalcalibration::RegionalCalibration, p)
-    α / (δₘ(M, model.hogg) + getindex(γ(t, regionalcalibration), p))
-end
-
 "Drift of log output y for `t < τ`"
-function b(t, Xᵢ::Point{T}, emissivity, investments, model::M) where { T, D <: GrowthDamages{T}, P <: Preferences, M <: AbstractModel{T, D, P} } 
-    Aₜ = A(t, model.economy)
-
-    abatement = Aₜ * β(t, emissivity, model.economy)
-
+function b(t, Xᵢ::Point, u::Policy, model::M) where { T, D <: GrowthDamages{T}, P <: Preferences, M <: AbstractModel{T, D, P} } 
+    abatement = A(t, model.economy) * β(t, u.ε, model.economy)
+    investments = ϕ(t, u.χ, model.economy)
     growth = model.economy.ϱ - model.economy.δₖᵖ
-    damage = d(Xᵢ.T, Xᵢ.m, model)
+    damages = d(Xᵢ.T, Xᵢ.m, model)
 
-    return growth + investments - abatement - damage
+    return growth + investments - abatement - damages
 end
-function b(t, _, emissivity, investments, model::M) where { T, D <: LevelDamages{T}, P <: Preferences{T}, M <: AbstractModel{T, D, P} }
-    Aₜ = A(t, model.economy)
-    abatement = Aₜ * β(t, emissivity, model.economy)
+function b(t, u::Policy, model::M) where { T, D <: LevelDamages{T}, P <: Preferences{T}, M <: AbstractModel{T, D, P} }
+    abatement = A(t, model.economy) * β(t, u.ε, model.economy)
+    investments = ϕ(t, u.χ, model.economy)
+    growth = model.economy.ϱ - model.economy.δₖᵖ
 
     return growth + investments - abatement
 end
-function b(t, Xᵢ::Point, u::Policy, model::M, calibration::Calibration) where {T, D <: GrowthDamages{T}, M <: AbstractModel{T, D}}
-    εₜ = ε(t, Xᵢ.M, u.α, model, calibration) 
-    investments = ϕ(t, u.χ, model.economy)
-    
-    return b(t, Xᵢ, εₜ, investments, model)
-end
-function b(t, Xᵢ::Point{T}, u, model::M, calibration::RegionalCalibration, p) where {T, D <: GrowthDamages{T}, M <: AbstractModel{T, D}}
-    χ, α = u
-    εₜ = ε(t, Xᵢ.M, α, model, calibration, p) 
-    investments = ϕ(t, χ, model.economy)
-    
-    return b(t, Xᵢ, εₜ, investments, model)
-end
+b(t, _, u::Policy, model::M) where { T, D <: LevelDamages{T}, P <: Preferences{T}, M <: AbstractModel{T, D, P} } = b(t, u, model) # Consistency of signature
 
-# TODO: Update the cost breakdown for the game model
 function costbreakdown(t, Xᵢ::Point{T}, u,  model::M, calibration) where {T, D <: GrowthDamages{T}, P <: Preferences, M <: AbstractModel{T, D, P}}
-    χ, α = u
-    εₜ = ε(t, Xᵢ.M, α, model, calibration)
-    Aₜ = A(t, model.economy)
-
-    abatement = β(t, εₜ, model.economy)
-    adjcosts = model.economy.κ * β(t, εₜ, model.economy)^2 / 2.
-    
-    damage = d(Xᵢ.T, model.damages, model.hogg)
-
-    damage, adjcosts, abatement
+    throw("Not implemented yet!")
 end
 
 "δ-factor for output at time `t ≥ τ`"
-function terminaloutputfct(τ, Xᵢ::Point{T}, Δt, χ, model::M) where { T, M <: AbstractModel{T}}
+function terminaloutputfct(τ, Δt, Xᵢ::Point{T}, χ, model::M) where { T, M <: AbstractModel{T}}
     drift = bterminal(τ, Xᵢ, χ, model) - model.preferences.θ * model.economy.σₖ^2 / 2
      
     adj = Δt * (1 - model.preferences.θ) * drift
 
     return max(1 + adj, 0)
 end
-function logterminaloutputfct(τ, Xᵢ::Point{T}, Δt, χ, model::M) where { T, M <: AbstractModel{T}}
+function logterminaloutputfct(τ, Δt, Xᵢ::Point{T}, χ, model::M) where { T, M <: AbstractModel{T}}
     drift = bterminal(τ, Xᵢ, χ, model) - model.preferences.θ * model.economy.σₖ^2 / 2
      
     adj = Δt * (1 - model.preferences.θ) * drift
 
-    return log1p(max(adj, -0.999))
+    return log1p(max(adj, -1))
 end
 
 
 "δ-factor for output at time `t < τ`"
-function outputfct(t, Xᵢ::Point, Δt, u, model, calibration::Calibration)
-    drift = b(t, Xᵢ, u, model, calibration) - model.preferences.θ * model.economy.σₖ^2 / 2
+function outputfct(t, Δt, Xᵢ::Point, u::Policy, model)
+    drift = b(t, Xᵢ, u, model) - model.preferences.θ * model.economy.σₖ^2 / 2
 
     adj = Δt * (1 - model.preferences.θ) * drift
 
     return max(1 + adj, 0)
 end
-function outputfct(t, Xᵢ::Point, Δt, u, model, calibration::RegionalCalibration, p)
-    drift = b(t, Xᵢ, u, model, calibration, p) - model.preferences.θ * model.economy.σₖ^2 / 2
-
-    adj = Δt * (1 - model.preferences.θ) * drift
-
-    return max(1 + adj, 0)
-end
-
-function logoutputfct(t, Xᵢ::Point, Δt, u, model, calibration::Calibration)
-    drift = b(t, Xᵢ, u, model, calibration) - model.preferences.θ * model.economy.σₖ^2 / 2
+function logoutputfct(t, Δt, Xᵢ::Point, u::Policy, model)
+    drift = b(t, Xᵢ, u, model) - model.preferences.θ * model.economy.σₖ^2 / 2
     
     adj = Δt * (1 - model.preferences.θ) * drift
     
-    return log1p(max(adj, -0.999))
+    return log1p(max(adj, -1))
 end
 
-
-
-function Grid.RegularGrid(domains::NTuple{2, Domain{R}}, N::Int, hogg::Hogg) where R
+function constructgrid(domains::NTuple{2, Domain{R}}, N::Int, hogg::Hogg) where R
     if N > Grid.maxN @warn "h < ϵ: ensure N ≤ $Grid.maxN" end
 
     h = 1 / (N - 1)
@@ -132,11 +91,11 @@ function Grid.RegularGrid(domains::NTuple{2, Domain{R}}, N::Int, hogg::Hogg) whe
 
     X = [ Point(T, m, hogg.Mᵖ * exp(m)) for T in Tspace, m in mspace]
     
-    Grid.RegularGrid{N, R}(h, X, (ΔT, Δm), domains)
+    return Grid.RegularGrid{N, R}(h, X, (ΔT, Δm), domains)
 end
-function Grid.RegularGrid(domains::AbstractVector{Domain}, h::T) where T
+function constructgrid(domains::AbstractVector{Domain}, h::T) where T
     N = floor(Int, 1 / h) + 1
-    return Grid.RegularGrid(domains, N)
+    return RegularGrid(domains, N)
 end
 
 function Grid.interpolateovergrid(state::DPState, fromgrid::RegularGrid, togrid::RegularGrid)
@@ -152,4 +111,17 @@ function Grid.interpolateovergrid(state::DPState, fromgrid::RegularGrid, togrid:
     t = interpolateovergrid(state.timestate.t, fromgrid, togrid)
 
     return DPState(valuefunction, policystate, Time(state.timestate.τ, t))
+end
+
+function shrink(domain::Domain, factor)
+    l, r = domain
+    cut = (r - l) * (1 - factor) / 2
+
+    return (l + cut, r - cut)
+end
+
+function shrink(G::RegularGrid{N}, factor, hogg::Hogg) where N
+    domains = shrink.(G.domains, factor)
+
+    return constructgrid(domains, N, hogg)
 end

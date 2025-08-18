@@ -135,7 +135,7 @@ function loadterminal(models::Vector{<:AbstractModel}; outdir = "data/simulation
     return [loadterminal(model; outdir = outdir, addpath = addpaths[i]) for (i, model) ∈ enumerate(models)] 
 end
 
-function loadtotal(model::AbstractModel{T}; outdir = "data/simulation") where T
+function loadtotal(model::AbstractModel{T}; outdir = "data/simulation", loadkwargs...) where T
     
     if !isdir(outdir)
         error("Output directory does not exist: $(outdir)\nHave you not solved the constrained or negative problem?")
@@ -155,9 +155,9 @@ function loadtotal(model::AbstractModel{T}; outdir = "data/simulation") where T
         error("Cache file does not exist: $filename\nHave you solved the problem for these parameters?")
     end
 
-    return loadtotal(cachepath)
+    return loadtotal(cachepath; loadkwargs...)
 end
-function loadtotal(cachepath::String)
+function loadtotal(cachepath::String; tspan = (0, Inf))
     cachefile = jldopen(cachepath, "r")
     G = cachefile["G"]
     model = cachefile["model"]
@@ -167,6 +167,11 @@ function loadtotal(cachepath::String)
     ix = sortperm(timesteps)
     timesteps = timesteps[ix]
     timekeys = timekeys[ix]
+
+    t₀, t₁ = tspan
+    selectidx = t₀ .≤ timesteps .≤ t₁
+    timesteps = timesteps[selectidx]
+    timekeys = timekeys[selectidx]
 
     states = DPState[]
     for key ∈ timekeys

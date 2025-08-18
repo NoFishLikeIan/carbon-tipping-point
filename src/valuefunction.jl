@@ -20,16 +20,14 @@ struct DPState{T <: Real}
     timestate::Time{T}
 end
 
-DPState(calibration::Calibration, G) = DPState(calibration.τ, calibration, G)
-function DPState(τ, calibration::Calibration{T}, ::RegularGrid{N, T}) where {N, T}
+DPState(calibration::Calibration{T}, G::RegularGrid{N, T}) where {N, T} = DPState(calibration.τ, G)
+function DPState(τ::T, ::RegularGrid{N, T}) where {N, T}
     Fₜ = ones(T, (N, N))
     Fₜ₊ₕ = copy(Fₜ)
     error = similar(Fₜ)
     valuefunction = ValueFunction(Fₜ, Fₜ₊ₕ, error)
 
-    ᾱ = max(γ(τ, calibration), 0)
-
-    policy = [Policy{T}(1/2, ᾱ) for _ in 1:N, _ in 1:N]
+    policy = [ Policy{T}(0.5, 1.) for _ in 1:N, _ in 1:N ]
     foc = similar(error)
     policystate = PolicyState(policy, foc)    
 

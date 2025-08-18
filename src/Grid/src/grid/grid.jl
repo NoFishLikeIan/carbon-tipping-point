@@ -11,7 +11,7 @@ end
 
 mutable struct Policy{T <: Real} <: FieldVector{2, T} 
     χ::T
-    α::T
+    ε::T
 end
 
 struct RegularGrid{N, T <: Real}

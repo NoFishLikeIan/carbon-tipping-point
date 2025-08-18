@@ -45,7 +45,7 @@ argtable = ArgParseSettings()
         arg_type = Float64
         default = 2.0
 
-    "--leveldamages"
+    "--damages"
         action = :store_true
     
     "--eis"

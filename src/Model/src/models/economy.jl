@@ -1,6 +1,7 @@
 abstract type Damages{T <: Real} end
 abstract type GrowthDamages{T} <: Damages{T} end
-abstract type LevelDamages{T} <: Damages{T} end
+
+struct NoDamageGrowth{T} <: GrowthDamages{T} end
 
 Base.@kwdef struct WeitzmanGrowth{T} <: GrowthDamages{T}
     ξ::T = 2.6e-4
@@ -12,17 +13,25 @@ Base.@kwdef struct Kalkuhl{T} <: GrowthDamages{T}
     ξ₂::T = 0.0018 # Quadratic term in damage function
 end
 
+abstract type LevelDamages{T} <: Damages{T} end
+
+struct NoDamageLevel{T} <: LevelDamages{T} end
+
 Base.@kwdef struct WeitzmanLevel{T} <: Damages{T}
     ξ::T = 0.00266
 end
 
+d(_, _, damages::NoDamageGrowth{T}, args...) where T = zero(T)
+
 function d(T, m, damages::Kalkuhl, hogg::Hogg, feedback::Feedback)
     ΔT = max(T - hogg.Tᵖ, 0)
-    return (damages.ξ₁ + damages.ξ₂ * ΔT) * μ(T, m, hogg, feedback) / hogg.ϵ
+    dT = μ(T, m, hogg, feedback) / hogg.ϵ
+    return (damages.ξ₁ + damages.ξ₂ * ΔT) * max(dT, -0.05)
 end
 function d(T, m, damages::Kalkuhl, hogg::Hogg)
     ΔT = max(T - hogg.Tᵖ, 0)
-    return (damages.ξ₁ + damages.ξ₂ * ΔT) * μ(T, m, hogg) / hogg.ϵ
+    dT = μ(T, m, hogg) / hogg.ϵ
+    return (damages.ξ₁ + damages.ξ₂ * ΔT) * max(dT, -0.05)
 end
 
 function d(T, m, damages::WeitzmanGrowth, hogg::Hogg)
@@ -40,6 +49,7 @@ function d(T, damages::WeitzmanLevel, hogg::Hogg)
     ΔT = max(T - hogg.Tᵖ, 0)
     return inv(1 + damages.ξ * ΔT^2)
 end
+d(_, _, damages::NoDamageLevel{T}, args...) where T = zero(T)
 
 function D(ΔT, damages::Kalkuhl)
     damages.ξ₁ * ΔT + damages.ξ₂ * ΔT^2 / 2.
@@ -62,12 +72,12 @@ Base.@kwdef struct Economy{T <: Real}
 end
 
 "Cost of abatement as a fraction of GDP"
-function β(t, e, economy::Economy)
-    economy.ω₀ * exp(-economy.ωᵣ * t) * e^2 / 2.
+function β(t, ε, economy::Economy)
+    economy.ω₀ * exp(-economy.ωᵣ * t) * ε^2 / 2.
 end
 
-function β′(t, e, economy::Economy)
-    exp(-economy.ωᵣ * t) * e
+function β′(t, ε, economy::Economy)
+    exp(-economy.ωᵣ * t) * ε
 end
 
 function ϕ(t, χ, economy::Economy)

@@ -1,4 +1,5 @@
 using Test, BenchmarkTools, Revise
+using Plots, LaTeXStrings
 
 using Model, Grid
 using FastClosures
@@ -26,30 +27,32 @@ begin # Construct the model
 	@unpack calibration, hogg, feedbacklower, feedback, feedbackhigher = calibrationfile
 	close(calibrationfile)
 	
+	hogg = Hogg()
 	damages = Kalkuhl()
 	preferences = Preferences(ρ = 0.015, θ = 10., ψ = 1)
 	economy = Economy()
 	
-	model = TippingModel(hogg, preferences, damages, economy, feedbackhigher)
+	model = LinearModel(hogg, preferences, damages, economy)
 	
 	N = 101
-	Tdomain = hogg.Tᵖ .+ (0., 5.5);
+	Tdomain = hogg.Tᵖ .+ (0., 10.)
 	mdomain = mstable.(Tdomain, model)
 	
-	G = RegularGrid((Tdomain, mdomain), N, hogg)
+	Gterminal = constructgrid((Tdomain, mdomain), N, hogg)
 end;
 
 begin
-	state = DPState(calibration, G)
-	terminaljacobi!(state, model, G)
+	state = DPState(calibration, Gterminal)
+	terminaljacobi!(state, model, Gterminal)
 end
 
-vfi(model, calibration, G; maxiter = 10_000, verbose = 0, tol = 1e-10, alternate = true)
+vfi!(state, model, Gterminal; maxiter = 100_000, verbose = 2, tol = 1e-8, alternate = true, ω = 1.05)
 
 if isinteractive()
-	using Plots
 	Tspace = range(G.domains[1]...; length = size(G, 1))
 	mspace = range(G.domains[2]...; length = size(G, 2))
+	nullcline = mstable.(Tspace, model)
 
-	contourf(mspace, Tspace, log.(state.valuefunction.Fₜ); c = :viridis)
+	Ffig = contourf(mspace, Tspace, state.valuefunction.Fₜ; c = :viridis, xlabel = L"m", ylabel = L"T")
+	plot!(Ffig, nullcline, Tspace; c = :white, linestyle = :dash, xlims = extrema(mspace), ylims = extrema(Tspace), label = false)
 end

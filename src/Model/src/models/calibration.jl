@@ -30,7 +30,7 @@ function γ(t, p::NTuple{8})
     return num / den + offset
 end
 function γ(t, calibration::Calibration)
-    γ(min(t, calibration.τ), calibration.γparameters)
+    max(γ(min(t, 150), calibration.γparameters), 0)
 end
 function γ(t, regionalcalibration::RegionalCalibration)
     frac = interpolateovert(t, regionalcalibration.calibration.tspan, regionalcalibration.fraction)

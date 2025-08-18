@@ -21,35 +21,49 @@ function constantboundary(F, idx, L, R)
     
     return FᵢT₊, FᵢT₋, Fᵢm₊, Fᵢm₋
 end
-
+function reflectiveboundary(F, idx, L, R)
+    idxT₊ = idx + Idx[1]
+    FᵢT₊ = idxT₊.I[1] ≤ R.I[1] ? F[idxT₊] : F[idx - Idx[1]]
+    
+    idxT₋ = idx - Idx[1]
+    FᵢT₋ = idxT₋.I[1] ≥ L.I[1] ? F[idxT₋] : F[idx + Idx[1]]
+    
+    idxm₊ = idx + Idx[2]
+    Fᵢm₊ = idxm₊.I[2] ≤ R.I[2] ? F[idxm₊] : F[idx - Idx[2]]
+    
+    idxm₋ = idx - Idx[2]
+    Fᵢm₋ = idxm₋.I[2] ≥ L.I[2] ? F[idxm₋] : F[idx + Idx[2]]
+    
+    return FᵢT₊, FᵢT₋, Fᵢm₊, Fᵢm₋
+end
 function getneighours(F, idx, L, R)
-    constantboundary(F, idx, L, R)
+    reflectiveboundary(F, idx, L, R)
 end
 
-function timestep(t, Xᵢ::Point, α, model::AbstractModel, calibration::Calibration, G)
+function timestep(t, Xᵢ::Point, u::Policy, Δtmax, model::AbstractModel, calibration::Calibration, G)
     ΔT, Δm = G.Δ
-    σₜ² = (model.hogg.σₜ / (model.hogg.ϵ * ΔT))^2
-    σₘ² = (model.hogg.σₘ / Δm)^2
+    σₜ² = ( model.hogg.σₜ / (model.hogg.ϵ * ΔT) )^2
+    σₘ² = ( model.hogg.σₘ / Δm )^2
 
-    dT = μ(Xᵢ.T, Xᵢ.m, model) / (model.hogg.ϵ * ΔT)
-    dm = (γ(t, calibration) - α) / Δm
+    dT = μ(Xᵢ.T, Xᵢ.m, model) / ( model.hogg.ϵ * ΔT )
+    dm = ( γ(t, calibration) * (1 - u.ε) - δₘ(Xᵢ.m, model.hogg) * u.ε )  / Δm
 
-    Q = σₘ² + σₜ² + G.h * (abs(dT) + abs(dm))
+    Q = σₘ² + σₜ² + G.h * ( abs(dT) + abs(dm) )
 
-    return G.h^2 / Q
+    return min(G.h^2 / Q, Δtmax)
 end
 
-function driftstep(t, idx, F, α, model::AbstractModel, calibration::Calibration, G)
+function driftstep(t, idx, F, u::Policy, Δtmax, model::AbstractModel, calibration::Calibration, G)
     ΔT, Δm = G.Δ
 
     L, R = extrema(G)
 
-    σₜ² = (model.hogg.σₜ / (model.hogg.ϵ * ΔT))^2
-    σₘ² = (model.hogg.σₘ / Δm)^2
+    σₜ² = ( model.hogg.σₜ / (model.hogg.ϵ * ΔT) )^2
+    σₘ² = ( model.hogg.σₘ / Δm )^2
 
     Xᵢ = G.X[idx]
     dT = μ(Xᵢ.T, Xᵢ.m, model) / (model.hogg.ϵ * ΔT)
-    dm = (γ(t, calibration) - α) / Δm
+    dm = ( γ(t, calibration) * (1 - u.ε) - δₘ(Xᵢ.m, model.hogg) * u.ε )  / Δm
 
     FᵢT₊, FᵢT₋, Fᵢm₊, Fᵢm₋ = getneighours(F, idx, L, R)
 
@@ -59,14 +73,15 @@ function driftstep(t, idx, F, α, model::AbstractModel, calibration::Calibration
     dmF = G.h * abs(dm) * ifelse(dm > 0, Fᵢm₊, Fᵢm₋) + σₘ² * (Fᵢm₊ + Fᵢm₋) / 2
 
     F′ = (dTF + dmF) / Q
-    Δt = G.h^2 / Q
+    Δt = min(G.h^2 / Q, Δtmax)
 
     return F′, Δt
 end
 
-markovstep(t, idx, F, α, model::Union{LinearModel, TippingModel}, calibration::Calibration, G) = driftstep(t, idx, F, α, model, calibration, G)
-function markovstep(t, idx, F, α, model::JumpModel, calibration::Calibration, G)
-    Fᵈ, Δt = driftstep(t, idx, F, α, model, calibration, G)
+markovstep(t, idx, F, u::Policy, Δtmax, model::Union{LinearModel, TippingModel}, calibration::Calibration, G) = driftstep(t, idx, F, u, Δtmax, model, calibration, G)
+function markovstep(t, idx, F, u::Policy, Δtmax, model::JumpModel, calibration::Calibration, G)
+    throw("markovstep not implemented for JumpModel!")
+    Fᵈ, Δt = driftstep(t, idx, F, α, Δtmax, model, calibration, G)
 
     # Update with jump
     R = maximum(CartesianIndices(F))
@@ -84,14 +99,13 @@ function markovstep(t, idx, F, α, model::JumpModel, calibration::Calibration, G
     return F′, Δt
 end
 
-function logcost(logF′, t, Xᵢ::Point, Δt, u, model::AbstractModel{T, D}, calibration::Calibration) where {T, D <: GrowthDamages{T}}
-    δ = logoutputfct(t, Xᵢ, Δt, u, model, calibration)
-    logδF′ = δ + logF′
+function logcost(logF′, Δt, t, Xᵢ::Point, u, model::AbstractModel{T, D}) where {T, D <: GrowthDamages{T}}
+    logδF′ = logoutputfct(t, Δt, Xᵢ, u, model) + logF′
     return logg(u.χ, logδF′, Δt, model.preferences)
 end
-function cost(F′, t, Xᵢ::Point, Δt, u::Policy, model::AbstractModel{T, D}, calibration::Calibration) where {T, D <: GrowthDamages{T}}
-    δ = outputfct(t, Xᵢ, Δt, u, model, calibration)
-    return g(u.χ, δ * F′, Δt, model.preferences)
+function cost(F′, t, Δt, Xᵢ::Point, u::Policy, model::AbstractModel{T, D}) where {T, D <: GrowthDamages{T}}
+    δ = outputfct(t, Δt, Xᵢ, u, model)
+    return g(u.χ, Δt, δ * F′, model.preferences)
 end
 
 function Base.isempty(q::ZigZagBoomerang.PartialQueue)

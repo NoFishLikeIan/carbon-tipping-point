@@ -19,8 +19,8 @@ export δₘ, L, λ, μ, ∂μ∂T
 export mstable, Tstable
 
 export Damages
-export GrowthDamages, WeitzmanGrowth, Kalkuhl
-export LevelDamages, WeitzmanLevel
+export GrowthDamages, WeitzmanGrowth, Kalkuhl, NoDamageGrowth
+export LevelDamages, WeitzmanLevel, NoDamageLevel
 export Economy, RegionalEconomies
 export β, β′, d, D, ϕ, A
 

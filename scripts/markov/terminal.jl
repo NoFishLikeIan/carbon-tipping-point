@@ -1,20 +1,20 @@
-function terminalcost(τ, Fᵢ′, Xᵢ::Point, Δt, χ, model::M) where {T, D <: GrowthDamages{T}, P <: Preferences{T}, M <: AbstractModel{T, D, P}}
-    δ = terminaloutputfct(τ, Xᵢ, Δt, χ, model)
-    return g(χ, δ * Fᵢ′, Δt, model.preferences)
+function terminalcost(τ, F′, Δt, Xᵢ::Point, χ, model::M) where {T, D <: GrowthDamages{T}, P <: Preferences{T}, M <: AbstractModel{T, D, P}}
+    δ = terminaloutputfct(τ, Δt, Xᵢ, χ, model)
+    return g(χ, δ * F′, Δt, model.preferences)
 end
-function terminalcost(τ, Fᵢ′, Xᵢ::Point, Δt, χ, model::M) where {T, D <: LevelDamages{T}, P <: Preferences{T}, M <: AbstractModel{T, D, P}}
-    δ = terminaloutputfct(τ, Xᵢ, Δt, χ, model)
+function terminalcost(τ, F′, Δt, Xᵢ::Point, χ, model::M) where {T, D <: LevelDamages{T}, P <: Preferences{T}, M <: AbstractModel{T, D, P}}
+    δ = terminaloutputfct(τ, Δt, Xᵢ, χ, model)
     damage = d(Xᵢ.T, Xᵢ.m, model)
-    return g(damage * χ, δ * Fᵢ′, Δt, model.preferences)
+    return g(damage * χ, δ * F′, Δt, model.preferences)
 end
 
-function logterminalcost(τ, Fᵢ′, Xᵢ::Point, Δt, χ, model::M) where {T, D <: GrowthDamages{T}, P <: Preferences{T}, M <: AbstractModel{T, D, P}}
-    δ = logterminaloutputfct(τ, Xᵢ, Δt, χ, model)
-    logF′ = δ + Fᵢ′
+function logterminalcost(τ, F′, Δt, Xᵢ::Point, χ, model::M) where {T, D <: GrowthDamages{T}, P <: Preferences{T}, M <: AbstractModel{T, D, P}}
+    δ = logterminaloutputfct(τ, Δt, Xᵢ, χ, model)
+    logF′ = δ + F′
     return logg(χ, logF′, Δt, model.preferences)
 end
 
-function terminaltimestep(idx, model::M, G) where M <: AbstractModel
+function terminaltimestep(idx, Δtmax, model::M, G) where M <: AbstractModel
     ΔT, Δm = G.Δ
     σₜ² = (model.hogg.σₜ / (model.hogg.ϵ * ΔT))^2
     σₘ² = (model.hogg.σₘ / Δm)^2
@@ -23,11 +23,10 @@ function terminaltimestep(idx, model::M, G) where M <: AbstractModel
     dT = μ(Xᵢ.T, Xᵢ.m, model) / (model.hogg.ϵ * ΔT)
     Q = σₘ² + σₜ² + G.h * abs(dT)
 
-    return G.h^2 / Q
+    return min(G.h^2 / Q, Δtmax)
 end
-function terminaldriftstep(idx, F̄, model::M, G) where M <: AbstractModel
+function terminaldriftstep(idx, F̄, Δtmax, model::M, G) where M <: AbstractModel
     L, R = extrema(G)
-
     ΔT, Δm = G.Δ
 
     σₜ² = (model.hogg.σₜ / (model.hogg.ϵ * ΔT))^2
@@ -44,15 +43,15 @@ function terminaldriftstep(idx, F̄, model::M, G) where M <: AbstractModel
 
     Q = σₘ² + σₜ² + G.h * abs(dT)
     F′ = (dTF + dmF) / Q
-    Δt = G.h^2 / Q
+    Δt = min(G.h^2 / Q, Δtmax) # Ensure the time step is not too large
 
     return F′, Δt
 end
-function terminalmarkovstep(idx, F̄, model::M, G) where M <: Union{TippingModel, LinearModel} 
-    terminaldriftstep(idx, F̄, model, G)
+function terminalmarkovstep(idx, F̄, Δtmax, model::M, G) where M <: Union{TippingModel, LinearModel} 
+    terminaldriftstep(idx, F̄, Δtmax, model, G)
 end
-function terminalmarkovstep(idx, F̄, model::JumpModel, G)
-    Fᵈ, Δt = terminaldriftstep(idx, F̄, model, G)
+function terminalmarkovstep(idx, F̄, Δtmax, model::JumpModel, G)
+    Fᵈ, Δt = terminaldriftstep(idx, F̄, Δtmax, model, G)
 
     # Update with jump
     R = maximum(CartesianIndices(F̄))
@@ -72,20 +71,21 @@ function terminalmarkovstep(idx, F̄, model::JumpModel, G)
 end
 
 function terminaljacobi!(state::DPState, model, G; iterkwargs...) 
-   terminaljacobi!(state.timestate.τ, state.valuefunction.Fₜ, state.policystate.policy, state.valuefunction.error, model, G; iterkwargs...)
+   terminaljacobi!(state.valuefunction, state.policystate, state.timestate, model, G; iterkwargs...)
 end
-function terminaljacobi!(τ, F::Matrix{T}, policy::Matrix{Policy{T}}, errors, model, G; indices = CartesianIndices(F)) where T
+function terminaljacobi!(valuefunction::ValueFunction{T}, policystate::PolicyState, timestate::Time, model, G; indices = CartesianIndices(G), ω = 1.2, opttol = 1e-5, Δtmax = 1/12) where T
     @inbounds @threads for idx in indices
-        F′, Δt = terminalmarkovstep(idx, F, model, G)
+        F′, Δt = terminalmarkovstep(idx, valuefunction.Fₜ, Δtmax, model, G)
         Xᵢ = G.X[idx]
 
         # Optimal control
-        objective = @closure χ -> logterminalcost(τ, F′, Xᵢ, Δt, χ, model)
-        Fᵢ, χ = gssmin(objective, zero(T), one(T); tol = eps(T))
-        
-        errors[idx] = abs(Fᵢ - F[idx])
-        F[idx] = Fᵢ
-        policy[idx].χ = χ
+        objective = χ -> logterminalcost(timestate.τ, F′, Δt, Xᵢ, χ, model)
+        Fᵢ, χ = gssmin(objective, zero(T), one(T); tol = opttol)
+        Fᵢ′ = ω * Fᵢ + (1 - ω) * valuefunction.Fₜ[idx]
+
+        valuefunction.error[idx] = abs(Fᵢ′ - valuefunction.Fₜ[idx])
+        valuefunction.Fₜ[idx] = Fᵢ′
+        policystate.policy[idx].χ = χ
     end
 end
 
@@ -93,34 +93,41 @@ function vfi(model::M, calibration::Calibration, G; kwargs...) where M <: Abstra
     state = DPState(calibration, G)
     return vfi!(state, model, G; kwargs...)
 end
-function vfi!(state::DPState, model::M, G; tol = 1e-3, maxiter = 10_000, verbose = 0, indices = CartesianIndices(G), alternate = false) where M <: AbstractModel
+function vfi!(state::DPState, model::M, G; tol = 1e-3, maxiter = 10_000, verbose = 0, indices = CartesianIndices(G), alternate = false, optkwargs...) where M <: AbstractModel
     (verbose ≥ 1) && println("Starting iterations...")
     magnitude = floor(Int, -log10(tol))
 
-    for iter in 1:maxiter
-        iterindices = (alternate && isodd(iter)) ? indices : reverse(indices)
+    indicescollection = alternate ? 
+        (indices, reverse(indices, dims = 1), reverse(indices, dims = 2), reverse(indices)) : (indices, )
+    
+    alternatem = length(indicescollection)
 
-        terminaljacobi!(state, model, G; indices = iterindices)
+    for iter in 1:maxiter
+        iterindices = indicescollection[1 + iter % alternatem]
+        terminaljacobi!(state, model, G; indices = iterindices, optkwargs...)
 
         maxerror = maximum(state.valuefunction.error)
 
         if isnan(maxerror)
             @warn "NaN error detected. Exiting."
+            state.valuefunction.Fₜ₊ₕ .= state.valuefunction.Fₜ
             return state
         end
 
         if maxerror < tol
             (verbose ≥ 1) && printjacobiterminal(maxerror, iter, magnitude)
+            state.valuefunction.Fₜ₊ₕ .= state.valuefunction.Fₜ
             return state
         end
 
-        if (verbose ≥ 2) && (!alternate || isodd(iter))
+        if (verbose ≥ 2) && (!alternate || iter % alternatem == 0)
             printjacobi(maxerror, iter, maxiter, magnitude)
         end
     end
 
     (verbose ≥ 1) && @warn @sprintf "Convergence failed, did not reach %f tolerance in %i iterations." tol maxiter
     
+    state.valuefunction.Fₜ₊ₕ .= state.valuefunction.Fₜ
     return state
 end
 

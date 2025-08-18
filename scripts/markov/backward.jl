@@ -1,67 +1,42 @@
 function logminimisation(u, parameters)
-    t, idx, Fₜ₊ₕ, Xᵢ, model, calibration, G = parameters
-    F′, Δt = markovstep(t, idx, Fₜ₊ₕ, u.α, model, calibration, G)
+    t, idx, Fₜ₊ₕ, Xᵢ, Δtmax, model, calibration, G = parameters
+    
+    F′, Δt = markovstep(t, idx, Fₜ₊ₕ, u, Δtmax, model, calibration, G)
 
-    return logcost(F′, t, Xᵢ, Δt, u, model, calibration)
-end
-
-function backwardstep!(state::DPState, cluster, Δts, model, calibration, G; iterkwargs...)
-    backwardstep!(state.valuefunction, state.policystate, state.timestate, cluster, Δts, model, calibration, G; iterkwargs...)
+    return logcost(F′, Δt, t, Xᵢ, u, model)
 end
 
 function inverseidentity(::Policy{T}) where T <: Real
     MMatrix{2, 2, T}(1, 0, 0, 1)
 end
 
-function backwardstep!(valuefunction::ValueFunction{T}, policystate::PolicyState{T}, timestate::Time{T}, cluster, Δts, model::M, calibration, G; withnegative = true, ad = Optimization.AutoForwardDiff(), prevweight = 0.5, lb = Policy(0., 0.), optkwargs...) where {T, D <: Damages{T}, P <: LogSeparable{T}, M <: AbstractModel{T, D, P}}
+function backwardstep!(state::DPState, cluster, Δts, model, calibration, G; iterkwargs...)
+    backwardstep!(state.valuefunction, state.policystate, state.timestate, cluster, Δts, model, calibration, G; iterkwargs...)
+end
+function backwardstep!(valuefunction::ValueFunction{T}, policystate::PolicyState{T}, timestate::Time{T}, cluster, Δts, model::M, calibration, G; 
+    withnegative = true, ad = Optimization.AutoForwardDiff(), alg = BFGS(initial_invH = inverseidentity, linesearch = BackTracking(order = 3)), Δtmax = 1/12, optkwargs...) where {T, D <: Damages{T}, P <: LogSeparable{T}, M <: AbstractModel{T, D, P}}
 
     fn = OptimizationFunction(logminimisation, ad)
     indices = CartesianIndices(G)
+    lb = Policy{T}(0., 0.); lbs = lb .+ 1e-3
+    ub = Policy{T}(1., ifelse(withnegative, Inf, 1.)); ubs = ub .- 1e-3
 
     @inbounds @threads for (i, δt) in cluster
         idx = indices[i]
         Xᵢ = G.X[idx]
         t = timestate.τ - δt
-        pₜ = policystate.policy[idx]
-        
-        parameters = (t, idx, valuefunction.Fₜ₊ₕ, Xᵢ, model, calibration, G)
-        
-        ᾱ = withnegative ? one(T) : γ(t, calibration) + δₘ(Xᵢ.M, model.hogg)
-        ub = Policy(1.0, ᾱ)
 
-        if ᾱ > 0
-            α₀ = prevweight * clamp(pₜ.α, 0, ᾱ) + (1 - prevweight) * ᾱ / 2
-            u₀ = Policy(pₜ.χ, α₀)
+        parameters = (t, idx, valuefunction.Fₜ₊ₕ, Xᵢ, Δtmax, model, calibration, G)
 
-            prob = Optimization.OptimizationProblem(fn, u₀, parameters; lb = lb, ub = ub)
+        u₀ = clamp.(policystate.policy[idx], lbs, ubs)
+        prob = Optimization.OptimizationProblem(fn, u₀, parameters; lb = lb, ub = ub)
+        sol = solve(prob, alg; optkwargs...)
 
-            sol = solve(prob, BFGS(initial_invH = inverseidentity); optkwargs...)
-
-            if !SciMLBase.successful_retcode(sol)
-                @warn @sprintf "Minimisation failed at t=%.2f, idx=%s, retcode=%s" t Tuple(idx) sol.retcode
-            end
-
-            if isnan(sol.objective)
-                @error @sprintf "NaN objective at t=%.2f, idx=%s" t Tuple(idx)
-            end
-
-            pₜ .= sol.u
-            policystate.foc[idx] = sol.original.g_residual
-            valuefunction.Fₜ[idx] = sol.objective
-            Δts[i] = timestep(t, Xᵢ, sol.u.α, model, calibration, G)
-            timestate.t[idx] = t
-        else
-            obj = @closure χ -> logminimisation(Policy(χ, ᾱ), parameters)
-            y, χ = gssmin(obj, lb.χ, ub.χ)
-            
-            pₜ.χ = χ
-            pₜ.α = ᾱ
-            policystate.foc[idx] = zero(χ)
-
-            valuefunction.Fₜ[idx] = y
-            Δts[i] = timestep(t, Xᵢ, ᾱ, model, calibration, G)
-            timestate.t[idx] = t
-        end
+        policystate.policy[idx] .= sol.u
+        valuefunction.Fₜ[idx] = sol.objective
+        policystate.foc[idx] = sol.original.g_residual
+        Δts[i] = timestep(t, Xᵢ, sol.u, Δtmax, model, calibration, G)
+        timestate.t[idx] = t
     end
 
     valuefunction.Fₜ₊ₕ .= valuefunction.Fₜ
@@ -70,13 +45,18 @@ function backwardstep!(valuefunction::ValueFunction{T}, policystate::PolicyState
 end
 
 function backwardsimulation!(state, model, calibration, G; kwargs...)
-    queue = DiagonalRedBlackQueue(G)
+    δt₀ = vec(state.timestate.τ .- state.timestate.t)
+    queue = DiagonalRedBlackQueue(G; initialvector = δt₀)
     backwardsimulation!(queue, state, model, calibration, G; kwargs...)
 end
 
 function backwardsimulation!(queue::ZigZagBoomerang.PartialQueue, state, model, calibration, G; verbose = 0, cachepath = nothing, cachestep = 0.25, overwrite = false, tstop = 0., withnegative = false, tcacheinit = state.timestate.τ, printevery = 10_000, iterkwargs...)
-    tcache = tcacheinit
-    inittime = time()
+    clustertime = state.timestate.τ - minimum(queue.vals)
+    tcache = min(tcacheinit, maximum(state.timestate.t)) # Next time at which to save a cache.
+    if verbose ≥ 1
+        inittime = time()
+        elapsed = 0.0
+    end
 
     savecache = !isnothing(cachepath)
     if savecache
@@ -97,7 +77,7 @@ function backwardsimulation!(queue::ZigZagBoomerang.PartialQueue, state, model, 
             end
 
             cachefile = jldopen(cachepath, "a+")
-            tcache = tcacheinit - minimum(queue.vals) - cachestep
+            tcache =  min(tcacheinit, maximum(state.timestate.t)) - minimum(queue.vals) - cachestep
         else
             cachefile = jldopen(cachepath, "w+")
             cachefile["G"] = G
@@ -109,13 +89,11 @@ function backwardsimulation!(queue::ZigZagBoomerang.PartialQueue, state, model, 
     passcounter = 1
 
     while !isempty(queue)
-        tmin = tcacheinit - minimum(queue.vals)
         cluster = ZigZagBoomerang.dequeue!(queue) |> only
+        clustertime = state.timestate.τ - minimum(queue.vals)
         
         if (verbose ≥ 2) || ((verbose ≥ 1) && (passcounter % printevery == 0))
-            elapsed = time() - inittime
-            @printf "%.2f: pass %i, cluster (size %i) minimum time = %.4f\n" elapsed passcounter length(cluster) tmin
-            flush(stdout)
+            printbackward!(elapsed, inittime, passcounter, cluster, clustertime)
         end
 
         backwardstep!(state, cluster, Δts, model, calibration, G; withnegative = withnegative, iterkwargs...)
@@ -123,19 +101,18 @@ function backwardsimulation!(queue::ZigZagBoomerang.PartialQueue, state, model, 
         passcounter += 1
         
         for (i, _) in cluster
-            if queue[i] ≤ tcacheinit - tstop
+            if state.timestate.τ - queue[i] ≥ tstop
                 queue[i] += Δts[i]
             end
         end
         
-        if savecache && tmin ≤ tcache
-            if (verbose ≥ 2)
-                println("Saving cache at $tcache")
-            end
+        if savecache && (state.timestate.τ - minimum(queue.vals)) ≤ tcache
+            if (verbose ≥ 2) println("Saving cache with key $tcache") end
 
             group = JLD2.Group(cachefile, "$tcache")
             group["state"] = state
-            tcache = tcache - cachestep 
+
+            tcache = tcache - cachestep # Update next time at which to cache
         end
     end
 

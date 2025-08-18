@@ -3,23 +3,23 @@ using JSON
 rras = [10.0];
 eiss = [1.];
 thresholds = [2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 4.0];
-withleveldamages = [false];
+damages = [:kalkuhl, :nodamages, :weitzman]
 withnegatives = [false, true];
 
-tippingparameters = Dict{String, Union{Float64, Bool}}[];
-benchmarkparameters = Dict{String, Union{Float64, Bool}}[];
+tippingparameters = Dict{String, Union{Float64, Symbol, Bool}}[];
+linearparameters = Dict{String, Union{Float64, Symbol, Bool}}[];
 
-for rra in rras, eis in eiss, leveldamages in withleveldamages, withnegative in withnegatives
-    push!(benchmarkparameters, Dict("rra" => rra, "eis" => eis, "leveldamages" => leveldamages, "withnegative" => withnegative))
+for rra in rras, eis in eiss, damage in damages, withnegative in withnegatives
+    push!(linearparameters, Dict("rra" => rra, "eis" => eis, "damage" => damage, "withnegative" => withnegative))
 
     for threshold in thresholds
-        push!(tippingparameters, Dict("threshold" => threshold, "rra" => rra, "eis" => eis, "leveldamages" => leveldamages, "withnegative" => withnegative))
+        push!(tippingparameters, Dict("threshold" => threshold, "rra" => rra, "eis" => eis, "damage" => damage, "withnegative" => withnegative))
     end
 end
 
 obj = Dict(
-    "benchmarkparameters" => benchmarkparameters,
-    "tippingparameters" => tippingparameters
+    "tipping" => tippingparameters,
+    "linear" => linearparameters
 )
 
 open("jobs/planner/parameters.json", "w") do f
