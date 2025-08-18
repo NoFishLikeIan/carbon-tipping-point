@@ -3,9 +3,9 @@
 #SBATCH --job-name=solve
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=64
+#SBATCH --cpus-per-task=192
 #SBATCH --time=16:00:00
-#SBATCH --partition=rome
+#SBATCH --partition=genoa
 #SBATCH --mail-type=BEGIN,END,FAIL,TIME_LIMIT_80
 #SBATCH -o ./logs/out/SOLVE.out 
 #SBATCH -e ./logs/error/SOLVE.out
@@ -22,7 +22,7 @@ rsync data/calibration.jld2 $SCRATCHDATA # Copy calibration data to scratch
 
 # Run script 
 julia --threads ${SLURM_CPUS_PER_TASK} --project scripts/solve.jl \
-    -N 71 --tol 1e-8 \
+    -N 101 --tol 1e-8 \
     --cachestep 0.25 --verbose 1 --overwrite \
     --datapath "$SCRATCHDATA"  --simulationpath "simulation-large" \
     --threshold 2.5 --damages "kalkuhl"

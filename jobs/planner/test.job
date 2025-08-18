@@ -1,12 +1,12 @@
 #!/bin/bash
 
-#SBATCH --job-name=testtipping
-#SBATCH --array=0-15
+#SBATCH --job-name=test
+#SBATCH --array=0-47
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=12
-#SBATCH --time=01:00:00
-#SBATCH --partition=rome
+#SBATCH --cpus-per-task=192
+#SBATCH --time=00:20:00
+#SBATCH --partition=genoa
 #SBATCH --mail-type=BEGIN,END,FAIL,TIME_LIMIT_80
 #SBATCH -o ./logs/out/TEST%A_%a.out 
 #SBATCH -e ./logs/error/TEST%A_%a.out
@@ -30,10 +30,10 @@ jq_command='
 
 params=$(jq -r --arg id "$SLURM_ARRAY_TASK_ID" "$jq_command" jobs/planner/parameters.json)
 
-# Run script
+# Run script 
 julia --threads ${SLURM_CPUS_PER_TASK} --project scripts/solve.jl -N 11 \
-    --cachestep 0.25 --verbose 1 \
-    --datapath "$SCRATCHDATA"  --simulationpath "simulation-test" --overwrite \
+    --cachestep 0.25 --verbose 1  --overwrite --tol 1e-8 \
+    --datapath "$SCRATCHDATA"  --simulationpath "simulation-test" \
     $params
 
 # Copy results back to home
