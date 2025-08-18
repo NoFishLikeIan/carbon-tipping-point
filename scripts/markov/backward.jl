@@ -93,7 +93,8 @@ function backwardsimulation!(queue::ZigZagBoomerang.PartialQueue, state, model, 
         clustertime = state.timestate.τ - minimum(queue.vals)
         
         if (verbose ≥ 2) || ((verbose ≥ 1) && (passcounter % printevery == 0))
-            printbackward!(elapsed, inittime, passcounter, cluster, clustertime)
+            nextelapsed = printbackward(elapsed, inittime, passcounter, cluster, clustertime)
+            elapsed = nextelapsed
         end
 
         backwardstep!(state, cluster, Δts, model, calibration, G; withnegative = withnegative, iterkwargs...)

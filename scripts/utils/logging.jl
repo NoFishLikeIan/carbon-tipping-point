@@ -12,7 +12,7 @@ function printjacobi(ε, iter, maxiter, magnitude; addition = 2)
     print(out); flush(stdout)
 end
 
-function printbackward!(elapsed, inittime, passcounter, cluster, clustertime)
+function printbackward(elapsed, inittime, passcounter, cluster, clustertime)
     nextelapsed = time() - inittime
     Δelapsed = nextelapsed - elapsed
     minutes, seconds = divrem(nextelapsed, 60.)
@@ -21,5 +21,5 @@ function printbackward!(elapsed, inittime, passcounter, cluster, clustertime)
     @printf "%2.0fm:%2.0fs (Δ %.2fs): pass %i, cluster size %i, time = %.4f\n" minutes seconds Δelapsed passcounter n clustertime
     flush(stdout)
 
-    elapsed = nextelapsed
+    return nextelapsed
 end
