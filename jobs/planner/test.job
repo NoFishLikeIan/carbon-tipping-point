@@ -12,8 +12,8 @@
 #SBATCH -e ./logs/error/TEST%A_%a.out
 #SBATCH --mail-user=a.titton@uva.nl
 
-module load 2023
-module load Julia/1.9.2-linux-x86_64
+module load 2024
+module load Julia/1.10.4-linux-x86_64
 
 cd $HOME/scc-tipping-points # Move to base directory
 
@@ -23,16 +23,15 @@ rsync data/calibration.jld2 $SCRATCHDATA # Copy calibration data to scratch
 
 # Extract parameters at the SLURM_ARRAY_TASK_ID from parameters.json
 jq_command='
-.tippingparameters[$id | tonumber] | 
-"--threshold \(.threshold) --rra \(.rra) --eis \(.eis)" +
-(if .leveldamages then " --leveldamages" else "" end) +
+.parameters[$id | tonumber] | 
+"--threshold \(.threshold) --damages \(.damage)" +
 (if .withnegative then " --withnegative" else "" end)
 '
 
-params=$(jq -r --arg id "$SLURM_ARRAY_TASK_ID" "$jq_command" jobs/simulations/parameters.json)
+params=$(jq -r --arg id "$SLURM_ARRAY_TASK_ID" "$jq_command" jobs/planner/parameters.json)
 
 # Run script
-julia --threads ${SLURM_CPUS_PER_TASK} --project scripts/runtipping.jl -N 11 \
+julia --threads ${SLURM_CPUS_PER_TASK} --project scripts/solve.jl -N 11 \
     --cachestep 0.25 --verbose 1 \
     --datapath "$SCRATCHDATA"  --simulationpath "simulation-test" --overwrite \
     $params

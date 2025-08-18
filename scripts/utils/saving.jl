@@ -14,6 +14,8 @@ function simpaths(model::AbstractModel)
         "growth"
     elseif model.damages isa WeitzmanLevel 
         "level"
+    elseif model.damages isa NoDamageGrowth
+        "no-damages"
     else
         throw("Directory not specified for damages $(typeof(model.damages))")
     end

@@ -7,12 +7,12 @@
 #SBATCH --time=16:00:00
 #SBATCH --partition=rome
 #SBATCH --mail-type=BEGIN,END,FAIL,TIME_LIMIT_80
-#SBATCH -o ./logs/out/SPECIFIC%A_%a.out 
-#SBATCH -e ./logs/error/SPECIFIC%A_%a.out
+#SBATCH -o ./logs/out/SOLVE.out 
+#SBATCH -e ./logs/error/SOLVE.out
 #SBATCH --mail-user=a.titton@uva.nl
 
-module load 2023
-module load Julia/1.9.2-linux-x86_64
+module load 2024
+module load Julia/1.10.4-linux-x86_64
 
 cd $HOME/scc-tipping-points # Move to base directory
 
@@ -21,10 +21,11 @@ mkdir -p $SCRATCHDATA # Create scratch directory with user name
 rsync data/calibration.jld2 $SCRATCHDATA # Copy calibration data to scratch
 
 # Run script 
-julia --threads ${SLURM_CPUS_PER_TASK} --project scripts/runtipping.jl -N 71 \
-    --cachestep 0.25 --verbose 1 \
-    --datapath "$SCRATCHDATA"  --simulationpath "simulation-large" --overwrite \
-    --threshold 2.5 --rra 10 --eis 0.75
+julia --threads ${SLURM_CPUS_PER_TASK} --project scripts/solve.jl \
+    -N 71 --tol 1e-8 \
+    --cachestep 0.25 --verbose 1 --overwrite \
+    --datapath "$SCRATCHDATA"  --simulationpath "simulation-large" \
+    --threshold 2.5 --damages "kalkuhl"
 
 # Copy results back to home
 rsync -avzu $SCRATCHDATA $HOME/scc-tipping-points

@@ -37,16 +37,11 @@ argtable = ArgParseSettings()
         arg_type = Float64
         default = 0.25
 
-    "--procs", "-p"
-        arg_type = Int
-        default = 0
-
     "--threshold"
         arg_type = Float64
-        default = 2.0
 
     "--damages"
-        action = :store_true
+        arg_type = String
     
     "--eis"
         arg_type = Float64

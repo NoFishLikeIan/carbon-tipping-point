@@ -12,8 +12,8 @@
 #SBATCH -e ./logs/error/EXPERIMENTTEST%A_%a.out
 #SBATCH --mail-user=a.titton@uva.nl
 
-module load 2023
-module load Julia/1.9.2-linux-x86_64
+module load 2024
+module load Julia/1.10.4-linux-x86_64
 
 cd $HOME/scc-tipping-points # Move to base directory
 

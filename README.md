@@ -2,7 +2,7 @@ The following repository contains the code for the paper "The Cost of Uncertaint
 
 ### Reproducing the paper
 
-Running simulations (`scripts/runtipping.jl`, `scripts/rungame.jl` or `scripts/runbenchmark.jl`) requires `Julia 1.9.2`.
+Running simulations (`scripts/solve.jl`, `scripts/rungame.jl` or `scripts/runbenchmark.jl`) requires `Julia 1.9.2`.
 
 ```bash
 julia +1.9.2 --project scripts/runbenchmark.jl \

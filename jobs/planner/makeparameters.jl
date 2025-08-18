@@ -1,27 +1,23 @@
 using JSON
 
-rras = [10.0];
-eiss = [1.];
-thresholds = [2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 4.0];
-damages = [:kalkuhl, :nodamages, :weitzman]
+thresholds = [2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 4.0, -1.];
+damages = ["kalkuhl", "nodamages", "weitzman"]
 withnegatives = [false, true];
 
-tippingparameters = Dict{String, Union{Float64, Symbol, Bool}}[];
-linearparameters = Dict{String, Union{Float64, Symbol, Bool}}[];
+parameters = Dict{String, Union{Float64, String, Bool}}[];
 
-for rra in rras, eis in eiss, damage in damages, withnegative in withnegatives
-    push!(linearparameters, Dict("rra" => rra, "eis" => eis, "damage" => damage, "withnegative" => withnegative))
+for damage in damages, withnegative in withnegatives, threshold in thresholds
+    obj = Dict(
+        "damage" => damage, 
+        "withnegative" => withnegative,
+        "threshold" => threshold
+    )
 
-    for threshold in thresholds
-        push!(tippingparameters, Dict("threshold" => threshold, "rra" => rra, "eis" => eis, "damage" => damage, "withnegative" => withnegative))
-    end
+    push!(parameters, obj)
 end
 
-obj = Dict(
-    "tipping" => tippingparameters,
-    "linear" => linearparameters
-)
+println("Constructed $(length(parameters)) parameters object.")
 
 open("jobs/planner/parameters.json", "w") do f
-    JSON.print(f, obj, 2)
+    JSON.print(f, Dict("parameters" => parameters), 2)
 end

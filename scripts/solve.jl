@@ -9,7 +9,11 @@ include("arguments.jl") # Import argument parser
 
 parsedargs = ArgParse.parse_args(argtable)
 
-@unpack overwrite, datapath, simulationpath, N, cachestep, tol, verbose, stopat, threshold, leveldamages, eis, rra, withnegative = parsedargs
+@unpack datapath, simulationpath, overwrite = parsedargs # File system parameters
+@unpack cachestep, verbose, stopat = parsedargs # IO parameters
+@unpack N, tol = parsedargs # Simulation parameters
+@unpack threshold, damages, eis, rra, withnegative = parsedargs # Problem parameters
+
 
 if (verbose ≥ 1)
     println("$(now()): ", "Running with $(nthreads()) threads...")
@@ -30,9 +34,9 @@ using ZigZagBoomerang
 using Statistics
 using StaticArrays
 using FastClosures
-using LinearAlgebra: norm
+using LinearAlgebra
 
-using Optimization, OptimizationOptimJL
+using Optimization, OptimizationOptimJL, LineSearches
 using ForwardDiff
 
 using JLD2
@@ -57,18 +61,32 @@ end
 
 preferences = Preferences(θ = rra, ψ = eis);
 economy = Economy()
-damages = leveldamages ? WeitzmanLevel() : Kalkuhl()
+damage = if damages == "kalkuhl"
+    Kalkuhl{Float64}()
+elseif damages == "nodamages"
+    NoDamageGrowth{Float64}()
+elseif damages == "weitzman"
+    WeitzmanGrowth{Float64}()
+else
+    error("Unknown damage type: $damages")
+end
 
-feedback = Model.updateTᶜ(threshold + hogg.Tᵖ, feedback)
-model = TippingModel(hogg, preferences, damages, economy, feedback)
+model = if threshold > 0
+    feedback = Model.updateTᶜ(threshold + hogg.Tᵖ, feedback)
+    TippingModel(hogg, preferences, damage, economy, feedback)
+else
+    LinearModel(hogg, preferences, damage, economy)
+end
 
 # Construct Grid
-Tdomain = hogg.Tᵖ .+ (0., 6.);
-mdomain = mstable.(Tdomain, hogg)
-G = RegularGrid((Tdomain, mdomain), N, hogg)
+Tdomain = hogg.Tᵖ .+ (0., 10.);
+mdomain = mstable.(Tdomain, model)
+Gterminal = constructgrid((Tdomain, mdomain), N, hogg)
 
 if (verbose ≥ 1)
-    println("$(now()): ","Solving tipping model with Tᶜ = $threshold, ψ = $eis, θ = $rra, $(withnegative ? "with" : "without") negative emissions and $(leveldamages ? "level" : "growth") damages...")
+    modelstring = model isa TippingModel ? "tipping model with Tᶜ = $threshold," : "linear model with"
+
+    println("$(now()): ","Solving $modelstring ψ = $eis, θ = $rra, $(withnegative ? "with" : "without") negative emissions and $damages damages...")
     flush(stdout)
 end
 
@@ -79,11 +97,12 @@ if (verbose ≥ 1)
     flush(stdout)
 end
 
-state, Gterminal = computeterminal(model, calibration, G; verbose, outdir, alternate = true, tol, overwrite)
+state, Gterminal = computeterminal(model, calibration, Gterminal; verbose, outdir, alternate = true, tol, overwrite)
 
 if (verbose ≥ 1)
     println("$(now()): ","Running backward...")
     flush(stdout)
 end
 
+G = shrink(Gterminal, 0.9, hogg)
 state = computebackward((state, Gterminal), model, calibration, G; verbose, outdir, overwrite, tstop = stopat, cachestep, withnegative)
