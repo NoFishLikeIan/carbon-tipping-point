@@ -31,7 +31,22 @@
       "withnegative": false
     },
     {
+      "threshold": 3.5,
+      "damage": "kalkuhl",
+      "withnegative": false
+    },
+    {
+      "threshold": 3.75,
+      "damage": "kalkuhl",
+      "withnegative": false
+    },
+    {
       "threshold": 4.0,
+      "damage": "kalkuhl",
+      "withnegative": false
+    },
+    {
+      "threshold": 5.0,
       "damage": "kalkuhl",
       "withnegative": false
     },
@@ -71,7 +86,22 @@
       "withnegative": true
     },
     {
+      "threshold": 3.5,
+      "damage": "kalkuhl",
+      "withnegative": true
+    },
+    {
+      "threshold": 3.75,
+      "damage": "kalkuhl",
+      "withnegative": true
+    },
+    {
       "threshold": 4.0,
+      "damage": "kalkuhl",
+      "withnegative": true
+    },
+    {
+      "threshold": 5.0,
       "damage": "kalkuhl",
       "withnegative": true
     },
@@ -82,86 +112,6 @@
     },
     {
       "threshold": 2.0,
-      "damage": "nodamages",
-      "withnegative": false
-    },
-    {
-      "threshold": 2.25,
-      "damage": "nodamages",
-      "withnegative": false
-    },
-    {
-      "threshold": 2.5,
-      "damage": "nodamages",
-      "withnegative": false
-    },
-    {
-      "threshold": 2.75,
-      "damage": "nodamages",
-      "withnegative": false
-    },
-    {
-      "threshold": 3.0,
-      "damage": "nodamages",
-      "withnegative": false
-    },
-    {
-      "threshold": 3.25,
-      "damage": "nodamages",
-      "withnegative": false
-    },
-    {
-      "threshold": 4.0,
-      "damage": "nodamages",
-      "withnegative": false
-    },
-    {
-      "threshold": -1.0,
-      "damage": "nodamages",
-      "withnegative": false
-    },
-    {
-      "threshold": 2.0,
-      "damage": "nodamages",
-      "withnegative": true
-    },
-    {
-      "threshold": 2.25,
-      "damage": "nodamages",
-      "withnegative": true
-    },
-    {
-      "threshold": 2.5,
-      "damage": "nodamages",
-      "withnegative": true
-    },
-    {
-      "threshold": 2.75,
-      "damage": "nodamages",
-      "withnegative": true
-    },
-    {
-      "threshold": 3.0,
-      "damage": "nodamages",
-      "withnegative": true
-    },
-    {
-      "threshold": 3.25,
-      "damage": "nodamages",
-      "withnegative": true
-    },
-    {
-      "threshold": 4.0,
-      "damage": "nodamages",
-      "withnegative": true
-    },
-    {
-      "threshold": -1.0,
-      "damage": "nodamages",
-      "withnegative": true
-    },
-    {
-      "threshold": 2.0,
       "damage": "weitzman",
       "withnegative": false
     },
@@ -191,7 +141,22 @@
       "withnegative": false
     },
     {
+      "threshold": 3.5,
+      "damage": "weitzman",
+      "withnegative": false
+    },
+    {
+      "threshold": 3.75,
+      "damage": "weitzman",
+      "withnegative": false
+    },
+    {
       "threshold": 4.0,
+      "damage": "weitzman",
+      "withnegative": false
+    },
+    {
+      "threshold": 5.0,
       "damage": "weitzman",
       "withnegative": false
     },
@@ -231,13 +196,33 @@
       "withnegative": true
     },
     {
+      "threshold": 3.5,
+      "damage": "weitzman",
+      "withnegative": true
+    },
+    {
+      "threshold": 3.75,
+      "damage": "weitzman",
+      "withnegative": true
+    },
+    {
       "threshold": 4.0,
+      "damage": "weitzman",
+      "withnegative": true
+    },
+    {
+      "threshold": 5.0,
       "damage": "weitzman",
       "withnegative": true
     },
     {
       "threshold": -1.0,
       "damage": "weitzman",
+      "withnegative": true
+    },
+    {
+      "threshold": -1.0,
+      "damage": "nodamages",
       "withnegative": true
     }
   ]

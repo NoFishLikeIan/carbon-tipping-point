@@ -1,11 +1,11 @@
 using JSON
 
-thresholds = [2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 4.0, -1.];
-damages = ["kalkuhl", "nodamages", "weitzman"]
+thresholds = [2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0, 5.0, -1.];
+damages = ["kalkuhl", "weitzman"]
 withnegatives = [false, true];
 
-parameters = Dict{String, Union{Float64, String, Bool}}[];
-
+ParamVal = Union{Float64, String, Bool};
+parameters = Dict{String, ParamVal}[];
 for damage in damages, withnegative in withnegatives, threshold in thresholds
     obj = Dict(
         "damage" => damage, 
@@ -15,6 +15,8 @@ for damage in damages, withnegative in withnegatives, threshold in thresholds
 
     push!(parameters, obj)
 end
+
+sanitycheck = Dict{String, ParamVal}("damage" => "nodamages", "withnegative" => true, "threshold" => -1.); push!(parameters, sanitycheck)
 
 println("Constructed $(length(parameters)) parameters object.")
 
