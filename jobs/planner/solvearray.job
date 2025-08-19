@@ -1,12 +1,12 @@
 #!/bin/bash
 
 #SBATCH --job-name=solvearray
-#SBATCH --array=0-47
+#SBATCH --array=4-47
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=192
+#SBATCH --cpus-per-task=64
 #SBATCH --time=16:00:00
-#SBATCH --partition=genoa
+#SBATCH --partition=rome
 #SBATCH --mail-type=BEGIN,END,FAIL,TIME_LIMIT_80
 #SBATCH -o ./logs/out/SOLVE%A_%a.out 
 #SBATCH -e ./logs/error/SOLVE%A_%a.out
