@@ -32,6 +32,10 @@ function backwardstep!(valuefunction::ValueFunction{T}, policystate::PolicyState
         prob = Optimization.OptimizationProblem(fn, u₀, parameters; lb = lb, ub = ub)
         sol = solve(prob, alg; optkwargs...)
 
+        if !SciMLBase.successful_retcode(sol)
+            @warn "Optimization failed for idx=$idx at time t=$t with retcode $(sol.retcode)"
+        end
+
         policystate.policy[idx] .= sol.u
         valuefunction.Fₜ[idx] = sol.objective
         policystate.foc[idx] = sol.original.g_residual

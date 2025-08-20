@@ -41,8 +41,12 @@ function b(t, u::Policy, model::M) where { T, D <: LevelDamages{T}, P <: Prefere
 end
 b(t, _, u::Policy, model::M) where { T, D <: LevelDamages{T}, P <: Preferences{T}, M <: AbstractModel{T, D, P} } = b(t, u, model) # Consistency of signature
 
-function costbreakdown(t, Xᵢ::Point{T}, u,  model::M, calibration) where {T, D <: GrowthDamages{T}, P <: Preferences, M <: AbstractModel{T, D, P}}
-    throw("Not implemented yet!")
+function costbreakdown(t, Xᵢ::Point, u::Policy, model::M, calibration) where {T, D <: GrowthDamages, P <: Preferences, M <: AbstractModel{T, D, P}}
+    abatement = β(t, u.ε, model.economy)
+    adjustments = model.economy.κ * abatement^2 / 2
+    damages = d(Xᵢ.T, Xᵢ.m, model.damages, model.hogg)
+
+    return abatement, adjustments, damages
 end
 
 "δ-factor for output at time `t ≥ τ`"

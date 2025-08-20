@@ -10,6 +10,7 @@ include("models/climate.jl")
 include("models/economy.jl")
 include("models/preferences.jl")
 include("models/models.jl")
+include("logging.jl")
 
 export Calibration, RegionalCalibration
 export γ, Eᵇ
@@ -28,6 +29,5 @@ export g, f, logg, discount
 
 export AbstractModel, LinearModel, TippingModel, JumpModel
 export Preferences, LogUtility, CRRA, LogSeparable, EpsteinZin
-
 
 end # module Model

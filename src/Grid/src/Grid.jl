@@ -14,6 +14,7 @@ using Graphs: SimpleGraphs
 include("routines/bisection.jl")
 include("grid/grid.jl")
 include("grid/interpolations.jl")
+include("logging.jl")
 
 export bisection, gss, gssmin
 
