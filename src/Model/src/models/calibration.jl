@@ -1,11 +1,11 @@
-struct Calibration{T <: Real, N}
+struct Calibration{T<:Real,N}
     baselineyear::T # Baseline year of the calibration
     emissions::Vector{T} # Emissions data in GtCO₂ / year
-    γparameters::NTuple{N, T} # Paramters for γ
+    γparameters::NTuple{N,T} # Paramters for γ
     τ::T # End of calibration
 end
 
-struct RegionalCalibration{T <: Real}
+struct RegionalCalibration{T<:Real}
     calibration::Calibration{T}
     fraction::Vector{T}
 end
@@ -16,21 +16,14 @@ Base.broadcastable(c::RegionalCalibration) = Ref(c)
 
 "Growth rate of carbon concentration in the no-policy scenario `γₜ : [0, τ] -> [0, ∞)`."
 function γ(t, p::NTuple{6})
-    growth = p[1] * exp(p[2] * t)
-    decay = p[3] * exp(p[4] * t)
-    linear = p[5] + p[6] * t
+    # Shifted log-normal peak function
+    peak = p[1] * exp(-(log(t + p[2]) - p[3])^2 / p[4])
+    decay = p[5] * exp(-p[6] * t)
 
-    return linear + growth - decay
-end
-function γ(t, p::NTuple{8})
-    num = p[1] * t^2 + p[2] * t + p[3]
-    den = t^3 + p[4] * t^2 + p[5] * t + p[6]
-    offset = p[7] * exp(-p[8] * t)
-    
-    return num / den + offset
+    return peak + decay
 end
 function γ(t, calibration::Calibration)
-    max(γ(min(t, 150), calibration.γparameters), 0)
+    γ(min(t, calibration.τ), calibration.γparameters)
 end
 function γ(t, regionalcalibration::RegionalCalibration)
     frac = interpolateovert(t, regionalcalibration.calibration.tspan, regionalcalibration.fraction)
@@ -47,11 +40,15 @@ Eᵇ(t, calibration::Calibration) = interpolateovert(t, calibration.tspan, calib
 function interpolateovert(t, tspan, v)
 
     tmin, tmax = tspan
-    
-    if t ≤ tmin return first(v) end
-    if t ≥ tmax return last(v) end
 
-    partition = range(tmin, tmax; length = length(v))
+    if t ≤ tmin
+        return first(v)
+    end
+    if t ≥ tmax
+        return last(v)
+    end
+
+    partition = range(tmin, tmax; length=length(v))
     udx = findfirst(tᵢ -> tᵢ > t, partition)
     ldx = udx - 1
 
