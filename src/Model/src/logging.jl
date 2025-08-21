@@ -79,7 +79,7 @@ end
 
 function Base.isless(m₁::M₁, m₂::M₂) where {M₁ <: AbstractModel, M₂ <: AbstractModel}
     if (m₁ isa FirstOrderLinearModel) || (m₂ isa FirstOrderLinearModel)
-        return true
+        return false
     else
         return isless(m₁.feedback.Tᶜ, m₂.feedback.Tᶜ)
     end

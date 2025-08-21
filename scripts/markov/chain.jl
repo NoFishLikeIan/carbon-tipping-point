@@ -37,7 +37,7 @@ function reflectiveboundary(F, idx, L, R)
     return FᵢT₊, FᵢT₋, Fᵢm₊, Fᵢm₋
 end
 function getneighours(F, idx, L, R)
-    reflectiveboundary(F, idx, L, R)
+    constantboundary(F, idx, L, R)
 end
 
 function timestep(t, Xᵢ::Point, u::Policy, Δtmax, model::AbstractModel, calibration::Calibration, G)

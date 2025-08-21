@@ -79,7 +79,7 @@ else
 end
 
 # Construct Grid
-Tdomain = hogg.Tᵖ .+ (0., 10.);
+Tdomain = hogg.Tᵖ .+ (0., 8.5);
 mdomain = mstable.(Tdomain, model)
 Gterminal = constructgrid((Tdomain, mdomain), N, hogg)
 
@@ -97,7 +97,7 @@ if (verbose ≥ 1)
     flush(stdout)
 end
 
-state, Gterminal = computeterminal(model, calibration, Gterminal; verbose, outdir, alternate = true, tol, overwrite)
+state, Gterminal = computeterminal(model, calibration, Gterminal; verbose = verbose, outdir = outdir, alternate = true, tol = tol, overwrite = overwrite)
 
 if (verbose ≥ 1)
     println("$(now()): ","Running backward...")
@@ -105,4 +105,4 @@ if (verbose ≥ 1)
 end
 
 G = shrink(Gterminal, 0.9, hogg)
-state = computebackward((state, Gterminal), model, calibration, G; verbose, outdir, overwrite, tstop = stopat, cachestep, withnegative)
+state = computebackward((state, Gterminal), model, calibration, G; verbose = verbose, outdir = outdir, overwrite = overwrite, tstop = stopat, cachestep = cachestep, withnegative = withnegative)

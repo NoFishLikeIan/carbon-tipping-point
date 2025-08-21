@@ -14,12 +14,12 @@ function backwardstep!(state::DPState, cluster, Δts, model, calibration, G; ite
     backwardstep!(state.valuefunction, state.policystate, state.timestate, cluster, Δts, model, calibration, G; iterkwargs...)
 end
 function backwardstep!(valuefunction::ValueFunction{T}, policystate::PolicyState{T}, timestate::Time{T}, cluster, Δts, model::M, calibration, G; 
-    withnegative = true, ad = Optimization.AutoForwardDiff(), alg = BFGS(initial_invH = inverseidentity, linesearch = BackTracking(order = 3)), Δtmax = 1/12, optkwargs...) where {T, D <: Damages{T}, P <: LogSeparable{T}, M <: AbstractModel{T, D, P}}
+    withnegative = true, ad = Optimization.AutoForwardDiff(), alg = BFGS(initial_invH = inverseidentity, linesearch = BackTracking(order = 3)), Δtmax = 1 / 100, optkwargs...) where {T, D <: Damages{T}, P <: LogSeparable{T}, M <: AbstractModel{T, D, P}}
 
     fn = OptimizationFunction(logminimisation, ad)
     indices = CartesianIndices(G)
-    lb = Policy{T}(0., 0.); lbs = lb .+ 1e-3
-    ub = Policy{T}(1., ifelse(withnegative, Inf, 1.)); ubs = ub .- 1e-3
+    lb = Policy{T}(0., 0.); lbs = lb .+ 1e-3;
+    ub = Policy{T}(1., ifelse(withnegative, Inf, 1.)); ubs = ub .- 1e-3;
 
     @inbounds @threads for (i, δt) in cluster
         idx = indices[i]

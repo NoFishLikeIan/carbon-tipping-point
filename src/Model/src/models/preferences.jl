@@ -32,7 +32,7 @@ function Preferences(; ρ = 0.015, θ = 10., ψ = 1.)
     end
 end
 
-discount(ρ, Δt) = inv(1 + ρ * Δt)
+discount(ρ, Δt) = exp(-ρ * Δt) # inv(1 + ρ * Δt)
 
 "Climate damage aggregator. `χ` is the consumtpion rate, `F′` is the expected value of `F` at `t + Δt` and `Δt` is the time step"
 function g(χ, F′, Δt, p::EpsteinZin)

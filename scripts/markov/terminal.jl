@@ -73,7 +73,7 @@ end
 function terminaljacobi!(state::DPState, model, G; iterkwargs...) 
    terminaljacobi!(state.valuefunction, state.policystate, state.timestate, model, G; iterkwargs...)
 end
-function terminaljacobi!(valuefunction::ValueFunction{T}, policystate::PolicyState, timestate::Time, model, G; indices = CartesianIndices(G), ω = 1.2, opttol = 1e-5, Δtmax = 1/12) where T
+function terminaljacobi!(valuefunction::ValueFunction{T}, policystate::PolicyState, timestate::Time, model, G; indices = CartesianIndices(G), ω = 1.05, opttol = 1e-5, Δtmax = 1 / 100) where T
     @inbounds @threads for idx in indices
         F′, Δt = terminalmarkovstep(idx, valuefunction.Fₜ, Δtmax, model, G)
         Xᵢ = G.X[idx]
@@ -83,7 +83,7 @@ function terminaljacobi!(valuefunction::ValueFunction{T}, policystate::PolicySta
         Fᵢ, χ = gssmin(objective, zero(T), one(T); tol = opttol)
         Fᵢ′ = ω * Fᵢ + (1 - ω) * valuefunction.Fₜ[idx]
 
-        valuefunction.error[idx] = abs(Fᵢ′ - valuefunction.Fₜ[idx])
+        valuefunction.error[idx] = abs2(Fᵢ′ - valuefunction.Fₜ[idx])
         valuefunction.Fₜ[idx] = Fᵢ′
         policystate.policy[idx].χ = χ
     end
