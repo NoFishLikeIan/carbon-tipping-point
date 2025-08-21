@@ -1,127 +1,90 @@
-PolicyFunction = Union{Interpolations.Extrapolation, Function};
-PoliciesFunctions = NTuple{2, PolicyFunction};
+wrap(T, m, hogg) = Point(T, m, hogg.Mᵖ * exp(m));
 
-GameParameters = Tuple{Tuple{M1, M2}, NTuple{2, PoliciesFunctions}, Calibration} where {M1 <: AbstractModel, M2 <: AbstractModel}
-
-function Fgame!(du, u, parameters::GameParameters, t)
-    models, policies, calibration = parameters
-    oecdmodel, rowmodel = models
-    oecdpolicies, rowpolicies = policies
-
-    T₁, T₂, m = @view u[1:3]
-    χ₁ = oecdpolicies[1](T₁, m, t)
-    χ₂ = rowpolicies[1](T₂, m, t)
-
-    α₁ = oecdpolicies[2](T₁, m, t)
-    α₂ = rowpolicies[2](T₂, m, t)
-
-    # Temperature
-    du[1] = μ(T₁, m, oecdmodel) / oecdmodel.hogg.ϵ
-    du[2] = μ(T₂, m, rowmodel) / rowmodel.hogg.ϵ
-    
-    # Carbon concentration
-    du[3] = γ(t, calibration) - α₁ - α₂
-
-    # Output
-    du[4] = b(t, Point(T₁, m), (χ₁, α₁), oecdmodel, calibration)
-    du[5] = b(t, Point(T₂, m), (χ₂, α₂), rowmodel, calibration)
-
-    return
-end
-
-function Ggame!(Σ, u, parameters::GameParameters, t)
-    models = first(parameters)
-    oecdmodel, rowmodel = models
-
-    Σ[1] = oecdmodel.hogg.σₜ / oecdmodel.hogg.ϵ
-	Σ[2] = rowmodel.hogg.σₜ / rowmodel.hogg.ϵ
-    Σ[3] = oecdmodel.hogg.σₘ
-    Σ[4] = oecdmodel.economy.σₖ
-    Σ[5] = rowmodel.economy.σₖ
-
-    return
-end
-
-SimulationParameters = Tuple{AbstractModel, PoliciesFunctions, Calibration}
-function Fbreakdown!(du, u, parameters::SimulationParameters, t)
-    model, pols, calibration = parameters
-    χitp, αitp = pols
+PolicyFunction = Base.Callable
+SimulationParameters = Tuple{AbstractModel, Calibration, PolicyFunction}
+"Drift of system which cumulates abatement, adjustments, and damages."
+function F(u::SVector{6, R}, parameters::SimulationParameters, t) where R <: Real
+    model, calibration, policyitp = parameters;
     T, m = @view u[1:2]
+    state = wrap(T, m, model.hogg)
+    policy = policyitp(t, state)
 
-    du[1] = μ(T, m, model) / model.hogg.ϵ
-	du[2] = γ(t, calibration) - αitp(T, m, t)
-    du[3] =  b(t, Point(T, m), (χitp(T, m, t), αitp(T, m, t)), model, calibration)
+    dT = μ(T, m, model) / model.hogg.ϵ
+	dm = γ(t, calibration) * (1 - policy.ε) - policy.ε * δₘ(state.M, model.hogg)
+    dy = b(t, state, policy, model)
 
     # Cost breakdown breakdown
-    damage, adjcosts, abatement = costbreakdown(t, Point(T, m), (χitp(T, m, t), αitp(T, m, t)), model, calibration)
+    abatement, adjustments, damages = costbreakdown(t, state, policy, model, calibration)
 
-    du[4] = adjcosts
-    du[5] = abatement
-    du[6] = damage
+    return SVector(dT, dm, dy, abatement, adjustments, damages)
 end
-
-function F!(du, u, parameters::SimulationParameters, t)
-    model, pols, calibration = parameters
-    χitp, αitp = pols
+"Drift of system."
+function F(u::SVector{3, R}, parameters::SimulationParameters, t) where R <: Real
+    model, policyitp, calibration = parameters;
     T, m = @view u[1:2]
+    state = wrap(T, m, model.hogg)
+    policy = policyitp(t, state)
 
-    du[1] = μ(T, m, model) / model.hogg.ϵ
-	du[2] = γ(t, calibration) - αitp(T, m, t)
-    du[3] = b(t, Point(T, m), (χitp(T, m, t), αitp(T, m, t)), model, calibration)
-end
+    dT = μ(state.T, state.m, model) / model.hogg.ϵ
+	dm = γ(t, calibration) * (1 - policy.ε) - policy.ε * δₘ(state.M, model.hogg)
+    dy = b(t, state, policy, model)
 
-function F!(du, u, parameters::SimulationParameters, t)
-    model, αitp, calibration  = parameters
-    T, m = u
-
-    du[1] = μ(T, m, model) / model.hogg.ϵ
-	du[2] = γ(t, calibration) - αitp(T, m, t)
+    return SVector(dT, dm, dy)
 end
 
 NpParamaters = Tuple{AbstractModel, Calibration}
-function Fnp!(du, u, parameters::NpParamaters, t)
+"Drift of system in the no-policy scenario."
+function Fnp(u::SVector{2, R}, parameters::NpParamaters, t) where R <: Real
     model, calibration = parameters
-	du[1] = μ(u[1], u[2], model) / model.hogg.ϵ
-	du[2] = γ(t, calibration)
+    T, m = @view u[1:2]
+    state = wrap(T, m, model.hogg)
+    
+    dT = μ(state.T, state.m, model) / model.hogg.ϵ
+    dm = γ(t, calibration)
+    
+    return SVector(dT, dm)
 end
 
 NpGameParameters = Tuple{NTuple{2, AbstractModel}, Calibration}
-function Fnp!(du, u, parameters::NpGameParameters, t)
+"Drift of game system without policies."
+function Fnp(u::SVector{3, R}, parameters::NpGameParameters, t) where R <: Real
     models, calibration = parameters
     oecdmodel, rowmodel = models
     T₁, T₂, m = @view u[1:3]
 
-    du[1] = μ(T₁, m, oecdmodel) / oecdmodel.hogg.ϵ
-    du[2] = μ(T₂, m, rowmodel) / rowmodel.hogg.ϵ
-    du[3] = γ(t, calibration)
+    dT₁ = μ(T₁, m, oecdmodel) / oecdmodel.hogg.ϵ
+    dT₂ = μ(T₂, m, rowmodel) / rowmodel.hogg.ϵ
+    dm = γ(t, calibration)
+    
+    return SVector(dT₁, dT₂, dm)
 end
 
-function G!(Σ, u, parameters::NpParamaters, t)
+function noise(u, parameters::NpParamaters, t)
     model = first(parameters)
-	Σ[1] = model.hogg.σₜ / model.hogg.ϵ
-	Σ[2] = model.hogg.σₘ
+    σT = model.hogg.σₜ / model.hogg.ϵ
+    σm = model.hogg.σₘ
+    return SVector(σT, σm)
 end
-function G!(Σ, u, parameters::SimulationParameters, t)
+function noise(u::SVector{3}, parameters::SimulationParameters, t)
     model = first(parameters)
-
-    Σ[1] = model.hogg.σₜ / model.hogg.ϵ
-	Σ[2] = model.hogg.σₘ
-    Σ[3] = model.economy.σₖ
+    σT = model.hogg.σₜ / model.hogg.ϵ
+    σm = model.hogg.σₘ
+    σk = model.economy.σₖ
+    return SVector(σT, σm, σk)
 end
-function G!(Σ, u, parameters::NpGameParameters, t)
+function noise(u::SVector{6}, parameters::SimulationParameters, t)
+    model = first(parameters)
+    σT = model.hogg.σₜ / model.hogg.ϵ
+    σm = model.hogg.σₘ
+    σk = model.economy.σₖ
+    return SVector(σT, σm, σk, 0.0, 0.0, 0.0)
+end
+function noise(u, parameters::NpGameParameters, t)
     oecdmodel, rowmodel = first(parameters)
-
-    Σ[1] = oecdmodel.hogg.σₜ / oecdmodel.hogg.ϵ
-    Σ[2] = rowmodel.hogg.σₜ / rowmodel.hogg.ϵ
-    Σ[3] = oecdmodel.hogg.σₘ
-end
-function Gbreakdown!(Σ, u, parameters::SimulationParameters, t)
-    model = first(parameters)
-
-    Σ[1] = model.hogg.σₜ / model.hogg.ϵ
-	Σ[2] = model.hogg.σₘ
-    Σ[3] = model.economy.σₖ
-    Σ[4:end] .= 0.
+    σT₁ = oecdmodel.hogg.σₜ / oecdmodel.hogg.ϵ
+    σT₂ = rowmodel.hogg.σₜ / rowmodel.hogg.ϵ
+    σm = oecdmodel.hogg.σₘ
+    return SVector(σT₁, σT₂, σm)
 end
 
 rate(u, parameters::Tuple, t) = rate(u, first(parameters), t)
@@ -138,75 +101,64 @@ function tipping!(integrator)
     integrator.u[1] += q
 end
 
-Result = Tuple{Vector{Float64}, Array{Float64, 3}, Array{Float64, 4}, RegularGrid, AbstractModel}
-"Constructs linear interpolation of results"
-function buildinterpolations(result::Result)
-    timespace, F, policy, G, _ = result
 
+"Constructs linear interpolation of results"
+function buildinterpolations(states::OrderedDict{R, DPState{R}},  G::RegularGrid) where R
     Tspace = range(G.domains[1]...; length = size(G, 1))
     mspace = range(G.domains[2]...; length = size(G, 2))
+    timespace = collect(keys(states))
 
     nodes = (Tspace, mspace, timespace)
-    Fitp = linear_interpolation(nodes, F; extrapolation_bc = Line())
-    χitp = linear_interpolation(nodes, policy[:, :, 1, :]; extrapolation_bc = Line())
-    αitp = linear_interpolation(nodes, policy[:, :, 2, :]; extrapolation_bc = Line())
+    F = Array{R, 3}(undef, length(Tspace), length(mspace), length(timespace));
+    χ = similar(F); ε = similar(χ);
 
-    Dict{Symbol, typeof(χitp)}(:F => Fitp, :χ => χitp, :α => αitp)
+    for (i, pair) in enumerate(states)
+        state = pair.second
+        F[:, :, i] .= state.valuefunction.Fₜ
+        χ[:, :, i] .= getproperty.(state.policystate.policy, :χ)
+        ε[:, :, i] .= getproperty.(state.policystate.policy, :ε)
+    end
+
+    Fitp = linear_interpolation(nodes, F; extrapolation_bc = Line());
+    χitp = linear_interpolation(nodes, χ; extrapolation_bc = Line());
+    εitp = linear_interpolation(nodes, ε; extrapolation_bc = Line());
+
+    valueitp = let Fitp = Fitp
+        (t, x) -> Fitp(x.T, x.m, t)
+    end
+
+    policyitp = let χitp = χitp, εitp = εitp
+        (t, x) -> Policy(χitp(x.T, x.m, t), εitp(x.T, x.m, t))
+    end
+
+    return valueitp, policyitp
 end
 
 GameResult = Tuple{Vector{Float64}, Dict{<:AbstractModel, Array{Float64, 3}}, Dict{<:AbstractModel, Array{Float64, 4}}, RegularGrid, Vector{<:AbstractModel}}
 function buildinterpolations(result::GameResult)
-    timespace, F, policy, G, models = result
-
-    Tspace = range(G.domains[1]...; length = size(G, 1))
-    mspace = range(G.domains[2]...; length = size(G, 2))
-
-    nodes = (Tspace, mspace, timespace)
-
-    itps = Dict{
-        AbstractModel, 
-        Dict{Symbol, Extrapolation}
-    }()
-
-    for model in models
-        Fitp = linear_interpolation(nodes, F[model]; extrapolation_bc = Line())
-        χitp = linear_interpolation(nodes, policy[model][:, :, 1, :]; extrapolation_bc = Line())
-        αitp = linear_interpolation(nodes, policy[model][:, :, 2, :]; extrapolation_bc = Line())
-
-        itps[model] = Dict{Symbol, Extrapolation}(:F => Fitp, :χ => χitp, :α => αitp)
-    end
-
-    return itps
+    throw("Not implemented!")
 end
 
-# Functions
-computeonsim(sim::RODESolution, f, timesteps) = computeonsim!(similar(timesteps), sim, f, timesteps) 
-computeonsim(sim::RODESolution, f) = computeonsim(sim, f, sim.t)
-function computeonsim!(outvec, sim::RODESolution, f, timesteps)
-    for i in eachindex(outvec)
-        t = timesteps[i]
-        simₜ = sim(t)
+computeonsim(sim::RODESolution, f) = computeonsim!(similar(sim.t), sim, f)
+function computeonsim!(y, sim::RODESolution, f)
+    for i in eachindex(y)
+        t, u = sim.t[i], sim.u[i]
 
-        xᵢ = simₜ isa DifferentialEquations.ExtendedJumpArray ? simₜ.u : simₜ
-
-        outvec[i] = f(xᵢ..., t)
+        y[i] = f(t, u)
     end
 
-    return outvec
+    return y
 end
-
-function computeonsim(sol::EnsembleSolution, f, timesteps)
+function computeonsim(sol::EnsembleSolution, f)
     N = length(sol)
-    T = length(timesteps)
-    M = Matrix{Float64}(undef, T, N)
+    T = length(first(sol).t)
+    M = Matrix{eltype(sol)}(undef, T, N)
 
-    computeonsim!(M, sol, f, timesteps)
-end
-function computeonsim!(M, sol::EnsembleSolution, f, timesteps)
-    for (m, sim) in zip(eachcol(M), sol)
-        computeonsim!(m, sim, f, timesteps)
+    for j in axes(M, 2)
+        yᵢ = @view M[:, j]
+        computeonsim!(yᵢ, sol[j], f)
     end
-
+    
     return M
 end
 
@@ -220,7 +172,6 @@ function timequantiles(M::AbstractMatrix, ps; kwargs...)
 
     return qs
 end
-
 function smoothquantile!(v, window)
     vo = copy(v)
 

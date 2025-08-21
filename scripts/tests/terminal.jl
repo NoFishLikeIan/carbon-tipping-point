@@ -29,16 +29,22 @@ begin # Construct the model
 	
 	hogg = Hogg()
 	damages = Kalkuhl()
-	preferences = Preferences(ρ = 0.015, θ = 10., ψ = 1)
-	economy = Economy()
-	
-	model = LinearModel(hogg, preferences, damages, economy)
+	preferences = Preferences()
+		
+	threshold = 2.
+	model = if 0 < threshold < Inf
+		feedback = Model.updateTᶜ(threshold + hogg.Tᵖ, feedback)
+		TippingModel(hogg, preferences, damages, economy, feedback)
+	else
+		LinearModel(hogg, preferences, damages, economy)
+	end
 	
 	N = 101
-	Tdomain = hogg.Tᵖ .+ (0., 10.)
+	Tdomain = hogg.Tᵖ .+ (0., 7.)
 	mdomain = mstable.(Tdomain, model)
 	
 	Gterminal = constructgrid((Tdomain, mdomain), N, hogg)
+	Δtmax = 1 / 64
 end;
 
 begin
@@ -46,13 +52,18 @@ begin
 	terminaljacobi!(state, model, Gterminal)
 end
 
-vfi!(state, model, Gterminal; maxiter = 100_000, verbose = 2, tol = 1e-8, alternate = true, ω = 1.05)
+vfi!(state, model, Gterminal; maxiter = 100_000, verbose = 2, tol = 1e-3, alternate = true, ω = 1.05, Δtmax = Δtmax)
 
 if isinteractive()
-	Tspace = range(G.domains[1]...; length = size(G, 1))
-	mspace = range(G.domains[2]...; length = size(G, 2))
+	Tspace = range(Gterminal.domains[1]...; length = size(Gterminal, 1))
+	mspace = range(Gterminal.domains[2]...; length = size(Gterminal, 2))
 	nullcline = mstable.(Tspace, model)
 
 	Ffig = contourf(mspace, Tspace, state.valuefunction.Fₜ; c = :viridis, xlabel = L"m", ylabel = L"T")
 	plot!(Ffig, nullcline, Tspace; c = :white, linestyle = :dash, xlims = extrema(mspace), ylims = extrema(Tspace), label = false)
+
+	χfig = contourf(mspace, Tspace, getproperty.(state.policystate.policy, :χ); c = :Reds, xlabel = L"m", ylabel = L"T", yaxis = false)
+	plot!(χfig, nullcline, Tspace; c = :white, linestyle = :dash, xlims = extrema(mspace), ylims = extrema(Tspace), label = false)
+
+	plot(Ffig, χfig; size = 300 .* (2√2, 1), margins = 3Plots.mm)
 end

@@ -103,7 +103,6 @@ function makefilename(model::AbstractModel)
     
     return "$(replace(filename, "." => ",")).jld2"
 end
-
 function makefilename(models::Vector{<:AbstractModel})
 
     filenames = String[]
@@ -163,7 +162,7 @@ function loadtotal(cachepath::String; tspan = (0, Inf))
     cachefile = jldopen(cachepath, "r")
     G = cachefile["G"]
     model = cachefile["model"]
-    timekeys = filter(key -> key ∉ ["G", "model"], keys(cachefile))
+    timekeys = filter(key -> key ∉ ("G", "model"), keys(cachefile))
     timesteps = round.(parse.(Float64, timekeys), digits = 4)
 
     ix = sortperm(timesteps)
@@ -177,13 +176,22 @@ function loadtotal(cachepath::String; tspan = (0, Inf))
 
     states = DPState[]
     for key ∈ timekeys
-        push!(states, cachefile[key]["state"])
+        state = cachefile[key]["state"]
+        push!(states, state)
     end
     close(cachefile)
 
-    outdict = Dict(timesteps .=> states)
+    outdict = OrderedDict(timesteps .=> states)
 
     return outdict, G, model
+end
+
+function loadproblem(cachepath)
+    cachefile = jldopen(cachepath, "r")
+    G = cachefile["G"]
+    model = cachefile["model"]
+
+    return model, G
 end
 
 function loadgame(models::Vector{<:AbstractModel}; outdir = "data/simulation")

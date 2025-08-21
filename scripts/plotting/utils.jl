@@ -9,10 +9,10 @@ function stringifydeviation(ΔT; digits = 2)
     return format(fmt, ΔT)
 end
 
-function makedeviationtickz(from, to, model; step = 0.5, digits = 2, addedlabels = Tuple{String, Float64}[])
+function makedeviationtickz(from, to, hogg; step = 0.5, digits = 2, addedlabels = Tuple{String, Float64}[])
 
     preindustrialdev = range(from, to; step = step)
-    ticks = model.hogg.Tᵖ .+ preindustrialdev
+    ticks = hogg.Tᵖ .+ preindustrialdev
 
     labels = [stringifydeviation(x; digits = digits) for x in preindustrialdev]
 
@@ -27,14 +27,14 @@ function makedeviationtickz(from, to, model; step = 0.5, digits = 2, addedlabels
     return (ticks[idxs], labels[idxs])
 end
 
-function labelofmodel(model::AbstractModel)
-    if model isa JumpModel
-        return "Benchmark"
+function labelofmodel(model)
+    if model isa LinearModel
+        "No tipping element"
     elseif model isa TippingModel
-        return model.albedo.Tᶜ < 2. ? "Imminent" : "Remote"
+        L"T^c = %$(model.feedback.Tᶜ - model.hogg.Tᵖ)"
+    else
+        error("Model type not implemented")
     end
-
-    throw("Not found label for model $model")
 end
 
 function smoother(vs, n)

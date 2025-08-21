@@ -38,41 +38,47 @@ begin # Construct the model
 	
 	hogg = Hogg()
 	damages = Kalkuhl()
-	preferences = Preferences(ρ = 0.015, θ = 10., ψ = 1)
+	preferences = Preferences()
 	economy = Economy()
+	threshold = 2.0
 	
-	model = LinearModel(hogg, preferences, damages, economy)
-	
-	N = 51
-	Tdomain = hogg.Tᵖ .+ (0., 9.)
+	model = if 0 < threshold < Inf
+		feedback = Model.updateTᶜ(threshold + hogg.Tᵖ, feedback)
+		TippingModel(hogg, preferences, damages, economy, feedback)
+	else
+		LinearModel(hogg, preferences, damages, economy)
+	end
+
+	# Construct Grid
+	N = 101
+	Tdomain = hogg.Tᵖ .+ (0., 10.);
 	mdomain = mstable.(Tdomain, model)
-	
 	Gterminal = constructgrid((Tdomain, mdomain), N, hogg)
-	initialstate = DPState(calibration, Gterminal)
+	terminalstate = DPState(calibration, Gterminal)
+
+	Δtmax = 1 / 100
 end;
 
-begin # Setup terminal value function
-	vfi!(initialstate, model, Gterminal; maxiter = 10_000, tol = 1e-10, alternate = true, ω = 1.05)
-end;
+vfi!(terminalstate, model, Gterminal; maxiter = 100_000, tol = 1e-3, alternate = true, ω = 1., verbose = 2, Δtmax = Δtmax)
 
 if isinteractive()
 	Tspace = range(Gterminal.domains[1]...; length = size(Gterminal, 1))
 	mspace = range(Gterminal.domains[2]...; length = size(Gterminal, 2))
 
-	Ffig = contourf(mspace, Tspace, initialstate.valuefunction.Fₜ; title = L"\log(F)", ylabel = L"T", xlabel = L"m", margins = 10Plots.mm)
+	Ffig = contourf(mspace, Tspace, terminalstate.valuefunction.Fₜ; title = L"\log(F)", ylabel = L"T", xlabel = L"m", margins = 10Plots.mm)
 end
 
 begin # Setup problem
 	G = shrink(Gterminal, 0.9, hogg)
-	state = interpolateovergrid(initialstate, Gterminal, G)
+	state = interpolateovergrid(terminalstate, Gterminal, G)
 	queue = DiagonalRedBlackQueue(G)
 	Δts = zeros(prod(size(G)))
 	cluster = first(ZigZagBoomerang.dequeue!(queue))
 
 	ad = Optimization.AutoForwardDiff()
-	withnegative = true
+	withnegative = false
 	T = Float64
-	alg = BFGS(initial_invH = inverseidentity)
+	alg = LBFGS() # BFGS(initial_invH = inverseidentity)
 
 	@unpack valuefunction, policystate, timestate = state
 end;
@@ -81,7 +87,7 @@ backwardstep!(state, cluster, Δts, model, calibration, G; withnegative = withne
 @btime backwardstep!($state, $cluster, $Δts, $model, $calibration, $G; withnegative = $withnegative)
 
 begin
-	state = interpolateovergrid(initialstate, Gterminal, G)
+	state = interpolateovergrid(terminalstate, Gterminal, G)
 	backwardsimulation!(state, model, calibration, G; verbose = 1, withnegative = withnegative, tstop = 400., printevery = 1_000)
 end
 
