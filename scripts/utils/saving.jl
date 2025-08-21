@@ -12,6 +12,8 @@ function simpaths(model::AbstractModel)
 
     damagedir = if model.damages isa Kalkuhl
         "growth"
+    elseif model.damages isa WeitzmanGrowth
+        "weitzman" 
     elseif model.damages isa WeitzmanLevel 
         "level"
     elseif model.damages isa NoDamageGrowth

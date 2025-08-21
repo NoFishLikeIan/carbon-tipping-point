@@ -105,4 +105,4 @@ if (verbose ≥ 1)
 end
 
 G = shrink(Gterminal, 0.9, hogg)
-state = computebackward((state, Gterminal), model, calibration, G; verbose = verbose, outdir = outdir, overwrite = overwrite, tstop = stopat, cachestep = cachestep, withnegative = withnegative)
+state = computebackward((state, Gterminal), model, calibration, G; verbose = verbose, outdir = outdir, overwrite = overwrite, tstop = stopat, cachestep = cachestep, withnegative = withnegative, alg = LBFGS())

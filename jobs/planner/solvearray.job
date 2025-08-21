@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #SBATCH --job-name=solvearray
-#SBATCH --array=4-47
+#SBATCH --array=1-21
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=64
