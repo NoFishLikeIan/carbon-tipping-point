@@ -43,7 +43,8 @@ using JLD2
 using Printf, Dates
 
 include("../src/valuefunction.jl")
-include("../src/extensions.jl")
+include("../src/extend/model.jl")
+include("../src/extend/grid.jl")
 include("utils/saving.jl")
 include("utils/logging.jl")
 include("markov/chain.jl")

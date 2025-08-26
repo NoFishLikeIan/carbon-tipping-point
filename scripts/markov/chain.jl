@@ -1,113 +1,174 @@
-function neumannboundary(F, idx, L, R)
-    idxT₊ = idx + Idx[1]
-    FᵢT₊ = idxT₊.I[1] ≤ R.I[1] ? F[idxT₊] : 2F[idx] - F[idx - Idx[1]]
-    
-    idxT₋ = idx - Idx[1]
-    FᵢT₋ = idxT₋.I[1] ≥ L.I[1] ? F[idxT₋] : 2F[idx] - F[idx + Idx[1]]
-    
-    idxm₊ = idx + Idx[2]
-    Fᵢm₊ = idxm₊.I[2] ≤ R.I[2] ? F[idxm₊] : 2F[idx] - F[idx - Idx[2]]
-    
-    idxm₋ = idx - Idx[2]
-    Fᵢm₋ = idxm₋.I[2] ≥ L.I[2] ? F[idxm₋] : 2F[idx] - F[idx + Idx[2]]
-    
-    return FᵢT₊, FᵢT₋, Fᵢm₊, Fᵢm₋
-end
-function constantboundary(F, idx, L, R)
-    FᵢT₊ = getindex(F, min(idx + Idx[1], R))
-    FᵢT₋ = getindex(F, max(idx - Idx[1], L))
-    Fᵢm₊ = getindex(F, min(idx + Idx[2], R))
-    Fᵢm₋ = getindex(F, max(idx - Idx[2], L))
-    
-    return FᵢT₊, FᵢT₋, Fᵢm₊, Fᵢm₋
-end
-function reflectiveboundary(F, idx, L, R)
-    idxT₊ = idx + Idx[1]
-    FᵢT₊ = idxT₊.I[1] ≤ R.I[1] ? F[idxT₊] : F[idx - Idx[1]]
-    
-    idxT₋ = idx - Idx[1]
-    FᵢT₋ = idxT₋.I[1] ≥ L.I[1] ? F[idxT₋] : F[idx + Idx[1]]
-    
-    idxm₊ = idx + Idx[2]
-    Fᵢm₊ = idxm₊.I[2] ≤ R.I[2] ? F[idxm₊] : F[idx - Idx[2]]
-    
-    idxm₋ = idx - Idx[2]
-    Fᵢm₋ = idxm₋.I[2] ≥ L.I[2] ? F[idxm₋] : F[idx + Idx[2]]
-    
-    return FᵢT₊, FᵢT₋, Fᵢm₊, Fᵢm₋
-end
-function getneighours(F, idx, L, R)
-    constantboundary(F, idx, L, R)
+function εopt(t, Xᵢ::Point, ∂ₘH, model::M) where {S,D<:Damages{S},P<:LogSeparable{S},M<:AbstractModel{S,D,P}}
+    @unpack preferences, economy, hogg = model
+
+    dm = γ(t, calibration) + δₘ(exp(Xᵢ.m) * hogg.Mᵖ, hogg)
+    ωₜ = ω(t, economy)
+
+    return clamp(∂ₘH * dm / (ωₜ * (preferences.θ - 1)), 0, 5)
 end
 
-function timestep(t, Xᵢ::Point, u::Policy, Δtmax, model::AbstractModel, calibration::Calibration, G)
-    ΔT, Δm = G.Δ
-    σₜ² = ( model.hogg.σₜ / (model.hogg.ϵ * ΔT) )^2
-    σₘ² = ( model.hogg.σₘ / Δm )^2
 
-    dT = μ(Xᵢ.T, Xᵢ.m, model) / ( model.hogg.ϵ * ΔT )
-    dm = ( γ(t, calibration) * (1 - u.ε) - δₘ(Xᵢ.m, model.hogg) * u.ε )  / Δm
+"Constructs upwind-downwind scheme A."
+function constructA(V::ValueFunction, model::M, G::RegularGrid{N₁,N₂,S}, calibration::Calibration) where {N₁,N₂,S,D<:Damages{S},P<:LogSeparable{S},M<:AbstractModel{S,D,P}}
+    n = length(G)
+    ΔT⁻¹, Δm⁻¹ = inv.(step(G))
+    t = V.t.t
+    γₜ = γ(t, calibration)
+    ωₜ = ω(t, economy)
+    
+    idx = Int[]; jdx = Int[]
+    values = S[]
 
-    Q = σₘ² + σₜ² + G.h * ( abs(dT) + abs(dm) )
+    @inbounds for j in axes(G, 2), i in axes(G, 1)
+        k = LinearIndex((i, j), G)
+        Xᵢ = G.X[k]
+        δᵢ = δₘ(exp(Xᵢ.m) * hogg.Mᵖ, hogg)
+ 
+        y = zero(S) # Diagonal values
+        
+        # Temperature, which is uncontrolled
+        bᵀ = μ(Xᵢ.T, Xᵢ.m, model) / model.hogg.ϵ
+        
+        if bᵀ ≥ 0
+            z = bᵀ * ΔT⁻¹
+            push!(idx, k); push!(jdx, LinearIndex((i + 1, j), G))
+            push!(values, z)
+            y -= z
+        else
+            x = -bᵀ * ΔT⁻¹
+            push!(idx, k); push!(jdx, LinearIndex((i - 1, j), G))
+            push!(values, x)
+            y -= x
+        end
 
-    return min(G.h^2 / Q, Δtmax)
+        # Carbon concentration is controlled
+        if j < N₂
+            ∂ᵐ₊H = (V.H[i, j + 1] - V.H[i, j]) * Δm⁻¹
+            ε₊ = εopt(t, Xᵢ, ∂ᵐ₊H, model)
+            bᵐ₊ = γₜ * (1 - ε₊) - δᵢ * ε₊
+        else
+            ε₊ = 1 / (1 + δᵢ / γₜ)
+            ∂ᵐ₊H = ωₜ * (model.preferences.θ - 1) * ε₊ / (γₜ + δᵢ)
+            bᵐ₊ = zero(S)
+        end
+
+        if j > 1
+            ∂ᵐ₋H = (V.H[i, j] - V.H[i, j - 1]) * Δm⁻¹
+            ε₋ = εopt(t, Xᵢ, ∂ᵐ₋H, model)
+            bᵐ₋ = γₜ * (1 - ε₋) - δᵢ * ε₋
+        else
+            ε₋ = 1 / (1 + δᵢ / γₜ)
+            ∂ᵐ₋H = ωₜ * (model.preferences.θ - 1) * ε₋ / (γₜ + δᵢ)
+            bᵐ₋ = zero(S)
+        end
+        
+        
+        if bᵐ₊ > 0 && bᵐ₋ < 0
+            error("Non-concave value function detected at grid point ($i, $j). " *
+              "Forward drift bᵐ₊ = $bᵐ₊ > 0 and backward drift bᵐ₋ = $bᵐ₋ < 0, " *
+              "which indicates the value function is not concave in the carbon concentration dimension.")
+        elseif bᵐ₊ > 0 && bᵐ₋ ≥ 0
+            V.ε[k] = ε₊
+
+            z = bᵐ₊ * Δm⁻¹
+            push!(idx, k); push!(jdx, LinearIndex((i, j + 1), G))
+            push!(values, z)
+            y -= z
+        elseif bᵐ₊ ≤ 0 && bᵐ₋ < 0
+            V.ε[k] = ε₋
+
+            x = -bᵐ₋ * Δm⁻¹
+            push!(idx, k); push!(jdx, LinearIndex((i, j - 1), G))
+            push!(values, z)
+            y -= z
+        end
+
+        push!(idx, k); push!(jdx, k)
+        push!(values, y)
+    end
+
+    return sparse(idx, jdx, values, n, n)
 end
 
-function driftstep(t, idx, F, u::Policy, Δtmax, model::AbstractModel, calibration::Calibration, G)
-    ΔT, Δm = G.Δ
+"Constructs second order central difference operator."
+function constructL(model::M, G::RegularGrid{N₁,N₂,S}) where {N₁,N₂,S,D<:Damages{S},P<:LogSeparable{S},M<:AbstractModel{S,D,P}}
+    n = length(G)
+    ΔT, Δm = step.(G.ranges)  # FIXED: Use step sizes, not extrema!
+    νᵀ = (model.hogg.σₜ / (model.hogg.ϵ * ΔT))^2
+    νᵐ = (model.hogg.σₘ / Δm)^2
 
-    L, R = extrema(G)
+    weights = S[]
+    idx = Int[]
+    jdx = []
+    @inbounds for j in axes(G, 2), i in axes(G, 1)
+        k = LinearIndex((i, j), G)
 
-    σₜ² = ( model.hogg.σₜ / (model.hogg.ϵ * ΔT) )^2
-    σₘ² = ( model.hogg.σₘ / Δm )^2
+        # T direction second derivative
+        if i > 1 && i < N₁
+            push!(weights, νᵀ)
+            push!(idx, k)
+            push!(jdx, LinearIndex((i - 1, j), G))
 
-    Xᵢ = G.X[idx]
-    dT = μ(Xᵢ.T, Xᵢ.m, model) / (model.hogg.ϵ * ΔT)
-    dm = ( γ(t, calibration) * (1 - u.ε) - δₘ(Xᵢ.m, model.hogg) * u.ε )  / Δm
+            push!(weights, νᵀ)
+            push!(idx, k)
+            push!(jdx, LinearIndex((i + 1, j), G))
 
-    FᵢT₊, FᵢT₋, Fᵢm₊, Fᵢm₋ = getneighours(F, idx, L, R)
+            push!(weights, -2νᵀ)
+            push!(idx, k)
+            push!(jdx, k)
+        elseif i == 1
+            # Left boundary: use forward difference
+            push!(weights, νᵀ)
+            push!(idx, k)
+            push!(jdx, LinearIndex((i + 1, j), G))
 
-    Q = σₘ² + σₜ² + G.h * (abs(dT) + abs(dm))
+            push!(weights, -νᵀ)
+            push!(idx, k)
+            push!(jdx, k)
+        elseif i == N₁
+            # Right boundary: use backward difference
+            push!(weights, νᵀ)
+            push!(idx, k)
+            push!(jdx, LinearIndex((i - 1, j), G))
 
-    dTF = G.h * abs(dT) * ifelse(dT > 0, FᵢT₊, FᵢT₋) + σₜ² * (FᵢT₊ + FᵢT₋) / 2
-    dmF = G.h * abs(dm) * ifelse(dm > 0, Fᵢm₊, Fᵢm₋) + σₘ² * (Fᵢm₊ + Fᵢm₋) / 2
+            push!(weights, -νᵀ)
+            push!(idx, k)
+            push!(jdx, k)
+        end
 
-    F′ = (dTF + dmF) / Q
-    Δt = min(G.h^2 / Q, Δtmax)
+        # m direction second derivative
+        if j > 1 && j < N₂
+            push!(weights, νᵐ)
+            push!(idx, k)
+            push!(jdx, LinearIndex((i, j - 1), G))
 
-    return F′, Δt
-end
+            push!(weights, νᵐ)
+            push!(idx, k)
+            push!(jdx, LinearIndex((i, j + 1), G))
 
-markovstep(t, idx, F, u::Policy, Δtmax, model::Union{LinearModel, TippingModel}, calibration::Calibration, G) = driftstep(t, idx, F, u, Δtmax, model, calibration, G)
-function markovstep(t, idx, F, u::Policy, Δtmax, model::JumpModel, calibration::Calibration, G)
-    throw("markovstep not implemented for JumpModel!")
-    Fᵈ, Δt = driftstep(t, idx, F, α, Δtmax, model, calibration, G)
+            push!(weights, -2νᵐ)
+            push!(idx, k)
+            push!(jdx, k)
+        elseif j == 1
+            # Left boundary: use forward difference
+            push!(weights, νᵐ)
+            push!(idx, k)
+            push!(jdx, LinearIndex((i, j + 1), G))
 
-    # Update with jump
-    R = maximum(CartesianIndices(F))
-    Xᵢ = G.X[idx]
-    πᵢ = intensity(Xᵢ.T, model.hogg, model.jump)
-    qᵢ = increase(Xᵢ.T, model.hogg, model.jump)
+            push!(weights, -νᵐ)
+            push!(idx, k)
+            push!(jdx, k)
+        elseif j == N₂
+            # Right boundary: use backward difference
+            push!(weights, νᵐ)
+            push!(idx, k)
+            push!(jdx, LinearIndex((i, j - 1), G))
 
-    steps = floor(Int, div(qᵢ, G.Δ.T * G.h))
-    weight = qᵢ / (G.Δ.T * G.h)
+            push!(weights, -νᵐ)
+            push!(idx, k)
+            push!(jdx, k)
+        end
+    end
 
-    Fʲ = F[min(idx + steps * Idx[1], R)] * (1 - weight) + F[min(idx + (steps + 1) * Idx[1], R)] * weight
-
-    F′ = Fᵈ + πᵢ * Δt * (Fʲ - Fᵈ)
-
-    return F′, Δt
-end
-
-function logcost(logF′, Δt, t, Xᵢ::Point, u, model::AbstractModel{T, D}) where {T, D <: GrowthDamages{T}}
-    logδF′ = logoutputfct(t, Δt, Xᵢ, u, model) + logF′
-    return logg(u.χ, logδF′, Δt, model.preferences)
-end
-function cost(F′, t, Δt, Xᵢ::Point, u::Policy, model::AbstractModel{T, D}) where {T, D <: GrowthDamages{T}}
-    δ = outputfct(t, Δt, Xᵢ, u, model)
-    return g(u.χ, Δt, δ * F′, model.preferences)
-end
-
-function Base.isempty(q::ZigZagBoomerang.PartialQueue)
-    all((isempty(m) for m in q.minima))
+    return sparse(idx, jdx, weights, n, n)
 end

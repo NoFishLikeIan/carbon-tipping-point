@@ -2,21 +2,20 @@ using Test, BenchmarkTools, Revise
 using Plots, LaTeXStrings
 
 using Model, Grid
-using FastClosures
-using ZigZagBoomerang
 using Base.Threads
 using SciMLBase
-using Optim
 using Statistics
-using StaticArrays
+using StaticArrays, SparseArrays
+using LinearSolve, LinearAlgebra
 
 using JLD2, UnPack
 using Dates, Printf
 
+includet("../../src/extend/model.jl")
 includet("../../src/valuefunction.jl")
-includet("../../src/extensions.jl")
 includet("../utils/saving.jl")
 includet("../utils/logging.jl")
+includet("../markov/utils.jl")
 includet("../markov/chain.jl")
 includet("../markov/terminal.jl")
 
@@ -40,20 +39,30 @@ begin # Construct the model
         LinearModel(hogg, preferences, damages, economy)
     end
 
-    N = 101
+    N = (105, 100)
     Tdomain = hogg.Tᵖ .+ (0., 10.)
-    mdomain = mstable.(Tdomain, model)
+    mdomain = mstable(Tdomain[1] + 0.25, model), mstable(Tdomain[2] - 0.25, model)
 
-    Gterminal = constructgrid((Tdomain, mdomain), N, hogg)
-    Δtmax = 1 / 100
+    G = RegularGrid(N, (Tdomain, mdomain))
 end;
 
+# Test steady state problem
+valuefunction = ValueFunction(G, calibration)
+Δt = 0.01
+steadystate!(valuefunction, Δt, model, G, calibration; verbose = 2)
+
+# OLD
 begin
-    state = DPState(calibration, Gterminal)
-    terminaljacobi!(state, model, Gterminal)
+    iterations = 10_000
+    indices = CartesianIndices(Gterminal)
+    state = DPState(calibration.τ, Gterminal)
+    # terminaljacobi!(state, model, Gterminal, indices)
+    # optimalpolicy!(state, model, Gterminal)
+    # vfi!(state, model, Gterminal, iterations, (indices,))
+    seidelgauss!(state, model, Gterminal, iterations)
 end
 
-vfi!(state, model, Gterminal; maxiter=100_000, verbose=2, tol=1e-6, alternate=true, ω=1.05, Δtmax=Δtmax)
+state, _ = computeterminal(model, Gterminal, calibration; inneriterations=10_000, verbose=1, withrichardson=true, vtol=1e-9, ptol=1e-5)
 
 if isinteractive()
     Tspace = range(Gterminal.domains[1]...; length=size(Gterminal, 1))
@@ -66,5 +75,5 @@ if isinteractive()
     χfig = contourf(mspace, Tspace, getproperty.(state.policystate.policy, :χ); c=:Reds, xlabel=L"m", ylabel=L"T", yaxis=false)
     plot!(χfig, nullcline, Tspace; c=:white, linestyle=:dash, xlims=extrema(mspace), ylims=extrema(Tspace), label=false)
 
-    plot(Ffig, χfig; size=600 .* (2√2, 1), margins=3Plots.mm)
+    plot(Ffig, χfig; size=600 .* (2√2, 1), margins=2Plots.mm)
 end
