@@ -23,7 +23,8 @@ export Damages
 export GrowthDamages, WeitzmanGrowth, Kalkuhl, NoDamageGrowth
 export LevelDamages, WeitzmanLevel, NoDamageLevel
 export Economy, RegionalEconomies
-export β, β′, d, D, ϕ, A
+export β, β′, d, D, ϕ, A, ω
+export Φ, Bterminal, χopt
 
 export g, f, logg, discount
 

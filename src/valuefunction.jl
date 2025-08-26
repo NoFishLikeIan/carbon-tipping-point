@@ -1,37 +1,18 @@
-struct Time{T <: Real}
-    τ::T
-    t::Matrix{T}
+mutable struct Time{S <: Real}
+    t::S
 end
 
-struct PolicyState{T <: Real}
-    policy::Matrix{Policy{T}}
-    foc::Matrix{T}
-end
+"Finite Difference representation of the value function at time `t`"
+struct ValueFunction{S <: Real, N₁, N₂}
+    H::Matrix{S} # Matrix representation of the value function
+    ε::Matrix{S} # Matrix represeting abatement
+    t::Time{S}
 
-struct ValueFunction{T <: Real}
-    Fₜ::Matrix{T}
-    Fₜ₊ₕ::Matrix{T}
-    error::Matrix{T}
-end
-
-struct DPState{T <: Real}
-    valuefunction::ValueFunction{T}
-    policystate::PolicyState{T}
-    timestate::Time{T}
-end
-
-DPState(calibration::Calibration{T}, G::RegularGrid{N, T}) where {N, T} = DPState(calibration.τ, G)
-function DPState(τ::T, ::RegularGrid{N, T}) where {N, T}
-    Fₜ = ones(T, (N, N))
-    Fₜ₊ₕ = copy(Fₜ)
-    error = similar(Fₜ)
-    valuefunction = ValueFunction(Fₜ, Fₜ₊ₕ, error)
-
-    policy = [ Policy{T}(0.5, 1.) for _ in 1:N, _ in 1:N ]
-    foc = similar(error)
-    policystate = PolicyState(policy, foc)    
-
-    t = fill(τ, (N, N)) 
-
-    return DPState(valuefunction, policystate, Time(τ, t))
+    function ValueFunction(G::RegularGrid{N₁, N₂, S}, calibration::Calibration) where {N₁, N₂, S}
+        t = Time(calibration.τ)
+        H = ones(S, size(G))
+        ε = ones(S, size(G))
+        
+        return new{S, N₁, N₂}(H, ε, t)
+    end
 end

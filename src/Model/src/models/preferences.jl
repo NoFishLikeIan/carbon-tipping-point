@@ -95,3 +95,10 @@ function f(c, v, Δt, p::LogUtility)
 end
 
 Base.broadcastable(p::Preferences) = Ref(p)
+
+function χopt(t, e::Economy, p::LogSeparable)
+    r = e.κ * A(t, e)
+    num = (r - 1) + √((r - 1)^2 + 4e.κ * p.ρ)
+
+    return num / (2r)
+end
