@@ -84,3 +84,154 @@ function Base.isless(m₁::M₁, m₂::M₂) where {M₁ <: AbstractModel, M₂ 
         return isless(m₁.feedback.Tᶜ, m₂.feedback.Tᶜ)
     end
 end
+
+
+function Base.show(io::IO, calibration::Calibration{T,N}) where {T,N}
+    println(io, "┌─ Calibration")
+    
+    # Basic information
+    println(io, "│  General Properties:")
+    println(io, "│    ├─ Base year: $(calibration.baselineyear)")
+    println(io, "│    ├─ Time horizon: $(calibration.τ) years")
+    println(io, "│    └─ Emission data points: $(length(calibration.emissions))")
+    
+    # γ parameters
+    println(io, "│  Growth Rate Parameters:")
+    for (i, p) in enumerate(calibration.γparameters)
+        if i == N
+            println(io, "│    └─ p$i = $(round(p, digits=6))")
+        else
+            println(io, "│    ├─ p$i = $(round(p, digits=6))")
+        end
+    end
+    
+    # Generate Unicode plot of γ function
+    println(io, "│")
+    println(io, "│  Growth Rate Function γ(t):")
+    
+    # Sample the function
+    width = 50  # Width of the plot
+    ts = range(0, calibration.τ, length=width)
+    values = [γ(t, calibration) for t in ts]
+    
+    # Calculate min/max for scaling
+    min_val = minimum(values)
+    max_val = maximum(values)
+    
+    # Create Unicode sparkline
+    chars = collect(" ▁▂▃▄▅▆▇█")
+    range_val = max_val - min_val
+    if range_val ≈ 0
+        range_val = 1.0
+    end
+    
+    # Map values to character indices
+    indices = [round(Int, 1 + 8 * (val - min_val) / range_val) for val in values]
+    indices = [max(1, min(9, idx)) for idx in indices]
+    
+    # Print the sparkline with labels
+    println(io, "│    max: $(round(max_val, digits=5))")
+    print(io, "│    ")
+    for idx in indices
+        print(io, chars[idx])
+    end
+    println(io)
+    println(io, "│    min: $(round(min_val, digits=5))")
+    
+    # Print x-axis labels
+    print(io, "│    0")
+    mid_point = round(Int, width/2)
+    mid_spaces = max(0, mid_point - 1)
+    print(io, " "^mid_spaces, "$(round(Int, ts[mid_point]))")
+    
+    end_spaces = max(0, width - mid_point - 2)
+    println(io, " "^end_spaces, "$(round(Int, ts[end]))")
+    
+    println(io, "└─────────────────────────────────")
+end
+
+# Add support for display in notebooks and REPLs
+function Base.show(io::IO, ::MIME"text/plain", calibration::Calibration)
+    show(io, calibration)
+end
+
+# Handle RegionalCalibration with two regions
+function Base.show(io::IO, calibration::RegionalCalibration{T}) where T
+    println(io, "┌─ RegionalCalibration")
+    
+    # Show underlying calibration
+    println(io, "│  Underlying Calibration:")
+    println(io, "│    ├─ Base year: $(calibration.calibration.baselineyear)")
+    println(io, "│    ├─ Time horizon: $(calibration.calibration.τ) years")
+    println(io, "│    └─ Emission data points: $(length(calibration.calibration.emissions))")
+    
+    # Regional fractions
+    println(io, "│  Regional Data:")
+    println(io, "│    ├─ Regions: 2")
+    println(io, "│    └─ Current fraction: $(round(calibration.fraction[end], digits=3))")
+    
+    # Generate Unicode plot for both regions
+    println(io, "│")
+    println(io, "│  Regional Growth Rate Functions:")
+    
+    # Sample the functions
+    width = 50
+    ts = range(0, calibration.calibration.τ, length=width)
+    
+    # Get values for both regions
+    values_by_region = [γ(t, calibration) for t in ts]
+    values_region1 = [val[1] for val in values_by_region]
+    values_region2 = [val[2] for val in values_by_region]
+    
+    # Find overall min/max
+    all_values = vcat(values_region1, values_region2)
+    min_val = minimum(all_values)
+    max_val = maximum(all_values)
+    
+    # Create sparklines
+    chars = " ▁▂▃▄▅▆▇█"
+    range_val = max_val - min_val
+    if range_val ≈ 0
+        range_val = 1.0
+    end
+    
+    # Map values to character indices for both regions
+    indices1 = [round(Int, 1 + 8 * (val - min_val) / range_val) for val in values_region1]
+    indices1 = [max(1, min(9, idx)) for idx in indices1]
+    
+    indices2 = [round(Int, 1 + 8 * (val - min_val) / range_val) for val in values_region2]
+    indices2 = [max(1, min(9, idx)) for idx in indices2]
+    
+    # Print sparklines
+    println(io, "│    max: $(round(max_val, digits=5))")
+    
+    print(io, "│    R1: ")
+    for idx in indices1
+        print(io, chars[idx])
+    end
+    println(io)
+    
+    print(io, "│    R2: ")
+    for idx in indices2
+        print(io, chars[idx])
+    end
+    println(io)
+    
+    println(io, "│    min: $(round(min_val, digits=5))")
+    
+    # Print x-axis labels
+    print(io, "│    0")
+    mid_point = round(Int, width/2)
+    mid_spaces = max(0, mid_point - 1)
+    print(io, " "^mid_spaces, "$(round(Int, ts[mid_point]))")
+    
+    end_spaces = max(0, width - mid_point - 2)
+    println(io, " "^end_spaces, "$(round(Int, ts[end]))")
+    
+    println(io, "└─────────────────────────────────")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", calibration::RegionalCalibration)
+    show(io, calibration)
+end
+
