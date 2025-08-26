@@ -25,10 +25,8 @@ push!(PGFPlotsX.CUSTOM_PREAMBLE,
 
 using Model, Grid
 
-
 includet("../../src/valuefunction.jl")
 includet("../../src/extend/model.jl")
-includet("../../src/extend/grid.jl")
 includet("../utils/saving.jl")
 includet("../utils/simulating.jl")
 

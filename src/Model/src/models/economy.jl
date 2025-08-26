@@ -59,8 +59,8 @@ Base.broadcastable(damages::Damages) = Ref(damages)
 
 Base.@kwdef struct Economy{T<:Real}
     # Technology
-    ωᵣ::T = 0.017558043747351086 # Speed of abatement technology cost reduction
-    ω₀::T = 2 * 0.11 # Fraction of GDP required today to abate
+    ωᵣ::T = 0.0045 # Speed of abatement technology cost reduction
+    ω₀::T = 2 * 0.0532 # Fraction of GDP required today to abate
     ϱ::T = 1e-3 # Growth of TFP
     κ::T = 11.2 # Adjustment costs of abatement technology
     δₖᵖ::T = 0.0162 # Initial depreciation rate of capital

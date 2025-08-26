@@ -103,7 +103,7 @@ end
 
 
 "Constructs linear interpolation of results"
-function buildinterpolations(states::OrderedDict{R,DPState{R}}, G::RegularGrid) where R
+function buildinterpolations(states, G::RegularGrid)
     Tspace = range(G.domains[1]...; length=size(G, 1))
     mspace = range(G.domains[2]...; length=size(G, 2))
     timespace = collect(keys(states))
