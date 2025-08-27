@@ -109,4 +109,4 @@ end
 
 G = shrink(Gterminal, 0.1)
 valuefunction = interpolateovergrid(terminalvaluefunction, Gterminal, G)
-backwardsimulation!(valuefunction, dt, model, G, calibration; verbose, withnegative, overwrite, outdir, startcache = 100., cachestep = 1.)
+backwardsimulation!(valuefunction, dt, model, G, calibration; verbose, withnegative, overwrite, outdir, cachestep = cachestep)
