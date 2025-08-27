@@ -12,15 +12,13 @@ end
 
 function shrink(domain::Domain, factor)
     l, r = domain
-    cut = (r - l) * (1 - factor) / 2
+    cut = (r - l) * factor / 2
 
     return (l + cut, r - cut)
 end
-
-function shrink(G::RegularGrid, factor)
-    RegularGrid(N, shrink.(G.domains, factor))
+function shrink(G::RegularGrid{N₁, N₂}, factor) where {N₁, N₂}
+    RegularGrid((N₁, N₂), shrink.(G.domains, factor))
 end
-
-function halfgrid(G::RegularGrid)
-    RegularGrid(G.N .÷ 2, G.domains)
+function halfgrid(G::RegularGrid{N₁, N₂}) where {N₁, N₂}
+    RegularGrid((N₁ ÷ 2, N₂ ÷ 2), G.domains)
 end

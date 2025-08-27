@@ -54,3 +54,11 @@ function Base.CartesianIndex(k::Int, ::RegularGrid{N₁}) where {N₁}
     j = ((k - 1) ÷ N₁) + 1
     return CartesianIndex(i, j)
 end
+
+function closestgridpoint(Xᵢ::Point, grid::RegularGrid)
+    Tspace, mspace = grid.ranges
+    i = argmin(i -> abs(Tspace[i] - Xᵢ.T), axes(grid, 1))
+    j = argmin(j -> abs(mspace[j] - Xᵢ.m), axes(grid, 2))
+    
+    return i, j
+end

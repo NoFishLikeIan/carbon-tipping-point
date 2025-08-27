@@ -25,3 +25,38 @@ function abserror!(error::Error{S}, a::AbstractArray{S}, b::AbstractArray{S}, k)
 
     return error
 end
+
+function initcachefile(model, G, outdir, withnegative; overwrite = false)
+    # Initialise cache folder
+    folder = simpaths(model, withnegative)
+    cachefolder = joinpath(outdir, folder)
+    
+    if !isdir(cachefolder)
+        mkpath(cachefolder)
+    end
+
+    filename = makefilename(model)
+    cachepath = joinpath(cachefolder, filename)
+
+    if isfile(cachepath) && overwrite
+        @warn "File $cachepath already exists and mode is overwrite. Will remove."
+
+        rm(cachepath)
+
+        cachefile = jldopen(cachepath, "w+")
+        cachefile["G"] = G
+        cachefile["model"] = model
+
+    elseif isfile(cachepath) && !overwrite 
+
+        println("File $cachepath already exists and mode is not overwrite. Will resume from cache.")
+        cachefile = jldopen(cachepath, "a+")
+
+    else
+        cachefile = jldopen(cachepath, "w+")
+        cachefile["G"] = G
+        cachefile["model"] = model
+    end
+
+    return cachepath, cachefile
+end

@@ -1,11 +1,9 @@
 function αopt(t, Xᵢ::Point, ∂ₘH, model::M, calibration::Calibration) where {S,D<:Damages{S},P<:LogSeparable{S},M<:AbstractModel{S,D,P}}
-    αnet = ᾱ(t, Xᵢ, model, calibration)
-
-    return clamp(-∂ₘH * αnet^2 / (ω(t, model.economy) * (1 - model.preferences.θ)), 0, αnet)
+    -∂ₘH * ᾱ(t, Xᵢ, model, calibration)^2 / (ω(t, model.economy) * (1 - model.preferences.θ))
 end
 
 "Constructs upwind-downwind scheme A."
-function constructD(V::ValueFunction, model::M, G::RegularGrid{N₁,N₂,S}, calibration::Calibration) where {N₁,N₂,S,D<:Damages{S},P<:LogSeparable{S},M<:AbstractModel{S,D,P}}
+function constructD(V::ValueFunction, model::M, G::RegularGrid{N₁,N₂,S}, calibration::Calibration; withnegative = false) where {N₁,N₂,S,D<:Damages{S},P<:LogSeparable{S},M<:AbstractModel{S,D,P}}
     n = length(G)
     ΔT⁻¹, Δm⁻¹ = inv.(step(G))
     ΔT⁻² = ΔT⁻¹^2
@@ -21,7 +19,7 @@ function constructD(V::ValueFunction, model::M, G::RegularGrid{N₁,N₂,S}, cal
     idx = Int[]; jdx = Int[]
     values = S[]
 
-    for j in axes(G, 2), i in axes(G, 1)
+    @inbounds for j in axes(G, 2), i in axes(G, 1)
         k = LinearIndex((i, j), G)
         Xᵢ = G.X[k]
  
@@ -31,13 +29,18 @@ function constructD(V::ValueFunction, model::M, G::RegularGrid{N₁,N₂,S}, cal
         bᵀ = μ(Xᵢ.T, Xᵢ.m, model) / model.hogg.ϵ
 
         if bᵀ ≥ 0
-            z = bᵀ * ΔT⁻¹
+            ∂ᵀH = (i < N₁ ? V.H[i + 1, j] - V.H[i, j] : V.H[i, j] - V.H[i - 1, j]) * ΔT⁻¹
+
+            z = bᵀ * ΔT⁻¹ + 2σₜ² * ∂ᵀH
             
             push!(idx, k); push!(jdx, LinearIndex((i + 1, j), G))
             push!(values, z)
             y -= z
+
         else
-            x = -bᵀ * ΔT⁻¹
+            ∂ᵀH = (i > 1 ? V.H[i, j] - V.H[i - 1, j] : V.H[i + 1, j] - V.H[i, j]) * ΔT⁻¹
+
+            x = -bᵀ * ΔT⁻¹ + 2σₜ² * ∂ᵀH
             
             push!(idx, k); push!(jdx, LinearIndex((i - 1, j), G))
             push!(values, x)
@@ -63,9 +66,11 @@ function constructD(V::ValueFunction, model::M, G::RegularGrid{N₁,N₂,S}, cal
         end
 
         # Carbon concentration is controlled
+        αmax = ifelse(withnegative, one(S), ᾱ(t, Xᵢ, model, calibration))
+
         if j < N₂
             ∂ᵐ₊H = (V.H[i, j + 1] - V.H[i, j]) * Δm⁻¹
-            α₊ = αopt(t, Xᵢ, ∂ᵐ₊H, model, calibration)
+            α₊ = clamp(αopt(t, Xᵢ, ∂ᵐ₊H, model, calibration), 0, αmax)
             bᵐ₊ = γₜ - α₊
         else
             α₊ = ᾱ(t, Xᵢ, model, calibration)
@@ -75,7 +80,7 @@ function constructD(V::ValueFunction, model::M, G::RegularGrid{N₁,N₂,S}, cal
 
         if j > 1
             ∂ᵐ₋H = (V.H[i, j] - V.H[i, j - 1]) * Δm⁻¹
-            α₋ = αopt(t, Xᵢ, ∂ᵐ₋H, model, calibration)
+            α₋ = clamp(αopt(t, Xᵢ, ∂ᵐ₋H, model, calibration), 0, αmax)
             bᵐ₋ = γₜ - α₋
         else
             α₋ = ᾱ(t, Xᵢ, model, calibration)
@@ -89,14 +94,16 @@ function constructD(V::ValueFunction, model::M, G::RegularGrid{N₁,N₂,S}, cal
             H₋ = l(t, Xᵢ, α₋, model, calibration) + ∂ᵐ₋H * bᵐ₋
 
             if H₊ < H₋ # Minimisation problem
-                z = bᵐ₊ * Δm⁻¹
+                V.α[k] = α₊
+                
+                z = bᵐ₊ * Δm⁻¹ + 2σₘ² * ∂ᵐ₊H
                 push!(idx, k); push!(jdx, LinearIndex((i, j + 1), G))
                 push!(values, z)
                 y -= z
             else
                 V.α[k] = α₋
 
-                x = -bᵐ₋ * Δm⁻¹
+                x = -bᵐ₋ * Δm⁻¹ + 2σₘ² * ∂ᵐ₋H
                 push!(idx, k); push!(jdx, LinearIndex((i, j - 1), G))
                 push!(values, x)
                 y -= x
@@ -105,14 +112,14 @@ function constructD(V::ValueFunction, model::M, G::RegularGrid{N₁,N₂,S}, cal
         elseif bᵐ₊ > 0 && bᵐ₋ ≥ 0
             V.α[k] = α₊
 
-            z = bᵐ₊ * Δm⁻¹
+            z = bᵐ₊ * Δm⁻¹ + 2σₘ² * ∂ᵐ₊H
             push!(idx, k); push!(jdx, LinearIndex((i, j + 1), G))
             push!(values, z)
             y -= z
         elseif bᵐ₊ ≤ 0 && bᵐ₋ < 0
             V.α[k] = α₋
 
-            x = -bᵐ₋ * Δm⁻¹
+            x = -bᵐ₋ * Δm⁻¹ + 2σₘ² * ∂ᵐ₋H
             push!(idx, k); push!(jdx, LinearIndex((i, j - 1), G))
             push!(values, x)
             y -= x
@@ -144,89 +151,36 @@ function constructD(V::ValueFunction, model::M, G::RegularGrid{N₁,N₂,S}, cal
     return sparse(idx, jdx, values, n, n)
 end
 
-"Constructs second order central difference operator."
-function constructL(model::M, G::RegularGrid{N₁,N₂,S}) where {N₁,N₂,S,D<:Damages{S},P<:LogSeparable{S},M<:AbstractModel{S,D,P}}
-    n = length(G)
-    ΔT, Δm = step.(G.ranges)
-    νᵀ = (model.hogg.σₜ / (model.hogg.ϵ * ΔT))^2
-    νᵐ = (model.hogg.σₘ / Δm)^2
+function constructA(valuefunction::ValueFunction, Δt⁻¹, model::M, G::RegularGrid{N₁,N₂,S}, calibration::Calibration; withnegative = false) where {N₁,N₂,S,D<:Damages{S},P<:LogSeparable{S},M<:AbstractModel{S,D,P}}
+    (model.preferences.ρ + Δt⁻¹) * I - constructD(valuefunction, model, G, calibration; withnegative)
+end
 
-    weights = S[]
-    idx = Int[]
-    jdx = []
+function constructb!(b, valuefunction::ValueFunction, Δt⁻¹, model::M, G::RegularGrid{N₁,N₂,S}, calibration) where {N₁,N₂,S,D<:Damages{S},P<:LogSeparable{S},M<:AbstractModel{S,D,P}}
+    ΔT⁻¹, Δm⁻¹ = inv.(step(G))
+    γₜ = γ(valuefunction.t.t, calibration)
+
     @inbounds for j in axes(G, 2), i in axes(G, 1)
         k = LinearIndex((i, j), G)
 
-        # T direction second derivative
-        if i > 1 && i < N₁
-            push!(weights, νᵀ)
-            push!(idx, k)
-            push!(jdx, LinearIndex((i - 1, j), G))
+        Xᵢ = G.X[k]
+        αᵢ = valuefunction.α[k]
 
-            push!(weights, νᵀ)
-            push!(idx, k)
-            push!(jdx, LinearIndex((i + 1, j), G))
-
-            push!(weights, -2νᵀ)
-            push!(idx, k)
-            push!(jdx, k)
-        elseif i == 1
-            # Left boundary: use forward difference
-            push!(weights, νᵀ)
-            push!(idx, k)
-            push!(jdx, LinearIndex((i + 1, j), G))
-
-            push!(weights, -νᵀ)
-            push!(idx, k)
-            push!(jdx, k)
-        elseif i == N₁
-            # Right boundary: use backward difference
-            push!(weights, νᵀ)
-            push!(idx, k)
-            push!(jdx, LinearIndex((i - 1, j), G))
-
-            push!(weights, -νᵀ)
-            push!(idx, k)
-            push!(jdx, k)
+        bᵀ = μ(Xᵢ.T, Xᵢ.m, model) / model.hogg.ϵ
+        ∂ᵀH = if (bᵀ ≥ 0 && i < N₁) || (bᵀ < 0 && i == 1)
+            (valuefunction.H[i + 1, j] - valuefunction.H[i, j]) * ΔT⁻¹
+        else
+           (valuefunction.H[i, j] - valuefunction.H[i - 1, j]) * ΔT⁻¹
         end
 
-        # m direction second derivative
-        if j > 1 && j < N₂
-            push!(weights, νᵐ)
-            push!(idx, k)
-            push!(jdx, LinearIndex((i, j - 1), G))
-
-            push!(weights, νᵐ)
-            push!(idx, k)
-            push!(jdx, LinearIndex((i, j + 1), G))
-
-            push!(weights, -2νᵐ)
-            push!(idx, k)
-            push!(jdx, k)
-        elseif j == 1
-            # Left boundary: use forward difference
-            push!(weights, νᵐ)
-            push!(idx, k)
-            push!(jdx, LinearIndex((i, j + 1), G))
-
-            push!(weights, -νᵐ)
-            push!(idx, k)
-            push!(jdx, k)
-        elseif j == N₂
-            # Right boundary: use backward difference
-            push!(weights, νᵐ)
-            push!(idx, k)
-            push!(jdx, LinearIndex((i, j - 1), G))
-
-            push!(weights, -νᵐ)
-            push!(idx, k)
-            push!(jdx, k)
+        bᵐ = γₜ - valuefunction.α[k]
+        ∂ᵐH = if (bᵐ ≥ 0 && j < N₂) || (bᵐ < 0 && j == 1)
+            (valuefunction.H[i, j + 1] - valuefunction.H[i, j]) * Δm⁻¹
+        else
+           (valuefunction.H[i, j] - valuefunction.H[i, j - 1]) * Δm⁻¹
         end
+
+        adv = ∂ᵀH * (model.hogg.σₜ / model.hogg.ϵ)^2 + ∂ᵐH * model.hogg.σₘ^2
+
+        b[k] = l(valuefunction.t.t, Xᵢ, αᵢ, model, calibration) + Δt⁻¹ * valuefunction.H[k] + adv
     end
-
-    return sparse(idx, jdx, weights, n, n)
-end
-
-function constructA(valuefunction::ValueFunction, Δt⁻¹, model::M, G::RegularGrid{N₁,N₂,S}, calibration::Calibration) where {N₁,N₂,S,D<:Damages{S},P<:LogSeparable{S},M<:AbstractModel{S,D,P}}
-    (model.preferences.ρ + Δt⁻¹) * I - constructD(valuefunction, model, G, calibration)
 end

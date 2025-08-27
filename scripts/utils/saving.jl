@@ -1,5 +1,4 @@
-function simpaths(model::AbstractModel)
-
+function simpaths(model::AbstractModel, withnegative::Bool)
     basedir = if model isa TippingModel
         "tipping"
     elseif model isa LinearModel
@@ -32,76 +31,36 @@ function simpaths(model::AbstractModel)
         throw("Directory not specified for preferences $(typeof(model.preferences))")
     end
 
+    controldir = withnegative ? "negative" : "constrained"
 
-    return joinpath(basedir, damagedir, preferencedir)
+    return joinpath(basedir, damagedir, preferencedir, controldir)
 end
 function makefilename(model::AbstractModel)
-    # Get model-specific parameters
-    modelparameters = if model isa TippingModel
-        @unpack Tᶜ = model.feedback
-        Printf.Format("Tc=%.2f_") => (Tᶜ,)
+    # 1. Threshold temperature deviation from pre-industrial
+    thresholdpart = if model isa TippingModel
+        deviation = model.feedback.Tᶜ - model.hogg.Tᵖ
+        "T$(Printf.format(Printf.Format("%.1f"), deviation))"
     else
-        Printf.Format("") => ()
+        "Linear"
     end
     
-    # Get preference parameters
-    preferenceparameters = if model.preferences isa EpsteinZin
-        @unpack ρ, θ, ψ = model.preferences
-        Printf.Format("ρ=%.5f_θ=%.2f_ψ=%.2f_") => (ρ, θ, ψ)
-    elseif model.preferences isa LogSeparable
-        @unpack ρ, θ = model.preferences
-        ψ = one(ρ)
-        Printf.Format("ρ=%.5f_θ=%.2f_ψ=%.2f_") => (ρ, θ, ψ)
-    elseif model.preferences isa CRRA
-        @unpack ρ, θ = model.preferences
-        Printf.Format("ρ=%.5f_θ=%.2f_") => (ρ, θ)
-    elseif model.preferences isa LogUtility
-        @unpack ρ = model.preferences
-        Printf.Format("ρ=%.5f_") => (ρ,)
+    # 2. Type of damages
+    damagepart = if model.damages isa Kalkuhl
+        "Kalkuhl"
+    elseif model.damages isa WeitzmanLevel 
+        "Weitzman"
+    elseif model.damages isa NoDamageGrowth
+        "NoDamage"
     else
-        throw("Filename not implemented for preferences $(typeof(model.preferences))")
+        "$(typeof(model.damages).name.name)"
     end
     
-    # Get economy parameters
-    @unpack ωᵣ = model.economy
-    @unpack σₜ, σₘ = model.hogg
-    economyparameters = Printf.Format("σT=%.4f_σm=%.4f_ωr=%.5f") => (σₜ, σₘ, ωᵣ)
+    # 3. RRA θ
+    θ = model.preferences.θ
+    rrapart = "RRA$(Printf.format(Printf.Format("%.1f"), θ))"
     
-    # Get damage parameters
-    damageparameters = if model.damages isa WeitzmanLevel
-        @unpack ξ = model.damages
-        Printf.Format("_ξ=%.6f") => (ξ,)
-    elseif model.damages isa Kalkuhl
-        @unpack ξ₁, ξ₂ = model.damages
-        Printf.Format("_ξ1=%.6f_ξ2=%.6f") => (ξ₁, ξ₂)
-    else
-        Printf.Format("") => ()
-    end
-    
-    # Build filename string
-    filenameparameters = String[]
-    
-    # Add model-specific part
-    if !isempty(modelparameters.first.str)
-        push!(filenameparameters, Printf.format(modelparameters.first, modelparameters.second...))
-    end
-    
-    # Add preference part
-    push!(filenameparameters, Printf.format(preferenceparameters.first, preferenceparameters.second...))
-    
-    # Add economy part
-    push!(filenameparameters, Printf.format(economyparameters.first, economyparameters.second...))
-    
-    # Add damage part
-    if !isempty(string(damageparameters.first))
-        push!(filenameparameters, Printf.format(damageparameters.first, damageparameters.second...))
-    end
-    
-    # Join and clean up
-    filename = join(filenameparameters, "")
-    filename = rstrip(filename, '_')  # Remove trailing underscore
-    
-    return "$(replace(filename, "." => ",")).jld2"
+    filename = "$(thresholdpart)_$(damagepart)_$(rrapart).jld2"
+    return replace(filename, "." => ",")
 end
 function makefilename(models::Vector{<:AbstractModel})
 
@@ -117,7 +76,7 @@ function makefilename(models::Vector{<:AbstractModel})
 end
 
 function loadterminal(model::AbstractModel{T}; outdir = "data/simulation", addpath = "") where T
-    folder = simpaths(model)
+    folder = simpaths(model, withnegative)
     filename = makefilename(model)
     
     savedir = joinpath(outdir, folder, "terminal", addpath)
@@ -142,7 +101,7 @@ function loadtotal(model::AbstractModel{T}; outdir = "data/simulation", loadkwar
         error("Output directory does not exist: $(outdir)\nHave you not solved the constrained or negative problem?")
     end
 
-    folder = simpaths(model)
+    folder = simpaths(model, withnegative)
     cachefolder = joinpath(outdir, folder)
     
     if !isdir(cachefolder)

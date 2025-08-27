@@ -25,6 +25,8 @@ struct JumpModel{T, D, P} <: FirstOrderLinearModel{T, D, P}
     jump::Jump{T}
 end
 
+UnitElasticityModel{S} = AbstractModel{S, D, P} where { D <: Damages{S}, P <: LogSeparable{S} }
+
 Base.broadcastable(m::AbstractModel) = Ref(m)
 
 # Extend functions to models

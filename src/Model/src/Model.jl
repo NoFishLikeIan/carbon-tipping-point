@@ -28,7 +28,7 @@ export Φ, Bterminal, χopt
 
 export g, f, logg, discount
 
-export AbstractModel, LinearModel, TippingModel, JumpModel
+export AbstractModel, LinearModel, TippingModel, JumpModel, UnitElasticityModel
 export Preferences, LogUtility, CRRA, LogSeparable, EpsteinZin
 
 end # module Model

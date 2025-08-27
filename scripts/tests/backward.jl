@@ -3,32 +3,22 @@ using Plots, LaTeXStrings
 default(c=:viridis, label=false, dpi=180)
 
 using Model, Grid
-
 using Base.Threads
-
 using SciMLBase
-using ZigZagBoomerang
 using Statistics
-using StaticArrays
-using FastClosures
-using LinearAlgebra
+using StaticArrays, SparseArrays, BandedMatrices
+using LinearSolve, LinearAlgebra
 
-using Optimization, SimpleOptimization
-using OptimizationOptimJL, OptimizationPolyalgorithms, LineSearches
+using JLD2, UnPack
+using Dates, Printf
 
-using ForwardDiff
-
-using JLD2
-using Printf, Dates
-
-includet("../../src/valuefunction.jl")
 includet("../../src/extend/model.jl")
-includet("../../src/extend/grid.jl")
+includet("../../src/valuefunction.jl")
+includet("../../src/extend/valuefunction.jl")
 includet("../utils/saving.jl")
-includet("../utils/logging.jl")
+includet("../markov/utils.jl")
 includet("../markov/chain.jl")
-includet("../markov/terminal.jl")
-includet("../markov/backward.jl")
+includet("../markov/finitedifference.jl")
 
 begin # Construct the model
     calibrationfilepath = "data/calibration.jld2"
@@ -38,11 +28,11 @@ begin # Construct the model
     @unpack calibration, hogg, feedbacklower, feedback, feedbackhigher = calibrationfile
     close(calibrationfile)
 
-    hogg = Hogg()
     damages = Kalkuhl()
     preferences = Preferences()
     economy = Economy()
-    threshold = 2.0
+
+    threshold = 2.5
 
     model = if 0 < threshold < Inf
         feedback = Model.updateTᶜ(threshold + hogg.Tᵖ, feedback)
@@ -51,54 +41,75 @@ begin # Construct the model
         LinearModel(hogg, preferences, damages, economy)
     end
 
-    # Construct Grid
-    N = 101
-    Tdomain = hogg.Tᵖ .+ (0., 10.)
-    mdomain = mstable.(Tdomain, model)
-    Gterminal = constructgrid((Tdomain, mdomain), N, hogg)
-    terminalstate = DPState(calibration, Gterminal)
+    N = (10, 10)
+    Tdomain = hogg.Tᵖ .+ (0., 8.)
+    mdomain = mstable(Tdomain[1] + 0.5, model), mstable(Tdomain[2] - 0.5, model)
 
-    Δtmax = 1 / 100
+    G = RegularGrid(N, (Tdomain, mdomain))
+    Δt = 1 / 24
+
+    if isinteractive()
+        Tspace = range(G.domains[1]...; length=size(G, 1))
+        mspace = range(G.domains[2]...; length=size(G, 2))
+        nullcline = mstable.(Tspace, model)
+    end
 end;
 
-vfi!(terminalstate, model, Gterminal; maxiter=100_000, tol=1e-8, alternate=true, ω=1., verbose=2, Δtmax=Δtmax)
+valuefunction = ValueFunction(hogg, G, calibration)
+steadystate!(valuefunction, Δt, model, G, calibration; verbose = 2, tolerance = Error(1e-2, 1e-3))
 
 if isinteractive()
-    Tspace = range(Gterminal.domains[1]...; length=size(Gterminal, 1))
-    mspace = range(Gterminal.domains[2]...; length=size(Gterminal, 2))
+    policyfig = contourf(mspace, Tspace, valuefunction.α; title = L"Terminal $\bar{\alpha}_{\tau}$", xlabel = L"m", ylabel = L"T", c=:viridis, cmin = 0., xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
+    valuefig = contourf(mspace, Tspace, valuefunction.H; title = L"Terminal value $\bar{H}$", xlabel = L"m", ylabel = L"T", c=:viridis, xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
 
-    Ffig = contourf(mspace, Tspace, terminalstate.valuefunction.Fₜ; title=L"\log(F)", ylabel=L"T", xlabel=L"m", margins=5Plots.mm)
+    for fig in (policyfig, valuefig)
+        plot!(fig, nullcline, Tspace; label = false, c = :white)
+        scatter!(fig, [log(hogg.M₀ / hogg.Mᵖ)], [hogg.T₀]; label = false, c = :white)
+    end
+
+    plot(policyfig, valuefig; layout=(1,2), size = 600 .* (2√2, 1))
 end
 
-begin # Setup problem
-    G = shrink(Gterminal, 0.9, hogg)
-    state = interpolateovergrid(terminalstate, Gterminal, G)
-    queue = DiagonalRedBlackQueue(G)
-    Δts = zeros(prod(size(G)))
-    cluster = first(ZigZagBoomerang.dequeue!(queue))
+if isinteractive() # Backward simulation gif
+    Δt⁻¹ = 1 / Δt
 
-    ad = Optimization.AutoForwardDiff()
-    withnegative = false
-    T = Float64
-    alg = LBFGS() # BFGS(initial_invH = inverseidentity)
+    A₀ = constructA(valuefunction, Δt⁻¹, model, G, calibration)
+    b₀ = Vector{Float64}(undef, length(G))
+    problem = LinearSolve.init(LinearProblem(A₀, b₀), KLUFactorization())
 
-    @unpack valuefunction, policystate, timestate = state
-end;
+    @gif for iter in 1:120
+        updateproblem!(problem, valuefunction, Δt⁻¹, model, G, calibration)
+        solve!(problem)
+            
+        valuefunction.H .= reshape(problem.u, size(G))
 
-backwardstep!(state, cluster, Δts, model, calibration, G; withnegative=withnegative)
-@btime backwardstep!($state, $cluster, $Δts, $model, $calibration, $G; withnegative=$withnegative)
+        policyfig = contourf(mspace, Tspace, valuefunction.α; title = L"Policy $\bar{\alpha}_{%$(valuefunction.t.t)}$", xlabel = L"m", ylabel = L"T", c=:viridis, cmin = 0., xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
+        valuefig = contourf(mspace, Tspace, valuefunction.H; title = L"Value $H_%$(valuefunction.t.t)$", xlabel = L"m", ylabel = L"T", c=:viridis, xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
 
-begin
-    state = interpolateovergrid(terminalstate, Gterminal, G)
-    backwardsimulation!(state, model, calibration, G; verbose=1, withnegative=withnegative, tstop=400., printevery=1_000)
+        for fig in (policyfig, valuefig)
+            plot!(fig, nullcline, Tspace; label = false, c = :white)
+            scatter!(fig, [log(hogg.M₀ / hogg.Mᵖ)], [hogg.T₀]; label = false, c = :white)
+        end
+
+        jointfig = plot(policyfig, valuefig; layout=(1,2), size = 600 .* (2√2, 1))
+
+        valuefunction.t.t -= Δt
+
+        jointfig
+    end fps = 15
+
 end
+
+backwardsimulation!(valuefunction, Δt, model, G, calibration; t₀ = 0., verbose = 2)
 
 if isinteractive()
-    Ffig = contourf(mspace, Tspace, state.valuefunction.Fₜ; title="log(F)")
-    αfig = heatmap(Tspace, mspace, last.(state.policystate.policy); title="ε")
+    policyfig = contourf(mspace, Tspace, valuefunction.α; title = L"Initial $\bar{\alpha}_{0}$", xlabel = L"m", ylabel = L"T", c=:viridis, cmin = 0., xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
+    valuefig = contourf(mspace, Tspace, valuefunction.H; title = L"Initial value $H_0$", xlabel = L"m", ylabel = L"T", c=:viridis, xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
 
-    tfig = heatmap(Tspace, mspace, state.timestate.t; title="t")
-    focfig = heatmap(Tspace, mspace, state.policystate.foc; title="FOC")
+    for fig in (policyfig, valuefig)
+        plot!(fig, nullcline, Tspace; label = false, c = :white)
+        scatter!(fig, [log(hogg.M₀ / hogg.Mᵖ)], [hogg.T₀]; label = false, c = :white)
+    end
 
-    plot(Ffig, αfig, tfig, focfig; layout=(2, 2), size=(800, 600), margins=10Plots.mm)
+    plot(policyfig, valuefig; layout=(1,2), size = 600 .* (2√2, 1))
 end

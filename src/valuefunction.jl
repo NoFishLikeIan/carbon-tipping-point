@@ -15,4 +15,8 @@ struct ValueFunction{S <: Real, N₁, N₂}
         
         return new{S, N₁, N₂}(H, α, t)
     end
+
+    function ValueFunction{S, N₁, N₂}(H, α, t) where {S, N₁, N₂}
+        new{S, N₁, N₂}(H, α, t)
+    end
 end

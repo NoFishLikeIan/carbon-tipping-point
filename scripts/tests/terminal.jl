@@ -12,12 +12,12 @@ using JLD2, UnPack
 using Dates, Printf
 
 includet("../../src/extend/model.jl")
+includet("../../src/extend/valuefunction.jl")
 includet("../../src/valuefunction.jl")
 includet("../utils/saving.jl")
-includet("../utils/logging.jl")
 includet("../markov/utils.jl")
 includet("../markov/chain.jl")
-includet("../markov/terminal.jl")
+includet("../markov/finitedifference.jl")
 
 begin # Construct the model
     calibrationfilepath = "data/calibration.jld2"
@@ -31,8 +31,8 @@ begin # Construct the model
     preferences = Preferences()
     economy = Economy()
 
-    threshold = 1.8
-    
+    threshold = 2.5
+
     model = if 0 < threshold < Inf
         feedback = Model.updateTᶜ(threshold + hogg.Tᵖ, feedback)
         TippingModel(hogg, preferences, damages, economy, feedback)
@@ -45,7 +45,7 @@ begin # Construct the model
     mdomain = mstable(Tdomain[1] + 0.5, model), mstable(Tdomain[2] - 0.5, model)
 
     G = RegularGrid(N, (Tdomain, mdomain))
-    Δt = 1 / 12
+    Δt = 1 / 100
 
     if isinteractive()
         Tspace = range(G.domains[1]...; length=size(G, 1))
@@ -54,7 +54,7 @@ begin # Construct the model
     end
 end;
 
-# Plot optimisation
+# Gif optimisation
 if isinteractive()
     Δt⁻¹ = 1 / Δt
     valuefunction = ValueFunction(hogg, G, calibration)
@@ -71,8 +71,8 @@ if isinteractive()
         Tspace = range(G.domains[1]...; length=size(G, 1))
         mspace = range(G.domains[2]...; length=size(G, 2))
 
-        policyfig = contourf(mspace, Tspace, valuefunction.α; title = "Abatement Policy - Iteration $iter", xlabel = L"m", ylabel = L"T", c=:viridis, cmin = 0.)
-        valuefig = contourf(mspace, Tspace, valuefunction.H; title = "Value Function H - Iteration $iter", xlabel = L"m", ylabel = L"T", c=:viridis)
+        policyfig = contourf(mspace, Tspace, valuefunction.α; title = "Abatement Policy - Iteration $iter", xlabel = L"m", ylabel = L"T", c=:viridis, linewidth = 0, cmin = 0.)
+        valuefig = contourf(mspace, Tspace, valuefunction.H; title = "Value Function H - Iteration $iter", xlabel = L"m", ylabel = L"T", c=:viridis, linewidth = 0)
 
         plot(policyfig, valuefig; layout=(1,2), size = 600 .* (2√2, 1))
 
@@ -91,5 +91,5 @@ if isinteractive()
         scatter!(fig, [log(hogg.M₀ / hogg.Mᵖ)], [hogg.T₀]; label = false, c = :white)
     end
 
-    plot(policyfig, valuefig; layout=(1,2), size = 600 .* (2√2, 1))
+    jointfig = plot(policyfig, valuefig; layout=(1,2), size = 600 .* (2√2, 1))
 end

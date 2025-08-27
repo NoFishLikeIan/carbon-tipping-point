@@ -28,6 +28,10 @@ argtable = ArgParseSettings()
     "--tol"
         arg_type = Float64
         default = 1e-3
+
+    "--dt"
+        arg_type = Float64
+        default = 1 / 24
     
     "--stopat"
         arg_type = Float64
