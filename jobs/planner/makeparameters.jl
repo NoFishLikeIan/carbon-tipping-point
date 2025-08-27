@@ -1,6 +1,6 @@
 using JSON
 
-thresholds = [2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0, 5.0, -1.];
+thresholds = [2:0.1:5..., -1.];
 damages = ["kalkuhl", "weitzman"]
 withnegatives = [false, true];
 

@@ -1,16 +1,16 @@
 using Revise
 using JLD2, UnPack, DataStructures
 using FastClosures
-
-using StaticArrays
+using Base.Threads
+using SciMLBase
 using Statistics
-using Model, Grid
 using SciMLBase, DifferentialEquations, DiffEqBase
-using Interpolations
-using Dierckx
+using Interpolations, Dierckx
+using StaticArrays
 
-using Random;
-Random.seed!(11148705);
+using Model, Grid
+
+using Random; Random.seed!(11148705);
 
 using Plots, PGFPlotsX
 using LaTeXStrings, Printf
@@ -20,16 +20,16 @@ push!(PGFPlotsX.CUSTOM_PREAMBLE, raw"\usepgfplotslibrary{fillbetween}", raw"\use
 push!(PGFPlotsX.CUSTOM_PREAMBLE, raw"\usepackage{siunitx}")
 push!(PGFPlotsX.CUSTOM_PREAMBLE, raw"\DeclareSIUnit{\ppm}{p.p.m.}")
 
+includet("../../../src/extend/model.jl")
 includet("../../../src/valuefunction.jl")
-includet("../../../src/extensions.jl")
+includet("../../../src/extend/valuefunction.jl")
 includet("../utils.jl")
 includet("../../utils/saving.jl")
 includet("../../utils/simulating.jl")
 
 damage = Kalkuhl;
 withnegative = false
-abatementtype = withnegative ? "negative" : "constrained"
-DATAPATH = "data/simulation-large-lbfgs";
+DATAPATH = "data/simulation-large";
 
 SAVEFIG = true;
 plotpath = joinpath("papers/job-market-paper/submission/plots", abatementtype)
@@ -37,7 +37,7 @@ if !isdir(plotpath)
     mkpath(plotpath)
 end
 
-horizon = 20.
+horizon = 80.
 tspan = (0., horizon)
 
 begin # Import results and interpolations
@@ -47,17 +47,20 @@ begin # Import results and interpolations
     models = AbstractModel[]
     interpolations = Dict{AbstractModel,NTuple{2,Base.Callable}}()
 
+    modelfiles = String[]
     for (i, filepath) in enumerate(simulationfiles)
         model, _ = loadproblem(filepath)
-        abatementdir = splitpath(filepath)[3]
+        abatementdir = splitpath(filepath)[end - 1]
 
         if (model.damages isa damage) && (abatementtype == abatementdir)
-            print("Loading file $i / $(nfiles): $(filepath)\r")
-
-            states = loadtotal(filepath; tspan=tspan) |> first
-            interpolations[model] = buildinterpolations(states, G)
-            push!(models, model)
+            push!(modelfiles, filepath)
         end
+    end
+
+    for (i, filepath) in enumerate(modelfiles)
+        states = loadtotal(filepath; tspan=tspan)
+        interpolations[model] = buildinterpolations(states, G)
+            push!(models, model)
     end
 end;
 
