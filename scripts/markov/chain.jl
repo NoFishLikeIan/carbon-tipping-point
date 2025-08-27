@@ -15,10 +15,9 @@ function constructD(V::ValueFunction, model::M, G::RegularGrid{N₁,N₂,S}, cal
     t = V.t.t
     γₜ = γ(t, calibration)
     ωₜ = ω(t, economy)
-    
+
     idx = Int[]; jdx = Int[]
     values = S[]
-
     @inbounds for j in axes(G, 2), i in axes(G, 1)
         k = LinearIndex((i, j), G)
         Xᵢ = G.X[k]
@@ -151,8 +150,16 @@ function constructD(V::ValueFunction, model::M, G::RegularGrid{N₁,N₂,S}, cal
     return sparse(idx, jdx, values, n, n)
 end
 
-function constructA(valuefunction::ValueFunction, Δt⁻¹, model::M, G::RegularGrid{N₁,N₂,S}, calibration::Calibration; withnegative = false) where {N₁,N₂,S,D<:Damages{S},P<:LogSeparable{S},M<:AbstractModel{S,D,P}}
+# FIXME: Make in place
+function constructA(valuefunction::ValueFunction, Δt⁻¹, model::M, G::RegularGrid{N₁,N₂,S}, calibration::Calibration; withnegative = false) where {N₁,N₂,S,D<:Damages{S},P<:LogSeparable{S},M<:AbstractModel{S,D,P}} 
     (model.preferences.ρ + Δt⁻¹) * I - constructD(valuefunction, model, G, calibration; withnegative)
+end
+function constructA!(A, valuefunction::ValueFunction, Δt⁻¹, model::M, G::RegularGrid{N₁,N₂,S}, calibration::Calibration; withnegative = false) where {N₁,N₂,S,D<:Damages{S},P<:LogSeparable{S},M<:AbstractModel{S,D,P}}
+    A .= (model.preferences.ρ + Δt⁻¹) * I - constructD(valuefunction, model, G, calibration; withnegative)
+end
+
+function constructb(valuefunction::ValueFunction, Δt⁻¹, model::M, G::RegularGrid{N₁,N₂,S}, calibration) where {N₁,N₂,S,D<:Damages{S},P<:LogSeparable{S},M<:AbstractModel{S,D,P}}
+    constructb!(Vector{S}(undef, length(G)), valuefunction, Δt⁻¹, model, G, calibration)
 end
 
 function constructb!(b, valuefunction::ValueFunction, Δt⁻¹, model::M, G::RegularGrid{N₁,N₂,S}, calibration) where {N₁,N₂,S,D<:Damages{S},P<:LogSeparable{S},M<:AbstractModel{S,D,P}}
@@ -183,4 +190,6 @@ function constructb!(b, valuefunction::ValueFunction, Δt⁻¹, model::M, G::Reg
 
         b[k] = l(valuefunction.t.t, Xᵢ, αᵢ, model, calibration) + Δt⁻¹ * valuefunction.H[k] + adv
     end
+
+    return b
 end

@@ -35,7 +35,7 @@ jq_command='
 params=$(jq -r --arg id "$SLURM_ARRAY_TASK_ID" "$jq_command" jobs/game/parameters.json)
 
 # Run script 
-julia --threads ${SLURM_CPUS_PER_TASK} --project scripts/rungame.jl -N 5 \
+julia --threads ${SLURM_CPUS_PER_TASK} --project scripts/rungame.jl --N 5 \
     --cachestep 0.25 --verbose 1 \
     --datapath "$SCRATCHDATA"  --simulationpath "game-test" --overwrite \
     $params

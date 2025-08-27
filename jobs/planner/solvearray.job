@@ -33,7 +33,7 @@ jq_command='
 params=$(jq -r --arg id "$SLURM_ARRAY_TASK_ID" "$jq_command" jobs/planner/parameters.json)
 
 # Run script 
-julia --threads ${SLURM_CPUS_PER_TASK} --project scripts/solve.jl -N 71 \
+julia --threads ${SLURM_CPUS_PER_TASK} --project scripts/solve.jl --N 71 \
     --cachestep 0.25 --verbose 1  --overwrite --tol 1e-8 \
     --datapath "$SCRATCHDATA"  --simulationpath "simulation-large" \
     $params

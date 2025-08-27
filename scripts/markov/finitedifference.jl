@@ -1,5 +1,5 @@
 function updateproblem!(problem, valuefunction::ValueFunction, Δt⁻¹, model::M, G::RegularGrid{N₁,N₂,S}, calibration::Calibration; withnegative = false) where {N₁, N₂, S, M <: UnitElasticityModel{S}}
-    problem.A .= constructA(valuefunction, Δt⁻¹, model, G, calibration; withnegative)
+    constructA!(problem.A, valuefunction, Δt⁻¹, model, G, calibration; withnegative)
     constructb!(problem.b, valuefunction, Δt⁻¹, model, G, calibration)
 
     return problem
@@ -19,9 +19,9 @@ end
 "Iterate linear solver until convergence"
 function steadystate!(valuefunction::ValueFunction{S, N₁, N₂}, Δt::S, model::M, G, calibration; iterations = 10_000, printstep = iterations ÷ 100, tolerance::Error{S} = Error{S}(1e-3, 1e-3), verbose = 0, withnegative = false) where {S, N₁, N₂, M <: UnitElasticityModel{S}}
     Δt⁻¹ = 1 / Δt
-    n = length(G)
     A₀ = constructA(valuefunction, Δt⁻¹, model, G, calibration)
-    b₀ = Vector{S}(undef, n)
+    b₀ = constructb(valuefunction, Δt⁻¹, model, G, calibration)
+
     problem = LinearSolve.init(LinearProblem(A₀, b₀), KLUFactorization())
 
     for iter in 1:iterations

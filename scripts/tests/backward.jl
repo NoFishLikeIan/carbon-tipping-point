@@ -6,7 +6,8 @@ using Model, Grid
 using Base.Threads
 using SciMLBase
 using Statistics
-using StaticArrays, SparseArrays, BandedMatrices
+using StaticArrays, SparseArrays
+
 using LinearSolve, LinearAlgebra
 
 using JLD2, UnPack
@@ -41,7 +42,7 @@ begin # Construct the model
         LinearModel(hogg, preferences, damages, economy)
     end
 
-    N = (10, 10)
+    N = (150, 139)
     Tdomain = hogg.Tᵖ .+ (0., 8.)
     mdomain = mstable(Tdomain[1] + 0.5, model), mstable(Tdomain[2] - 0.5, model)
 

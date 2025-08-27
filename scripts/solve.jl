@@ -11,7 +11,7 @@ parsedargs = ArgParse.parse_args(argtable)
 
 @unpack datapath, simulationpath, overwrite = parsedargs # File system parameters
 @unpack cachestep, verbose, stopat = parsedargs # IO parameters
-@unpack N, tol, dt = parsedargs # Simulation parameters
+@unpack NT, Nm, tol, dt = parsedargs # Simulation parameters
 @unpack threshold, damages, eis, rra, withnegative = parsedargs # Problem parameters
 
 if !(eis ≈ 1)
@@ -81,6 +81,7 @@ end
 Tmin, Tmax = hogg.Tᵖ .+ (0., 8.5);
 Tdomain = (Tmin, Tmax)
 mdomain = mstable(Tmin + 0.5, model), mstable(Tmax - 0.5, model)
+N = (NT, Nm)
 Gterminal = RegularGrid(N, (Tdomain, mdomain))
 
 if (verbose ≥ 1)
@@ -98,8 +99,8 @@ if (verbose ≥ 1)
 end
 
 tolerance = Error(tol, 1e-3)
-terminalvaluefunction = ValueFunction(hogg, G, calibration)
-steadystate!(terminalvaluefunction, dt, model, G, calibration; verbose, tolerance, withnegative)
+terminalvaluefunction = ValueFunction(hogg, Gterminal, calibration)
+steadystate!(terminalvaluefunction, dt, model, Gterminal, calibration; verbose, tolerance, withnegative)
 
 if (verbose ≥ 1)
     println("$(now()): ","Running backward...")

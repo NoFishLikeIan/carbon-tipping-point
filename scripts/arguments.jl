@@ -12,10 +12,15 @@ argtable = ArgParseSettings()
         default = "simulation-small"
         help = "Path to simulation folder"
     
-    "-N"
+    "--NT"
         arg_type = Int
         default = 21
-        help = "Size of grid"
+        help = "Size of grid in temperature"
+    
+    "--Nm"
+        arg_type = Int
+        default = 21
+        help = "Size of grid in log-CO2e"
 
     "--verbose" , "-v"
         arg_type = Int

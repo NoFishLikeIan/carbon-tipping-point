@@ -22,7 +22,7 @@ rsync data/calibration.jld2 $SCRATCHDATA # Copy calibration data to scratch
 
 # Run script 
 julia --threads ${SLURM_CPUS_PER_TASK} --project scripts/solve.jl \
-    -N 71 --tol 1e-8 \
+    --N 71 --tol 1e-8 \
     --cachestep 0.25 --verbose 1 --overwrite \
     --datapath "$SCRATCHDATA"  --simulationpath "simulation-large" \
     --threshold 2.5 --damages "kalkuhl"
