@@ -9,6 +9,7 @@ function stringifydeviation(ΔT; digits = 2)
     return format(fmt, ΔT)
 end
 
+
 function makedeviationtickz(from, to, hogg; step = 0.5, digits = 2, addedlabels = Tuple{String, Float64}[])
 
     preindustrialdev = range(from, to; step = step)

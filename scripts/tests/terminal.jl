@@ -31,7 +31,8 @@ begin # Construct the model
     preferences = Preferences()
     economy = Economy()
 
-    threshold = Inf
+    threshold = 1.8
+    
     model = if 0 < threshold < Inf
         feedback = Model.updateTᶜ(threshold + hogg.Tᵖ, feedback)
         TippingModel(hogg, preferences, damages, economy, feedback)
@@ -40,40 +41,55 @@ begin # Construct the model
     end
 
     N = (105, 100)
-    Tdomain = hogg.Tᵖ .+ (0., 10.)
-    mdomain = mstable(Tdomain[1] + 0.25, model), mstable(Tdomain[2] - 0.25, model)
+    Tdomain = hogg.Tᵖ .+ (0., 7.)
+    mdomain = mstable(Tdomain[1] + 0.5, model), mstable(Tdomain[2] - 0.5, model)
 
     G = RegularGrid(N, (Tdomain, mdomain))
+    Δt = 1 / 12
+
+    if isinteractive()
+        Tspace = range(G.domains[1]...; length=size(G, 1))
+        mspace = range(G.domains[2]...; length=size(G, 2))
+        nullcline = mstable.(Tspace, model)
+    end
 end;
 
-# Test steady state problem
-valuefunction = ValueFunction(G, calibration)
-Δt = 0.01
-steadystate!(valuefunction, Δt, model, G, calibration; verbose = 2)
+# Plot optimisation
+if isinteractive()
+    Δt⁻¹ = 1 / Δt
+    valuefunction = ValueFunction(hogg, G, calibration)
 
-# OLD
-begin
-    iterations = 10_000
-    indices = CartesianIndices(Gterminal)
-    state = DPState(calibration.τ, Gterminal)
-    # terminaljacobi!(state, model, Gterminal, indices)
-    # optimalpolicy!(state, model, Gterminal)
-    # vfi!(state, model, Gterminal, iterations, (indices,))
-    seidelgauss!(state, model, Gterminal, iterations)
+    A₀ = constructA(valuefunction, Δt⁻¹, model, G, calibration)
+    b₀ = Vector{Float64}(undef, length(G))
+    problem = LinearSolve.init(LinearProblem(A₀, b₀), KLUFactorization())
+
+    @gif for iter in 1:600
+        updateproblem!(problem, valuefunction, Δt⁻¹, model, G, calibration)
+        solve!(problem)
+            
+        valuefunction.H .= reshape(problem.u, size(G))
+        Tspace = range(G.domains[1]...; length=size(G, 1))
+        mspace = range(G.domains[2]...; length=size(G, 2))
+
+        policyfig = contourf(mspace, Tspace, valuefunction.α; title = "Abatement Policy - Iteration $iter", xlabel = L"m", ylabel = L"T", c=:viridis, cmin = 0.)
+        valuefig = contourf(mspace, Tspace, valuefunction.H; title = "Value Function H - Iteration $iter", xlabel = L"m", ylabel = L"T", c=:viridis)
+
+        plot(policyfig, valuefig; layout=(1,2), size = 600 .* (2√2, 1))
+
+    end fps = 30
 end
 
-state, _ = computeterminal(model, Gterminal, calibration; inneriterations=10_000, verbose=1, withrichardson=true, vtol=1e-9, ptol=1e-5)
+valuefunction = ValueFunction(hogg, G, calibration)
+steadystate!(valuefunction, Δt, model, G, calibration; verbose = 2, tolerance = Error(1e-2, 1e-3))
 
 if isinteractive()
-    Tspace = range(Gterminal.domains[1]...; length=size(Gterminal, 1))
-    mspace = range(Gterminal.domains[2]...; length=size(Gterminal, 2))
-    nullcline = mstable.(Tspace, model)
+    policyfig = contourf(mspace, Tspace, valuefunction.α; title = "Abatement Policy", xlabel = L"m", ylabel = L"T", c=:viridis, cmin = 0., xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
+    valuefig = contourf(mspace, Tspace, valuefunction.H; title = "Value Function H", xlabel = L"m", ylabel = L"T", c=:viridis, xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
 
-    Ffig = contourf(mspace, Tspace, state.valuefunction.Fₜ; c=:viridis, xlabel=L"m", ylabel=L"T")
-    plot!(Ffig, nullcline, Tspace; c=:white, linestyle=:dash, xlims=extrema(mspace), ylims=extrema(Tspace), label=false)
+    for fig in (policyfig, valuefig)
+        plot!(fig, nullcline, Tspace; label = false, c = :white)
+        scatter!(fig, [log(hogg.M₀ / hogg.Mᵖ)], [hogg.T₀]; label = false, c = :white)
+    end
 
-    χfig = contourf(mspace, Tspace, getproperty.(state.policystate.policy, :χ); c=:Reds, xlabel=L"m", ylabel=L"T", yaxis=false)
-    plot!(χfig, nullcline, Tspace; c=:white, linestyle=:dash, xlims=extrema(mspace), ylims=extrema(Tspace), label=false)
-
-    plot(Ffig, χfig; size=600 .* (2√2, 1), margins=2Plots.mm)
+    plot(policyfig, valuefig; layout=(1,2), size = 600 .* (2√2, 1))
 end

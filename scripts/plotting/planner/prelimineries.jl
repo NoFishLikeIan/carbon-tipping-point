@@ -5,6 +5,7 @@ using JLD2, CSV, UnPack
 using DataFrames, DataStructures
 using StatsBase
 using Interpolations
+using StaticArrays
 
 using DifferentialEquations, DifferentialEquations.EnsembleAnalysis
 
@@ -17,17 +18,18 @@ push!(PGFPlotsX.CUSTOM_PREAMBLE, raw"\DeclareSIUnit{\ppm}{p.p.m.}")
 
 using Model, Grid
 
-includet("../../../src/extensions.jl")
+
+includet("../utils.jl")
 includet("../../utils/saving.jl")
 includet("../../utils/simulating.jl")
-includet("../utils.jl")
+includet("../../../src/extend/model.jl")
 
 begin # Global variables
     DATAPATH = "data"
     PLOTPATH = "papers/job-market-paper/submission/plots"
     PRESENTATIONPATH = joinpath(PLOTPATH, "presentation")
 
-    SAVEFIG = true
+    SAVEFIG = false
     LINE_WIDTH = 2.5
     SEED = 11148705
 
@@ -76,13 +78,13 @@ begin # Labels, colors and axis
     yearlytime = 0:1:horizon
     simtspan = (0, horizon)
 
-    temperatureticks = collect.(makedeviationtickz(1., ΔTmax, first(tippingmodels); step=1, digits=0))
+    temperatureticks = collect.(makedeviationtickz(1., ΔTmax, first(tippingmodels).hogg; step=1, digits=0))
 
     Tmin, Tmax = extrema(temperatureticks[1])
 
     m₀ = log(hogg.M₀ / hogg.Mᵖ)
     T₀ = Tstable(m₀, linearmodel) |> only
-    X₀ = [T₀, m₀]
+    X₀ = SVector(T₀, m₀)
 end;
 
 begin # Feedback plot
@@ -121,11 +123,11 @@ begin # Feedback plot
     feedbackfig
 end
 
-begin
+begin # Simulate NP problem
     simmodels = models[1:3]
     sims = Dict{AbstractModel, DiffEqArray}()
 
-    npprob = SDEProblem(Fnp!, G!, X₀, simtspan, (linearmodel, calibration)) |> EnsembleProblem
+    npprob = SDEProblem(Fnp, noise, X₀, simtspan, (linearmodel, calibration)) |> EnsembleProblem
 
     for model in simmodels
         npparameters = (model, calibration)
@@ -139,7 +141,7 @@ begin
     end
 end;
 
-begin # Nullcline plot
+begin # NP simulation + nullclines
     nullclinevariation = Dict{AbstractModel, Vector{Vector{NTuple{2,Float64}}}}()
 
     for model in reverse(simmodels)
@@ -152,18 +154,17 @@ begin # Nullcline plot
             M = hogg.Mᵖ * exp(m)
             isstable = model isa LinearModel || ∂μ∂T(T, m, model.hogg, model.feedback) < 0
             if isstable == currentlystable
-                push!(currentM, (M, T - 0.1))
+                push!(currentM, (M, T))
             else
                 currentlystable = !currentlystable
                 push!(nullclines, currentM)
-                currentM = [(M, T - 0.1)]
+                currentM = [(M, T)]
             end
         end
 
         push!(nullclines, currentM)
         nullclinevariation[model] = nullclines
     end
-
     
     mmedianpath = getindex.(getindex.(sims[simmodels[1]].u, 2), 2)
     Mmedianpath = @. hogg.Mᵖ * exp(mmedianpath)
@@ -294,18 +295,13 @@ end
 # --- No Policy dynamics
 begin # Simulate carbon concentrations
     mbau(m, (hogg, calibration), t) = γ(t, calibration)
-    σₘbau(m, (hogg, calibration), t) = hogg.σₘ
-    mfn = SDEFunction(mbau, σₘbau)
-    
+    σₘbau(m, (hogg, calibration), t) = hogg.σₘ    
     parameters = (hogg, calibration)
-    mbauprob = SDEProblem(mfn, log(hogg.M₀ / hogg.Mᵖ), (0.0, 80.0), parameters)
-    mensemble = EnsembleProblem(mbauprob)
-    mbausims = solve(mensemble, SOSRI(); trajectories = 10_000)
+    mbauprob = SDEProblem(mbau, σₘbau, m₀, (0.0, 80.0), parameters) |> EnsembleProblem
+    mbausims = solve(mbauprob, SOSRI(); trajectories = 10_000)
 end
 
 begin # Growth of carbon concentration 
-    horizon = Int(last(yearlytime))
-
     figsize = @pgf {
         width = raw"0.425\linewidth",
         height = raw"0.3\linewidth",
@@ -542,7 +538,7 @@ begin # Damage fig
     ytick = 0:0.05:maxpercentage
     yticklabels = [@sprintf("%.0f \\%%", 100 * y) for y in ytick]
 
-    _, xticklabels = makedeviationtickz(ΔTspace[1], ΔTspace[end], first(tippingmodels); step = 1, digits = 0)
+    _, xticklabels = makedeviationtickz(ΔTspace[1], ΔTspace[end], first(tippingmodels).hogg; step = 1, digits = 0)
     xtick = ΔTspace[1]:1:ΔTspace[end]
 
     damagefig = @pgf Axis({
@@ -572,13 +568,13 @@ begin # Damage fig
 end
 
 begin # Marginal abatement curve
-    emissivity = range(0.0, 1.0; length = 51)
+    emissivity = range(0.0, 1.4; length = 51)
 
     times = [0., 40., 80.] |> reverse
 
-    yearcolors = get(PALETTE, [0., 0.4, 0.6]) # graypalette(length(times))
+    yearcolors = get(PALETTE, [0., 0.4, 0.6])
 
-    xticks = 0:0.2:1
+    xticks = range(extrema(emissivity)..., step = 0.2)
     xticklabels = [@sprintf("%.0f\\%%", 100 * x) for x in xticks]
 
     ytick = 0.02:0.02:0.12
@@ -590,12 +586,19 @@ begin # Marginal abatement curve
         grid = "both",
         xlabel = L"Abated percentage $\varepsilon(\alpha_t)$",
         ylabel = L"Abatement costs $\beta_t\big(\varepsilon(\alpha_t)\big)$",
-        xmin = 0., xmax = 1.,
+        xmin = 0., xmax = maximum(emissivity),
         xtick = xticks, xticklabels = xticklabels,
         ymin = 0., ymax = maximum(ytick),
         ytick = ytick, yticklabels = yticklabels,
         scaled_y_ticks = false
     })
+
+    # Add gray band for ε > 1 (negative emissions)
+    bandx = [1.0, maximum(emissivity)]
+    bandy = [0.0, maximum(ytick)]
+    bandcoords = vcat([(x, bandy[1]) for x in bandx], [(x, bandy[2]) for x in reverse(bandx)])
+    bandpoly = @pgf Plot({fill = "gray", opacity = 0.25, draw = "none", forget_plot}, Coordinates(bandcoords))
+    push!(abatementfig, bandpoly)
 
     for (k, t) in enumerate(times)
         mac = [β(t, ε, economy) for ε in emissivity]

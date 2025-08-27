@@ -25,24 +25,22 @@ d(_, _, damages::NoDamageGrowth{T}, args...) where T = zero(T)
 
 function d(T, m, damages::Kalkuhl, hogg::Hogg, feedback::Feedback)
     ΔT = max(T - hogg.Tᵖ, 0)
-    dT = μ(T, m, hogg, feedback) / hogg.ϵ
-    return (damages.ξ₁ + damages.ξ₂ * ΔT) * dT
+    return (damages.ξ₁ + damages.ξ₂ * ΔT) * μ(T, m, hogg, feedback) / hogg.ϵ
 end
 function d(T, m, damages::Kalkuhl, hogg::Hogg)
     ΔT = max(T - hogg.Tᵖ, 0)
-    dT = μ(T, m, hogg) / hogg.ϵ
-    return (damages.ξ₁ + damages.ξ₂ * ΔT) * dT
+    return (damages.ξ₁ + damages.ξ₂ * ΔT) * μ(T, m, hogg) / hogg.ϵ
 end
 
-function d(T, m, damages::WeitzmanGrowth, hogg::Hogg)
+function d(T, _, damages::WeitzmanGrowth, hogg::Hogg)
     ΔT = max(T - hogg.Tᵖ, 0)
     return damages.ξ * ΔT^damages.ν
 end
-function d(T, m, damages::WeitzmanGrowth, hogg::Hogg, feedback::Feedback)
+function d(T, m, damages::WeitzmanGrowth, hogg::Hogg, ::Feedback)
     d(T, m, damages, hogg)
 end
 
-function d(T, m, damages::D, hogg::Hogg) where D<:LevelDamages
+function d(T, _, damages::D, hogg::Hogg) where D<:LevelDamages
     d(T, damages, hogg)
 end
 function d(T, damages::WeitzmanLevel, hogg::Hogg)

@@ -1,12 +1,10 @@
-wrap(T, m, hogg) = Point(T, m, hogg.Mᵖ * exp(m));
-
 PolicyFunction = Base.Callable
 SimulationParameters = Tuple{AbstractModel,Calibration,PolicyFunction}
 "Drift of system which cumulates abatement, adjustments, and damages."
 function F(u::SVector{6,R}, parameters::SimulationParameters, t) where R<:Real
     model, calibration, policyitp = parameters
     T, m = @view u[1:2]
-    state = wrap(T, m, model.hogg)
+    state = Point(T, m)
     policy = policyitp(t, state)
 
     dT = μ(T, m, model) / model.hogg.ϵ
@@ -22,7 +20,7 @@ end
 function F(u::SVector{3,R}, parameters::SimulationParameters, t) where R<:Real
     model, policyitp, calibration = parameters
     T, m = @view u[1:2]
-    state = wrap(T, m, model.hogg)
+    state = Point(T, m)
     policy = policyitp(t, state)
 
     dT = μ(state.T, state.m, model) / model.hogg.ϵ
@@ -36,10 +34,9 @@ NpParamaters = Tuple{AbstractModel,Calibration}
 "Drift of system in the no-policy scenario."
 function Fnp(u::SVector{2,R}, parameters::NpParamaters, t) where R<:Real
     model, calibration = parameters
-    T, m = @view u[1:2]
-    state = wrap(T, m, model.hogg)
+    T, m = u
 
-    dT = μ(state.T, state.m, model) / model.hogg.ϵ
+    dT = μ(T, m, model) / model.hogg.ϵ
     dm = γ(t, calibration)
 
     return SVector(dT, dm)
@@ -50,7 +47,7 @@ NpGameParameters = Tuple{NTuple{2,AbstractModel},Calibration}
 function Fnp(u::SVector{3,R}, parameters::NpGameParameters, t) where R<:Real
     models, calibration = parameters
     oecdmodel, rowmodel = models
-    T₁, T₂, m = @view u[1:3]
+    T₁, T₂, m = u
 
     dT₁ = μ(T₁, m, oecdmodel) / oecdmodel.hogg.ϵ
     dT₂ = μ(T₂, m, rowmodel) / rowmodel.hogg.ϵ
