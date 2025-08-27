@@ -5,7 +5,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --array=0-15
-#SBATCH --time=24:00:00
+#SBATCH --time=00:01:00
 #SBATCH --partition=rome
 #SBATCH --mail-type=BEGIN,END,FAIL,TIME_LIMIT_80
 #SBATCH -o ./logs/out/SOLVE%A_%a.out 
@@ -26,7 +26,7 @@ rsync data/calibration.jld2 $SCRATCHDATA # Copy calibration data to scratch
 # Extract parameters at the SLURM_ARRAY_TASK_ID from parameters.json
 jq_command='
 .parameters[$id | tonumber] | 
-"--threshold \(.threshold) --damages \(.damages)" +
+"--threshold \(.threshold) --damages \(.damage)" +
 (if .withnegative then " --withnegative" else "" end)
 '
 
@@ -34,7 +34,7 @@ params=$(jq -r --arg id "$SLURM_ARRAY_TASK_ID" "$jq_command" jobs/planner/parame
 
 # Run script 
 julia --threads ${SLURM_CPUS_PER_TASK} --project scripts/solve.jl --NT 151 --Nm 150 \
-    --cachestep 0.25 --verbose 1  --overwrite --tol 1e-3 \
+    --cachestep 0.08 --verbose 1  --overwrite --tol 1e-3 --dt = 3e-4 \
     --datapath "$SCRATCHDATA"  --simulationpath "simulation-large" \
     $params
 

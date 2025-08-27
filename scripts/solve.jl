@@ -107,6 +107,6 @@ if (verbose ≥ 1)
     flush(stdout)
 end
 
-G = shrink(Gterminal, 0.1)
+G = shrink(Gterminal, 0.05)
 valuefunction = interpolateovergrid(terminalvaluefunction, Gterminal, G)
 backwardsimulation!(valuefunction, dt, model, G, calibration; verbose, withnegative, overwrite, outdir, cachestep = cachestep)
