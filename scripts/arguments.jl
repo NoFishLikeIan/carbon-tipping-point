@@ -62,6 +62,10 @@ argtable = ArgParseSettings()
 
     "--withnegative"
         action = :store_true
+
+    "--tau"
+        arg_type = Float64
+        default = 500.
 end
 
 resumeargtable = ArgParseSettings()

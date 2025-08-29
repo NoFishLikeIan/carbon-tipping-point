@@ -11,7 +11,7 @@ parsedargs = ArgParse.parse_args(argtable)
 
 @unpack datapath, simulationpath, overwrite = parsedargs # File system parameters
 @unpack cachestep, verbose, stopat = parsedargs # IO parameters
-@unpack NT, Nm, tol, dt = parsedargs # Simulation parameters
+@unpack NT, Nm, tol, dt, tau = parsedargs # Simulation parameters
 @unpack threshold, damages, eis, rra, withnegative = parsedargs # Problem parameters
 
 if !(eis ≈ 1)
@@ -99,7 +99,7 @@ if (verbose ≥ 1)
 end
 
 tolerance = Error(tol, 1e-3)
-terminalvaluefunction = ValueFunction(hogg, Gterminal, calibration)
+terminalvaluefunction = ValueFunction(tau, hogg, Gterminal, calibration)
 steadystate!(terminalvaluefunction, dt, model, Gterminal, calibration; verbose, tolerance, withnegative)
 
 if (verbose ≥ 1)
