@@ -101,7 +101,7 @@ if isinteractive() # Backward simulation gif
 
 end
 
-backwardsimulation!(valuefunction, Δt, model, G, calibration; t₀ = 0., verbose = 2)
+backwardsimulation!(valuefunction, Δt, model, G, calibration; t₀ = 150., verbose = 2, withsave = false)
 
 if isinteractive()
     policyfig = contourf(mspace, Tspace, valuefunction.α; title = L"Initial $\bar{\alpha}_{0}$", xlabel = L"m", ylabel = L"T", c=:viridis, cmin = 0., xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)

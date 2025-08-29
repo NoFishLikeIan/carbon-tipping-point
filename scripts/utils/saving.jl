@@ -145,10 +145,12 @@ function loadtotal(cachepath::String; tspan = (0, Inf))
     return outdict, G, model
 end
 
-function loadproblem(cachepath)
-    cachefile = jldopen(cachepath, "r")
+function loadproblem(filepath)
+    cachefile = jldopen(filepath, "r")
     G = cachefile["G"]
     model = cachefile["model"]
+
+    close(cachefile)
 
     return model, G
 end

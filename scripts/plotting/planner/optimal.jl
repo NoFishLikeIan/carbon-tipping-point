@@ -28,19 +28,17 @@ includet("../../utils/saving.jl")
 includet("../../utils/simulating.jl")
 
 damage = Kalkuhl;
-withnegative = false
+withnegative = false; abatementtype = withnegative ? "negative" : "constrained"
 DATAPATH = "data/simulation-large";
 
 SAVEFIG = true;
 plotpath = joinpath("papers/job-market-paper/submission/plots", abatementtype)
-if !isdir(plotpath)
-    mkpath(plotpath)
-end
+if !isdir(plotpath) mkpath(plotpath) end
 
 horizon = 80.
 tspan = (0., horizon)
 
-begin # Import results and interpolations
+begin # Read available files
     simulationfiles = listfiles(DATAPATH)
     nfiles = length(simulationfiles)
     G = loadproblem(first(simulationfiles)) |> last
@@ -49,6 +47,7 @@ begin # Import results and interpolations
 
     modelfiles = String[]
     for (i, filepath) in enumerate(simulationfiles)
+        println("Reading $i / $(length(simulationfiles))")
         model, _ = loadproblem(filepath)
         abatementdir = splitpath(filepath)[end - 1]
 
@@ -56,13 +55,15 @@ begin # Import results and interpolations
             push!(modelfiles, filepath)
         end
     end
+end;
 
+begin # Import available files
     for (i, filepath) in enumerate(modelfiles)
         states = loadtotal(filepath; tspan=tspan)
         interpolations[model] = buildinterpolations(states, G)
             push!(models, model)
     end
-end;
+end
 
 begin
     calibrationfilepath = "data/calibration.jld2"

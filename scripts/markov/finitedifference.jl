@@ -54,6 +54,8 @@ function backwardsimulation!(
     if withsave
         cachepath, cachefile = initcachefile(model,G, outdir, withnegative; overwrite)
         tcache = copy(startcache)
+        magnitude = -floor(Int, log10(abs(cachestep)))
+        keyformat = Printf.Format("%.$(magnitude)f")
     end
 
     if verbose > 0
@@ -82,14 +84,14 @@ function backwardsimulation!(
             @printf "Time %.2f\r" valuefunction.t.t
         end
 
-        if withsave
-            cachekey = @sprintf "%.2f" tcache
+        if withsave && valuefunction.t.t ≤ tcache
+            cachekey = Printf.format(keyformat, tcache)
             if verbose > 1 @printf "Saving cache with key %s\n" cachekey end
 
             group = JLD2.Group(cachefile, cachekey)
             group["V"] = valuefunction
 
-            tcache -= cachestep
+            tcache = tcache - cachestep
         end
     end
 
