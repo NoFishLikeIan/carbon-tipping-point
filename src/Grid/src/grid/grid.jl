@@ -2,14 +2,21 @@ const maxN = floor(Int, 1 / sqrt(eps(Float64))) # Maximum grid size
 
 Domain{T} = NTuple{2,T}
 
-struct Point{T<:Real} <: FieldVector{2,T}
-    T::T
-    m::T
+struct Point{S<:Real} <: FieldVector{2, S}
+    T::S
+    m::S
+end
+
+struct Policy{S<:Real} <: FieldVector{2, S}
+    χ::S
+    α::S
 end
 
 # Extend static array
-StaticArrays.similar_type(::Type{<:Point}, ::Type{T}, s::Size{(2,)}) where T = Point{T}
-Base.similar(::Type{<:Point}, ::Type{T}) where T = Point(zero(T), zero(T))
+StaticArrays.similar_type(::Type{<:Point}, ::Type{S}, s::Size{(2,)}) where S = Point{S}
+Base.similar(::Type{<:Point}, ::Type{S}) where S = Point(zero(S), zero(S))
+StaticArrays.similar_type(::Type{<:Policy}, ::Type{S}, s::Size{(2,)}) where S = Policy{S}
+Base.similar(::Type{<:Policy}, ::Type{S}) where S = Policy(zero(S), zero(S))
 
 struct RegularGrid{N₁, N₂, S <: Real, R <: StepRangeLen{S}}
     domains::NTuple{2,Domain{S}}
@@ -29,6 +36,7 @@ Base.size(grid::RegularGrid, d::Int) = size(grid.X, d)
 Base.axes(grid::RegularGrid, d) = axes(grid.X, d)
 Base.axes(grid::RegularGrid) = axes(grid.X)
 Base.length(grid::RegularGrid) = length(grid.X)
+Base.eltype(::RegularGrid{N₁, N₂, S}) where {N₁, N₂, S} = S 
 
 function Base.extrema(grid::RegularGrid)
     ntuple(i -> grid.domains[i][2] - grid.domains[i][1], 2)

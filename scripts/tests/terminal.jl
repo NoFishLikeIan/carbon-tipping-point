@@ -12,8 +12,8 @@ using JLD2, UnPack
 using Dates, Printf
 
 includet("../../src/extend/model.jl")
-includet("../../src/extend/valuefunction.jl")
 includet("../../src/valuefunction.jl")
+includet("../../src/extend/valuefunction.jl")
 includet("../utils/saving.jl")
 includet("../markov/utils.jl")
 includet("../markov/chain.jl")
@@ -31,7 +31,7 @@ begin # Construct the model
     preferences = Preferences()
     economy = Economy()
 
-    threshold = 2.5
+    threshold = 2.
 
     model = if 0 < threshold < Inf
         feedback = Model.updateTᶜ(threshold + hogg.Tᵖ, feedback)
@@ -41,15 +41,16 @@ begin # Construct the model
     end
 
     N = (105, 100)
-    Tdomain = hogg.Tᵖ .+ (0., 7.)
+    Tdomain = hogg.Tᵖ .+ (0., 12.)
     mdomain = mstable(Tdomain[1] + 0.5, model), mstable(Tdomain[2] - 0.5, model)
 
     G = RegularGrid(N, (Tdomain, mdomain))
-    Δt = 1 / 100
+    Δt = 0.05
+    τ = 500.
 
     if isinteractive()
-        Tspace = range(G.domains[1]...; length=size(G, 1))
-        mspace = range(G.domains[2]...; length=size(G, 2))
+        Tspace = range(Tdomain[1], Tdomain[2]; length=size(G, 1))
+        mspace = range(mdomain[1], mdomain[2]; length=size(G, 2))
         nullcline = mstable.(Tspace, model)
     end
 end;
@@ -57,11 +58,12 @@ end;
 # Gif optimisation
 if isinteractive()
     Δt⁻¹ = 1 / Δt
-    valuefunction = ValueFunction(hogg, G, calibration)
+    valuefunction = ValueFunction(τ, hogg, G, calibration)
 
     A₀ = constructA(valuefunction, Δt⁻¹, model, G, calibration)
     b₀ = Vector{Float64}(undef, length(G))
     problem = LinearSolve.init(LinearProblem(A₀, b₀), KLUFactorization())
+    γ̄ = γ(valuefunction.t.t, calibration)
 
     @gif for iter in 1:600
         updateproblem!(problem, valuefunction, Δt⁻¹, model, G, calibration)
@@ -71,7 +73,7 @@ if isinteractive()
         Tspace = range(G.domains[1]...; length=size(G, 1))
         mspace = range(G.domains[2]...; length=size(G, 2))
 
-        policyfig = contourf(mspace, Tspace, valuefunction.α; title = "Abatement Policy - Iteration $iter", xlabel = L"m", ylabel = L"T", c=:viridis, linewidth = 0, cmin = 0.)
+        policyfig = contourf(mspace, Tspace, γ̄ .- valuefunction.α; title = "Drift of CO2e - Iteration $iter", xlabel = L"m", ylabel = L"T", c=:viridis, linewidth = 0, cmin = 0.)
         valuefig = contourf(mspace, Tspace, valuefunction.H; title = "Value Function H - Iteration $iter", xlabel = L"m", ylabel = L"T", c=:viridis, linewidth = 0)
 
         plot(policyfig, valuefig; layout=(1,2), size = 600 .* (2√2, 1))
@@ -79,11 +81,14 @@ if isinteractive()
     end fps = 30
 end
 
-valuefunction = ValueFunction(hogg, G, calibration)
-steadystate!(valuefunction, Δt, model, G, calibration; verbose = 2, tolerance = Error(1e-2, 1e-3))
+valuefunction = ValueFunction(τ, hogg, G, calibration)
+steadystate!(valuefunction, Δt, model, G, calibration; verbose = 1, tolerance = Error(1e-2, 1e-3), withnegative = true)
 
 if isinteractive()
-    policyfig = contourf(mspace, Tspace, valuefunction.α; title = "Abatement Policy", xlabel = L"m", ylabel = L"T", c=:viridis, cmin = 0., xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
+    dm = @. γ̄ - valuefunction.α
+    dm̄ = maximum(abs, dm)
+
+    policyfig = contourf(mspace, Tspace, dm; title = "Drift of CO2e", xlabel = L"m", ylabel = L"T", c=:coolwarm, clims = (-dm̄, dm̄), xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
     valuefig = contourf(mspace, Tspace, valuefunction.H; title = "Value Function H", xlabel = L"m", ylabel = L"T", c=:viridis, xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
 
     for fig in (policyfig, valuefig)

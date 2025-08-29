@@ -73,7 +73,7 @@ function constructD(V::ValueFunction, model::M, G::RegularGrid{N₁,N₂,S}, cal
             bᵐ₊ = γₜ - α₊
         else
             α₊ = ᾱ(t, Xᵢ, model, calibration)
-            ∂ᵐ₊H = ωₜ * (model.preferences.θ - 1) / α₊
+            ∂ᵐ₊H = γₜ * ωₜ * (model.preferences.θ - 1) / α₊^2
             bᵐ₊ = zero(S)
         end
 
@@ -83,7 +83,7 @@ function constructD(V::ValueFunction, model::M, G::RegularGrid{N₁,N₂,S}, cal
             bᵐ₋ = γₜ - α₋
         else
             α₋ = ᾱ(t, Xᵢ, model, calibration)
-            ∂ᵐ₋H = ωₜ * (model.preferences.θ - 1) / α₋
+            ∂ᵐ₋H = γₜ * ωₜ * (model.preferences.θ - 1) / α₋^2
             bᵐ₋ = zero(S)
         end
         

@@ -9,9 +9,12 @@ struct ValueFunction{S <: Real, N₁, N₂}
     t::Time{S}
 
     function ValueFunction(hogg::Hogg, G::RegularGrid{N₁, N₂, S}, calibration::Calibration) where {N₁, N₂, S}
-        t = Time(calibration.τ)
+        ValueFunction(calibration.τ, hogg, G, calibration)
+    end
+    function ValueFunction(τ, hogg::Hogg, G::RegularGrid{N₁, N₂, S}, calibration::Calibration) where {N₁, N₂, S}
+        t = Time(τ)
         H = ones(S, size(G))
-        α = [ γ(calibration.τ, calibration) + δₘ(exp(Xᵢ.m) * hogg.Mᵖ, hogg) for Xᵢ in G.X ]
+        α = [ γ(τ, calibration) + δₘ(exp(Xᵢ.m) * hogg.Mᵖ, hogg) for Xᵢ in G.X ]
         
         return new{S, N₁, N₂}(H, α, t)
     end

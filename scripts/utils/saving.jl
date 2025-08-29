@@ -109,16 +109,16 @@ function loadtotal(model::AbstractModel{T}; outdir = "data/simulation", loadkwar
     end
     
     filename = makefilename(model)
-    cachepath = joinpath(cachefolder, filename)
+    filepath = joinpath(cachefolder, filename)
     
-    if !isfile(cachepath)
+    if !isfile(filepath)
         error("Cache file does not exist: $filename\nHave you solved the problem for these parameters?")
     end
 
-    return loadtotal(cachepath; loadkwargs...)
+    return loadtotal(filepath; loadkwargs...)
 end
-function loadtotal(cachepath::String; tspan = (0, Inf))
-    cachefile = jldopen(cachepath, "r")
+function loadtotal(filepath::String; tspan = (0, Inf))
+    cachefile = jldopen(filepath, "r")
     G = cachefile["G"]
     model = cachefile["model"]
     timekeys = filter(key -> key ∉ ("G", "model"), keys(cachefile))
@@ -133,16 +133,19 @@ function loadtotal(cachepath::String; tspan = (0, Inf))
     timesteps = timesteps[selectidx]
     timekeys = timekeys[selectidx]
 
-    states = DPState[]
+    N₁, N₂ = size(G)
+    S = eltype(G)
+    values = ValueFunction{S, N₁, N₂}[]
     for key ∈ timekeys
-        state = cachefile[key]["state"]
-        push!(states, state)
+        V = cachefile[key]["V"]
+        push!(values, V)
     end
+    
     close(cachefile)
 
-    outdict = OrderedDict(timesteps .=> states)
+    outdict = OrderedDict(timesteps .=> values)
 
-    return outdict, G, model
+    return outdict, model, G
 end
 
 function loadproblem(filepath)
@@ -157,13 +160,13 @@ end
 
 function loadgame(models::Vector{<:AbstractModel}; outdir = "data/simulation")
     filename = makefilename(models)
-    cachepath = joinpath(outdir, filename)
+    filepath = joinpath(outdir, filename)
 
-    return loadgame(cachepath)
+    return loadgame(filepath)
 end
 
-function loadgame(cachepath::String)
-    cachefile = jldopen(cachepath, "r")
+function loadgame(filepath::String)
+    cachefile = jldopen(filepath, "r")
     G = cachefile["G"]
     models = cachefile["models"]
     timekeys = filter(key -> key ∉ ["G", "models"], keys(cachefile))
@@ -200,13 +203,15 @@ function listfiles(simpath::String; exclude = ["terminal"])
     end
 
     files = String[]
-    for (root, _, file_names) in walkdir(simpath)
+    for (root, _, filenames) in walkdir(simpath)
         if any(occursin.(exclude, root))
             continue
         end
 
-        for file_name in file_names
-            push!(files, joinpath(root, file_name))
+        for filename in filenames
+            if occursin("jld2", filename)
+                push!(files, joinpath(root, filename))
+            end
         end
     end
 

@@ -50,8 +50,8 @@ begin # Construct the model
     Δt = 1 / 24
 
     if isinteractive()
-        Tspace = range(G.domains[1]...; length=size(G, 1))
-        mspace = range(G.domains[2]...; length=size(G, 2))
+        Tspace = range(Tdomain[1], Tdomain[2]; length=size(G, 1))
+        mspace = range(mdomain[1], mdomain[2]; length=size(G, 2))
         nullcline = mstable.(Tspace, model)
     end
 end;
@@ -59,8 +59,10 @@ end;
 valuefunction = ValueFunction(hogg, G, calibration)
 steadystate!(valuefunction, Δt, model, G, calibration; verbose = 2, tolerance = Error(1e-2, 1e-3))
 
+abatement = [ε(valuefunction.t.t, G.X[i], valuefunction.α[i], model, calibration) for i in CartesianIndices(G)]
+
 if isinteractive()
-    policyfig = contourf(mspace, Tspace, valuefunction.α; title = L"Terminal $\bar{\alpha}_{\tau}$", xlabel = L"m", ylabel = L"T", c=:viridis, cmin = 0., xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
+    policyfig = contourf(mspace, Tspace, abatement; title = L"Terminal $\bar{\alpha}_{\tau}$", xlabel = L"m", ylabel = L"T", c=:Greens, cmin = 0., cmax = 1., xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
     valuefig = contourf(mspace, Tspace, valuefunction.H; title = L"Terminal value $\bar{H}$", xlabel = L"m", ylabel = L"T", c=:viridis, xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
 
     for fig in (policyfig, valuefig)

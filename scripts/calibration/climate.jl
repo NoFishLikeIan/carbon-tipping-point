@@ -223,7 +223,7 @@ end
 # --- Computing parametric emissions form
 begin # Setup CO₂e maximisation problem
     baselineyear = 2020.
-    τ = 2270. - baselineyear
+    τ = 2200. - baselineyear
     co2tspan = baselineyear .+ (0., τ)
 
     tdxs = baselineyear .≤ co2equivalence.Year .≤ (baselineyear + τ)

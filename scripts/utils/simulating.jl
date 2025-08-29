@@ -1,33 +1,53 @@
-PolicyFunction = Base.Callable
-SimulationParameters = Tuple{AbstractModel,Calibration,PolicyFunction}
-"Drift of system which cumulates abatement, adjustments, and damages."
-function F(u::SVector{6,R}, parameters::SimulationParameters, t) where R<:Real
-    model, calibration, policyitp = parameters
-    T, m = @view u[1:2]
-    state = Point(T, m)
-    policy = policyitp(t, state)
-
-    dT = μ(T, m, model) / model.hogg.ϵ
-    dm = γ(t, calibration) * (1 - policy.ε) - policy.ε * δₘ(state.M, model.hogg)
-    dy = b(t, state, policy, model)
-
-    # Cost breakdown breakdown
-    abatement, adjustments, damages = costbreakdown(t, state, policy, model, calibration)
-
-    return SVector(dT, dm, dy, abatement, adjustments, damages)
+struct TimeStateInterpolation{S, I <: Interpolations.Extrapolation{S}}
+    itp::I
 end
+
+function apply(t, x::Point, itp::TimeStateInterpolation)
+    itp.itp(x.T, x.m, t)
+end
+
+function costbreakdown(t, state, policy, model, calibration)
+    ε = policy.α / ᾱ(t, state, model, calibration)
+    abatement = β(t, ε, model.economy)
+    adjustment = model.economy.κ * abatement^2 / 2
+    damages = d(state.T, state.m, model)
+
+    return abatement, adjustment, damages
+end
+
+SimulationParameters = Tuple{AbstractModel, Calibration, TimeStateInterpolation}
 "Drift of system."
 function F(u::SVector{3,R}, parameters::SimulationParameters, t) where R<:Real
-    model, policyitp, calibration = parameters
+    model, calibration, αitp = parameters
     T, m = @view u[1:2]
     state = Point(T, m)
-    policy = policyitp(t, state)
+    α = apply(t, state, αitp)
+    χ = χopt(t, model.economy, model.preferences)
+    policy = Policy(χ, α)
 
-    dT = μ(state.T, state.m, model) / model.hogg.ϵ
-    dm = γ(t, calibration) * (1 - policy.ε) - policy.ε * δₘ(state.M, model.hogg)
-    dy = b(t, state, policy, model)
+    dT = μ(T, m, model) / model.hogg.ϵ
+    dm = γ(t, calibration) - α
+    dy = b(t, state, policy, model, calibration)
 
     return SVector(dT, dm, dy)
+end
+"Drift of system which cumulates abatement, adjustments, and damages."
+function F(u::SVector{6,R}, parameters::SimulationParameters, t) where R<:Real
+    model, calibration, αitp = parameters
+    T, m = @view u[1:2]
+    state = Point(T, m)
+    α = apply(t, state, αitp)
+    χ = χopt(t, model.economy, model.preferences)
+    policy = Policy(χ, α)
+
+    dT = μ(T, m, model) / model.hogg.ϵ
+    dm = γ(t, calibration) - α
+    dy = b(t, state, policy, model, calibration)
+
+    # Cost breakdown
+    abatement, adjustment, damages = costbreakdown(t, state, policy, model, calibration)
+
+    return SVector(dT, dm, dy, abatement, adjustment, damages)
 end
 
 NpParamaters = Tuple{AbstractModel,Calibration}
@@ -98,38 +118,27 @@ function tipping!(integrator)
     integrator.u[1] += q
 end
 
-
 "Constructs linear interpolation of results"
-function buildinterpolations(states, G::RegularGrid)
-    Tspace = range(G.domains[1]...; length=size(G, 1))
-    mspace = range(G.domains[2]...; length=size(G, 2))
-    timespace = collect(keys(states))
+function buildinterpolations(values, model, G::RegularGrid{N₁, N₂, S}) where {N₁, N₂, S}
+    Tdomain, Gdomain = G.domains
+    Tspace = range(Tdomain[1], Tdomain[2]; length=size(G, 1))
+    mspace = range(Gdomain[1], Gdomain[2]; length=size(G, 2))
+    timespace = collect(keys(values))
 
     nodes = (Tspace, mspace, timespace)
-    F = Array{R,3}(undef, length(Tspace), length(mspace), length(timespace))
-    χ = similar(F)
-    ε = similar(χ)
+    H = Array{S, 3}(undef, size(G, 1), size(G, 2), length(timespace))
+    α = similar(H)
 
-    for (i, pair) in enumerate(states)
-        state = pair.second
-        F[:, :, i] .= state.valuefunction.Fₜ
-        χ[:, :, i] .= getproperty.(state.policystate.policy, :χ)
-        ε[:, :, i] .= getproperty.(state.policystate.policy, :ε)
+    for (i, pair) in enumerate(values)
+        V = pair.second
+        H[:, :, i] .= V.H
+        α[:, :, i] .= V.α
     end
 
-    Fitp = linear_interpolation(nodes, F; extrapolation_bc=Line())
-    χitp = linear_interpolation(nodes, χ; extrapolation_bc=Line())
-    εitp = linear_interpolation(nodes, ε; extrapolation_bc=Line())
+    Hitp = linear_interpolation(nodes, H; extrapolation_bc=Line()) |> TimeStateInterpolation
+    αitp = linear_interpolation(nodes, α; extrapolation_bc=Line()) |> TimeStateInterpolation
 
-    valueitp = let Fitp = Fitp
-        (t, x) -> Fitp(x.T, x.m, t)
-    end
-
-    policyitp = let χitp = χitp, εitp = εitp
-        (t, x) -> Policy(χitp(x.T, x.m, t), εitp(x.T, x.m, t))
-    end
-
-    return valueitp, policyitp
+    return Hitp, αitp
 end
 
 GameResult = Tuple{Vector{Float64},Dict{<:AbstractModel,Array{Float64,3}},Dict{<:AbstractModel,Array{Float64,4}},RegularGrid,Vector{<:AbstractModel}}

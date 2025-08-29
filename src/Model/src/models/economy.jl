@@ -25,11 +25,15 @@ d(_, _, damages::NoDamageGrowth{T}, args...) where T = zero(T)
 
 function d(T, m, damages::Kalkuhl, hogg::Hogg, feedback::Feedback)
     ΔT = max(T - hogg.Tᵖ, 0)
-    return (damages.ξ₁ + damages.ξ₂ * ΔT) * μ(T, m, hogg, feedback) / hogg.ϵ
+    driftdamage = (damages.ξ₁ + damages.ξ₂ * ΔT) * μ(T, m, hogg, feedback) / hogg.ϵ
+    noisedamage = (hogg.σₜ^2 * ΔT^2) / 2
+    return noisedamage + driftdamage
 end
 function d(T, m, damages::Kalkuhl, hogg::Hogg)
     ΔT = max(T - hogg.Tᵖ, 0)
-    return (damages.ξ₁ + damages.ξ₂ * ΔT) * μ(T, m, hogg) / hogg.ϵ
+    driftdamage = (damages.ξ₁ + damages.ξ₂ * ΔT) * μ(T, m, hogg) / hogg.ϵ
+    noisedamage = (hogg.σₜ^2 * ΔT^2) / 2
+    return noisedamage + driftdamage
 end
 
 function d(T, _, damages::WeitzmanGrowth, hogg::Hogg)
@@ -58,7 +62,7 @@ Base.broadcastable(damages::Damages) = Ref(damages)
 Base.@kwdef struct Economy{T<:Real}
     # Technology
     ωᵣ::T = 0.0045 # Speed of abatement technology cost reduction
-    ω₀::T = 2 * 0.0532 # Fraction of GDP required today to abate
+    ω₀::T = 0.0532 # Fraction of GDP required today to abate
     ϱ::T = 1e-3 # Growth of TFP
     κ::T = 11.2 # Adjustment costs of abatement technology
     δₖᵖ::T = 0.0162 # Initial depreciation rate of capital

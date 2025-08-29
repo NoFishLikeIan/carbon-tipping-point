@@ -41,13 +41,10 @@ tspan = (0., horizon)
 begin # Read available files
     simulationfiles = listfiles(DATAPATH)
     nfiles = length(simulationfiles)
-    G = loadproblem(first(simulationfiles)) |> last
-    models = AbstractModel[]
-    interpolations = Dict{AbstractModel,NTuple{2,Base.Callable}}()
-
+    _, G = loadproblem(first(simulationfiles))
     modelfiles = String[]
     for (i, filepath) in enumerate(simulationfiles)
-        println("Reading $i / $(length(simulationfiles))")
+        print("Reading $i / $(length(simulationfiles))\r")
         model, _ = loadproblem(filepath)
         abatementdir = splitpath(filepath)[end - 1]
 
@@ -58,11 +55,24 @@ begin # Read available files
 end;
 
 begin # Import available files
-    for (i, filepath) in enumerate(modelfiles)
-        states = loadtotal(filepath; tspan=tspan)
-        interpolations[model] = buildinterpolations(states, G)
-            push!(models, model)
+    models = AbstractModel[]
+    S = eltype(G)
+    
+    
+    interpolations = Dict{AbstractModel, NTuple{2, TimeStateInterpolation}}()
+    
+    for i in 1:(length(modelfiles))
+        print("Loading $i / $(length(modelfiles))\r")
+        firstfilepath = first(modelfiles)
+        firstvalues, firstmodel, firstG = loadtotal(firstfilepath; tspan=tspan)
+        firstitps = buildinterpolations(firstvalues, firstmodel, firstG);
+        filepath = modelfiles[i]
+        values, model, G = loadtotal(filepath; tspan=tspan)
+        interpolations[model] = buildinterpolations(values, model, G)
+        push!(models, model)
     end
+
+    sort!(models)
 end
 
 begin
@@ -76,39 +86,42 @@ end
 
 begin # Plot estetics
     tippingmodels = filter(model -> model isa TippingModel, models)
-    extremamodel = (models[2], models[1])
+    extremamodel = (first(models), last(models))
 
     PALETTE = colorschemes[:grays]
     colors = get(PALETTE, range(0, 0.6; length=length(extremamodel)))
 
     TEMPLABEL = raw"Temperature deviations $T_t \; [\si{\degree\Celsius}]$"
     LINE_WIDTH = 2.5
-    hogg = Hogg()
 
-    Tspace = range(G.domains[1]...; length=size(G, 1))
-    mspace = range(G.domains[2]...; length=size(G, 2))
+    (Tmin, Tmax), (mmin, mmax) = G.domains
+    Tspace = range(Tmin, Tmax; length=size(G, 1))
+    mspace = range(mmin, mmax; length=size(G, 2))
 
     yearlytime = range(tspan[1], tspan[2]; step=1.)
+    T₀ = hogg.T₀
+    m₀ = log(hogg.M₀ / hogg.Mᵖ)
+    x₀ = Point(T₀, m₀)
 
-    ΔTmin = Tspace[1] - hogg.Tᵖ
-    ΔTmax = Tspace[end] - hogg.Tᵖ
+    ΔTmin = Tmin[1] - hogg.Tᵖ
+    ΔTmax = Tmax[end] - hogg.Tᵖ
     temperatureticks = makedeviationtickz(ΔTmin, ΔTmax, hogg; step=1, digits=0)
 end;
 
 # Policies
-if false # FIXME: Redo.
+if false # Redo
     policyfig = @pgf GroupPlot({group_style = {group_size = "2 by 1", horizontal_sep = "1em"}})
 
     for (k, model) in enumerate(extremamodel)
-        _, policyitp = interpolations[model]
+        αitp = interpolations[model] |> last;
 
-        stableabatement = @closure m -> begin
-            T = only(Tstable(m, model))
-            state = wrap(T, m, model.hogg)
-            return policyitp(0., state).ε
+        stableabatement = @closure T -> begin
+            m = mstable(T, model)
+            M = exp(m) * hogg.Mᵖ
+            return apply(0., Point(T, m), αitp) / (γ(0., calibration) + δₘ(M, hogg))
         end
 
-        abatements = map(stableabatement, mspace)
+        abatements = map(stableabatement, Tspace)
 
         left = findfirst(a -> length(a) > 1, abatements)
         right = findlast(a -> length(a) > 1, abatements)
@@ -194,15 +207,14 @@ end
 begin
     TRAJECTORIES = 10_000
     economy = Economy()
-    m₀ = log(hogg.M₀ / hogg.Mᵖ)
-    X₀ = SVector(hogg.T₀, m₀, 1.)
+
+    X₀ = SVector(T₀, m₀, 1.)
     u₀ = SVector(X₀..., 0., 0., 0.) # Introduce three 0s for costs
 
     simulations = Dict{AbstractModel,EnsembleSolution}()
     for (i, model) in enumerate(models)
-        _, policyitp = interpolations[model]
-
-        parameters = (model, calibration, policyitp)
+        αitp = interpolations[model] |> last;
+        parameters = (model, calibration, αitp);
 
         problem = SDEProblem(F, noise, u₀, tspan, parameters)
         ensembleprob = EnsembleProblem(problem)
@@ -229,18 +241,17 @@ begin
     figopts = @pgf {width = raw"0.5\textwidth", height = raw"0.35\textwidth", grid = "both", xmin = 0, xmax = horizon}
 
     qs = [0.01, 0.5, 0.99]
-
     temperatureticks = makedeviationtickz(0., 6., hogg; step=1, digits=0)
-
 
     for (k, model) in enumerate(extremamodel)
         simulation = simulations[model]
-        _, policyitp = interpolations[model]
-        ts = simulation[1].t
+        αitp = interpolations[model] |> last
+        ts = first(simulation).t
 
         εfn = @closure (t, u) -> begin
-            state = wrap(u[1], u[2], hogg)
-            return policyitp(t, state).ε
+            state = Point(u[1], u[2])
+            α = apply(t, state, αitp)
+            return α / ᾱ(t, state, model, calibration)
         end
 
         abatement = computeonsim(simulation, εfn)

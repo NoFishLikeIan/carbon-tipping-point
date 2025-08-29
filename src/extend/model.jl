@@ -10,6 +10,10 @@ function ᾱ(t, Xᵢ, model, calibration)
     return γ(t, calibration) + δₘ(M, model.hogg)
 end
 
+function ε(t, Xᵢ, αᵢ, model, calibration)
+    αᵢ / ᾱ(t, Xᵢ, model, calibration)
+end
+
 function l(t, Xᵢ, α, model::M, calibration::Calibration) where {S,D<:Damages{S},P<:LogSeparable{S},M<:AbstractModel{S,D,P}}
     @unpack economy, preferences = model
     χ = χopt(t, economy, preferences)
@@ -20,4 +24,15 @@ function l(t, Xᵢ, α, model::M, calibration::Calibration) where {S,D<:Damages{
     netgrowth = gdpgrowth - d(Xᵢ.T, Xᵢ.m, model) - β(t, ε, economy)
 
     return (1 - preferences.θ) * netgrowth
+end
+
+function b(t, Xᵢ::Point, u::Policy, model, calibration)
+    @unpack economy = model
+    growth = economy.ϱ + ϕ(t, u.χ, economy)
+
+    ε = u.α / ᾱ(t, Xᵢ, model, calibration)
+    abatement = A(t, model.economy) * β(t, ε, economy)
+    damages = d(Xᵢ.T, Xᵢ.m, model)
+
+    return growth - abatement - damages
 end

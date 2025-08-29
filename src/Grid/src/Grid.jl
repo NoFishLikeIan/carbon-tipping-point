@@ -18,7 +18,7 @@ include("routines/bisection.jl")
 
 export bisection, gss, gssmin
 
-export Point
+export Point, Policy
 export Domain, RegularGrid
 export LinearIndex
 export interpolateovergrid, shrink, halfgrid
