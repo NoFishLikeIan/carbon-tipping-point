@@ -36,7 +36,7 @@ Base.size(grid::RegularGrid, d::Int) = size(grid.X, d)
 Base.axes(grid::RegularGrid, d) = axes(grid.X, d)
 Base.axes(grid::RegularGrid) = axes(grid.X)
 Base.length(grid::RegularGrid) = length(grid.X)
-Base.eltype(::RegularGrid{N₁, N₂, S}) where {N₁, N₂, S} = S 
+Base.eltype(::RegularGrid{N₁, N₂, S}) where {N₁, N₂, S} = S
 
 function Base.extrema(grid::RegularGrid)
     ntuple(i -> grid.domains[i][2] - grid.domains[i][1], 2)
@@ -44,6 +44,10 @@ end
 
 function Base.step(grid::RegularGrid)
     ntuple(i -> step(grid.ranges[i]), 2)
+end
+
+function inversestep(grid::RegularGrid)
+    ntuple(i -> inv(step(grid.ranges[i])), 2)
 end
 
 Base.LinearIndices(grid::RegularGrid) = LinearIndices(grid.X)

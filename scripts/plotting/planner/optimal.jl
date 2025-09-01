@@ -31,7 +31,7 @@ damage = Kalkuhl;
 withnegative = false; abatementtype = withnegative ? "negative" : "constrained"
 DATAPATH = "data/simulation-large";
 
-SAVEFIG = true;
+SAVEFIG = false;
 plotpath = joinpath("papers/job-market-paper/submission/plots", abatementtype)
 if !isdir(plotpath) mkpath(plotpath) end
 
@@ -52,23 +52,18 @@ begin # Read available files
             push!(modelfiles, filepath)
         end
     end
+
+    modelfiles = modelfiles[[1, 2]] # FIXME: Temporary
 end;
 
 begin # Import available files
     models = AbstractModel[]
-    S = eltype(G)
-    
-    
     interpolations = Dict{AbstractModel, NTuple{2, TimeStateInterpolation}}()
     
-    for i in 1:(length(modelfiles))
+    for (i, filepath) = enumerate(modelfiles)
         print("Loading $i / $(length(modelfiles))\r")
-        firstfilepath = first(modelfiles)
-        firstvalues, firstmodel, firstG = loadtotal(firstfilepath; tspan=tspan)
-        firstitps = buildinterpolations(firstvalues, firstmodel, firstG);
-        filepath = modelfiles[i]
         values, model, G = loadtotal(filepath; tspan=tspan)
-        interpolations[model] = buildinterpolations(values, model, G)
+        interpolations[model] = buildinterpolations(values, model, G);
         push!(models, model)
     end
 
@@ -109,31 +104,35 @@ begin # Plot estetics
 end;
 
 # Policies
-if false # Redo
+begin
     policyfig = @pgf GroupPlot({group_style = {group_size = "2 by 1", horizontal_sep = "1em"}})
 
     for (k, model) in enumerate(extremamodel)
         αitp = interpolations[model] |> last;
+        
+        stableabatement = m -> begin
+            Ts = Tstable(m, model)
+            states = [ Point(T, m) for T in Ts ]
+            αs = [ apply(0., x, αitp) for x in states ]
 
-        stableabatement = @closure T -> begin
-            m = mstable(T, model)
-            M = exp(m) * hogg.Mᵖ
-            return apply(0., Point(T, m), αitp) / (γ(0., calibration) + δₘ(M, hogg))
+            return @. αs / ᾱ(0., states, model, calibration)
         end
 
-        abatements = map(stableabatement, Tspace)
+        abatements = map(stableabatement, mspace)
 
         left = findfirst(a -> length(a) > 1, abatements)
         right = findlast(a -> length(a) > 1, abatements)
 
+        lowerpolicy = first.(abatements[1:right])
+        upperpolicy = last.(abatements[left:end])
+
         mtick = collect(range(extrema(mspace)...; length=5))[2:(end-1)]
         mticklabels = ["$l" for l in @. Int(round(exp(mtick)))]
 
-        push!(mtick, log(model.hogg.M₀))
+        push!(mtick, m₀)
         push!(mticklabels, L"M_0")
 
         idxs = sortperm(mtick)
-
         mtick = mtick[idxs]
         mticklabels = mticklabels[idxs]
 
@@ -147,7 +146,7 @@ if false # Redo
 
         policyax = @pgf Axis({
             set_layers, mark_layer = "axis background",
-            title = labelsbymodel[model],
+            title = labelofmodel(model),
             xmin = minimum(mspace), xmax = maximum(mspace),
             enlarge_x_limits = 0.01,
             xtick = mtick, xticklabels = mticklabels,
@@ -155,7 +154,6 @@ if false # Redo
             enlarge_y_limits = 0.01,
             width = raw"0.5\linewidth", height = raw"0.5\linewidth", leftopts...
         })
-
 
 
         lowerplot = @pgf Plot(
@@ -219,7 +217,7 @@ begin
         problem = SDEProblem(F, noise, u₀, tspan, parameters)
         ensembleprob = EnsembleProblem(problem)
 
-        simulation = solve(ensembleprob, SOSRI(); trajectories=TRAJECTORIES, saveat=1.)
+        simulation = solve(ensembleprob, SRA3(); trajectories=TRAJECTORIES)
         println("Done with simulation of $i / $(length(models))\n$model")
 
         simulations[model] = simulation
@@ -228,10 +226,10 @@ end
 
 begin
     simfig = @pgf GroupPlot({
-        group_style = {
-            group_size = "$(length(extremamodel)) by 2",
-            horizontal_sep = raw"1em",
-        }})
+    group_style = {
+        group_size = "$(length(extremamodel)) by 2",
+        horizontal_sep = raw"1em",
+    }})
 
     yearticks = 0:20:horizon
 
@@ -240,40 +238,32 @@ begin
     fillopts = @pgf {fill = "gray", opacity = 0.5}
     figopts = @pgf {width = raw"0.5\textwidth", height = raw"0.35\textwidth", grid = "both", xmin = 0, xmax = horizon}
 
-    qs = [0.01, 0.5, 0.99]
-    temperatureticks = makedeviationtickz(0., 6., hogg; step=1, digits=0)
+    qs = (0.05, 0.5, 0.95)
+    temperatureticks = makedeviationtickz(0.5, 3., hogg; step=0.5, digits=1)
 
-    for (k, model) in enumerate(extremamodel)
+    # Carbon concentration in first plot
+    for (k, model) in enumerate(extremamodel) 
         simulation = simulations[model]
-        αitp = interpolations[model] |> last
         ts = first(simulation).t
 
-        εfn = @closure (t, u) -> begin
-            state = Point(u[1], u[2])
-            α = apply(t, state, αitp)
-            return α / ᾱ(t, state, model, calibration)
+        paths = EnsembleAnalysis.timeseries_point_quantile(simulation, qs, ts)
+        
+        M = Matrix{Float64}(undef, length(qs), length(paths));
+        for (k, row) in enumerate(getindex.(paths.u, 2))
+            @. M[:, k] = hogg.Mᵖ * exp(row)
         end
 
-        abatement = computeonsim(simulation, εfn)
-        abatementquantiles = timequantiles(abatement, qs)
+        medianplot = @pgf Plot(medianopts, Coordinates(ts, M[2, :]))
+        lowerplot = @pgf Plot({confidenceopts..., name_path = "lower"}, Coordinates(ts, M[3, :]))
+        upperplot = @pgf Plot({confidenceopts..., name_path = "upper"}, Coordinates(ts, M[1, :]))
+        fill = @pgf Plot(fillopts, raw"fill between [of=lower and upper]")
 
-        for q in eachcol(abatementquantiles)
-            smooth!(q, 5)
-        end
 
-        εmedianplot = @pgf Plot(medianopts, Coordinates(ts, abatementquantiles[:, 2]))
-        εlower = @pgf Plot({confidenceopts..., name_path = "lower"}, Coordinates(ts, abatementquantiles[:, 1]))
-        εupper = @pgf Plot({confidenceopts..., name_path = "upper"}, Coordinates(ts, abatementquantiles[:, 3]))
-
-        εfill = @pgf Plot(fillopts, raw"fill between [of=lower and upper]")
-
-        Eoptionfirst = @pgf k > 1 ? {yticklabel = raw"\empty"} : {ylabel = L"Abated fraction $\varepsilon_t$"}
-
+        labeloption = @pgf k > 1 ? { yticklabel = raw"\empty" } : { ylabel = L"`Conecntration $M_t \; [\si{ppm}]$" }
         @pgf push!(simfig, {figopts...,
                 xticklabel = raw"\empty",
-                ymin = 0, ymax = abatementtype == "negative" ? 2. : 1.,
-                scaled_y_ticks = false, title = labelofmodel(model), Eoptionfirst...,
-            }, εmedianplot, εlower, εupper, εfill)
+                title = labelofmodel(model), labeloption...,
+            }, medianplot, lowerplot, upperplot, fill)
     end
 
     # Makes the temperature plots in the second row
@@ -285,9 +275,9 @@ begin
         paths = EnsembleAnalysis.timeseries_point_quantile(simulation, qs, ts)
         Tpaths = first.(paths.u)
 
-        Tmedianplot = @pgf Plot(medianopts, Coordinates(yearlytime, getindex.(Tpaths, 2)))
-        Tlowerplot = @pgf Plot({confidenceopts..., name_path = "lower"}, Coordinates(yearlytime, getindex.(Tpaths, 1)))
-        Tupperplot = @pgf Plot({confidenceopts..., name_path = "upper"}, Coordinates(yearlytime, getindex.(Tpaths, 3)))
+        Tmedianplot = @pgf Plot(medianopts, Coordinates(ts, getindex.(Tpaths, 2)))
+        Tlowerplot = @pgf Plot({confidenceopts..., name_path = "lower"}, Coordinates(ts, getindex.(Tpaths, 1)))
+        Tupperplot = @pgf Plot({confidenceopts..., name_path = "upper"}, Coordinates(ts, getindex.(Tpaths, 3)))
 
         Tfill = @pgf Plot(fillopts, raw"fill between [of=lower and upper]")
 
@@ -296,7 +286,8 @@ begin
         Toptionfirst = @pgf k > 1 ? {
             yticklabel = raw"\empty"
         } : {
-            ytick = temperatureticks[1], yticklabels = temperatureticks[2],
+            ytick = temperatureticks[1], 
+            yticklabels = temperatureticks[2],
             ylabel = raw"Temperature $T_t$"
         }
 

@@ -32,7 +32,8 @@ function labelofmodel(model)
     if model isa LinearModel
         "No tipping element"
     elseif model isa TippingModel
-        L"T^c = %$(model.feedback.Tᶜ - model.hogg.Tᵖ)"
+        Tᶜ = round(model.feedback.Tᶜ - model.hogg.Tᵖ; digits = 2)
+        L"T^c = %$(Tᶜ)"
     else
         error("Model type not implemented")
     end

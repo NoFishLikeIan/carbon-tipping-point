@@ -21,6 +21,6 @@ export bisection, gss, gssmin
 export Point, Policy
 export Domain, RegularGrid
 export LinearIndex
-export interpolateovergrid, shrink, halfgrid
+export interpolateovergrid, shrink, halfgrid, inversestep
 
 end

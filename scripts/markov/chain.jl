@@ -3,9 +3,8 @@ function αopt(t, Xᵢ::Point, ∂ₘH, model::M, calibration::Calibration) wher
 end
 
 "Constructs upwind-downwind scheme A."
-function constructD(V::ValueFunction, model::M, G::RegularGrid{N₁,N₂,S}, calibration::Calibration; withnegative = false) where {N₁,N₂,S,D<:Damages{S},P<:LogSeparable{S},M<:AbstractModel{S,D,P}}
-    n = length(G)
-    ΔT⁻¹, Δm⁻¹ = inv.(step(G))
+function constructA(V::ValueFunction, Δt⁻¹, model::M, G::RegularGrid{N₁,N₂,S}, calibration::Calibration; withnegative = false) where {N₁, N₂, S, M <: UnitElasticityModel{S}}
+    ΔT⁻¹, Δm⁻¹ = inversestep(G)
     ΔT⁻² = ΔT⁻¹^2
     Δm⁻² = Δm⁻¹^2
 
@@ -15,9 +14,9 @@ function constructD(V::ValueFunction, model::M, G::RegularGrid{N₁,N₂,S}, cal
     t = V.t.t
     γₜ = γ(t, calibration)
     ωₜ = ω(t, economy)
+    r = model.preferences.ρ + Δt⁻¹
 
-    idx = Int[]; jdx = Int[]
-    values = S[]
+    idx = Int[]; jdx = Int[]; values = S[]
     @inbounds for j in axes(G, 2), i in axes(G, 1)
         k = LinearIndex((i, j), G)
         Xᵢ = G.X[k]
@@ -33,7 +32,7 @@ function constructD(V::ValueFunction, model::M, G::RegularGrid{N₁,N₂,S}, cal
             z = bᵀ * ΔT⁻¹ + 2σₜ² * ∂ᵀH
             
             push!(idx, k); push!(jdx, LinearIndex((i + 1, j), G))
-            push!(values, z)
+            push!(values, -z)
             y -= z
 
         else
@@ -42,7 +41,7 @@ function constructD(V::ValueFunction, model::M, G::RegularGrid{N₁,N₂,S}, cal
             x = -bᵀ * ΔT⁻¹ + 2σₜ² * ∂ᵀH
             
             push!(idx, k); push!(jdx, LinearIndex((i - 1, j), G))
-            push!(values, x)
+            push!(values, -x)
             y -= x
         end
 
@@ -50,23 +49,22 @@ function constructD(V::ValueFunction, model::M, G::RegularGrid{N₁,N₂,S}, cal
         νT = σₜ² * ΔT⁻²
         if i > 1 && i < N₁
             push!(idx, k); push!(jdx, LinearIndex((i - 1, j), G))
-            push!(values, νT)
+            push!(values, -νT)
             push!(idx, k); push!(jdx, LinearIndex((i + 1, j), G))
-            push!(values, νT)
+            push!(values, -νT)
             y -= 2νT
         elseif i == 1
             push!(idx, k); push!(jdx, LinearIndex((i + 1, j), G))
-            push!(values, νT)
+            push!(values, -νT)
             y -= νT
         elseif i == N₁
             push!(idx, k); push!(jdx, LinearIndex((i - 1, j), G))
-            push!(values, νT)
+            push!(values, -νT)
             y -= νT
         end
 
         # Carbon concentration is controlled
         αmax = ifelse(withnegative, one(S), ᾱ(t, Xᵢ, model, calibration))
-
         if j < N₂
             ∂ᵐ₊H = (V.H[i, j + 1] - V.H[i, j]) * Δm⁻¹
             α₊ = clamp(αopt(t, Xᵢ, ∂ᵐ₊H, model, calibration), 0, αmax)
@@ -88,7 +86,6 @@ function constructD(V::ValueFunction, model::M, G::RegularGrid{N₁,N₂,S}, cal
         end
         
         if bᵐ₊ ≥ 0 && bᵐ₋ ≤ 0
-
             H₊ = l(t, Xᵢ, α₊, model, calibration) + ∂ᵐ₊H * bᵐ₊
             H₋ = l(t, Xᵢ, α₋, model, calibration) + ∂ᵐ₋H * bᵐ₋
 
@@ -97,14 +94,14 @@ function constructD(V::ValueFunction, model::M, G::RegularGrid{N₁,N₂,S}, cal
                 
                 z = bᵐ₊ * Δm⁻¹ + 2σₘ² * ∂ᵐ₊H
                 push!(idx, k); push!(jdx, LinearIndex((i, j + 1), G))
-                push!(values, z)
+                push!(values, -z)
                 y -= z
             else
                 V.α[k] = α₋
 
                 x = -bᵐ₋ * Δm⁻¹ + 2σₘ² * ∂ᵐ₋H
                 push!(idx, k); push!(jdx, LinearIndex((i, j - 1), G))
-                push!(values, x)
+                push!(values, -x)
                 y -= x
             end
             
@@ -113,56 +110,47 @@ function constructD(V::ValueFunction, model::M, G::RegularGrid{N₁,N₂,S}, cal
 
             z = bᵐ₊ * Δm⁻¹ + 2σₘ² * ∂ᵐ₊H
             push!(idx, k); push!(jdx, LinearIndex((i, j + 1), G))
-            push!(values, z)
+            push!(values, -z)
             y -= z
         elseif bᵐ₊ ≤ 0 && bᵐ₋ < 0
             V.α[k] = α₋
 
             x = -bᵐ₋ * Δm⁻¹ + 2σₘ² * ∂ᵐ₋H
             push!(idx, k); push!(jdx, LinearIndex((i, j - 1), G))
-            push!(values, x)
+            push!(values, -x)
             y -= x
         end
-
 
         # Carbon concentration noise terms (second derivative)
         νm = σₘ² * Δm⁻²
         if j > 1 && j < N₂
             push!(idx, k); push!(jdx, LinearIndex((i, j - 1), G))
-            push!(values, νm)
+            push!(values, -νm)
             push!(idx, k); push!(jdx, LinearIndex((i, j + 1), G))
-            push!(values, νm)
+            push!(values, -νm)
             y -= 2νm
         elseif j == 1
             push!(idx, k); push!(jdx, LinearIndex((i, j + 1), G))
-            push!(values, νm)
+            push!(values, -νm)
             y -= νm
         elseif j == N₂
             push!(idx, k); push!(jdx, LinearIndex((i, j - 1), G))
-            push!(values, νm)
+            push!(values, -νm)
             y -= νm
         end
 
         push!(idx, k); push!(jdx, k)
-        push!(values, y)
+        push!(values, r - y)
     end
 
+    n = length(G)
     return sparse(idx, jdx, values, n, n)
 end
 
-# FIXME: Make in place
-function constructA(valuefunction::ValueFunction, Δt⁻¹, model::M, G::RegularGrid{N₁,N₂,S}, calibration::Calibration; withnegative = false) where {N₁,N₂,S,D<:Damages{S},P<:LogSeparable{S},M<:AbstractModel{S,D,P}} 
-    (model.preferences.ρ + Δt⁻¹) * I - constructD(valuefunction, model, G, calibration; withnegative)
-end
-function constructA!(A, valuefunction::ValueFunction, Δt⁻¹, model::M, G::RegularGrid{N₁,N₂,S}, calibration::Calibration; withnegative = false) where {N₁,N₂,S,D<:Damages{S},P<:LogSeparable{S},M<:AbstractModel{S,D,P}}
-    A .= (model.preferences.ρ + Δt⁻¹) * I - constructD(valuefunction, model, G, calibration; withnegative)
-end
-
-function constructb(valuefunction::ValueFunction, Δt⁻¹, model::M, G::RegularGrid{N₁,N₂,S}, calibration) where {N₁,N₂,S,D<:Damages{S},P<:LogSeparable{S},M<:AbstractModel{S,D,P}}
+function constructb(valuefunction::ValueFunction, Δt⁻¹, model::M, G::RegularGrid{N₁,N₂,S}, calibration) where {N₁, N₂, S, M <: UnitElasticityModel{S}}
     constructb!(Vector{S}(undef, length(G)), valuefunction, Δt⁻¹, model, G, calibration)
 end
-
-function constructb!(b, valuefunction::ValueFunction, Δt⁻¹, model::M, G::RegularGrid{N₁,N₂,S}, calibration) where {N₁,N₂,S,D<:Damages{S},P<:LogSeparable{S},M<:AbstractModel{S,D,P}}
+function constructb!(b, valuefunction::ValueFunction, Δt⁻¹, model::M, G::RegularGrid{N₁,N₂,S}, calibration) where {N₁, N₂, S, M <: UnitElasticityModel{S}}
     ΔT⁻¹, Δm⁻¹ = inv.(step(G))
     γₜ = γ(valuefunction.t.t, calibration)
 

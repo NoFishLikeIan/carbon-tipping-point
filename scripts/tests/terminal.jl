@@ -40,12 +40,12 @@ begin # Construct the model
         LinearModel(hogg, preferences, damages, economy)
     end
 
-    N = (105, 100)
-    Tdomain = hogg.Tᵖ .+ (0., 12.)
+    N = (200, 250)
+    Tdomain = hogg.Tᵖ .+ (0., 7.5)
     mdomain = mstable(Tdomain[1] + 0.5, model), mstable(Tdomain[2] - 0.5, model)
 
     G = RegularGrid(N, (Tdomain, mdomain))
-    Δt = 0.05
+    Δt = 1 / 100
     τ = 500.
 
     if isinteractive()
@@ -82,10 +82,10 @@ if isinteractive()
 end
 
 valuefunction = ValueFunction(τ, hogg, G, calibration)
-steadystate!(valuefunction, Δt, model, G, calibration; verbose = 1, tolerance = Error(1e-2, 1e-3), withnegative = true)
+steadystate!(valuefunction, Δt, model, G, calibration; verbose = 2, tolerance = Error(1e-3, 1e-4), withnegative = true)
 
 if isinteractive()
-    dm = @. γ̄ - valuefunction.α
+    dm = @. γ(valuefunction.t.t, calibration) - valuefunction.α
     dm̄ = maximum(abs, dm)
 
     policyfig = contourf(mspace, Tspace, dm; title = "Drift of CO2e", xlabel = L"m", ylabel = L"T", c=:coolwarm, clims = (-dm̄, dm̄), xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)

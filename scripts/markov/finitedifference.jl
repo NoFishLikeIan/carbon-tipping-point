@@ -1,5 +1,5 @@
 function updateproblem!(problem, valuefunction::ValueFunction, Δt⁻¹, model::M, G::RegularGrid{N₁,N₂,S}, calibration::Calibration; withnegative = false) where {N₁, N₂, S, M <: UnitElasticityModel{S}}
-    constructA!(problem.A, valuefunction, Δt⁻¹, model, G, calibration; withnegative)
+    problem.A .= constructA(valuefunction, Δt⁻¹, model, G, calibration; withnegative)
     constructb!(problem.b, valuefunction, Δt⁻¹, model, G, calibration)
 
     return problem
