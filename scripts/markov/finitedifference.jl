@@ -39,7 +39,7 @@ function steadystate!(valuefunction::ValueFunction{S, N₁, N₂}, Δt::S, model
         end
     end
 
-    @warn @printf "Failed convergence in %d iterations.\n" iterations
+    @warn @sprintf "Failed convergence in %d iterations.\n" iterations
 
     return valuefunction, (iterations, Error{S}(NaN, NaN))
 end
