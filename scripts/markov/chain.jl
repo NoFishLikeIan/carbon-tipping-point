@@ -181,3 +181,24 @@ function constructb!(b, valuefunction::ValueFunction, Δt⁻¹, model::M, G::Reg
 
     return b
 end
+
+function centralpolicy!(valuefunction::ValueFunction{S, N₁, N₂}, model::M, G::RegularGrid{N₁, N₂, S}, calibration) where {N₁, N₂, S, M <: UnitElasticityModel{S}}
+    @unpack H, α = valuefunction
+    Δm⁻¹ = inversestep(G)[2]
+
+    @inbounds for j in axes(H, 2), i in axes(H, 1)
+        ∂ₘH = (
+            if j == 1
+                H[i, j + 1] - H[i, j]
+            elseif j == size(H, 2)
+                H[i, j] - H[i, j - 1]
+            else
+                (H[i, j + 1] - H[i, j - 1]) / 2
+            end
+        ) * Δm⁻¹
+        
+        α[i, j] = αopt(valuefunction.t.t, G.X[i, j], ∂ₘH, model, calibration)
+    end
+
+    return valuefunction
+end
