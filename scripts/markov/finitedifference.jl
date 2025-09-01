@@ -49,7 +49,7 @@ function backwardsimulation!(
     t₀ = zero(S), withnegative = false,
     verbose = 0, printstep = S(10), 
     withsave = true, outdir = "data", overwrite = false, 
-    startcache = calibration.τ, cachestep = S(1)) where {S, N₁, N₂, M <: UnitElasticityModel{S}}
+    startcache = valuefunction.t.t, cachestep = S(1)) where {S, N₁, N₂, M <: UnitElasticityModel{S}}
     
     if withsave
         cachepath, cachefile = initcachefile(model,G, outdir, withnegative; overwrite)
