@@ -78,7 +78,7 @@ else
 end
 
 # Construct Grid
-Tmin, Tmax = hogg.Tᵖ .+ (0., 8.5);
+Tmin, Tmax = hogg.Tᵖ .+ (0., 7.5);
 Tdomain = (Tmin, Tmax)
 mdomain = mstable(Tmin + 0.5, model), mstable(Tmax - 0.5, model)
 N = (NT, Nm)
@@ -98,7 +98,7 @@ if (verbose ≥ 1)
     flush(stdout)
 end
 
-tolerance = Error(tol, 1e-3)
+tolerance = Error(tol, 1e-4)
 terminalvaluefunction = ValueFunction(tau, hogg, Gterminal, calibration)
 steadystate!(terminalvaluefunction, dt, model, Gterminal, calibration; verbose, tolerance, withnegative)
 
