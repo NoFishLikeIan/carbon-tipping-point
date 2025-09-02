@@ -62,7 +62,7 @@ begin # Import available files
     
     for (i, filepath) = enumerate(modelfiles)
         print("Loading $i / $(length(modelfiles))\r")
-        values, model, G = loadtotal(filepath; tspan=tspan)
+        values, model, G = loadtotal(filepath; tspan=(0, 1.5horizon))
         interpolations[model] = buildinterpolations(values, model, G);
         push!(models, model)
     end
@@ -101,30 +101,50 @@ begin # Plot estetics
     ΔTmin = Tmin[1] - hogg.Tᵖ
     ΔTmax = Tmax[end] - hogg.Tᵖ
     temperatureticks = makedeviationtickz(ΔTmin, ΔTmax, hogg; step=1, digits=0)
+
+    economy = Economy()
+
+    X₀ = SVector(T₀, m₀, 1.)
+    u₀ = SVector(X₀..., 0., 0., 0.) # Introduce three 0s for costs
 end;
 
 # Policies
+co2np = ODEProblem((m, calibration, t) -> γ(t, calibration), m₀, tspan, calibration)
+function tbau(m̄, co2np)
+    if m̄ < co2np.u0
+        return zero(m̄)
+    end
+
+    callback = ContinuousCallback((m, t, integrator) -> m̄ - m, terminate!)
+    sol = solve(co2np, Tsit5(); callback = callback, save_everystep = false, save_start = false)
+
+    return sol.t[end]
+end
+
 begin
     policyfig = @pgf GroupPlot({group_style = {group_size = "2 by 1", horizontal_sep = "1em"}})
 
-    for (k, model) in enumerate(extremamodel)
+    for (i, model) in enumerate(extremamodel)
         αitp = interpolations[model] |> last;
         
         stableabatement = m -> begin
+            t = tbau(m, co2np)
             Ts = Tstable(m, model)
             states = [ Point(T, m) for T in Ts ]
-            αs = [ apply(0., x, αitp) for x in states ]
+            αs = [ apply(t, x, αitp) for x in states ]
 
-            return @. αs / ᾱ(0., states, model, calibration)
+            return αs 
         end
 
         abatements = map(stableabatement, mspace)
 
         left = findfirst(a -> length(a) > 1, abatements)
+        leftdx = !isnothing(left) ? left : length(abatements)
         right = findlast(a -> length(a) > 1, abatements)
+        rightdx = !isnothing(right) ? right : length(abatements)
 
-        lowerpolicy = first.(abatements[1:right])
-        upperpolicy = last.(abatements[left:end])
+        lowerpolicy = first.(abatements[1:rightdx])
+        upperpolicy = last.(abatements[leftdx:end])
 
         mtick = collect(range(extrema(mspace)...; length=5))[2:(end-1)]
         mticklabels = ["$l" for l in @. Int(round(exp(mtick)))]
@@ -150,7 +170,7 @@ begin
             xmin = minimum(mspace), xmax = maximum(mspace),
             enlarge_x_limits = 0.01,
             xtick = mtick, xticklabels = mticklabels,
-            grid = "both", ymin = 0, ymax = 1,
+            grid = "both", ymin = 0,
             enlarge_y_limits = 0.01,
             width = raw"0.5\linewidth", height = raw"0.5\linewidth", leftopts...
         })
@@ -158,12 +178,12 @@ begin
 
         lowerplot = @pgf Plot(
             {line_width = LINE_WIDTH, color = colors[2]},
-            Coordinates(mspace[1:right], lowerpolicy)
+            Coordinates(mspace[1:rightdx], lowerpolicy)
         )
 
         lowermarker = @pgf Plot(
             {only_marks, color = colors[2], forget_plot},
-            Coordinates(mspace[[right]], lowerpolicy[[end]])
+            Coordinates(mspace[[rightdx]], lowerpolicy[[end]])
         )
 
         push!(policyax, lowerplot, lowermarker)
@@ -174,12 +194,12 @@ begin
 
         upperplot = @pgf Plot(
             {line_width = LINE_WIDTH, color = colors[1]},
-            Coordinates(mspace[left:end], upperpolicy)
+            Coordinates(mspace[leftdx:end], upperpolicy)
         )
 
         uppermarker = @pgf Plot(
             {only_marks, forget_plot, color = colors[1]},
-            Coordinates(mspace[[left]], upperpolicy[[1]])
+            Coordinates(mspace[[leftdx]], upperpolicy[[1]])
         )
 
         push!(policyax, upperplot, uppermarker)
@@ -203,11 +223,7 @@ end
 
 # -- Make simulation of optimal trajectories
 begin
-    TRAJECTORIES = 10_000
-    economy = Economy()
-
-    X₀ = SVector(T₀, m₀, 1.)
-    u₀ = SVector(X₀..., 0., 0., 0.) # Introduce three 0s for costs
+    trajectories = 10_000
 
     simulations = Dict{AbstractModel,EnsembleSolution}()
     for (i, model) in enumerate(models)
@@ -217,7 +233,7 @@ begin
         problem = SDEProblem(F, noise, u₀, tspan, parameters)
         ensembleprob = EnsembleProblem(problem)
 
-        simulation = solve(ensembleprob, SRA3(); trajectories=TRAJECTORIES)
+        simulation = solve(ensembleprob, SRA3(); trajectories)
         println("Done with simulation of $i / $(length(models))\n$model")
 
         simulations[model] = simulation
@@ -239,7 +255,7 @@ begin
     figopts = @pgf {width = raw"0.5\textwidth", height = raw"0.35\textwidth", grid = "both", xmin = 0, xmax = horizon}
 
     qs = (0.05, 0.5, 0.95)
-    temperatureticks = makedeviationtickz(0.5, 3., hogg; step=0.5, digits=1)
+    temperatureticks = makedeviationtickz(1, 2.5, hogg; step=0.5, digits=1)
 
     # Carbon concentration in first plot
     for (k, model) in enumerate(extremamodel) 
