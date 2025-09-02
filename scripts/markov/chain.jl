@@ -34,7 +34,6 @@ function constructA(V::ValueFunction, Δt⁻¹, model::M, G::RegularGrid{N₁,N�
             push!(idx, k); push!(jdx, LinearIndex((i + 1, j), G))
             push!(values, -z)
             y -= z
-
         else
             ∂ᵀH = (i > 1 ? V.H[i, j] - V.H[i - 1, j] : V.H[i + 1, j] - V.H[i, j]) * ΔT⁻¹
 

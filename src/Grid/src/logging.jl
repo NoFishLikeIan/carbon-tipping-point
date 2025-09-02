@@ -23,19 +23,9 @@ function Base.show(io::IO, grid::RegularGrid{N₁,N₂,S,R}) where {N₁,N₂,S,
         println(io, "│    ├─ Range: [$(round(m_min, digits=2)), $(round(m_max, digits=2))]")
         println(io, "│    └─ Step size: $(round(m_range/(N₂-1), digits=4))")
     end
-    
-    # Print example points if available
-    if !isempty(grid.X)
-        println(io, "│  Example Points:")
-        println(io, "│    ├─ Corner (1,1): T=$(round(grid.X[1,1].T, digits=2)), m=$(round(grid.X[1,1].m, digits=2))")
-        println(io, "│    ├─ Corner ($(N₁),$(N₂)): T=$(round(grid.X[N₁,N₂].T, digits=2)), m=$(round(grid.X[N₁,N₂].m, digits=2))")
-        println(io, "│    └─ Center ($(N₁÷2+1),$(N₂÷2+1)): T=$(round(grid.X[N₁÷2+1,N₂÷2+1].T, digits=2)), m=$(round(grid.X[N₁÷2+1,N₂÷2+1].m, digits=2))")
-    end
 
     println(io, "└─────────────────────────────────")
 end
-
-# Add support for display in notebooks and REPLs
 function Base.show(io::IO, ::MIME"text/plain", grid::RegularGrid)
     show(io, grid)
 end

@@ -53,7 +53,7 @@ begin # Read available files
         end
     end
 
-    modelfiles = modelfiles[[1, 2]] # FIXME: Temporary
+    modelfiles = modelfiles[[2, end]] # FIXME: Temporary
 end;
 
 begin # Import available files
