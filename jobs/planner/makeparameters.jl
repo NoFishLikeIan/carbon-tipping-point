@@ -1,7 +1,7 @@
 using JSON
 
-thresholds = [2:0.1:5..., -1.];
-damages = ["kalkuhl", "weitzman"]
+thresholds = [2., 2.5, 5.] # [2:0.1:5..., -1.];
+damages = ["kalkuhl"]
 withnegatives = [false, true];
 
 ParamVal = Union{Float64, String, Bool};
@@ -16,7 +16,7 @@ for damage in damages, withnegative in withnegatives, threshold in thresholds
     push!(parameters, obj)
 end
 
-sanitycheck = Dict{String, ParamVal}("damage" => "nodamages", "withnegative" => true, "threshold" => -1.); push!(parameters, sanitycheck)
+# sanitycheck = Dict{String, ParamVal}("damage" => "nodamages", "withnegative" => true, "threshold" => -1.); push!(parameters, sanitycheck)
 
 println("Constructed $(length(parameters)) parameters object.")
 

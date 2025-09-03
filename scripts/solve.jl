@@ -78,7 +78,7 @@ else
 end
 
 # Construct Grid
-Tmin, Tmax = hogg.Tᵖ .+ (0., 7.5);
+Tmin, Tmax = hogg.Tᵖ .+ (0., 6.);
 Tdomain = (Tmin, Tmax)
 mdomain = mstable(Tmin + 0.5, model), mstable(Tmax - 0.5, model)
 N = (NT, Nm)
@@ -109,4 +109,4 @@ end
 
 G = shrink(Gterminal, 0.05)
 valuefunction = interpolateovergrid(terminalvaluefunction, Gterminal, G)
-backwardsimulation!(valuefunction, dt, model, G, calibration; verbose, withnegative, overwrite, outdir, cachestep = cachestep)
+backwardsimulation!(valuefunction, dt, model, G, calibration; verbose, withnegative, overwrite, outdir, cachestep = cachestep, startcache = 150.)

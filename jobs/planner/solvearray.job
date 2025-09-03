@@ -3,9 +3,8 @@
 #SBATCH --job-name=solve
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=1
-#SBATCH --array=0-128
-#SBATCH --time=00:45:00
+#SBATCH --array=0-5
+#SBATCH --time=03:30:00
 #SBATCH --partition=rome
 #SBATCH --mail-type=BEGIN,END,FAIL,TIME_LIMIT_80
 #SBATCH -o ./logs/out/SOLVE%A_%a.out 
@@ -33,9 +32,9 @@ jq_command='
 params=$(jq -r --arg id "$SLURM_ARRAY_TASK_ID" "$jq_command" jobs/planner/parameters.json)
 
 # Run script 
-julia --threads ${SLURM_CPUS_PER_TASK} --project scripts/solve.jl --NT 151 --Nm 150 \
-    --cachestep 0.08 --verbose 1  --overwrite --tol 0.001 --dt 0.04 \
-    --datapath "$SCRATCHDATA"  --simulationpath "simulation-large" \
+julia --threads "auto" --project scripts/solve.jl --NT 200 --Nm 250 \
+    --cachestep 0.5 --verbose 1 --tol 0.001 --dt 0.005 \
+    --datapath "$SCRATCHDATA"  --simulationpath "simulation-dense" --overwrite \
     $params
 
 # Copy results back to home
