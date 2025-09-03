@@ -231,49 +231,17 @@ begin # Setup CO₂e maximisation problem
 
     Mᵖ = mean(co2equivalence[1800 .≤ co2equivalence.Year .≤ 1900, "Concentration"])
     m = @. log(co2calibrationdf.Concentration / Mᵖ)
+    γ̂ₜ = diff(m); smooth!(γ̂ₜ, 10)
+    Eₜ = γ̂ₜ .* co2calibrationdf.Concentration[1:(end - 1)] ./ ppmoverGt
 end;
 
-function concentrationloss(p, optparams)
-    ts, γ̂, α = optparams
-
-    ptup = Tuple(p)
-    loss = zero(eltype(γ̂))
-    for (i, t) in enumerate(ts)
-        loss += abs2(γ(t, ptup) - γ̂[i]) * exp(-α * t)
-    end
-
-    return loss
-end
-
-begin # Initialize the CO₂e calibration problem
-    p₀ = MVector(
-        0.012,
-        5.0,
-        3.8,
-        0.5,
-        0.001,
-        0.01
-    )
-
-    ts = range(0, τ - 1.; step=1.)
-    γ̂ = diff(m)
-    smooth!(γ̂, 5)
-    α = 0.01
-    optparams = (ts, γ̂, α)
-
-    ad = AutoForwardDiff()
-    γfn = Optimization.OptimizationFunction(concentrationloss, ad)
-    γprob = Optimization.OptimizationProblem(γfn, p₀, optparams)
-
-    result = solve(γprob, PolyOpt())
-end
+calibration = DynamicCalibration(co2tspan, Eₜ, γ̂ₜ)
 
 # --- Implied emissions
 begin
     m₀ = first(m)
-    γparameters = Tuple(result.u)
-    γfn = @closure (m, γparameters, t) -> γ(t - baselineyear, γparameters)
-    γprob = ODEProblem(γfn, m₀, co2tspan, γparameters)
+    γfn = @closure (m, calibration, t) -> γ(t - baselineyear, calibration)
+    γprob = ODEProblem(γfn, m₀, co2tspan, calibration)
 
     calibratedpath = solve(γprob, Tsit5(), saveat=range(γprob.tspan...; step=1.))
 
@@ -282,11 +250,6 @@ begin
     m₀ = calibratedpath(baselineyear)
     M₀ = Mᵖ * exp(m₀)
     Mₜ = Mᵖ * exp.(calibratedpath.u)
-
-    ppmoverGt = 2.13 * 3.664
-    Eₜ = diff(Mₜ) * ppmoverGt
-
-    calibration = Calibration(baselineyear, Eₜ, γparameters, τ)
 end
 
 if isinteractive() # Check simulated fit
@@ -492,9 +455,10 @@ function coupledsystem(u, parameters, t)
     hogg, calibration, Tᶜ, ΔS, L = parameters
     feedback = Feedback(promote(Tᶜ, ΔS, L)...)
 
+    baselineyear = calibration.calibrationspan[1]
     m, Tˡ, T = u
 
-    dm = γ(t - calibration.baselineyear, calibration)
+    dm = γ(t - baselineyear, calibration)
     dTˡ = μ(Tˡ, m, hogg) / hogg.ϵ
     dT = μ(T, m, hogg, feedback) / hogg.ϵ
 
@@ -544,7 +508,7 @@ begin # Calibrate adjustment speed
     u₀ = SVector(m₀, T₀, T₀)
 
     tecalibrationhorizon = 100. + baselineyear
-    centurydx = findfirst(==(tecalibrationhorizon), co2calibrationdf.Year)
+    centurydx = searchsortedfirst(co2calibrationdf.Year, tecalibrationhorizon)
     mtarget = log(co2calibrationdf[centurydx, "Concentration"] / Mᵖ)
 
     Tᶜ₀ = 4. + hogg.T₀
@@ -558,7 +522,7 @@ begin # Calibrate adjustment speed
 
     feedbacks = Feedback{Float64}[]
     for (i, df) in enumerate(tedfs)
-        subdf = df[baselineyear.≤df.Year.≤tecalibrationhorizon, :]
+        subdf = df[baselineyear .≤ df.Year .≤ tecalibrationhorizon, :]
 
         parameters = (hogg, calibration, Tᶜ₀, ΔS₀, L₀)
         coupledprob = ODEProblem(coupledsystem, u₀, extrema(subdf.Year), parameters)
@@ -575,12 +539,6 @@ begin # Calibrate adjustment speed
             @warn @sprintf "Result %i not converged.\n" i
         else
             @printf "Problem %i converged with ΔTᶜ=%.3f, ΔS=%.3f, L=%.3f, error=%.3e.\n" i (teresult.u[1] - hogg.Tᵖ) teresult.u[2] teresult.u[3] teresult.objective
-
-            res = constraints(teresult.u, optparameters)
-
-            if !all(lcons .< res .< ucons)
-                @warn @sprintf "Problem %i: constraints not satisfied. Residuals: %.3f, %.3f, %.3f, %.3f" i res[1] res[2] res[3] res[4]
-            end
         end
 
         Tᶜ, ΔS, L = teresult.u
@@ -593,8 +551,9 @@ end
 function extendedcoupledsystem!(du, u, parameters, t)
     hogg, calibration, feedbacks = parameters
     m = u[1]
+    baselineyear = calibration.calibrationspan[1]
 
-    du[1] = γ(t - calibration.baselineyear, calibration)
+    du[1] = γ(t - baselineyear, calibration)
     du[2] = μ(u[2], m, hogg)
 
     for (i, feedback) in enumerate(feedbacks)

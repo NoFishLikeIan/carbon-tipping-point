@@ -14,14 +14,14 @@ function ε(t, Xᵢ, αᵢ, model, calibration)
     αᵢ / ᾱ(t, Xᵢ, model, calibration)
 end
 
-function l(t, Xᵢ, α, model::M, calibration::Calibration) where {S,D<:Damages{S},P<:LogSeparable{S},M<:AbstractModel{S,D,P}}
+function l(t, Xᵢ, αᵢ, model::M, calibration::Calibration) where {S, M <: UnitElasticityModel{S}}
     @unpack economy, preferences = model
     χ = χopt(t, economy, preferences)
-    ε = α / ᾱ(t, Xᵢ, model, calibration)
+    e = ε(t, Xᵢ, αᵢ, model, calibration)
 
     gdpgrowth = preferences.ρ * log(χ) + economy.ϱ + ϕ(t, χ, economy) - preferences.θ * economy.σₖ^2 / 2
 
-    netgrowth = gdpgrowth - d(Xᵢ.T, Xᵢ.m, model) - β(t, ε, economy)
+    netgrowth = gdpgrowth - d(Xᵢ.T, Xᵢ.m, model) - A(t, economy) * β(t, e, economy)
 
     return (1 - preferences.θ) * netgrowth
 end
@@ -29,9 +29,7 @@ end
 function b(t, Xᵢ::Point, u::Policy, model, calibration)
     @unpack economy = model
     growth = economy.ϱ + ϕ(t, u.χ, economy)
-
-    ε = u.α / ᾱ(t, Xᵢ, model, calibration)
-    abatement = A(t, model.economy) * β(t, ε, economy)
+    abatement = A(t, model.economy) * β(t, ε(t, Xᵢ, u.α, model, calibration), economy)
     damages = d(Xᵢ.T, Xᵢ.m, model)
 
     return growth - abatement - damages

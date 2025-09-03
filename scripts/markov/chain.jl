@@ -1,5 +1,5 @@
-function αopt(t, Xᵢ::Point, ∂ₘH, model::M, calibration::Calibration) where {S,D<:Damages{S},P<:LogSeparable{S},M<:AbstractModel{S,D,P}}
-    -∂ₘH * ᾱ(t, Xᵢ, model, calibration)^2 / (ω(t, model.economy) * (1 - model.preferences.θ))
+function αopt(t, Xᵢ::Point, ∂ₘH, model::M, calibration::Calibration) where {S, M <: UnitElasticityModel{S}}
+    -∂ₘH * ᾱ(t, Xᵢ, model, calibration)^2 / (A(t, economy) * ω(t, model.economy) * (1 - model.preferences.θ))
 end
 
 "Constructs upwind-downwind scheme A."
@@ -24,8 +24,7 @@ function constructA(V::ValueFunction, Δt⁻¹, model::M, G::RegularGrid{N₁,N�
         y = zero(S) # Diagonal values
         
         # Temperature, which is uncontrolled
-        bᵀ = μ(Xᵢ.T, Xᵢ.m, model) / model.hogg.ϵ
-
+        bᵀ = μ(Xᵢ.T, Xᵢ.m, model) / model.hogg.ϵ        
         if bᵀ ≥ 0
             ∂ᵀH = (i < N₁ ? V.H[i + 1, j] - V.H[i, j] : V.H[i, j] - V.H[i - 1, j]) * ΔT⁻¹
 

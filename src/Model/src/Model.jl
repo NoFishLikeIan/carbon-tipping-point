@@ -12,7 +12,7 @@ include("models/preferences.jl")
 include("models/models.jl")
 include("logging.jl")
 
-export Calibration, RegionalCalibration
+export Calibration, DynamicCalibration, ConstantCalibration, RegionalCalibration
 export γ, Eᵇ
 
 export Feedback, Jump, Hogg

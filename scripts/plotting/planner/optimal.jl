@@ -12,10 +12,11 @@ using Model, Grid
 
 using Random; Random.seed!(11148705);
 
-using Plots, PGFPlotsX
+using Plots, PGFPlotsX, Contour
 using LaTeXStrings, Printf
 using Colors, ColorSchemes
 
+# pgfplotsx()
 push!(PGFPlotsX.CUSTOM_PREAMBLE, raw"\usepgfplotslibrary{fillbetween}", raw"\usetikzlibrary{patterns}")
 push!(PGFPlotsX.CUSTOM_PREAMBLE, raw"\usepackage{siunitx}")
 push!(PGFPlotsX.CUSTOM_PREAMBLE, raw"\DeclareSIUnit{\ppm}{p.p.m.}")
@@ -29,7 +30,7 @@ includet("../../utils/simulating.jl")
 
 damage = Kalkuhl;
 withnegative = false; abatementtype = withnegative ? "negative" : "constrained"
-DATAPATH = "data/simulation-large";
+DATAPATH = "data/simulation-dense";
 
 SAVEFIG = false;
 plotpath = joinpath("papers/job-market-paper/submission/plots", abatementtype)
@@ -41,7 +42,8 @@ tspan = (0., horizon)
 begin # Read available files
     simulationfiles = listfiles(DATAPATH)
     nfiles = length(simulationfiles)
-    _, G = loadproblem(first(simulationfiles))
+    G = simulationfiles |> first |> loadproblem |> last
+    
     modelfiles = String[]
     for (i, filepath) in enumerate(simulationfiles)
         print("Reading $i / $(length(simulationfiles))\r")
@@ -52,18 +54,18 @@ begin # Read available files
             push!(modelfiles, filepath)
         end
     end
-
-    modelfiles = modelfiles[[2, end]] # FIXME: Temporary
 end;
 
 begin # Import available files
     models = AbstractModel[]
-    interpolations = Dict{AbstractModel, NTuple{2, TimeStateInterpolation}}()
+    valuefunctions = Dict{AbstractModel, OrderedDict{Float64, ValueFunction}}()
+    interpolations = Dict{AbstractModel, NTuple{2, Interpolations.Extrapolation}}()
     
     for (i, filepath) = enumerate(modelfiles)
         print("Loading $i / $(length(modelfiles))\r")
-        values, model, G = loadtotal(filepath; tspan=(0, 1.5horizon))
-        interpolations[model] = buildinterpolations(values, model, G);
+        values, model, G = loadtotal(filepath; tspan=(0, 1.2horizon))
+        interpolations[model] = buildinterpolations(values, G);
+        valuefunctions[model] = values
         push!(models, model)
     end
 
@@ -81,7 +83,7 @@ end
 
 begin # Plot estetics
     tippingmodels = filter(model -> model isa TippingModel, models)
-    extremamodel = (first(models), last(models))
+    extremamodel = (models[1], models[end])
 
     PALETTE = colorschemes[:grays]
     colors = get(PALETTE, range(0, 0.6; length=length(extremamodel)))
@@ -89,17 +91,15 @@ begin # Plot estetics
     TEMPLABEL = raw"Temperature deviations $T_t \; [\si{\degree\Celsius}]$"
     LINE_WIDTH = 2.5
 
-    (Tmin, Tmax), (mmin, mmax) = G.domains
-    Tspace = range(Tmin, Tmax; length=size(G, 1))
-    mspace = range(mmin, mmax; length=size(G, 2))
+    Tspace, mspace = G.ranges
 
     yearlytime = range(tspan[1], tspan[2]; step=1.)
     T₀ = hogg.T₀
     m₀ = log(hogg.M₀ / hogg.Mᵖ)
     x₀ = Point(T₀, m₀)
 
-    ΔTmin = Tmin[1] - hogg.Tᵖ
-    ΔTmax = Tmax[end] - hogg.Tᵖ
+    ΔTmin = Tspace[1] - hogg.Tᵖ
+    ΔTmax = Tspace[end] - hogg.Tᵖ
     temperatureticks = makedeviationtickz(ΔTmin, ΔTmax, hogg; step=1, digits=0)
 
     economy = Economy()
@@ -109,108 +109,8 @@ begin # Plot estetics
 end;
 
 # Policies
-co2np = ODEProblem((m, calibration, t) -> γ(t, calibration), m₀, tspan, calibration)
-function tbau(m̄, co2np)
-    if m̄ < co2np.u0
-        return zero(m̄)
-    end
-
-    callback = ContinuousCallback((m, t, integrator) -> m̄ - m, terminate!)
-    sol = solve(co2np, Tsit5(); callback = callback, save_everystep = false, save_start = false)
-
-    return sol.t[end]
-end
-
-begin
-    policyfig = @pgf GroupPlot({group_style = {group_size = "2 by 1", horizontal_sep = "1em"}})
-
-    for (i, model) in enumerate(extremamodel)
-        αitp = interpolations[model] |> last;
-        
-        stableabatement = m -> begin
-            t = tbau(m, co2np)
-            Ts = Tstable(m, model)
-            states = [ Point(T, m) for T in Ts ]
-            αs = [ apply(t, x, αitp) for x in states ]
-
-            return αs 
-        end
-
-        abatements = map(stableabatement, mspace)
-
-        left = findfirst(a -> length(a) > 1, abatements)
-        leftdx = !isnothing(left) ? left : length(abatements)
-        right = findlast(a -> length(a) > 1, abatements)
-        rightdx = !isnothing(right) ? right : length(abatements)
-
-        lowerpolicy = first.(abatements[1:rightdx])
-        upperpolicy = last.(abatements[leftdx:end])
-
-        mtick = collect(range(extrema(mspace)...; length=5))[2:(end-1)]
-        mticklabels = ["$l" for l in @. Int(round(exp(mtick)))]
-
-        push!(mtick, m₀)
-        push!(mticklabels, L"M_0")
-
-        idxs = sortperm(mtick)
-        mtick = mtick[idxs]
-        mticklabels = mticklabels[idxs]
-
-        leftopts = @pgf i > 1 ? {
-            yticklabels = raw"\empty"
-        } : {
-            ylabel = L"Abated fraction $\varepsilon_t$",
-            xlabel = L"Carbon Concentration $M_t \; [\si{\ppm}]$ ",
-            x_label_style = {anchor = "north west"},
-        }
-
-        policyax = @pgf Axis({
-            set_layers, mark_layer = "axis background",
-            title = labelofmodel(model),
-            xmin = minimum(mspace), xmax = maximum(mspace),
-            enlarge_x_limits = 0.01,
-            xtick = mtick, xticklabels = mticklabels,
-            grid = "both", ymin = 0,
-            enlarge_y_limits = 0.01,
-            width = raw"0.5\linewidth", height = raw"0.5\linewidth", leftopts...
-        })
-
-
-        lowerplot = @pgf Plot(
-            {line_width = LINE_WIDTH, color = colors[2]},
-            Coordinates(mspace[1:rightdx], lowerpolicy)
-        )
-
-        lowermarker = @pgf Plot(
-            {only_marks, color = colors[2], forget_plot},
-            Coordinates(mspace[[rightdx]], lowerpolicy[[end]])
-        )
-
-        push!(policyax, lowerplot, lowermarker)
-
-        if i > 1
-            push!(policyax, LegendEntry(raw"\footnotesize Low $T$"))
-        end
-
-        upperplot = @pgf Plot(
-            {line_width = LINE_WIDTH, color = colors[1]},
-            Coordinates(mspace[leftdx:end], upperpolicy)
-        )
-
-        uppermarker = @pgf Plot(
-            {only_marks, forget_plot, color = colors[1]},
-            Coordinates(mspace[[leftdx]], upperpolicy[[1]])
-        )
-
-        push!(policyax, upperplot, uppermarker)
-
-        if i > 1
-            push!(policyax, LegendEntry(raw"\footnotesize High $T$"))
-        end
-
-        push!(policyfig, policyax)
-    end
-
+if false t = 0.
+    policyfig = @pgf GroupPlot({group_style = {group_size = "2 by 1", horizontal_sep = "1em"}});
 
     @pgf policyfig["legend style"] = raw"at = {(0.95, 0.3)}"
 
@@ -219,7 +119,7 @@ begin
     end
 
     policyfig
-end
+end;
 
 # -- Make simulation of optimal trajectories
 begin

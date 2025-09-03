@@ -33,7 +33,7 @@ begin # Construct the model
     preferences = Preferences()
     economy = Economy()
 
-    threshold = 1.5
+    threshold = 2.0
 
     model = if 0 < threshold < Inf
         feedback = Model.updateTᶜ(threshold + hogg.Tᵖ, feedback)
@@ -48,7 +48,7 @@ begin # Construct the model
 
     G = RegularGrid(N, (Tdomain, mdomain))
     Δt = 1 / 100
-    τ = 500.
+    τ = 250.
 
     if isinteractive()
         Tspace = range(Tdomain[1], Tdomain[2]; length=size(G, 1))
@@ -59,7 +59,7 @@ end;
 
 # Check terminal condition
 terminalvaluefunction = ValueFunction(τ, hogg, G, calibration)
-steadystate!(terminalvaluefunction, Δt, model, G, calibration; verbose = 2, iterations = 5_000, tolerance = Error(1e-3, 1e-4))
+steadystate!(terminalvaluefunction, Δt, model, G, calibration; verbose = 2, iterations = 1_000, tolerance = Error(1e-3, 1e-3))
 
 if isinteractive()
     abatement = [ε(terminalvaluefunction.t.t, G.X[i], terminalvaluefunction.α[i], model, calibration) for i in CartesianIndices(G)]
@@ -107,10 +107,9 @@ if isinteractive() # Backward simulation gif
 
         jointfig
     end fps = 15
-
 end
 
-backwardsimulation!(valuefunction, Δt, model, G, calibration; t₀ = 150., verbose = 2, withsave = false)
+backwardsimulation!(valuefunction, Δt, model, G, calibration; t₀ = 0., verbose = 2, withsave = false)
 
 if isinteractive()
     policyfig = contourf(mspace, Tspace, valuefunction.α; title = L"Initial $\bar{\alpha}_{0}$", xlabel = L"m", ylabel = L"T", c=:viridis, cmin = 0., xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)

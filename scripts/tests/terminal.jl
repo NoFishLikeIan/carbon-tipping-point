@@ -31,7 +31,7 @@ begin # Construct the model
     preferences = Preferences()
     economy = Economy()
 
-    threshold = 2.
+    threshold = 4.
 
     model = if 0 < threshold < Inf
         feedback = Model.updateTᶜ(threshold + hogg.Tᵖ, feedback)
@@ -41,22 +41,22 @@ begin # Construct the model
     end
 
     N = (200, 250)
-    Tdomain = hogg.Tᵖ .+ (0., 7.5)
+    Tdomain = hogg.Tᵖ .+ (0., 7.)
     mdomain = mstable(Tdomain[1] + 0.5, model), mstable(Tdomain[2] - 0.5, model)
 
     G = RegularGrid(N, (Tdomain, mdomain))
-    Δt = 1 / 100
+    Δt = 1 / 200
     τ = 500.
 
     if isinteractive()
-        Tspace = range(Tdomain[1], Tdomain[2]; length=size(G, 1))
-        mspace = range(mdomain[1], mdomain[2]; length=size(G, 2))
+        Tspace = range(Tdomain[1], Tdomain[2]; length = size(G, 1))
+        mspace = range(mdomain[1], mdomain[2]; length = size(G, 2))
         nullcline = mstable.(Tspace, model)
     end
 end;
 
 # Gif optimisation
-if isinteractive()
+if false && isinteractive()
     Δt⁻¹ = 1 / Δt
     valuefunction = ValueFunction(τ, hogg, G, calibration)
 
@@ -82,13 +82,13 @@ if isinteractive()
 end
 
 valuefunction = ValueFunction(τ, hogg, G, calibration)
-steadystate!(valuefunction, Δt, model, G, calibration; verbose = 2, tolerance = Error(1e-3, 1e-4), withnegative = true)
+steadystate!(valuefunction, Δt, model, G, calibration; verbose = 2, tolerance = Error(1e-3, 1e-4), withnegative = false, iterations = 300)
 
 if isinteractive()
-    dm = @. γ(valuefunction.t.t, calibration) - valuefunction.α
+    dm = γ(valuefunction.t.t, calibration) .- valuefunction.α
     dm̄ = maximum(abs, dm)
 
-    policyfig = contourf(mspace, Tspace, dm; title = "Drift of CO2e", xlabel = L"m", ylabel = L"T", c=:coolwarm, clims = (-dm̄, dm̄), xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
+    policyfig = contourf(mspace, Tspace, dm; title = "Drift of CO2e", xlabel = L"m", ylabel = L"T", c=:coolwarm, xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0., clims = (-dm̄, dm̄))
     valuefig = contourf(mspace, Tspace, valuefunction.H; title = "Value Function H", xlabel = L"m", ylabel = L"T", c=:viridis, xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
 
     for fig in (policyfig, valuefig)

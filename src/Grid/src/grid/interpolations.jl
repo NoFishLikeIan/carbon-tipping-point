@@ -9,7 +9,6 @@ function interpolateovergrid(V::AbstractMatrix, fromgrid::RegularGrid{N}, xs::Ab
 
     return [itp(x.T, x.m) for x ∈ xs]
 end
-
 function shrink(domain::Domain, factor)
     l, r = domain
     cut = (r - l) * factor / 2

@@ -1,58 +1,49 @@
-struct Calibration{T<:Real,N}
-    baselineyear::T # Baseline year of the calibration
-    emissions::Vector{T} # Emissions data in GtCO₂ / year
-    γparameters::NTuple{N,T} # Paramters for γ
-    τ::T # End of calibration
+abstract type Calibration{S <: Real} end
+
+Base.@kwdef struct ConstantCalibration{S} <: Calibration{S}
+   γ₀::S = 0.022
 end
 
-struct RegionalCalibration{T<:Real}
-    calibration::Calibration{T}
-    fraction::Vector{T}
+struct DynamicCalibration{S} <: Calibration{S}
+    calibrationspan::NTuple{2, S} # Time span of calibration
+    emissions::Vector{S} # Emissions data in GtCO₂ / year
+    γ̂::Vector{S} # Observed growth rates γ̂
 end
 
-Base.broadcastable(c::Calibration) = Ref(c)
-Base.broadcastable(c::RegionalCalibration) = Ref(c)
-
-
-"Growth rate of carbon concentration in the no-policy scenario `γₜ : [0, τ] -> [0, ∞)`."
-function γ(t, p::NTuple{6})
-    # Shifted log-normal peak function
-    peak = p[1] * exp(-(log(t + p[2]) - p[3])^2 / p[4])
-    decay = p[5] * exp(-p[6] * t)
-
-    return peak + decay
-end
-function γ(t, calibration::Calibration)
-    γ(min(t, calibration.τ), calibration.γparameters)
-end
-function γ(t, regionalcalibration::RegionalCalibration)
-    frac = interpolateovert(t, regionalcalibration.calibration.tspan, regionalcalibration.fraction)
-
-    γₜ = γ(t, regionalcalibration.calibration)
-
-    return γₜ * frac, γₜ * (1 - frac)
+struct RegionalCalibration{S<:Real}
+    calibration::Calibration{S}
+    fraction::Vector{S}
 end
 
-
-"Linear interpolation of emissions in `calibration`"
-Eᵇ(t, calibration::Calibration) = interpolateovert(t, calibration.tspan, calibration.emissions)
-
-function interpolateovert(t, tspan, v)
-
+function timeinterpolation(t, tspan, v)
     tmin, tmax = tspan
 
-    if t ≤ tmin
-        return first(v)
-    end
-    if t ≥ tmax
-        return last(v)
-    end
+    if t ≤ tmin return first(v) end
+    if t ≥ tmax return last(v) end
 
     partition = range(tmin, tmax; length=length(v))
-    udx = findfirst(tᵢ -> tᵢ > t, partition)
+    udx = searchsortedfirst(partition, t)
     ldx = udx - 1
 
     α = (t - partition[ldx]) / step(partition)
 
     return (1 - α) * v[ldx] + α * v[udx]
 end
+
+"Growth rate of carbon concentration in the no-policy scenario `γₜ : [0, τ] -> [0, ∞)`."
+function γ(_, calibration::ConstantCalibration)
+    calibration.γ₀
+end
+function γ(t, calibration::DynamicCalibration)
+    year = t + calibration.calibrationspan[1]
+    return timeinterpolation(year, calibration.calibrationspan, calibration.γ̂)
+end
+
+"Linear interpolation of emissions in `calibration`"
+function Eᵇ(t, calibration::DynamicCalibration)
+    year = t + calibration.calibrationspan[1]
+    return timeinterpolation(year, calibration.tspan, calibration.emissions)
+end
+
+Base.broadcastable(c::Calibration) = Ref(c)
+Base.broadcastable(c::RegionalCalibration) = Ref(c)

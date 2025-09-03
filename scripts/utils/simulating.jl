@@ -1,27 +1,19 @@
-struct TimeStateInterpolation{S, I <: Interpolations.Extrapolation{S}}
-    itp::I
-end
-
-function apply(t, x::Point, itp::TimeStateInterpolation)
-    itp.itp(x.T, x.m, t)
-end
-
 function costbreakdown(t, state, policy, model, calibration)
     ε = policy.α / ᾱ(t, state, model, calibration)
-    abatement = β(t, ε, model.economy)
+    abatement = A(t, model.economy) * β(t, ε, model.economy)
     adjustment = model.economy.κ * abatement^2 / 2
     damages = d(state.T, state.m, model)
 
     return abatement, adjustment, damages
 end
 
-SimulationParameters = Tuple{AbstractModel, Calibration, TimeStateInterpolation}
+SimulationParameters = Tuple{AbstractModel, Calibration, Interpolations.Extrapolation}
 "Drift of system."
 function F(u::SVector{3,R}, parameters::SimulationParameters, t) where R<:Real
     model, calibration, αitp = parameters
     T, m = @view u[1:2]
     state = Point(T, m)
-    α = apply(t, state, αitp)
+    α = αitp(T, m, t)
     χ = χopt(t, model.economy, model.preferences)
     policy = Policy(χ, α)
 
@@ -36,7 +28,7 @@ function F(u::SVector{6,R}, parameters::SimulationParameters, t) where R<:Real
     model, calibration, αitp = parameters
     T, m = @view u[1:2]
     state = Point(T, m)
-    α = apply(t, state, αitp)
+    α = αitp(T, m, t)
     χ = χopt(t, model.economy, model.preferences)
     policy = Policy(χ, α)
 
@@ -119,24 +111,26 @@ function tipping!(integrator)
 end
 
 "Constructs linear interpolation of results"
-function buildinterpolations(values, model, G::RegularGrid{N₁, N₂, S}) where {N₁, N₂, S}
-    Tdomain, Gdomain = G.domains
-    Tspace = range(Tdomain[1], Tdomain[2]; length=size(G, 1))
-    mspace = range(Gdomain[1], Gdomain[2]; length=size(G, 2))
-    timespace = collect(keys(values))
+function buildinterpolations(values, G::RegularGrid{N₁, N₂, S}) where {N₁, N₂, S}
+    Tspace, mspace = G.ranges
+    
+    times = diff(collect(keys(values)))
+    timestep = only(unique(times))
+    t₀, t₁ = extrema(keys(values))
+    tspace = t₀:timestep:t₁
+    
+    nodes = (Tspace, mspace, tspace)
 
-    nodes = (Tspace, mspace, timespace)
-    H = Array{S, 3}(undef, size(G, 1), size(G, 2), length(timespace))
+    H = Array{S, 3}(undef, N₁, N₂, length(tspace))
     α = similar(H)
 
-    for (i, pair) in enumerate(values)
-        V = pair.second
+    for (i, (t, V)) in enumerate(values)
         H[:, :, i] .= V.H
         α[:, :, i] .= V.α
     end
 
-    Hitp = linear_interpolation(nodes, H; extrapolation_bc=Line()) |> TimeStateInterpolation
-    αitp = linear_interpolation(nodes, α; extrapolation_bc=Line()) |> TimeStateInterpolation
+    Hitp = extrapolate(scale(interpolate(H, BSpline(Linear())), nodes...), Flat())
+    αitp = extrapolate(scale(interpolate(α, BSpline(Linear())), nodes...), Flat())
 
     return Hitp, αitp
 end
