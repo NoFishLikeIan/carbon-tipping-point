@@ -9,6 +9,12 @@ function interpolateovergrid(V::AbstractMatrix, fromgrid::RegularGrid{N}, xs::Ab
 
     return [itp(x.T, x.m) for x ∈ xs]
 end
+function interpolateovergrid!(V::AbstractMatrix, fromgrid::RegularGrid{N}, xs::AbstractMatrix{P}) where {N, T, P <: Point{T}}
+    itp = extrapolate(scale(interpolate(V, BSpline(Linear())), fromgrid.ranges), Line())
+
+    return [itp(x.T, x.m) for x ∈ xs]
+end
+
 function shrink(domain::Domain, factor)
     l, r = domain
     cut = (r - l) * factor / 2

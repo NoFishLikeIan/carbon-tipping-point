@@ -44,6 +44,23 @@ function steadystate!(valuefunction::ValueFunction{S, N₁, N₂}, Δt::S, model
     return valuefunction, (iterations, Error{S}(NaN, NaN))
 end
 
+function richardsonsteadystate!(V₁::ValueFunction{S, N₁, N₂}, Δt::S, model::M, G₁, calibration; verbose = 0, iterkwargs...) where {S, N₁, N₂, M <: UnitElasticityModel{S}}
+    G₂ = halfgrid(G₁)
+    V₂ = interpolateovergrid(V₁, G₁, G₂)
+
+    if verbose > 0 println("Solving smaller problem...") end
+    steadystate!(V₂, Δt, model, G₂, calibration; verbose, iterkwargs...)
+
+    if verbose > 0 println("Solving larger problem...") end
+    V₁.H .= interpolateovergrid(V₂.H, G₂, G₁)
+    steadystate!(V₁, Δt, model, G₁, calibration; verbose, iterkwargs...)
+
+    V₁.H .= 2V₁.H - interpolateovergrid(V₂.H, G₂, G₁)
+    V₁.α .= 2V₁.α - interpolateovergrid(V₂.α, G₂, G₁)
+
+    return V₁
+end
+
 function backwardsimulation!(
     valuefunction::ValueFunction{S, N₁, N₂}, Δt::S, model::M, G::RegularGrid{N₁, N₂, S}, calibration::Calibration; 
     t₀ = zero(S), withnegative = false,
