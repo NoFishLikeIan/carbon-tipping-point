@@ -77,13 +77,13 @@ end
 
 wfpolicy = NaN * zeros(size(remotepolicy))
 
-imminenttipregion = @. getindex(G.X, 1) ≥ 1.5 + hogg.Tᵖ
+imminenttipregion = @. getindex(G, 1) ≥ 1.5 + hogg.Tᵖ
 wfpolicy[imminenttipregion, :, :] .= imminentpolicy[imminenttipregion, :, :]
 wfpolicy[.~imminenttipregion, :, :] .= remotepolicy[.~imminenttipregion, :, :]
 
 prudpolicy = NaN * zeros(size(remotepolicy))
 
-remotetippedregion = @. getindex(G.X, 1) ≥ remotethreshold + hogg.Tᵖ
+remotetippedregion = @. getindex(G, 1) ≥ remotethreshold + hogg.Tᵖ
 prudpolicy[remotetippedregion, :, :] .= remotepolicy[remotetippedregion, :, :]
 prudpolicy[.~remotetippedregion, :, :] .= imminentpolicy[.~remotetippedregion, :, :]
 

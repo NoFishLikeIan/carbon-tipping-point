@@ -29,8 +29,9 @@ includet("../../utils/saving.jl")
 includet("../../utils/simulating.jl")
 
 damage = Kalkuhl;
-withnegative = false; abatementtype = withnegative ? "negative" : "constrained"
-DATAPATH = "data/simulation-dense";
+withnegative = true
+abatementtype = withnegative ? "negative" : "constrained"
+DATAPATH = "data/simulation-dense"; @assert isdir(DATAPATH)
 
 SAVEFIG = false;
 plotpath = joinpath("papers/job-market-paper/submission/plots", abatementtype)
@@ -82,9 +83,7 @@ begin
 end
 
 begin # Plot estetics
-    tippingmodels = filter(model -> model isa TippingModel, models)
-    extremamodel = (models[1], models[end])
-
+    extremamodel = extrema(models)
     PALETTE = colorschemes[:grays]
     colors = get(PALETTE, range(0, 0.6; length=length(extremamodel)))
 
@@ -157,7 +156,7 @@ begin
     qs = (0.05, 0.5, 0.95)
     temperatureticks = makedeviationtickz(1, 2.5, hogg; step=0.5, digits=1)
 
-    # Carbon concentration in first plot
+    # Carbon concentration in first row
     for (k, model) in enumerate(extremamodel) 
         simulation = simulations[model]
         ts = first(simulation).t
@@ -182,7 +181,7 @@ begin
             }, medianplot, lowerplot, upperplot, fill)
     end
 
-    # Makes the temperature plots in the second row
+    # Temperature in second row
     for (k, model) in enumerate(extremamodel)
         simulation = simulations[model]
         _, policyitp = interpolations[model]

@@ -7,6 +7,7 @@ using Base.Threads
 using SciMLBase
 using Statistics
 using StaticArrays, SparseArrays
+using Interpolations
 
 using LinearSolve, LinearAlgebra
 
@@ -42,19 +43,16 @@ begin # Construct the model
         LinearModel(hogg, preferences, damages, economy)
     end
 
-    N = (50, 50)
+    N = (20, 50)
     Tdomain = hogg.Tᵖ .+ (0., 7.5)
     mdomain = mstable(Tdomain[1] + 0.5, model), mstable(Tdomain[2] - 0.5, model)
 
     G = RegularGrid(N, (Tdomain, mdomain))
     Δt = 1 / 24
-    τ = 500.
+    τ = 0.
 
-    if isinteractive()
-        Tspace = range(Tdomain[1], Tdomain[2]; length=size(G, 1))
-        mspace = range(mdomain[1], mdomain[2]; length=size(G, 2))
-        nullcline = mstable.(Tspace, model)
-    end
+    Tspace, mspace = G.ranges
+    nullcline = mstable.(Tspace, model)
 end;
 
 # Check terminal condition
@@ -62,7 +60,8 @@ terminalvaluefunction = ValueFunction(τ, hogg, G, calibration)
 richardsonsteadystate!(terminalvaluefunction, Δt, model, G, calibration; verbose = 1, iterations = 10_000, tolerance = Error(1e-5, 1e-6))
 
 if isinteractive()
-    abatement = [ε(terminalvaluefunction.t.t, G.X[i], terminalvaluefunction.α[i], model, calibration) for i in CartesianIndices(G)]
+    αitp = linear_interpolation(G.ranges, terminalvaluefunction.α)
+    abatement = [ε(terminalvaluefunction.t.t, x, αitp(x.T, x.m), model, calibration) for x in G]
 
     policyfig = heatmap(mspace, Tspace, abatement; title = L"Terminal $\bar{\alpha}_{\tau}$", xlabel = L"m", ylabel = L"T", c=:Greens, cmin = 0., cmax = 1., xlims = extrema(mspace), ylims = extrema(Tspace), clims = (0, 1.2))
 
@@ -91,7 +90,7 @@ if isinteractive() # Backward simulation gif
             
         valuefunction.H .= reshape(problem.u, size(G))
 
-        abatement = [ε(valuefunction.t.t, G.X[i], valuefunction.α[i], model, calibration) for i in CartesianIndices(G)]
+        abatement = [ε(valuefunction.t.t, G[i], valuefunction.α[i], model, calibration) for i in CartesianIndices(G)]
 
         policyfig = contourf(mspace, Tspace, abatement; title = L"Policy $\bar{\alpha}_{%$(valuefunction.t.t)}$", xlabel = L"m", ylabel = L"T", c=:viridis, cmin = 0., cmax = 1., xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
         valuefig = contourf(mspace, Tspace, valuefunction.H; title = L"Value $H_%$(valuefunction.t.t)$", xlabel = L"m", ylabel = L"T", c=:viridis, xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
@@ -112,7 +111,7 @@ end
 backwardsimulation!(valuefunction, Δt, model, G, calibration; t₀ = 0., verbose = 2, withsave = false)
 
 if isinteractive()
-    abatement = [ε(terminalvaluefunction.t.t, G.X[i], terminalvaluefunction.α[i], model, calibration) for i in CartesianIndices(G)]
+    abatement = [ε(terminalvaluefunction.t.t, G[i], terminalvaluefunction.α[i], model, calibration) for i in CartesianIndices(G)]
 
     policyfig = contourf(mspace, Tspace, abatement; title = L"Initial $\bar{\alpha}_{0}$", xlabel = L"m", ylabel = L"T", c=:Greens, cmin = 0., xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
     valuefig = contourf(mspace, Tspace, valuefunction.H; title = L"Initial value $H_0$", xlabel = L"m", ylabel = L"T", c=:viridis, xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)

@@ -17,6 +17,7 @@ Base.size(grid::RegularGrid{N₁, N₂}, d) where {N₁, N₂} = size(grid)[d]
 Base.axes(grid::RegularGrid, d) = axes(grid.ranges[d], 1)
 Base.length(::RegularGrid{N₁, N₂}) where {N₁, N₂} = N₁ * N₂
 Base.eltype(::RegularGrid{N₁, N₂, S}) where {N₁, N₂, S} = S
+Base.IteratorSize(::RegularGrid) = Base.HasShape{2}()
 
 function Base.extrema(grid::RegularGrid)
     ntuple(i -> grid.domains[i][2] - grid.domains[i][1], 2)
@@ -52,16 +53,12 @@ function closestgridpoint(Xᵢ::Point, grid::RegularGrid)
 end
 
 Base.iterate(grid::RegularGrid) = iterate(grid, 1)
-function Base.iterate(grid::RegularGrid, state::Int)
-    if state > length(grid) return nothing end
-    
-    i, j = CartesianIndex(state, grid).I
-    
-    T = grid.ranges[1][i]
-    m = grid.ranges[2][j]
-    point = Point(T, m)
-    
-    return (point, state + 1)
+function Base.iterate(grid::RegularGrid, state::Int)    
+    if state > length(grid)
+        return nothing
+    end
+
+    return (grid[state], state + 1)
 end
 
 function Base.getindex(grid::RegularGrid, k)
@@ -75,7 +72,6 @@ function Base.getindex(grid::RegularGrid, i, j)
     return Point(T, m)
 end
 
-# Slice indexing - returns a matrix of Points
 function Base.getindex(grid::RegularGrid, I::AbstractVector, J::AbstractVector)
     [grid[i, j] for i in I, j in J]
 end
@@ -88,7 +84,6 @@ function Base.getindex(grid::RegularGrid, i::Int, J::AbstractVector)
     [grid[i, j] for j in J]
 end
 
-# Colon indexing
 function Base.getindex(grid::RegularGrid, ::Colon, J::AbstractVector)
     [grid[i, j] for i in 1:size(grid, 1), j in J]
 end
@@ -101,13 +96,11 @@ function Base.getindex(grid::RegularGrid, ::Colon, ::Colon)
     [grid[i, j] for i in 1:size(grid, 1), j in 1:size(grid, 2)]
 end
 
-# Support for views
 struct GridView{G<:RegularGrid, I, J}
     parent::G
     idxs::I
     jdxs::J
 end
-
 function Base.view(grid::RegularGrid, I, J)
     GridView(grid, I, J)
 end
@@ -127,7 +120,6 @@ function Base.getindex(gv::GridView, k::Int)
     return gv[j + 1, i + 1]
 end
 
-# Make GridView iterable
 function Base.iterate(gv::GridView, state=(1, 1))
     i, j = state
     rows, cols = size(gv)
@@ -137,13 +129,7 @@ function Base.iterate(gv::GridView, state=(1, 1))
     end
     
     point = gv[i, j]
-    
-    # Calculate next state
-    if j < cols
-        next_state = (i, j + 1)
-    else
-        next_state = (i + 1, 1)
-    end
-    
-    return (point, next_state)
+    nextstate = ifelse(j < cols, (i, j + 1), (i + 1, 1))
+
+    return (point, nextstate)
 end

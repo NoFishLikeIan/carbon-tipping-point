@@ -19,7 +19,7 @@ function constructA(V::ValueFunction, Δt⁻¹, model::M, G::RegularGrid{N₁,N�
     idx = Int[]; jdx = Int[]; values = S[]
     @inbounds for j in axes(G, 2), i in axes(G, 1)
         k = LinearIndex((i, j), G)
-        Xᵢ = G.X[k]
+        Xᵢ = G[k]
  
         y = zero(S) # Diagonal values
         
@@ -155,7 +155,7 @@ function constructb!(b, valuefunction::ValueFunction, Δt⁻¹, model::M, G::Reg
     @inbounds for j in axes(G, 2), i in axes(G, 1)
         k = LinearIndex((i, j), G)
 
-        Xᵢ = G.X[k]
+        Xᵢ = G[k]
         αᵢ = valuefunction.α[k]
 
         bᵀ = μ(Xᵢ.T, Xᵢ.m, model) / model.hogg.ϵ
@@ -195,7 +195,7 @@ function centralpolicy!(valuefunction::ValueFunction{S, N₁, N₂}, model::M, G
             end
         ) * Δm⁻¹
         
-        α[i, j] = αopt(valuefunction.t.t, G.X[i, j], ∂ₘH, model, calibration)
+        α[i, j] = αopt(valuefunction.t.t, G[i, j], ∂ₘH, model, calibration)
     end
 
     return valuefunction

@@ -6,7 +6,7 @@ using StaticArraysCore: StaticArray
 using StaticArrays
 
 using Statistics: mean, middle
-using Interpolations: interpolate, extrapolate, scale
+using Interpolations: interpolate, extrapolate, scale, linear_interpolation
 using Interpolations: BSpline, Linear, Line
 using ZigZagBoomerang: PartialQueue, dequeue!
 using Graphs: SimpleGraphs
