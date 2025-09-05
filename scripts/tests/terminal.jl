@@ -46,7 +46,7 @@ begin # Construct the model
 
     G = RegularGrid(N, (Tdomain, mdomain))
     Δt = 1 / 200
-    τ = 500.
+    τ = 300.
 
     if isinteractive()
         Tspace = range(Tdomain[1], Tdomain[2]; length = size(G, 1))
@@ -82,7 +82,7 @@ if false && isinteractive()
 end
 
 valuefunction = ValueFunction(τ, hogg, G, calibration)
-steadystate!(valuefunction, Δt, model, G, calibration; verbose = 2, tolerance = Error(1e-3, 1e-4), withnegative = false, iterations = 300)
+steadystate!(valuefunction, Δt, model, G, calibration; verbose = 2, tolerance = Error(1e-3, 1e-4), withnegative = false, iterations = 1_000)
 
 if isinteractive()
     dm = γ(valuefunction.t.t, calibration) .- valuefunction.α
