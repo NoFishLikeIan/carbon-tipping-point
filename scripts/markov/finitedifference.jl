@@ -105,7 +105,6 @@ function backwardsimulation!(
             cachekey = Printf.format(keyformat, tcache)
             if verbose > 1 @printf "Saving cache with key %s\n" cachekey end
             
-            centralpolicy!(valuefunction, model, G, calibration) # Recomputes α via central difference for smoothness
             group = JLD2.Group(cachefile, cachekey)
             group["V"] = valuefunction
 

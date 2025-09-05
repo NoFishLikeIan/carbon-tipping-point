@@ -33,14 +33,14 @@ function Base.show(io::IO, vf::ValueFunction{S, N₁, N₂}) where {S, N₁, N�
     
     # Print value function statistics
     H_min, H_max = extrema(vf.H)
-    H_mean = mean(vf.H)
+    H_mean = sum(vf.H) / length(vf.H)
     println(io, "│  Value Function (H):")
     println(io, "│    ├─ Range: [$(round(H_min, digits=4)), $(round(H_max, digits=4))]")
     println(io, "│    └─ Mean: $(round(H_mean, digits=4))")
     
     # Print abatement statistics
     α_min, α_max = extrema(vf.α)
-    α_mean = sum(vf.α) / 2
+    α_mean = sum(vf.α) / length(vf.α)
     println(io, "│  Abatement (α):")
     println(io, "│    ├─ Range: [$(round(α_min, digits=4)), $(round(α_max, digits=4))]")
     println(io, "│    └─ Mean: $(round(α_mean, digits=4))")

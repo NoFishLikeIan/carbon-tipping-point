@@ -61,15 +61,18 @@ function Base.iterate(grid::RegularGrid, state::Int)
     return (grid[state], state + 1)
 end
 
-function Base.getindex(grid::RegularGrid, k)
-    i, j = CartesianIndex(k, grid).I
-    getindex(grid, i, j)
+function Base.getindex(grid::RegularGrid, k::Int)
+    getindex(grid, CartesianIndex(k, grid))
 end
 
 function Base.getindex(grid::RegularGrid, i, j)
     T = grid.ranges[1][i]
     m = grid.ranges[2][j]
     return Point(T, m)
+end
+function Base.getindex(grid::RegularGrid, idx::CartesianIndex{2})
+    i, j = idx.I
+    return getindex(grid, i, j)
 end
 
 function Base.getindex(grid::RegularGrid, I::AbstractVector, J::AbstractVector)
@@ -132,4 +135,8 @@ function Base.iterate(gv::GridView, state=(1, 1))
     nextstate = ifelse(j < cols, (i, j + 1), (i + 1, 1))
 
     return (point, nextstate)
+end
+
+function Base.CartesianIndices(::RegularGrid{N₁, N₂}) where {N₁, N₂}
+    CartesianIndices((1:N₁, 1:N₂))
 end

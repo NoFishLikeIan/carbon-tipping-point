@@ -14,6 +14,17 @@ function ε(t, Xᵢ, αᵢ, model, calibration)
     αᵢ / ᾱ(t, Xᵢ, model, calibration)
 end
 
+function ε(valuefunction::ValueFunction, model, calibration)
+    @unpack t, α, H = valuefunction
+
+    E = similar(α)
+    @inbounds for idx in CartesianIndices(G)
+        E[idx] = ε(t.t, G[idx], α[idx], model, calibration)
+    end
+
+    return E
+end
+
 function l(t, Xᵢ, αᵢ, model::M, calibration::Calibration) where {S, M <: UnitElasticityModel{S}}
     @unpack economy, preferences = model
     χ = χopt(t, economy, preferences)

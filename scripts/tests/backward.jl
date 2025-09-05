@@ -108,10 +108,10 @@ if isinteractive() # Backward simulation gif
     end fps = 15
 end
 
-backwardsimulation!(valuefunction, Δt, model, G, calibration; t₀ = 0., verbose = 2, withsave = false)
+backwardsimulation!(valuefunction, Δt, model, G, calibration; t₀ = 295., verbose = 2, withsave = false)
 
 if isinteractive()
-    abatement = [ε(terminalvaluefunction.t.t, G[i], terminalvaluefunction.α[i], model, calibration) for i in CartesianIndices(G)]
+    abatement = ε(valuefunction, model, calibration)
 
     policyfig = contourf(mspace, Tspace, abatement; title = L"Initial $\bar{\alpha}_{0}$", xlabel = L"m", ylabel = L"T", c=:Greens, cmin = 0., xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
     valuefig = contourf(mspace, Tspace, valuefunction.H; title = L"Initial value $H_0$", xlabel = L"m", ylabel = L"T", c=:viridis, xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
