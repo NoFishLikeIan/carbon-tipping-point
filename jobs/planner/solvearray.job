@@ -4,7 +4,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --array=0-5
-#SBATCH --time=03:30:00
+#SBATCH --time=5:30:00
 #SBATCH --partition=rome
 #SBATCH --mail-type=BEGIN,END,FAIL,TIME_LIMIT_80
 #SBATCH -o ./logs/out/SOLVE%A_%a.out 

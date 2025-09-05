@@ -100,7 +100,7 @@ end
 
 tolerance = Error(tol, 1e-4)
 terminalvaluefunction = ValueFunction(tau, hogg, Gterminal, calibration)
-steadystate!(terminalvaluefunction, dt, model, Gterminal, calibration; verbose, tolerance, withnegative)
+richardsonsteadystate!(terminalvaluefunction, dt, model, Gterminal, calibration; verbose, tolerance, withnegative)
 
 if (verbose ≥ 1)
     println("$(now()): ","Running backward...")
