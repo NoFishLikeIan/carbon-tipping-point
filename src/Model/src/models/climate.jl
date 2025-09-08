@@ -31,10 +31,9 @@ Base.@kwdef struct Hogg{T <: Real}
     Mᵖ::T = 383.15 # [p.p.m. CO₂-eq]
     N₀::T = 388.38 # [p.p.m.]
 
-    # Climate sensitwivity
     S₀::T = 235.0 # [W m⁻²] Mean solar radiation
 
-    ϵ::T = 1.441620917527504 # [yr J m⁻² K⁻¹] Speed of temperature
+    ϵ::T = 1.0440986343061285 # [yr J m⁻² K⁻¹] Speed of temperature
     η::T = 5.67e-8 # Stefan-Boltzmann constant 
     
     G₁::T = 22.685575408165214 # [W m⁻²] Effect of CO₂ on radiation budget

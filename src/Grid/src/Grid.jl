@@ -14,16 +14,18 @@ using Graphs: SimpleGraphs
 include("routines/bisection.jl")
 include("routines/interpolations.jl")
 include("grid/state.jl")
-include("grid/grid.jl")
+include("grid/regular.jl")
 include("grid/elastic.jl")
+include("grid/iterating.jl")
 include("grid/interpolations.jl")
 include("logging.jl")
 
 export bisection, gss, gssmin
 
 export Point, Policy
-export Domain, RegularGrid, ElasticGrid
+export Domain, AbstractGrid, RegularGrid, ElasticGrid
 export LinearIndex
-export interpolateovergrid, shrink, halfgrid, inversestep
+export interpolateovergrid, shrink, halfgrid
+export steps, inversestep
 
 end
