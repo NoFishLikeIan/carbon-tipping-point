@@ -58,7 +58,7 @@ jldopen(experimentpath, "w") do file
         policies = (itp[:χ], itp[:α]);
         parameters = (model, policies);
 
-        m₀ = log(model.hogg.M₀)
+        m₀ = log(model.climate.hogg.M₀)
         y₀ = log(model.economy.Y₀)
         initialpoints = [[T₀, m₀, y₀] for T₀ in sampletemperature(model, trajectories)];
 

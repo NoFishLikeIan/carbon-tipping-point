@@ -14,9 +14,9 @@ using LinearSolve, LinearAlgebra
 using JLD2, UnPack
 using Dates, Printf
 
-includet("../../src/extend/model.jl")
 includet("../../src/valuefunction.jl")
 includet("../../src/extend/valuefunction.jl")
+includet("../../src/extend/model.jl")
 includet("../utils/saving.jl")
 includet("../markov/utils.jl")
 includet("../markov/chain.jl")
@@ -30,6 +30,7 @@ begin # Construct the model
     @unpack calibration, hogg, feedbacklower, feedback, feedbackhigher = calibrationfile
     close(calibrationfile)
 
+    hogg = Hogg(σₘ = 0., σₜ = 0.)
     damages = Kalkuhl()
     preferences = Preferences()
     economy = Economy()
@@ -43,29 +44,43 @@ begin # Construct the model
         LinearModel(hogg, preferences, damages, economy)
     end
 
-    N = (20, 50)
+    N = (200, 101)
     Tdomain = hogg.Tᵖ .+ (0., 7.5)
     mdomain = mstable(Tdomain[1] + 0.5, model), mstable(Tdomain[2] - 0.5, model)
 
     G = RegularGrid(N, (Tdomain, mdomain))
-    Δt = 1 / 24
-    τ = 0.
+    Δt = 1 / 100
+    τ = 500.
 
     Tspace, mspace = G.ranges
     nullcline = mstable.(Tspace, model)
+
+    withnegative = false
 end;
 
+# Picard divergese!
+
 # Check terminal condition
-terminalvaluefunction = ValueFunction(τ, hogg, G, calibration)
-richardsonsteadystate!(terminalvaluefunction, Δt, model, G, calibration; verbose = 1, iterations = 10_000, tolerance = Error(1e-5, 1e-6))
+valuefunction = ValueFunction(τ, hogg, G, calibration)
+valuefunction, (iterations, error) = steadystate!(valuefunction, Δt, model, G, calibration; verbose = 2, timeiter = 10_000, picarditer = 0, tolerance = Error(1e-6, 1e-8), withnegative = false, alg = KLUFactorization())
+
+begin # HJB error
+    Ā = constructA!(valuefunction, 1 / Δt, model, G, calibration, withnegative)
+    b̄ = constructsource(valuefunction, 1 / Δt, model, G, calibration) - constructadv(valuefunction,  model, G, calibration)
+
+    hjb = reshape(Ā * vec(valuefunction.H) - b̄, size(G))
+end;
 
 if isinteractive()
-    αitp = linear_interpolation(G.ranges, terminalvaluefunction.α)
-    abatement = [ε(terminalvaluefunction.t.t, x, αitp(x.T, x.m), model, calibration) for x in G]
+    hjberrorfig = heatmap(mspace, Tspace, hjb; title = "HJB error", xlabel = L"m", ylabel = L"T", c=:Greens, xlims = extrema(mspace), ylims = extrema(Tspace))
+end
 
-    policyfig = heatmap(mspace, Tspace, abatement; title = L"Terminal $\bar{\alpha}_{\tau}$", xlabel = L"m", ylabel = L"T", c=:Greens, cmin = 0., cmax = 1., xlims = extrema(mspace), ylims = extrema(Tspace), clims = (0, 1.2))
+if isinteractive()
+    E = ε(valuefunction, model, calibration)
 
-    valuefig = contourf(mspace, Tspace, terminalvaluefunction.H; title = L"Terminal value $\bar{H}$", xlabel = L"m", ylabel = L"T", xlims = extrema(mspace), ylims = extrema(Tspace), levels = 51)
+    policyfig = contourf(mspace, Tspace, E; title = L"Terminal $\bar{\alpha}_{\tau}$", xlabel = L"m", ylabel = L"T", c=:Greens, xlims = extrema(mspace), ylims = extrema(Tspace), clims = (0, 1.2), linewidth = 0.)
+
+    valuefig = contourf(mspace, Tspace, valuefunction.H; title = L"Terminal value $\bar{H}$", xlabel = L"m", ylabel = L"T", xlims = extrema(mspace), ylims = extrema(Tspace), levels = 21)
 
     for fig in (policyfig, valuefig)
         plot!(fig, nullcline, Tspace; label = false, c = :black, linewidth = 2.5)
@@ -76,11 +91,10 @@ if isinteractive()
 end
 
 # Simulate backwards
-valuefunction = deepcopy(terminalvaluefunction);
 if isinteractive() # Backward simulation gif
     Δt⁻¹ = 1 / Δt
 
-    A₀ = constructA(valuefunction, Δt⁻¹, model, G, calibration)
+    A₀ = constructA!(valuefunction, Δt⁻¹, model, G, calibration, withnegative)
     b₀ = Vector{Float64}(undef, length(G))
     problem = LinearSolve.init(LinearProblem(A₀, b₀), KLUFactorization())
 

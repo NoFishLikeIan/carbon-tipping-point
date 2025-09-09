@@ -34,7 +34,8 @@ PLOTPATH = "papers/job-market-paper/submission/plots"
 DATAPATH = "data"
 SAVEFIG = true
 PALETTE = colorschemes[:grays]
-calibrationpath = joinpath(DATAPATH, "calibration.jld2")
+calibrationpath = joinpath(DATAPATH, "calibration")
+if !isdir(calibrationpath) mkpath(calibrationpath) end
 
 # Loading data 
 function parsescenario(sspkey)
@@ -138,26 +139,60 @@ function computeco2equivalence(concentration, quantile, gwp)
     co2equivalence = deepcopy(concentration[(npscenario, "carbon_dioxide", quantile)])
     co2equivalence[!, "CO2 Concentration"] .= co2equivalence[:, "Concentration"]
     co2equivalence[!, "CO2 Emissions"] .= co2equivalence[:, "Emissions"]
+    
+    # Initialize total emissions with CO2 (in Gt/yr, will convert to ppm/yr)
+    co2equivalence[!, "Emissions"] = copy(co2equivalence[:, "CO2 Emissions"])
 
-    for (particle, (gwpvalue, factor)) in gwp
+    for (particle, (gwpvalue, unitfactor, massconcfactor)) in gwp
         df = concentration[(npscenario, particle, quantile)]
 
-        co2equivalence[!, "$particle Concentration"] .= df.Concentration .* factor * gwpvalue
+        # For concentrations: apply both GWP and unit conversion (ppb→ppm, ppt→ppm)
+        co2equivalence[!, "$particle Concentration"] .= df.Concentration .* unitfactor * gwpvalue
         co2equivalence[!, "Concentration"] .+= co2equivalence[!, "$particle Concentration"]
 
-        co2equivalence[!, "$particle Emissions"] .= df.Emissions .* gwpvalue
+        # For emissions: apply GWP conversion, unit conversion to Gt, then gas-specific mass→concentration
+        # unitfactor converts from Mt→Gt (1e-3) or kt→Gt (1e-6)
+        # massconcfactor converts from Gt to ppm/yr using correct molecular weight
+        co2equivalence[!, "$particle Emissions"] .= df.Emissions .* unitfactor .* gwpvalue .* massconcfactor
         co2equivalence[!, "Emissions"] .+= co2equivalence[!, "$particle Emissions"]
     end
+
+    # Convert CO2 emissions from Gt CO2/yr to p.p.m./yr using CO2-specific factor
+    # Apply scaling factor to correct for net vs gross emissions or missing atmospheric processes
+    scaling_factor = 3.4  # Based on diagnostic calculation: needed factor ≈ 3.4
+    co2equivalence[!, "Emissions"] .*= Model.Gtonoverppm * scaling_factor
 
     return co2equivalence
 end
 
 begin
+    # Molecular weights (g/mol)
+    molweights = Dict(
+        "carbon_dioxide" => 44.01,
+        "methane" => 16.04,
+        "nitrous_oxide" => 44.01, 
+        "nf3" => 71.00,      
+        "sf6" => 146.06
+    )
+    
+    masstoconcentration = Dict(
+        "carbon_dioxide" => Model.Gtonoverppm,
+        "methane" => Model.Gtonoverppm * molweights["carbon_dioxide"] / molweights["methane"],
+        "nitrous_oxide" => Model.Gtonoverppm * molweights["carbon_dioxide"] / molweights["nitrous_oxide"], 
+        "nf3" => Model.Gtonoverppm * molweights["carbon_dioxide"] / molweights["nf3"],
+        "sf6" => Model.Gtonoverppm * molweights["carbon_dioxide"] / molweights["sf6"]
+    )
+    
+    println("Mass-to-concentration conversion factors:")
+    for (gas, factor) in masstoconcentration
+        println("  $gas: $factor (Gt → ppm)")
+    end
+
     gwp = Dict(
-        "methane" => (29.8, 1e-3),
-        "nitrous_oxide" => (273., 1e-3),
-        "nf3" => (17_400., 1e-6),
-        "sf6" => (24_300., 1e-6),
+        "methane" => (29.8, 1e-3, masstoconcentration["methane"]),
+        "nitrous_oxide" => (273., 1e-3, masstoconcentration["nitrous_oxide"]),
+        "nf3" => (17_400., 1e-6, masstoconcentration["nf3"]),
+        "sf6" => (24_300., 1e-6, masstoconcentration["sf6"]),
     )
 
     co2equivalence = computeco2equivalence(concentration, 0.5, gwp)
@@ -207,9 +242,7 @@ if isinteractive() # Figure fraction of forcing
         ymin = 0.69, ymax = 1.0,
     })
 
-    curve = @pgf Plot({
-            line_width = 2.5
-        }, Coordinates(co2equivalence.Year[tdxs], fracradiation))
+    curve = @pgf Plot({ line_width = 2.5 }, Coordinates(co2equivalence.Year[tdxs], fracradiation))
 
     push!(fracfig, curve)
 
@@ -232,7 +265,7 @@ begin # Setup CO₂e maximisation problem
     Mᵖ = mean(co2equivalence[1800 .≤ co2equivalence.Year .≤ 1900, "Concentration"])
     m = @. log(co2calibrationdf.Concentration / Mᵖ)
     γ̂ₜ = diff(m); smooth!(γ̂ₜ, 10)
-    Eₜ = γ̂ₜ .* co2calibrationdf.Concentration[1:(end - 1)] ./ ppmoverGt
+    Eₜ = Vector{Float64}(co2calibrationdf.Emissions)
 end;
 
 calibration = DynamicCalibration(co2tspan, Eₜ, γ̂ₜ)
@@ -249,17 +282,17 @@ begin
 
     m₀ = calibratedpath(baselineyear)
     M₀ = Mᵖ * exp(m₀)
-    Mₜ = Mᵖ * exp.(calibratedpath.u)
+    Mₜ = @. Mᵖ * exp(calibratedpath.u)
 end
 
 if isinteractive() # Check simulated fit
-    Mfig = plot(co2calibrationdf.Year, Mₜ; c=:black, linestyle=:dash, ylabel=L"Concentration $[\si{\ppm}]$", label=L"Fitted $M_t$")
+    Mfig = plot(co2calibrationdf.Year, Mₜ; c=:black, linestyle=:dash, ylabel=L"Concentration $[\si{\ppm}]$", label=L"Fitted $M^{\textrm{np}}_t$")
 
     plot!(Mfig, co2calibrationdf.Year, co2calibrationdf.Concentration; c=:black, label=L"SSP5-8.5 $\hat{M}_t$", alpha=0.5)
 
     error = @. (Mₜ - co2calibrationdf.Concentration)
 
-    errorfig = plot(co2calibrationdf.Year, error; c=:black, ylabel=L"Concentration $[\si{\ppm}]$", label=L"Error $M_t - \hat{M_t} \; [\si{\ppm}]$", xlabel="Year")
+    errorfig = plot(co2calibrationdf.Year, error; c=:black, ylabel=L"Concentration $[\si{\ppm}]$", label=L"Error $M^{\textrm{np}}_t - \hat{M_t} \; [\si{\ppm}]$", xlabel="Year")
 
     co2errorfig = plot(Mfig, errorfig; layout=(2, 1), size=300 .* (√2, 2), legend=:bottomright, link=:x)
 
@@ -269,6 +302,62 @@ if isinteractive() # Check simulated fit
 
     co2errorfig
 end
+
+# --- Decay rate calibration
+if isinteractive() # Check cumulative emissions vs concentration
+    gapfig = plot(co2calibrationdf.Year, Mₜ .- Mₜ[1]; c=:black, ylabel=L"Concentration $[\si{\ppm}]$", label=L"$M^{\textrm{np}}_t - M^{\textrm{np}}_{2012}$", xlabel = L"Year $t$")
+
+    plot!(gapfig, co2calibrationdf.Year, cumsum(co2calibrationdf.Emissions); c=:black, linestyle=:dash, label=L"$\int E_t \text{dt}$", alpha=0.5)
+
+    if SAVEFIG
+        savefig(gapfig, joinpath(PLOTPATH, "gapfig.tikz"))
+    end
+
+    gapfig
+end
+
+function exponentialdecay(N, p)
+    aδ, bδ, cδ = p
+    return aδ * exp(-((N - bδ) / cδ)^2)
+end
+
+function sinkfn(u, parameters, t)
+    p, calibration = parameters
+    _, M = u
+
+    dN = exponentialdecay(M, p) * M
+    dM = γ(t, calibration) * M
+
+    return SVector(dN, dM)
+end
+
+begin # Compute decay rate observations
+    γ̂ = [γ(t - baselineyear, calibration) for t in co2calibrationdf.Year]
+    δ̂ = co2calibrationdf.Emissions ./ Mₜ - γ̂
+
+    p₀ = MVector(0.017, -8.15, 195.79) # Hambel et al. initial condition
+    u₀ = SVector(0., M₀)
+    parameters = (p₀, calibration)
+    prob = ODEProblem(sinkfn, u₀, calibration.calibrationspan, parameters)
+end
+
+function decayloss(p, optparameters)
+    prob, δ̂ = optparameters
+    sol = solve(prob; p = (p, calibration), saveat = 1.)
+    δ = [ exponentialdecay(u[1], p) for u in sol.u ]
+
+    return mean(abs2, δ̂ - δ)
+end
+
+begin # Solve parameters of exponential decay
+    decaylossfn = Optimization.OptimizationFunction(decayloss, SecondOrder(AutoForwardDiff(), AutoForwardDiff()));
+    optparameters = (prob, δ̂);
+    decayproblem = Optimization.OptimizationProblem(decaylossfn, p₀, optparameters)
+    decaysol = solve(decayproblem, LBFGS())
+
+    decay = ExponentialDecay(decaysol.u...)
+end
+
 
 # CALIBRATION OF TEMPERATURE
 begin # --- Extract lower and upper bounds for the temperature
@@ -291,8 +380,8 @@ const kelvintocelsius = 273.15;
 const deviationtokelvin = 287.15;
 
 begin
-    η = Hogg{Float64}().η # Stefan-Boltzmann constant in Wm⁻²K⁻⁴
-    S₀ = Hogg{Float64}().S₀ # Incoming radiative forcing
+    η = Hogg().η # Stefan-Boltzmann constant in Wm⁻²K⁻⁴
+    S₀ = Hogg().S₀ # Incoming radiative forcing
 
     ghgcalibrationhorizon = 80.
     ghgspan = baselineyear .+ (0, ghgcalibrationhorizon)
@@ -400,6 +489,8 @@ begin # Hogg definition
         T₀=T₀, M₀=M₀, Mᵖ=Mᵖ, N₀=N₀,
         ϵ=ϵ, G₀=G₀, G₁=G₁, σₜ=ϵ / 10
     )
+
+    linearclimate = LinearClimate(hogg, decay)
 end
 
 # TIPPING POINT CALIBRATION
@@ -452,15 +543,18 @@ end
 
 # Dynamics of the calibration
 function coupledsystem(u, parameters, t)
-    hogg, calibration, Tᶜ, ΔS, L = parameters
-    feedback = Feedback(promote(Tᶜ, ΔS, L)...)
+    hogg, calibration, _Tᶜ, _ΔS, _L = parameters
+    Tᶜ, ΔS, L = promote(_Tᶜ, _ΔS, _L)
 
+    feedback = Feedback(Tᶜ, ΔS, L)
     baselineyear = calibration.calibrationspan[1]
     m, Tˡ, T = u
 
     dm = γ(t - baselineyear, calibration)
-    dTˡ = μ(Tˡ, m, hogg) / hogg.ϵ
-    dT = μ(T, m, hogg, feedback) / hogg.ϵ
+    
+    f = Model.ghgforcing(m, hogg)
+    dTˡ = (f + Model.radiativeforcing(Tˡ, hogg)) / hogg.ϵ
+    dT = (f + Model.radiativeforcing(T, hogg) + λ(T, feedback)) / hogg.ϵ
 
     return SVector(dm, dTˡ, dT)
 end
@@ -549,21 +643,24 @@ begin # Calibrate adjustment speed
 end
 
 function extendedcoupledsystem!(du, u, parameters, t)
-    hogg, calibration, feedbacks = parameters
+    linearclimate, calibration, feedbacks = parameters
     m = u[1]
+    T = @view u[2:end]
+    dT = @view du[2:end]
     baselineyear = calibration.calibrationspan[1]
 
     du[1] = γ(t - baselineyear, calibration)
-    du[2] = μ(u[2], m, hogg)
+    dT[1] = μ(T[1], m, linearclimate)
 
     for (i, feedback) in enumerate(feedbacks)
-        du[i+2] = μ(u[i+2], m, hogg, feedback)
+        tippingclimate = TippingClimate(linearclimate.hogg, linearclimate.decay, feedback)
+        dT[i + 1] = μ(T[i + 1], m, tippingclimate)
     end
 end;
 
 if isinteractive()
     u₀ = [m₀, T₀, T₀, T₀, T₀]
-    parameters = (hogg, calibration, feedbacks)
+    parameters = (linearclimate, calibration, feedbacks)
 
     extenedcoupledprob = ODEProblem(extendedcoupledsystem!, u₀, (baselineyear, tecalibrationhorizon), parameters)
 
@@ -588,7 +685,8 @@ if isinteractive()
     nullclinefig = plot(ylabel="Temperature [°]", xlabel="CO2e concentration (ppm)")
 
     for (i, feedback) in enumerate(feedbacks)
-        mnullcline = [mstable(T, hogg, feedback) for T in Tspace]
+        tippingclimate = TippingClimate(linearclimate.hogg, linearclimate.decay, feedback)
+        mnullcline = [ mstable(T, tippingclimate) for T in Tspace ]
         plot!(nullclinefig, mnullcline, Tspace; label=qs[i], c=c[i])
     end
 
@@ -596,7 +694,7 @@ if isinteractive()
 end
 
 # Save outcome of calibration in file
-jldopen(calibrationpath, "w+") do file
+jldopen(joinpath(calibrationpath, "climate.jld2"), "w+") do file
     feedbacklower, feedback, feedbackhigher = feedbacks
-    @pack! file = hogg, calibration, feedbacklower, feedback, feedbackhigher
+    @pack! file = hogg, calibration, feedbacklower, feedback, feedbackhigher, decay
 end

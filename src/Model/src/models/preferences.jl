@@ -1,23 +1,23 @@
-abstract type Preferences{T <: Real} end
+abstract type Preferences{S <: Real} end
 
-Base.@kwdef struct LogUtility{T} <: Preferences{T}
-    ρ::T = 0.015 # Discount rate
+Base.@kwdef struct LogUtility{S} <: Preferences{S}
+    ρ::S = 0.015 # Discount rate
 end
 
-Base.@kwdef struct CRRA{T} <: Preferences{T}
-    ρ::T = 0.015  # Discount rate 
-    θ::T = 10.  # Relative risk aversion
+Base.@kwdef struct CRRA{S} <: Preferences{S}
+    ρ::S = 0.015  # Discount rate 
+    θ::S = 10.  # Relative risk aversion
 end
 
-Base.@kwdef struct LogSeparable{T} <: Preferences{T}
-    ρ::T = 0.015  # Discount rate 
-    θ::T = 10.  # Relative risk aversion
+Base.@kwdef struct LogSeparable{S} <: Preferences{S}
+    ρ::S = 0.015  # Discount rate 
+    θ::S = 10.  # Relative risk aversion
 end
 
-Base.@kwdef struct EpsteinZin{T} <: Preferences{T}
-    ρ::T = 0.015 # Discount rate
-    θ::T = 10. # Relative Risk Aversion
-    ψ::T = 0.75 # Elasticity of Intertemporal Complementarity
+Base.@kwdef struct EpsteinZin{S} <: Preferences{S}
+    ρ::S = 0.015 # Discount rate
+    θ::S = 10. # Relative Risk Aversion
+    ψ::S = 0.75 # Elasticity of Intertemporal Complementarity
 end
 
 function Preferences(; ρ = 0.015, θ = 10., ψ = 1.)
@@ -96,9 +96,9 @@ end
 
 Base.broadcastable(p::Preferences) = Ref(p)
 
-function χopt(t, e::Economy, p::LogSeparable)
-    r = e.κ * A(t, e)
-    num = (r - 1) + √((r - 1)^2 + 4e.κ * p.ρ)
+function χopt(t, economy::Economy, preferences::LogSeparable)
+    r = economy.investments.κ * A(t, economy.investments)
+    num = (r - 1) + √((r - 1)^2 + 4economy.investments.κ * preferences.ρ)
 
     return num / (2r)
 end

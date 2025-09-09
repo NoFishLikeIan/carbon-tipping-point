@@ -89,7 +89,7 @@ begin # Plot estetics
 
     model = first(models)
     nofeedback = Albedo(0., 0., model.albedo.λ₁, 0)
-    nofeedbackmodel = TippingModel(nofeedback, model.hogg, model.preferences, model.damages, model.economy)
+    nofeedbackmodel = TippingModel(nofeedback, model.climate.hogg, model.preferences, model.damages, model.economy)
 
     mspace = range(mstable(Tmin, nofeedbackmodel), mstable(Tmax, nofeedbackmodel); length=length(ΔTspace))
 

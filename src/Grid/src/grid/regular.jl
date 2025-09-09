@@ -19,3 +19,9 @@ end
 function inversestep(grid::RegularGrid)
     ntuple(i -> inv(step(grid.ranges[i])), 2)
 end
+
+"Returns the previous and next step of grid at positions `(i, j)`."
+function steps(grid::RegularGrid{N₁, N₂, S}, i, j) where {N₁, N₂, S}
+    ΔT, Δm = step(grid)
+    return (ΔT, ΔT), (Δm, Δm)
+end

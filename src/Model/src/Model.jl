@@ -15,20 +15,21 @@ include("logging.jl")
 export Calibration, DynamicCalibration, ConstantCalibration, RegionalCalibration
 export γ, Eᵇ
 
-export Feedback, Jump, Hogg
-export δₘ, L, λ, μ, ∂μ∂T
+export Climate, TippingClimate, LinearClimate, JumpingClimate
+export Hogg, Feedback, Jump
+export ExponentialDecay, ConstantDecay
+export δₘ, L, λ, μ, ∂μ∂T, ∂μ∂m
 export mstable, Tstable
 
+export Economy, Abatement, Investment
 export Damages
 export GrowthDamages, WeitzmanGrowth, Kalkuhl, NoDamageGrowth
 export LevelDamages, WeitzmanLevel, NoDamageLevel
-export Economy, RegionalEconomies
 export β, β′, d, D, ϕ, A, ω
-export Φ, Bterminal, χopt
+export χopt
 
-export g, f, logg, discount
-
-export AbstractModel, LinearModel, TippingModel, JumpModel, UnitElasticityModel
 export Preferences, LogUtility, CRRA, LogSeparable, EpsteinZin
+export g, f, logg, discount
+export IAM, UnitIAM
 
 end # module Model

@@ -1,19 +1,11 @@
-function Model.d(T, m, model::TippingModel)
-    Model.d(T, m, model.damages, model.hogg, model.feedback)
-end
-function Model.d(T, m, model::LinearModel)
-    Model.d(T, m, model.damages, model.hogg)
-end
-
 function ᾱ(t, Xᵢ, model, calibration)
-    M = exp(Xᵢ.m) * model.hogg.Mᵖ
-    return γ(t, calibration) + δₘ(M, model.hogg)
+    M = exp(Xᵢ.m) * model.climate.hogg.Mᵖ
+    return γ(t, calibration) + δₘ(M, model.climate.decay)
 end
 
 function ε(t, Xᵢ, αᵢ, model, calibration)
     αᵢ / ᾱ(t, Xᵢ, model, calibration)
 end
-
 function ε(valuefunction::ValueFunction, model, calibration)
     @unpack t, α, H = valuefunction
 
@@ -25,23 +17,16 @@ function ε(valuefunction::ValueFunction, model, calibration)
     return E
 end
 
-function l(t, Xᵢ, αᵢ, model::M, calibration::Calibration) where {S, M <: UnitElasticityModel{S}}
-    @unpack economy, preferences = model
+function l(t, Xᵢ, αᵢ, model::M, calibration::Calibration) where {S, M <: UnitIAM{S}}
+    @unpack economy, preferences, climate = model
+
     χ = χopt(t, economy, preferences)
     e = ε(t, Xᵢ, αᵢ, model, calibration)
 
-    gdpgrowth = preferences.ρ * log(χ) + economy.ϱ + ϕ(t, χ, economy) - preferences.θ * economy.σₖ^2 / 2
+    growth = ϕ(t, χ, economy.investments) + economy.investments.ϱ
+    abatement = A(t, economy.investments) * β(t, e, economy.abatement)
+    damages = d(Xᵢ.T, Xᵢ.m, economy.damages, climate)
+    consumption = preferences.ρ * log(χ) - preferences.θ * economy.investments.σₖ^2 / 2
 
-    netgrowth = gdpgrowth - d(Xᵢ.T, Xᵢ.m, model) - A(t, economy) * β(t, e, economy)
-
-    return (1 - preferences.θ) * netgrowth
-end
-
-function b(t, Xᵢ::Point, u::Policy, model, calibration)
-    @unpack economy = model
-    growth = economy.ϱ + ϕ(t, u.χ, economy)
-    abatement = A(t, model.economy) * β(t, ε(t, Xᵢ, u.α, model, calibration), economy)
-    damages = d(Xᵢ.T, Xᵢ.m, model)
-
-    return growth - abatement - damages
+    return (1 - preferences.θ) * (consumption + growth - damages - abatement)
 end

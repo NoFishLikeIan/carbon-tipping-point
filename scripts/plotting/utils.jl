@@ -1,15 +1,10 @@
-using Model: AbstractModel, JumpModel, TippingModel
-using Printf: format, Format
-
 const kelvintocelsius = 273.15
 
 function stringifydeviation(ΔT; digits = 2)
     fsign = ΔT > 0 ? "+" : ""
-    fmt = Format("$fsign%0.$(digits)f°")
-    return format(fmt, ΔT)
+    fmt = Printf.Format("$fsign%0.$(digits)f°")
+    return Printf.format(fmt, ΔT)
 end
-
-
 function makedeviationtickz(from, to, hogg; step = 0.5, digits = 2, addedlabels = Tuple{String, Float64}[])
 
     preindustrialdev = range(from, to; step = step)
@@ -28,11 +23,11 @@ function makedeviationtickz(from, to, hogg; step = 0.5, digits = 2, addedlabels 
     return (ticks[idxs], labels[idxs])
 end
 
-function labelofmodel(model)
-    if model isa LinearModel
+function labelsofclimate(climate::C) where {C <: Climate}
+    if C <: Model.PiecewiseLinearClimate
         "No tipping element"
-    elseif model isa TippingModel
-        Tᶜ = round(model.feedback.Tᶜ - model.hogg.Tᵖ; digits = 2)
+    elseif C <: TippingClimate
+        Tᶜ = round(model.feedback.Tᶜ - model.climate.hogg.Tᵖ; digits = 2)
         L"T^c = %$(Tᶜ)"
     else
         error("Model type not implemented")

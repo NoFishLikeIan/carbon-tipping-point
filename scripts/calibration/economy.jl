@@ -3,108 +3,155 @@ using Revise
 using DotEnv, UnPack, DataStructures
 using CSV, JLD2
 using DataFrames, TidierData
-using SparseArrays, LinearAlgebra, LinearAlgebra
+using SparseArrays, LinearAlgebra, StaticArrays
+using Optim
+using Plots, LaTeXStrings
 
-filepath = "data/AR6_Scenarios_Database_World_v1.1.csv"; @assert isfile(filepath)
-rawdf = CSV.read(filepath, DataFrame)
-scenarios = @chain rawdf begin
-    @filter(Region == "World")
-    @filter(Variable ∈ ("Price|Carbon", "Emissions|CO2", "GDP|PPP"))
-    @filter(contains(Model, "IMAGE 3.0"))
-    @filter(contains(Scenario, "SSP"))
-    @group_by(Model, Scenario)
+using Model
+
+
+DATAPATH = "data"
+filepath = joinpath(DATAPATH, "AR6_Scenarios_Database_World_v1.1.csv"); @assert isfile(filepath)
+
+calibrationpath = joinpath(DATAPATH, "calibration")
+if !isdir(calibrationpath) mkpath(calibrationpath) end
+
+begin # Load scenarios data
+    rawdf = CSV.read(filepath, DataFrame)
+    scenarios = @chain rawdf begin
+        @filter(Region == "World")
+        @filter(Variable ∈ ("Price|Carbon", "Emissions|CO2", "GDP|PPP"))
+        @filter(Model ∈ ("REMIND-MAgPIE 2.1-4.2",))
+        @group_by(Model, Scenario)
+    end
 end
 
-npscenario = "SSP5-Baseline"
-parsefloat(year) = parse(Float64, year)
-dfs = Dict{String, DataFrame}()
-for (k, scenario) in pairs(scenarios)
-    df = @chain DataFrame(scenario) begin
-        @select(!(:Model, :Scenario, :Region, :Unit))
-        stack(Not(:Variable), variable_name="Year", value_name="Value")
-        unstack(:Variable, :Value)
-        dropmissing!()
-        @mutate(Year = parsefloat(Year))
+begin # Construct scenarios dataframes
+    npscenario = "EN_NoPolicy"  # True no-policy baseline from REMIND-MAgPIE
+    parsefloat(year) = parse(Float64, year)
+    dfs = Dict{String, DataFrame}()
+    for (k, scenario) in pairs(scenarios)
+        df = @chain DataFrame(scenario) begin
+            @select(!(:Model, :Scenario, :Region, :Unit))
+            stack(Not(:Variable), variable_name="Year", value_name="Value")
+            unstack(:Variable, :Value)
+            dropmissing!()
+            @mutate(Year = parsefloat(Year))
+        end
+
+        isnp = k.Scenario == npscenario
+
+        if !isnp && ("Price|Carbon" ∉ names(df) || all((df[!, "Price|Carbon"]) .≈ 0))
+            continue
+        end
+
+        dfs[k.Scenario] = df
     end
-
-    isnp = k.Scenario == npscenario
-
-    if !isnp && ("Price|Carbon" ∉ names(df) || all((df[!, "Price|Carbon"]) .≈ 0))
-        continue
-    end
-
-    dfs[k.Scenario] = df
 end
 
 dfnp = dfs[npscenario]
 filter!(((scenario, df), ) -> scenario != npscenario, dfs)
 nmodels = length(dfs)
 
-Xs = Matrix{Float64}[]
-ys = Vector{Float64}[]
-for (k, (scenario, df)) in enumerate(dfs)
-    idx = findall(mac -> mac > -10., df[:, "Price|Carbon"])
-    if isempty(idx) continue end
+begin # Fill in data coefficients
+    ts = Float64[]
+    εs = Float64[]
+    β′s = Float64[]
 
-    mac = df[idx, "Price|Carbon"]
-    Y = df[idx, "GDP|PPP"]
-    E = df[idx, "Emissions|CO2"] / 1000
+    for (k, (scenario, df)) in enumerate(dfs)
+        carbonprice = df[:, "Price|Carbon"]
+        Y = df[:, "GDP|PPP"]
+        E = df[:, "Emissions|CO2"] / 1000
 
-    jdx = findall(y -> y ∈  df[idx, "Year"], dfnp.Year)
-    Eⁿᵖ = dfnp[jdx, "Emissions|CO2"] / 1000
-    Yⁿᵖ = dfnp[jdx, "GDP|PPP"]
+        # Filter out observations with zero or very low carbon prices
+        validprices = carbonprice .> 0.
+        
+        if !any(validprices)
+            continue 
+        end
 
-    β′ = @. max(mac * Eⁿᵖ / Y, 1e-3)
-    ε = @. max(1 - E / Eⁿᵖ, 1e-3)
+        jdx = findall(y -> y ∈  df[validprices, "Year"], dfnp.Year)
+        Eⁿᵖ = dfnp[jdx, "Emissions|CO2"] / 1000
+        Yⁿᵖ = dfnp[jdx, "GDP|PPP"]
 
-    Δt = df[idx, :Year] .- 2012.
-    X = [ones(length(Δt)) Δt]
-    y = @. log(β′) - log(ε)
+        mac = @. max(carbonprice[validprices] * Eⁿᵖ / Y[validprices], 1e-6)
+        abated = @. max(1 - E[validprices] / Eⁿᵖ, 1e-6)
+        t = df[validprices, :Year] .- 2020.
 
-    push!(Xs, X); push!(ys, y)
+        append!(ts, t)
+        append!(εs, abated)
+        append!(β′s, mac)
+    end
 end
 
-# Create model fixed effects
-modelidxs = Int[]
-for (k, X) in enumerate(Xs)
-    append!(modelidxs, fill(k, size(X, 1)))
+function Model.β′(t, ε, p::StaticVector{4, S}) where S <: Real
+    ω̄, Δω, ρ, b = p
+    return β′(t, ε, Abatement(ω̄, Δω, ρ, b))
 end
 
-# Create fixed effects matrix
-nobs = sum(size(X, 1) for X in Xs)
-FE = sparse(1:nobs, modelidxs, 1.0, nobs, nmodels)
-X = sparse(hcat(FE, vcat(Xs...)))
-y = vcat(ys...)
+function objective(p, params)
+    ts, εs, β′s = params
+    residual = 0.
 
-coeff = (X'X) \ (X'y)
-α₀, α₁ = coeff[(end - 1):end]
+    for k in eachindex(β′s)
+        mac = β′(ts[k], εs[k], p)
+        residual += abs2(β′s[k] - mac)
+    end
 
-# Compute standard errors using pseudo-inverse for singular matrices
-residuals = y - X * coeff
-σ² = sum(residuals.^2) / (length(y) - rank(Matrix(X)))  # Use rank instead of size
-XtX_pinv = pinv(Matrix(X'X))  # Pseudo-inverse for singular matrix
-V = σ² * XtX_pinv
+    return residual / length(β′s)
+end
 
-# Extract variances for α₀ and α₁ (only diagonal elements are reliable with pseudo-inverse)
-var_α₀ = V[end-1, end-1]
-var_α₁ = V[end, end]
+# Initial parameter guess
+p₀ = MVector(0.00043, 0.05506, 0.0148, 1.95) # DICE initial condition
+params = (ts, εs, β′s);
 
-# Standard errors of original coefficients
-se_α₀ = sqrt(max(var_α₀, 0))  # Ensure non-negative
-se_α₁ = sqrt(max(var_α₁, 0))
+# Constrain parameters to reasonable ranges
+lower = MVector(0., 0., 0., 1.)
+upper = MVector(1., 1., Inf, 2.8)  # Increased upper bound for b
 
-# Transformed coefficients
-ω₀ = log(α₀)
-ωᵣ = -α₁
+result = optimize(p -> objective(p, params), lower, upper, p₀, Fminbox(LBFGS()))
 
-# Standard errors of transformed coefficients using delta method
-# For ω₀ = log(α₀): SE(ω₀) = SE(α₀) / α₀
-se_ω₀ = se_α₀ / abs(α₀)
-se_ωᵣ = se_α₁
+begin
+    ω̄, Δω, ρ, b = round.(result.minimizer, digits = 6)
 
-println("Original coefficients:")
-println("α₀ = $(round(α₀, digits=6)) ± $(round(se_α₀, digits=6))")
-println("α₁ = $(round(α₁, digits=6)) ± $(round(se_α₁, digits=6))")
-println("\nTransformed coefficients:")
-println("ω₀ = log(α₀) = $(round(ω₀, digits=6)) ± $(round(se_ω₀, digits=6))")
-println("ωᵣ = -α₁ = $(round(ωᵣ, digits=6)) ± $(round(se_ωᵣ, digits=6))")
+    println("Calibrated parameters:")
+    println("ω̄ = $(round(ω̄, digits=6))")
+    println("Δω = $(round(Δω, digits=6))")  
+    println("ρ = $(round(ρ, digits=6))")
+    println("b = $(round(b, digits=4))")
+    println("Objective value: $(round(result.minimum, digits=4))")
+end
+
+abatement = Abatement(ω̄, Δω, ρ, b)
+begin # Calculate R² for goodness of fit 
+    predicted = [β′(t, ε, abatement) for (t, ε) in zip(ts, εs)]
+    residual = sum(abs2, β′s .- predicted)
+    total = sum(abs2, β′s .- mean(β′s))
+    R² = 1 - residual / total
+    println("R² = $(round(R², digits=4))")
+end
+
+begin # Create a plot of β′ for various values of t
+    tspace = 0:20:80
+    εspace = 0:0.01:1.4
+
+    timespace = sort(unique(ts))
+    cs = Dict(timespace .=> palette(:viridis, timespace))
+
+    fig = plot(xlabel=L"Abatement rate $\varepsilon$", ylabel=L"Marginal abatement cost $\beta\prime$", title="Marginal Abatement Cost Function")
+
+    # Add scatter plot of actual data points
+    zcolors = [cs[t] for t in ts]
+    scatter!(fig, εs, β′s; markersize = 2, alpha=0.3, c = zcolors, label = false)
+
+    for t in tspace
+        plot!(fig, εspace, ε -> β′(t, ε, abatement), label="$(2020 + t)", linewidth=3, c = cs[t])
+    end
+
+    fig
+end
+
+# Save outcome of calibration in file
+jldopen(joinpath(calibrationpath, "abatement.jld2"), "w+") do file
+    @pack! file = abatement
+end

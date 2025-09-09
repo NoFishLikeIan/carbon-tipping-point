@@ -6,6 +6,7 @@ using DataFrames, DataStructures
 using StatsBase
 using Interpolations
 using StaticArrays
+using Printf
 
 using DifferentialEquations, DifferentialEquations.EnsembleAnalysis
 
@@ -18,9 +19,9 @@ push!(PGFPlotsX.CUSTOM_PREAMBLE, raw"\DeclareSIUnit{\ppm}{p.p.m.}")
 
 using Model, Grid
 
-
 includet("../utils.jl")
 includet("../../utils/saving.jl")
+includet("../../../src/valuefunction.jl")
 includet("../../utils/simulating.jl")
 includet("../../../src/extend/model.jl")
 
@@ -40,28 +41,34 @@ begin # Global variables
 end;
 
 begin # Construct models and grids
-    calibrationpath = joinpath(DATAPATH, "calibration.jld2")
-    @assert isfile(calibrationpath) "Calibration file not found at $calibrationpath"
+    calibrationpath = joinpath(DATAPATH, "calibration")
+
+    climatepath = joinpath(calibrationpath, "climate.jld2")
+    @assert isfile(climatepath) "Climate calibration file not found at $climatepath"
+    climatefile = jldopen(climatepath, "r+")
+    @unpack calibration, hogg, feedbacklower, feedback, feedbackhigher = climatefile
+    close(climatefile)
+
+    abatementpath = joinpath(calibrationpath, "abatement.jld2")
+    @assert isfile(abatementpath) "Abatement calibration file not found at $abatementpath"
+    abatementfile = jldopen(abatementpath, "r+")
+    @unpack abatement = abatementfile
+    close(abatementfile)
+
+    decay = ExponentialDecay()
+    economy = Economy(investments = Investment(), damages = Kalkuhl(), abatement = abatement)
     
-    calibrationfile = jldopen(calibrationpath, "r+")
-    @unpack calibration, hogg, feedbacklower, feedback, feedbackhigher = calibrationfile
-    close(calibrationfile)
+    preferences = LogSeparable()
 
-    preferences = EpsteinZin()
-    damages = Kalkuhl()
-    economy = Economy()
-    jump = Jump()
-
-    linearmodel = LinearModel(hogg, preferences, damages, economy)
-    jumpmodel = JumpModel(hogg, preferences, damages, economy, jump)
-
+    linearmodel = IAM(LinearClimate(hogg, decay), economy, preferences)
+    
     tippingmodels = [
-        TippingModel(hogg, preferences, damages, economy, Model.updateTᶜ(2.5 + hogg.Tᵖ, feedback)),
-        TippingModel(hogg, preferences, damages, economy, Model.updateTᶜ(feedback.Tᶜ, feedback))
+        IAM(TippingClimate(hogg, decay, Model.updateTᶜ(2. + hogg.Tᵖ, feedback)), economy, preferences),
+        IAM(TippingClimate(hogg, decay, Model.updateTᶜ(4. + hogg.Tᵖ, feedback)), economy, preferences)
     ]
 
-    models = AbstractModel[tippingmodels..., linearmodel, jumpmodel]
-    labels = ["Imminent", "Remote", "No Feedback", "Benchmark"]
+    models = IAM[tippingmodels..., linearmodel]
+    labels = ["Imminent", "Remote", "No Feedback"]
     labelsbymodel = Dict(models .=> labels)
 end;
 
@@ -74,21 +81,21 @@ begin # Labels, colors and axis
     ΔTspace = range(0.0, ΔTmax; length = 101)
     Tspace = ΔTspace .+ Hogg().Tᵖ
 
-    horizon = 2100. - calibration.baselineyear
+    horizon = 2100. - first(calibration.calibrationspan)
     yearlytime = 0:1:horizon
     simtspan = (0, horizon)
 
-    temperatureticks = collect.(makedeviationtickz(1., ΔTmax, first(tippingmodels).hogg; step=1, digits=0))
+    temperatureticks = collect.(makedeviationtickz(1., ΔTmax, hogg; step=1, digits=0))
 
     Tmin, Tmax = extrema(temperatureticks[1])
 
     m₀ = log(hogg.M₀ / hogg.Mᵖ)
-    T₀ = Tstable(m₀, linearmodel) |> only
+    T₀ = hogg.T₀
     X₀ = SVector(T₀, m₀)
 end;
 
 begin # Feedback plot
-    additionalradiation = [λ(T, model.feedback) for T in Tspace, model in tippingmodels]
+    additionalradiation = [λ(T, model.climate.feedback) for T in Tspace, model in tippingmodels]
 
     feedbackfig = @pgf Axis({
         width = raw"0.6\textwidth",
@@ -124,12 +131,11 @@ begin # Feedback plot
 end
 
 begin # Simulate NP problem
-    simmodels = models[1:3]
-    sims = Dict{AbstractModel, DiffEqArray}()
+    sims = Dict{IAM, DiffEqArray}()
 
     npprob = SDEProblem(Fnp, noise, X₀, simtspan, (linearmodel, calibration)) |> EnsembleProblem
 
-    for model in simmodels
+    for model in models
         npparameters = (model, calibration)
         sol = solve(npprob, SOSRI(); trajectories, p = npparameters)
 
@@ -142,17 +148,17 @@ begin # Simulate NP problem
 end;
 
 begin # NP simulation + nullclines
-    nullclinevariation = Dict{AbstractModel, Vector{Vector{NTuple{2,Float64}}}}()
+    nullclinevariation = Dict{IAM, Vector{Vector{NTuple{2,Float64}}}}()
 
-    for model in reverse(simmodels)
+    for model in reverse(models)
         nullclines = Vector{NTuple{2,Float64}}[]
         currentM = NTuple{2,Float64}[]
         currentlystable = true
 
         for T in Tspace
-            m = mstable(T, model)
+            m = mstable(T, model.climate)
             M = hogg.Mᵖ * exp(m)
-            isstable = model isa LinearModel || ∂μ∂T(T, m, model.hogg, model.feedback) < 0
+            isstable = model.climate isa LinearClimate || ∂μ∂T(T, model.climate) < 0
             if isstable == currentlystable
                 push!(currentM, (M, T))
             else
@@ -166,7 +172,7 @@ begin # NP simulation + nullclines
         nullclinevariation[model] = nullclines
     end
     
-    mmedianpath = getindex.(getindex.(sims[simmodels[1]].u, 2), 2)
+    mmedianpath = getindex.(getindex.(sims[models[1]].u, 2), 2)
     Mmedianpath = @. hogg.Mᵖ * exp(mmedianpath)
     Mticks = Mmedianpath[1:15:end]
     Mmin, Mmax = extrema(Mticks)
@@ -197,7 +203,7 @@ begin # NP simulation + nullclines
         PGFPlotsX.save(joinpath(PLOTPATH, "skeleton-nullcline.tikz"), nullclinefig; include_preamble=true)
     end
 
-    for model in reverse(simmodels) # Nullclines
+    for model in reverse(models) # Nullclines
         color = colorsbymodel[model]
         
         stableleft, rest... = nullclinevariation[model]
@@ -215,7 +221,7 @@ begin # NP simulation + nullclines
         end
     end
 
-    for model in reverse(simmodels) # Simulation plots
+    for model in reverse(models) # Simulation plots
         color = colorsbymodel[model]
         simpath = sims[model]
 
@@ -263,7 +269,7 @@ begin # Pure nullcline figure
         legend_cell_align = "left"
     })
 
-    for model in reverse(simmodels) # Nullcline plots
+    for model in reverse(models) # Nullcline plots
         color = colorsbymodel[model]
         
         stableleft, rest... = nullclinevariation[model]
@@ -377,137 +383,12 @@ begin # Growth of carbon concentration
     gfig
 end
 
-# TODO: Finish the comparison of density plots between jump and tipping models.
-densmodels = AbstractModel[last(tippingmodels), jumpmodel];
-begin # Simulates the two models    
-    temperaturedrift! = @closure (du, u, model, t) -> begin
-        du[1] = μ(u[1], m₀, model) / model.hogg.ϵ
-    end
-
-    temperaturenoise! = @closure (Σ, u, model, t) -> begin
-        Σ[1] = model.hogg.σₜ / model.hogg.ϵ
-    end
-
-    T₀ = minimum(Model.Tstable(m₀, jumpmodel))
-
-    simulations = Dict{AbstractModel, RODESolution}()
-    
-    for model in densmodels
-        isjump = model isa JumpModel
-        fn = SDEFunction(temperaturedrift!, temperaturenoise!)
-
-        densprob = SDEProblem(fn, [T₀], (0., 50_000.), model)
-        
-        if !isjump
-            simulation = solve(densprob)
-        else
-            onedrate(u, model, t) = intensity(u[1], model.hogg, model.jump)
-            
-            function onedtipping!(integrator)
-                model = integrator.p
-                q = increase(integrator.u[1], model.hogg, model.jump)
-                integrator.u += q
-            end
-
-            ratejump = VariableRateJump(onedrate, onedtipping!);
-            jumpprob = JumpProblem(densprob, ratejump)
-
-            simulation = solve(densprob, SOSRI())
-        end
-        
-        simulation = solve(densprob)
-        simulations[model] = simulation
-    end
-end
-begin # Construct histograms
-    Textrema = map(sim -> extrema(first.(sim.u)), values(simulations))
-    Thistmin = minimum(first.(Textrema)) - 0.1
-    Thistmax = maximum(last.(Textrema)) + 0.1
-
-    Tbins = range(Thistmin, Thistmax; length = 31)
-
-    histograms = Dict{AbstractModel, Histogram}()
-
-    for model in densmodels
-        simulation = simulations[model]
-        T = first.(simulation.u)
-
-        histogram = fit(Histogram, T, Tbins)
-        histograms[model] = histogram
-    end
-end
-begin
-    denstemperatureticks = makedeviationtickz(0.0, ceil(Tmax - hogg.Tᵖ), first(tippingmodels); step=1, digits=0, addedlabels = [(L"$T_0$", hogg.T₀)])
-
-    densfig = @pgf GroupPlot({
-        group_style = {
-            group_size = "1 by 2",
-            xticklabels_at = "edge bottom",
-            vertical_sep = "2pt"
-        }
-    })
-    
-
-    for (k, model) in enumerate(densmodels)
-        histogram = histograms[model]
-
-        densityplot = @pgf Plot({
-            "ybar interval",
-            "xticklabel interval boundaries",
-            xmajorgrids = false,
-            ylabel = labelsbymodel[model],
-            fill = "gray", opacity = 0.5
-        }, Table(histogram))
-
-
-        @pgf lastplotopt = k < length(densmodels) ? {} : { xlabel = TLABEL, xticklabels = denstemperatureticks[2] }
-
-        @pgf push!(densfig, {lastplotopt...,
-            xmin = Thistmin, xmax = Thistmax, 
-            xtick = denstemperatureticks[1],
-            ymin = 0, ymax = 5000,
-            grid = "both", yticklabels = raw"\empty",
-            width = raw"0.7\textwidth", height = raw"0.4\textwidth",
-            ylabel = "$(labelsbymodel[model])"
-        }, densityplot)
-    end
-
-    if SAVEFIG
-        PGFPlotsX.save(joinpath(PLOTPATH, "densfig.tikz"), densfig; include_preamble=true)
-    end
-
-    densfig
-end
-
-begin # Carbon decay calibration
-    sinkspace = range(hogg.N₀, 2hogg.N₀; length=51)
-    decay = [Model.δₘ(n, hogg) for n in sinkspace]
-
-    decayfig = @pgf Axis({
-        width = raw"0.5\textwidth",
-        height = raw"0.5\textwidth",
-        grid = "both",
-        xlabel = raw"Carbon stored in sinks $N$",
-        ylabel = raw"Decay of CO$_2$ in the atmosphere $\delta_m$",
-        xmin = first(sinkspace), xmax = last(sinkspace),
-        ymin = 0
-    })
-
-    @pgf push!(decayfig, Plot({line_width = LINE_WIDTH}, Coordinates(sinkspace, decay)))
-
-    if SAVEFIG
-        PGFPlotsX.save(joinpath(PLOTPATH, "decay.tikz"), decayfig; include_preamble=true)
-    end
-
-    decayfig
-end
 
 begin # Carbon decay path
     npmprob = ODEProblem((m, calibration, t) -> γ(t, calibration), m₀, simtspan, calibration)
 
     npsim = solve(npmprob, AutoVern9(Rodas5P()); saveat = 1.)
-    npM = hogg.Mᵖ * exp.(npsim.u)
-    mediandecay = δₘ.(npM, hogg)
+    mediandecay = [δₘ(M, decay) for M in hogg.Mᵖ * exp.(npsim.u)]
 
     decaypathfig = @pgf Axis({
         width = raw"0.7\textwidth",
@@ -538,7 +419,7 @@ begin # Damage fig
     ytick = 0:0.05:maxpercentage
     yticklabels = [@sprintf("%.0f \\%%", 100 * y) for y in ytick]
 
-    _, xticklabels = makedeviationtickz(ΔTspace[1], ΔTspace[end], first(tippingmodels).hogg; step = 1, digits = 0)
+    _, xticklabels = makedeviationtickz(ΔTspace[1], ΔTspace[end], hogg; step = 1, digits = 0)
     xtick = ΔTspace[1]:1:ΔTspace[end]
 
     damagefig = @pgf Axis({
@@ -568,16 +449,16 @@ begin # Damage fig
 end
 
 begin # Marginal abatement curve
-    emissivity = range(0.0, 1.4; length = 51)
+    emissivity = range(0.0, 1.1; length = 51)
 
-    times = [0., 40., 80.] |> reverse
+    times = [0., 10., 20.] |> reverse
 
-    yearcolors = get(PALETTE, [0., 0.4, 0.6])
+    yearcolors = get(PALETTE, (times) / 30.)
 
     xticks = range(extrema(emissivity)..., step = 0.2)
     xticklabels = [@sprintf("%.0f\\%%", 100 * x) for x in xticks]
 
-    ytick = 0.02:0.02:0.12
+    ytick = 0.02:0.04:0.26
     yticklabels = [@sprintf("%.f\\%%", 100 * y) for y in ytick]
 
     abatementfig = @pgf Axis({
@@ -601,7 +482,7 @@ begin # Marginal abatement curve
     push!(abatementfig, bandpoly)
 
     for (k, t) in enumerate(times)
-        mac = [β(t, ε, economy) for ε in emissivity]
+        mac = [β(t, ε, abatement) for ε in emissivity]
 
         abatementcurve = @pgf Plot({line_width = LINE_WIDTH, color = yearcolors[k]}, Coordinates(emissivity, mac))
 

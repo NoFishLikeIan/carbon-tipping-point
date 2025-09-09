@@ -1,31 +1,31 @@
-function simpaths(model::AbstractModel, withnegative::Bool)
-    basedir = if model isa TippingModel
+function makesimulationpaths(model::IAM{S, D, P, C}, withnegative::Bool) where {S, D <: Damages{S}, P <: LogSeparable{S}, C <: Climate{S}}
+    basedir = if C <: TippingClimate
         "tipping"
-    elseif model isa LinearModel
+    elseif C <: LinearClimate
         "linear"
-    elseif model isa JumpModel
+    elseif C <: JumpingClimate
         "jump"
     else
         throw("Directory not specified for model $(typeof(model))")
     end
 
-    damagedir = if model.damages isa Kalkuhl
+    damagedir = if D <: Kalkuhl
         "growth"
-    elseif model.damages isa WeitzmanLevel 
+    elseif D <: WeitzmanLevel 
         "level"
-    elseif model.damages isa NoDamageGrowth
+    elseif D <: NoDamageGrowth
         "no-damages"
     else
         throw("Directory not specified for damages $(typeof(model.damages))")
     end
 
-    preferencedir = if model.preferences isa EpsteinZin
+    preferencedir = if P <: EpsteinZin
         "epsteinzin"
-    elseif model.preferences isa CRRA
+    elseif P <: CRRA
         "crra"
-    elseif model.preferences isa LogSeparable
+    elseif P <: LogSeparable
         "logseparable"
-    elseif model.preferences isa LogUtility
+    elseif P <: LogUtility
         "logutility"
     else
         throw("Directory not specified for preferences $(typeof(model.preferences))")
@@ -35,21 +35,21 @@ function simpaths(model::AbstractModel, withnegative::Bool)
 
     return joinpath(basedir, damagedir, preferencedir, controldir)
 end
-function makefilename(model::AbstractModel)
+function makefilename(model::IAM{S, D, P, C}) where {S, D <: Damages{S}, P <: LogSeparable{S}, C <: Climate{S}}
     # 1. Threshold temperature deviation from pre-industrial
-    thresholdpart = if model isa TippingModel
-        deviation = model.feedback.Tᶜ - model.hogg.Tᵖ
+    thresholdpart = if C <: TippingClimate
+        deviation = model.feedback.Tᶜ - model.climate.hogg.Tᵖ
         "T$(Printf.format(Printf.Format("%.1f"), deviation))"
     else
         "Linear"
     end
     
     # 2. Type of damages
-    damagepart = if model.damages isa Kalkuhl
+    damagepart = if D <: Kalkuhl
         "Kalkuhl"
-    elseif model.damages isa WeitzmanLevel 
+    elseif D <: WeitzmanLevel 
         "Weitzman"
-    elseif model.damages isa NoDamageGrowth
+    elseif D <: NoDamageGrowth
         "NoDamage"
     else
         "$(typeof(model.damages).name.name)"
@@ -62,21 +62,9 @@ function makefilename(model::AbstractModel)
     filename = "$(thresholdpart)_$(damagepart)_$(rrapart).jld2"
     return replace(filename, "." => ",")
 end
-function makefilename(models::Vector{<:AbstractModel})
 
-    filenames = String[]
-
-    for model in models
-        filename = makefilename(model)
-
-        push!(filenames, replace(filename, ".jld2" => ""))
-    end
-
-    return "$(join(filenames, "-")).jld2"
-end
-
-function loadterminal(model::AbstractModel{T}; outdir = "data/simulation", addpath = "") where T
-    folder = simpaths(model, withnegative)
+function loadterminal(model::IAM; outdir = "data/simulation", addpath = "")
+    folder = makesimulationpaths(model, withnegative)
     filename = makefilename(model)
     
     savedir = joinpath(outdir, folder, "terminal", addpath)
@@ -91,17 +79,13 @@ function loadterminal(model::AbstractModel{T}; outdir = "data/simulation", addpa
 
     return state, G
 end
-function loadterminal(models::Vector{<:AbstractModel}; outdir = "data/simulation", addpaths = repeat([""], length(models)))
-    return [loadterminal(model; outdir = outdir, addpath = addpaths[i]) for (i, model) ∈ enumerate(models)] 
-end
 
-function loadtotal(model::AbstractModel{T}; outdir = "data/simulation", loadkwargs...) where T
-    
+function loadtotal(model::IAM; outdir = "data/simulation", loadkwargs...)
     if !isdir(outdir)
         error("Output directory does not exist: $(outdir)\nHave you not solved the constrained or negative problem?")
     end
 
-    folder = simpaths(model, withnegative)
+    folder = makesimulationpaths(model, withnegative)
     cachefolder = joinpath(outdir, folder)
     
     if !isdir(cachefolder)
@@ -156,45 +140,6 @@ function loadproblem(filepath)
     close(cachefile)
 
     return model, G
-end
-
-function loadgame(models::Vector{<:AbstractModel}; outdir = "data/simulation")
-    filename = makefilename(models)
-    filepath = joinpath(outdir, filename)
-
-    return loadgame(filepath)
-end
-
-function loadgame(filepath::String)
-    cachefile = jldopen(filepath, "r")
-    G = cachefile["G"]
-    models = cachefile["models"]
-    timekeys = filter(key -> key ∉ ["G", "models"], keys(cachefile))
-    timesteps = round.(parse.(Float64, timekeys), digits = 4)
-
-    ix = sortperm(timesteps)
-    timesteps = timesteps[ix]
-    timekeys = timekeys[ix]
-
-    T = length(timesteps)
-
-    F = Dict{AbstractModel, Array{Float64, 3}}(model => Array{Float64, 3}(undef, size(G)..., T) for model ∈ models)
-    policy = Dict{AbstractModel, Array{Float64, 4}}(model => Array{Float64, 4}(undef, size(G)..., 2, T) for model ∈ models)
-
-    for (k, key) in enumerate(timekeys)
-        # TODO: This assumes the order of Fs to be the same of models, think of a check for this
-        Fs = cachefile[key]["Fs"]
-        policies = cachefile[key]["policies"]
-
-        for (j, model) in enumerate(models)
-            F[model][:, :, k] .= Fs[j]
-            policy[model][:, :, :, k] .= policies[j]
-        end
-    end
-
-    close(cachefile)
-
-    return timesteps, F, policy, G, models
 end
 
 function listfiles(simpath::String; exclude = ["terminal"])

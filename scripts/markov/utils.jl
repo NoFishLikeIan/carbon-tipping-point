@@ -12,15 +12,11 @@ function abserror(a::AbstractArray{S}, b::AbstractArray{S}) where S
 end
 function abserror!(error::Error{S}, a::AbstractArray{S}, b::AbstractArray{S}) where S
     for k in eachindex(a)
-        abserror!(error, a, b, k)
-    end
-    return error
-end
-function abserror!(error::Error{S}, a::AbstractArray{S}, b::AbstractArray{S}, k) where S
-    Δ = abs(a[k] - b[k])
-    if Δ > error.absolute
-        error.absolute = Δ
-        error.relative = Δ / abs(b[k])
+        Δ = abs(a[k] - b[k])
+        if Δ > error.absolute
+            error.absolute = Δ
+            error.relative = Δ / abs(b[k])
+        end
     end
 
     return error
@@ -28,7 +24,7 @@ end
 
 function initcachefile(model, G, outdir, withnegative; overwrite = false)
     # Initialise cache folder
-    folder = simpaths(model, withnegative)
+    folder = makesimulationpaths(model, withnegative)
     cachefolder = joinpath(outdir, folder)
     
     if !isdir(cachefolder)

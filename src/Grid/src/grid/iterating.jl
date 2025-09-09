@@ -9,8 +9,8 @@ function Base.extrema(grid::G) where G <: AbstractGrid
     ntuple(i -> grid.domains[i][2] - grid.domains[i][1], 2)
 end
 
-function LinearIndex(idx::CartesianIndex{2}, G::T) where T <: AbstractGrid
-    LinearIndex(idx.I, G)
+function LinearIndex(idx::CartesianIndex{2}, grid::G) where {G <: AbstractGrid}
+    LinearIndex(idx.I, grid)
 end
 
 function LinearIndex((i, j)::NTuple{2, Int}, ::G) where {N₁, G <: AbstractGrid{N₁}}

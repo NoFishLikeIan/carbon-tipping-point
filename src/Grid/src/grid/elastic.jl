@@ -36,28 +36,28 @@ struct ElasticGrid{N₁, N₂, S, R} <: AbstractGrid{N₁, N₂, S, R}
                 throw(ArgumentError("Length of weights[$(i)] ($(length(w))) must equal N[$(i)] ($(N[i]))"))
             end
 
-            constructsampler(w, domain)
+            return constructsampler(w, domain)
         end, 2)
     
 
         return new{N[1],N[2],S,typeof(ranges[1])}(domains, ranges)
     end
     function ElasticGrid(N, domains, weights::W) where {S <: Real, W <: AbstractMatrix{S}}
-        wᵀ = sum(weights, dims = 2)
-        wᵐ = sum(weights, dims = 1)
+        wᵀ = dropdims(sum(weights, dims = 2); dims = 2)
+        wᵐ = dropdims(sum(weights, dims = 1); dims = 1)
         return ElasticGrid(N, domains, (wᵀ, wᵐ))
     end
 end
 
-"Returns the previous and next step of grid at positions `(i, j)`. Returns `0` if step is on edge."
+"Returns the previous and next step of grid at positions `(i, j)`. Returns `Inf` if step is on edge."
 function steps(grid::ElasticGrid{N₁, N₂, S}, i, j) where {N₁, N₂, S}
     Tspace, mspace = grid.ranges
 
-    ΔT₋ = i == 1 ? S(NaN) : Tspace[j] - Tspace[j - 1]
-    ΔT₊ = i == N₁ ? S(NaN) : Tspace[i + 1] - Tspace[i]
+    ΔT₋ = i == 1 ? typemax(S) : Tspace[i] - Tspace[i - 1]
+    ΔT₊ = i == N₁ ? typemax(S) : Tspace[i + 1] - Tspace[i]
     
-    Δm₋ = j == 1 ? S(NaN) : mspace[j] - mspace[j - 1]
-    Δm₊ = j == N₂ ? S(NaN) : mspace[j + 1] - mspace[j]
+    Δm₋ = j == 1 ? typemax(S) : mspace[j] - mspace[j - 1]
+    Δm₊ = j == N₂ ? typemax(S) : mspace[j + 1] - mspace[j]
 
     return (ΔT₋, ΔT₊), (Δm₋, Δm₊)
 end
