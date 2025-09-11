@@ -46,7 +46,7 @@ begin # Construct models and grids
     climatepath = joinpath(calibrationpath, "climate.jld2")
     @assert isfile(climatepath) "Climate calibration file not found at $climatepath"
     climatefile = jldopen(climatepath, "r+")
-    @unpack calibration, hogg, feedbacklower, feedback, feedbackhigher = climatefile
+    @unpack calibration, hogg, feedbacklower, feedback, feedbackhigher, decay = climatefile
     close(climatefile)
 
     abatementpath = joinpath(calibrationpath, "abatement.jld2")
@@ -55,7 +55,6 @@ begin # Construct models and grids
     @unpack abatement = abatementfile
     close(abatementfile)
 
-    decay = ExponentialDecay()
     economy = Economy(investments = Investment(), damages = Kalkuhl(), abatement = abatement)
     
     preferences = LogSeparable()

@@ -46,20 +46,20 @@ function Fnp(u::SVector{2,R}, parameters::NpParamaters, t) where R<:Real
 end
 function noise(u, parameters::NpParamaters, t)
     model = first(parameters)
-    σT = model.climate.hogg.σₜ / model.climate.hogg.ϵ
+    σT = u[2] * model.climate.hogg.σₜ / model.climate.hogg.ϵ
     σm = model.climate.hogg.σₘ
     return SVector(σT, σm)
 end
 function noise(u::SVector{3}, parameters::SimulationParameters, t)
     model = first(parameters)
-    σT = model.climate.hogg.σₜ / model.climate.hogg.ϵ
+    σT = u[2] * model.climate.hogg.σₜ / model.climate.hogg.ϵ
     σm = model.climate.hogg.σₘ
     σk = model.economy.σₖ
     return SVector(σT, σm, σk)
 end
 function noise(u::SVector{6}, parameters::SimulationParameters, t)
     model = first(parameters)
-    σT = model.climate.hogg.σₜ / model.climate.hogg.ϵ
+    σT = u[2] * model.climate.hogg.σₜ / model.climate.hogg.ϵ
     σm = model.climate.hogg.σₘ
     σk = model.economy.σₖ
     return SVector(σT, σm, σk, 0.0, 0.0, 0.0)

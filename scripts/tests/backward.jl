@@ -15,72 +15,87 @@ using JLD2, UnPack
 using Dates, Printf
 
 includet("../../src/valuefunction.jl")
-includet("../../src/extend/valuefunction.jl")
 includet("../../src/extend/model.jl")
+includet("../../src/extend/grid.jl")
+includet("../../src/extend/valuefunction.jl")
 includet("../utils/saving.jl")
 includet("../markov/utils.jl")
 includet("../markov/chain.jl")
 includet("../markov/finitedifference.jl")
 
 begin # Construct the model
-    calibrationfilepath = "data/calibration.jld2"
-    @assert isfile(calibrationfilepath)
+    DATAPATH = "data"
+    calibrationpath = joinpath(DATAPATH, "calibration")
 
-    calibrationfile = jldopen(calibrationfilepath, "r+")
-    @unpack calibration, hogg, feedbacklower, feedback, feedbackhigher = calibrationfile
-    close(calibrationfile)
+    # Load economic calibration
+    abatementpath = joinpath(calibrationpath, "abatement.jld2")
+    @assert isfile(abatementpath) "Abatement calibration file not found at $abatementpath"
+    abatementfile = jldopen(abatementpath, "r+")
+    @unpack abatement = abatementfile
+    close(abatementfile)
 
-    hogg = Hogg(σₘ = 0., σₜ = 0.)
+    investments = Investment()
     damages = Kalkuhl()
-    preferences = Preferences()
-    economy = Economy()
+    economy = Economy(investments = investments, damages = damages, abatement = abatement)
 
-    threshold = 2.0
+    # Load climate claibration
+    climatepath = joinpath(calibrationpath, "climate.jld2")
+    @assert isfile(climatepath) "Climate calibration file not found at $climatepath"
+    climatefile = jldopen(climatepath, "r+")
+    @unpack calibration, hogg, feedbacklower, feedback, feedbackhigher, decay = climatefile
+    close(climatefile)
 
-    model = if 0 < threshold < Inf
+    threshold = 2.5
+    climate = if 0 < threshold < Inf
         feedback = Model.updateTᶜ(threshold + hogg.Tᵖ, feedback)
-        TippingModel(hogg, preferences, damages, economy, feedback)
+        TippingClimate(hogg, decay, feedback)
     else
-        LinearModel(hogg, preferences, damages, economy)
+        LinearClimate(hogg, decay)
     end
 
-    N = (200, 101)
-    Tdomain = hogg.Tᵖ .+ (0., 7.5)
-    mdomain = mstable(Tdomain[1] + 0.5, model), mstable(Tdomain[2] - 0.5, model)
+    preferences = LogSeparable()
 
-    G = RegularGrid(N, (Tdomain, mdomain))
-    Δt = 1 / 100
+    model = IAM(climate, economy, preferences)
+    deterministicmodel = determinsticIAM(model)
+end
+
+begin
+    N₁ = 200; N₂ = 100;
+    N = (N₁, N₂)
+    Tdomain = hogg.Tᵖ .+ (0.5, 7.)
+    mmin = mstable(Tdomain[1] + 0.5, model.climate)
+    mmax = mstable(Tdomain[2] - 0.5, model.climate)
+    mdomain = (mmin, mmax)
+    domains = (Tdomain, mdomain)
+    
+    Gterminal = constructelasticgrid(N, domains, model)
+    Δt = 1 / 200
     τ = 500.
-
-    Tspace, mspace = G.ranges
-    nullcline = mstable.(Tspace, model)
-
     withnegative = false
 end;
 
-# Picard divergese!
-
-# Check terminal condition
-valuefunction = ValueFunction(τ, hogg, G, calibration)
-valuefunction, (iterations, error) = steadystate!(valuefunction, Δt, model, G, calibration; verbose = 2, timeiter = 10_000, picarditer = 0, tolerance = Error(1e-6, 1e-8), withnegative = false, alg = KLUFactorization())
+terminalvaluefunction = ValueFunction(τ, climate, Gterminal, calibration)
+steadystate!(terminalvaluefunction, Δt, deterministicmodel, Gterminal, calibration; verbose = 1, tolerance = Error(1e-3, 1e-3), timeiterations = 1500, withnegative = withnegative, picarditerations = 0, printstep = 50)
 
 begin # HJB error
-    Ā = constructA!(valuefunction, 1 / Δt, model, G, calibration, withnegative)
-    b̄ = constructsource(valuefunction, 1 / Δt, model, G, calibration) - constructadv(valuefunction,  model, G, calibration)
+    Ā = constructA!(terminalvaluefunction, 1 / Δt, model, Gterminal, calibration, withnegative)
+    b̄ = constructb(terminalvaluefunction, 1 / Δt, model, Gterminal, calibration)
 
-    hjb = reshape(Ā * vec(valuefunction.H) - b̄, size(G))
+    hjb = reshape(Ā * vec(terminalvaluefunction.H) - b̄, size(Gterminal))
 end;
 
 if isinteractive()
+    Tspace, mspace = Gterminal.ranges
     hjberrorfig = heatmap(mspace, Tspace, hjb; title = "HJB error", xlabel = L"m", ylabel = L"T", c=:Greens, xlims = extrema(mspace), ylims = extrema(Tspace))
 end
 
 if isinteractive()
-    E = ε(valuefunction, model, calibration)
+    E = ε(terminalvaluefunction, model, calibration, Gterminal)
+    nullcline = [mstable(T, deterministicmodel.climate) for T in Tspace]
 
     policyfig = contourf(mspace, Tspace, E; title = L"Terminal $\bar{\alpha}_{\tau}$", xlabel = L"m", ylabel = L"T", c=:Greens, xlims = extrema(mspace), ylims = extrema(Tspace), clims = (0, 1.2), linewidth = 0.)
 
-    valuefig = contourf(mspace, Tspace, valuefunction.H; title = L"Terminal value $\bar{H}$", xlabel = L"m", ylabel = L"T", xlims = extrema(mspace), ylims = extrema(Tspace), levels = 21)
+    valuefig = contourf(mspace, Tspace, terminalvaluefunction.H; title = L"Terminal value $\bar{H}$", xlabel = L"m", ylabel = L"T", xlims = extrema(mspace), ylims = extrema(Tspace), levels = 21)
 
     for fig in (policyfig, valuefig)
         plot!(fig, nullcline, Tspace; label = false, c = :black, linewidth = 2.5)
@@ -91,43 +106,14 @@ if isinteractive()
 end
 
 # Simulate backwards
-if isinteractive() # Backward simulation gif
-    Δt⁻¹ = 1 / Δt
-
-    A₀ = constructA!(valuefunction, Δt⁻¹, model, G, calibration, withnegative)
-    b₀ = Vector{Float64}(undef, length(G))
-    problem = LinearSolve.init(LinearProblem(A₀, b₀), KLUFactorization())
-
-    @gif for iter in 1:120
-        updateproblem!(problem, valuefunction, Δt⁻¹, model, G, calibration)
-        solve!(problem)
-            
-        valuefunction.H .= reshape(problem.u, size(G))
-
-        abatement = [ε(valuefunction.t.t, G[i], valuefunction.α[i], model, calibration) for i in CartesianIndices(G)]
-
-        policyfig = contourf(mspace, Tspace, abatement; title = L"Policy $\bar{\alpha}_{%$(valuefunction.t.t)}$", xlabel = L"m", ylabel = L"T", c=:viridis, cmin = 0., cmax = 1., xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
-        valuefig = contourf(mspace, Tspace, valuefunction.H; title = L"Value $H_%$(valuefunction.t.t)$", xlabel = L"m", ylabel = L"T", c=:viridis, xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
-
-        for fig in (policyfig, valuefig)
-            plot!(fig, nullcline, Tspace; label = false, c = :white)
-            scatter!(fig, [log(hogg.M₀ / hogg.Mᵖ)], [hogg.T₀]; label = false, c = :white)
-        end
-
-        jointfig = plot(policyfig, valuefig; layout=(1,2), size = 600 .* (2√2, 1))
-
-        valuefunction.t.t -= Δt
-
-        jointfig
-    end fps = 15
-end
-
-backwardsimulation!(valuefunction, Δt, model, G, calibration; t₀ = 295., verbose = 2, withsave = false)
+G = shrink(Gterminal, 0.05, model)
+valuefunction = interpolateovergrid(terminalvaluefunction, Gterminal, G)
+backwardsimulation!(valuefunction, Δt, model, Gterminal, calibration; t₀ = 295., verbose = 2, withsave = false)
 
 if isinteractive()
-    abatement = ε(valuefunction, model, calibration)
+    abatement = ε(valuefunction, model, calibration, G)
 
-    policyfig = contourf(mspace, Tspace, abatement; title = L"Initial $\bar{\alpha}_{0}$", xlabel = L"m", ylabel = L"T", c=:Greens, cmin = 0., xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
+    policyfig = contourf(mspace, Tspace, abatement; xlabel = L"m", ylabel = L"T", c=:Greens, cmin = 0., xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
     valuefig = contourf(mspace, Tspace, valuefunction.H; title = L"Initial value $H_0$", xlabel = L"m", ylabel = L"T", c=:viridis, xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
 
     for fig in (policyfig, valuefig)

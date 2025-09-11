@@ -6,7 +6,7 @@ end
 function ε(t, Xᵢ, αᵢ, model, calibration)
     αᵢ / ᾱ(t, Xᵢ, model, calibration)
 end
-function ε(valuefunction::ValueFunction, model, calibration)
+function ε(valuefunction::ValueFunction, model, calibration, G)
     @unpack t, α, H = valuefunction
 
     E = similar(α)

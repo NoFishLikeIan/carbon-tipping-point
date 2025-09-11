@@ -32,7 +32,7 @@ begin # Construct the model
     close(abatementfile)
 
     investments = Investment()
-    damages = Kalkuhl()
+    damages = WeitzmanGrowth()
     economy = Economy(investments = investments, damages = damages, abatement = abatement)
 
     # Load climate claibration
@@ -42,9 +42,11 @@ begin # Construct the model
     @unpack calibration, hogg, feedbacklower, feedback, feedbackhigher, decay = climatefile
     close(climatefile)
 
-    threshold = Inf
+    decay = ConstantDecay(0.)
+
+    threshold = Inf #2.5
     climate = if 0 < threshold < Inf
-        feedback = Model.updateTᶜ(threshold + hogg.Tᵖ, feedback)
+        feedback = Model.updateTᶜ(threshold, feedback)
         TippingClimate(hogg, decay, feedback)
     else
         LinearClimate(hogg, decay)
@@ -56,53 +58,73 @@ begin # Construct the model
 end
 
 begin
-    N = (200, 250)
-    Tdomain = hogg.Tᵖ .+ (0., 7.)
+    N₁ = 51; N₂ = 51;  # Smaller grid for testing
+    N = (N₁, N₂)
+    Tdomain = (0.0, 7.0)  # Smaller, safer domain
     mmin = mstable(Tdomain[1] + 0.5, model.climate)
     mmax = mstable(Tdomain[2] - 0.5, model.climate)
     mdomain = (mmin, mmax)
     domains = (Tdomain, mdomain)
-    
+    withnegative = true
+
     G = constructelasticgrid(N, domains, model)
-    Δt = 1 / 200
-    τ = 300.
+    Δt⁻¹ = 200.
+    Δt = 1 / Δt⁻¹
+    τ = 0.
 end;
 
-# Gif optimisation
-if false && isinteractive()
-    Δt⁻¹ = 1 / Δt
-    valuefunction = ValueFunction(τ, hogg, G, calibration)
+begin # Optimisation Gif
+    valuefunction = ValueFunction(τ, climate, G, calibration)
+    source = constructsource(valuefunction, Δt⁻¹, model, G, calibration)
+    adv = constructadv(valuefunction, model, G, calibration)
+    stencil = makestencil(G)
+    A₀ = constructA!(stencil, valuefunction, Δt⁻¹, model, G, calibration, withnegative)
+    b₀ = source - adv
 
-    A₀ = constructA!(valuefunction, Δt⁻¹, model, G, calibration)
-    b₀ = Vector{Float64}(undef, length(G))
+    # Initialise the problem
     problem = LinearSolve.init(LinearProblem(A₀, b₀), KLUFactorization())
-    γ̄ = γ(valuefunction.t.t, calibration)
 
-    @gif for iter in 1:600
-        updateproblem!(problem, valuefunction, Δt⁻¹, model, G, calibration)
-        solve!(problem)
+    @gif for iter in 1:1500
+        constructadv!(adv, valuefunction, model, G, calibration)
+        for _ in 1:3 # Stabilise quadratic approximation
+            constructsource!(source, valuefunction, Δt⁻¹, model, G, calibration)
+            problem.b .= source - adv  # Use fixed quadratic terms
             
-        valuefunction.H .= reshape(problem.u, size(G))
-        Tspace = range(G.domains[1]...; length=size(G, 1))
-        mspace = range(G.domains[2]...; length=size(G, 2))
+            # Update only the linear parts of the operator (drift + diffusion)
+            problem.A = constructA!(stencil, valuefunction, Δt⁻¹, model, G, calibration, withnegative)
+            
+            sol = solve!(problem)
+            if !SciMLBase.successful_retcode(sol)
+                throw("Picard step solver failed at time $(valuefunction.t.t)!")
+            end
+            
+            updateovergrid!(valuefunction.H, problem.u, 0.1)  # Much more conservative mixing
+        end
+        backwardstep!(problem, stencil, valuefunction, Δt⁻¹, model, G, calibration; withnegative)
+        updateovergrid!(valuefunction.H, problem.u, 0.3)  # Conservative final update
+        
+        if any(isnan.(valuefunction.H))
+            continue
+        end
+        Tspace, mspace = G.ranges
+        contourf(mspace, Tspace, valuefunction.H; title = "Value Function H iter = $(iter)", xlabel = L"m", ylabel = L"T", c=:viridis, xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
 
-        policyfig = contourf(mspace, Tspace, γ̄ .- valuefunction.α; title = "Drift of CO2e - Iteration $iter", xlabel = L"m", ylabel = L"T", c=:viridis, linewidth = 0, cmin = 0.)
-        valuefig = contourf(mspace, Tspace, valuefunction.H; title = "Value Function H - Iteration $iter", xlabel = L"m", ylabel = L"T", c=:viridis, linewidth = 0)
+        if (iter % 100) == 0
+            print("Iteration $iter / 1500.\r")
+        end
 
-        plot(policyfig, valuefig; layout=(1,2), size = 600 .* (2√2, 1))
-
-    end fps = 30
+    end every 10
 end
 
-valuefunction = ValueFunction(τ, climate, G, calibration)
-steadystate!(valuefunction, Δt, model, G, calibration; verbose = 2, tolerance = Error(1e-3, 1e-3), withnegative = false, timeiterations = 1_000, picarditerations = 2)
+valuefunction, result = steadystate!(valuefunction, Δt, model, G, calibration; verbose = 1, tolerance = Error(1e-3, 1e-4), timeiterations = 1_000, picarditerations = 3, printstep = 100, withnegative)
 
 if isinteractive()
     Tspace, mspace = G.ranges
     nullcline = [mstable(T, model.climate) for T in Tspace]
-    abatement = ε(valuefunction, model, calibration)
 
-    policyfig = contourf(mspace, Tspace, abatement; title = "Drift of CO2e", xlabel = L"m", ylabel = L"T", c=:Greens, xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0., clims = (0, 1))
+    e = ε(valuefunction, model, calibration, G)
+    
+    policyfig = contourf(mspace, Tspace, e; title = "Drift of CO2e", xlabel = L"m", ylabel = L"T", c=:Greens, xlims = extrema(mspace), ylims = extrema(Tspace), clims = (0, max(1, maximum(e))), linewidth = 0.)
     valuefig = contourf(mspace, Tspace, valuefunction.H; title = "Value Function H", xlabel = L"m", ylabel = L"T", c=:viridis, xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
 
     for fig in (policyfig, valuefig)
