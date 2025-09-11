@@ -39,25 +39,22 @@ function ϕ(t, χ, investments::Investment)
     return investmentrate - adjcosts
 end
 
+# Growth Damages
 abstract type Damages{S<:Real} end
 abstract type GrowthDamages{S} <: Damages{S} end
-
 struct NoDamageGrowth{S} <: GrowthDamages{S} end
-
 Base.@kwdef struct WeitzmanGrowth{S} <: GrowthDamages{S}
     ξ::S = 2.6e-4
     ν::S = 3.25
 end
-
 Base.@kwdef struct Kalkuhl{S} <: GrowthDamages{S}
     ξ₁::S = 0.0357 # Linear term in damage function
     ξ₂::S = 0.0018 # Quadratic term in damage function
 end
 
+# Level Damages
 abstract type LevelDamages{S} <: Damages{S} end
-
 struct NoDamageLevel{S} <: LevelDamages{S} end
-
 Base.@kwdef struct WeitzmanLevel{S} <: Damages{S}
     ξ::S = 0.00266
 end
@@ -65,7 +62,7 @@ end
 d(_, _, damages::NoDamageGrowth{S}, args...) where S = zero(S)
 function d(T, m, damages::Kalkuhl, climate::C) where {C <: Climate}
     driftdamage = (damages.ξ₁ + damages.ξ₂ * T) * max(μ(T, m, climate), 0) / climate.hogg.ϵ
-    noisedamage = (damages.ξ₂ / 2) * (T * climate.hogg.σₜ / climate.hogg.ϵ)^2
+    noisedamage = (damages.ξ₂ / 2) * variance(T, climate.hogg)
     return noisedamage + driftdamage
 end
 function d(T, _, damages::WeitzmanGrowth, climate::C) where {C <: Climate}

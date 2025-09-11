@@ -32,7 +32,7 @@ begin # Construct the model
     close(abatementfile)
 
     investments = Investment()
-    damages = WeitzmanGrowth()
+    damages = Kalkuhl()
     economy = Economy(investments = investments, damages = damages, abatement = abatement)
 
     # Load climate claibration
@@ -42,9 +42,10 @@ begin # Construct the model
     @unpack calibration, hogg, feedbacklower, feedback, feedbackhigher, decay = climatefile
     close(climatefile)
 
+    # FIXME: Temporary parameters
     decay = ConstantDecay(0.)
 
-    threshold = Inf #2.5
+    threshold = 2.5
     climate = if 0 < threshold < Inf
         feedback = Model.updateTᶜ(threshold, feedback)
         TippingClimate(hogg, decay, feedback)
@@ -73,50 +74,46 @@ begin
     τ = 0.
 end;
 
-begin # Optimisation Gif
+if false # Optimisation Gif
     valuefunction = ValueFunction(τ, climate, G, calibration)
     source = constructsource(valuefunction, Δt⁻¹, model, G, calibration)
-    adv = constructadv(valuefunction, model, G, calibration)
+    adv = constructadv(valuefunction, model, G)
     stencil = makestencil(G)
     A₀ = constructA!(stencil, valuefunction, Δt⁻¹, model, G, calibration, withnegative)
     b₀ = source - adv
 
     # Initialise the problem
+    problemdata = (stencil, source, adv)
     problem = LinearSolve.init(LinearProblem(A₀, b₀), KLUFactorization())
 
-    @gif for iter in 1:1500
-        constructadv!(adv, valuefunction, model, G, calibration)
-        for _ in 1:3 # Stabilise quadratic approximation
-            constructsource!(source, valuefunction, Δt⁻¹, model, G, calibration)
-            problem.b .= source - adv  # Use fixed quadratic terms
-            
-            # Update only the linear parts of the operator (drift + diffusion)
-            problem.A = constructA!(stencil, valuefunction, Δt⁻¹, model, G, calibration, withnegative)
-            
-            sol = solve!(problem)
-            if !SciMLBase.successful_retcode(sol)
-                throw("Picard step solver failed at time $(valuefunction.t.t)!")
-            end
-            
-            updateovergrid!(valuefunction.H, problem.u, 0.1)  # Much more conservative mixing
-        end
-        backwardstep!(problem, stencil, valuefunction, Δt⁻¹, model, G, calibration; withnegative)
-        updateovergrid!(valuefunction.H, problem.u, 0.3)  # Conservative final update
+    Tspace, mspace = G.ranges
+    nullcline = [mstable(T, model.climate) for T in Tspace]
+    m₀ = log(hogg.M₀ / hogg.Mᵖ)
+    nframes = 1000
+    @gif for iter in 1:nframes
+        if (iter % (nframes ÷ 100)) == 0 print("Iteration $iter / $nframes.\r") end
+
+        backwardstep!(problem, problemdata, valuefunction, Δt⁻¹, model, G, calibration; withnegative)
+        updateovergrid!(valuefunction.H, problem.u, 1.)
+
+        if any(isnan.(valuefunction.H)) @warn "NaN value in H" end
+
+        valuefig = contourf(mspace, Tspace, valuefunction.H; title = "Value Function H", xlabel = L"m", ylabel = L"T", c=:viridis, xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
         
-        if any(isnan.(valuefunction.H))
-            continue
-        end
-        Tspace, mspace = G.ranges
-        contourf(mspace, Tspace, valuefunction.H; title = "Value Function H iter = $(iter)", xlabel = L"m", ylabel = L"T", c=:viridis, xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
+        emissionsreduction = ε(valuefunction, model, calibration, G)
+        abatementfig = contourf(mspace, Tspace, emissionsreduction; title = "Abatement", xlabel = L"m", ylabel = L"T", c=:Greens, xlims = extrema(mspace), ylims = extrema(Tspace), clims = (0, max(1, maximum(emissionsreduction))), linewidth = 0.)
 
-        if (iter % 100) == 0
-            print("Iteration $iter / 1500.\r")
+        for fig in (abatementfig, valuefig)
+            plot!(fig, nullcline, Tspace; label = false, c = :white)
+            scatter!(fig, [m₀], [hogg.T₀]; label = false, c = :white)
         end
 
-    end every 10
+        plot(abatementfig, valuefig; layout=(1,2), size = 600 .* (2√2, 1))
+
+    end every 5
 end
 
-valuefunction, result = steadystate!(valuefunction, Δt, model, G, calibration; verbose = 1, tolerance = Error(1e-3, 1e-4), timeiterations = 1_000, picarditerations = 3, printstep = 100, withnegative)
+valuefunction, result = steadystate!(valuefunction, Δt, model, G, calibration; verbose = 1, tolerance = Error(1e-4, 1e-4), timeiterations = 10_000, printstep = 100, withnegative)
 
 if isinteractive()
     Tspace, mspace = G.ranges

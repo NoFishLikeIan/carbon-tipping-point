@@ -1,10 +1,11 @@
 "Takes a step backward in time `H(t) -> H(t - Δt)`."
-function backwardstep!(problem, stencil, valuefunction::ValueFunction, Δt⁻¹, model::M, G::GR, calibration::Calibration; withnegative = false) where {N₁, N₂, S, M <: UnitIAM{S}, GR <: AbstractGrid{N₁,N₂,S}}
+function backwardstep!(problem, (stencil, source, adv), valuefunction::ValueFunction, Δt⁻¹, model::M, G::GR, calibration::Calibration; withnegative = false) where {N₁, N₂, S, M <: UnitIAM{S}, GR <: AbstractGrid{N₁,N₂,S}}
     # Construct the sparse LHS matrix
     problem.A .= constructA!(stencil, valuefunction, Δt⁻¹, model, G, calibration, withnegative)
 
     # Consutruct the RHS
-    constructb!(problem.b, valuefunction, Δt⁻¹, model, G, calibration)
+    constructsource!(source, valuefunction, Δt⁻¹, model, G, calibration)
+    problem.b .= source - adv
 
     sol = solve!(problem)
 
@@ -22,41 +23,28 @@ function updateovergrid!(H, u, θ)
 end
 
 "Iterate linear solver until convergence"
-function steadystate!(valuefunction::ValueFunction{S, N₁, N₂}, Δt::S, model::M, G::GR, calibration; timeiterations = 10_000, picarditerations = 2, printstep = 100, tolerance::Error{S} = Error{S}(1e-3, 1e-3), verbose = 0, withnegative = false, alg = KLUFactorization(), θ = 0.1) where {S, N₁, N₂, M <: UnitIAM{S}, GR <: AbstractGrid{N₁, N₂, S}}
+function steadystate!(valuefunction::ValueFunction{S, N₁, N₂}, Δt::S, model::M, G::GR, calibration; timeiterations = 10_000, printstep = 100, tolerance::Error{S} = Error{S}(1e-3, 1e-3), verbose = 0, withnegative = false, alg = KLUFactorization(), θ = 1.) where {S, N₁, N₂, M <: UnitIAM{S}, GR <: AbstractGrid{N₁, N₂, S}}
     Δt⁻¹ = 1 / Δt
-    stencil = makestencil(G)
-
+    
+    # Initialise problem
     source = constructsource(valuefunction, Δt⁻¹, model, G, calibration)
-    adv = constructadv(valuefunction, model, G, calibration)
+    adv = constructadv(valuefunction, model, G)
+    stencil = makestencil(G)
+    problemdata = (stencil, source, adv)
+
     A₀ = constructA!(stencil, valuefunction, Δt⁻¹, model, G, calibration, withnegative)
     b₀ = source - adv
 
     # Initialise the problem
     problem = LinearSolve.init(LinearProblem(A₀, b₀), alg)
+    backwardstep!(problem, problemdata, valuefunction, Δt⁻¹, model, G, calibration; withnegative)
     itererror = abserror(problem.u, valuefunction.H)
     
     for iter in 1:timeiterations  
-        constructadv!(adv, valuefunction, model, G, calibration)
-        for _ in 1:picarditerations # Stabilise quadratic approximation
-            constructsource!(source, valuefunction, Δt⁻¹, model, G, calibration)
-            problem.b .= source - adv  # Use fixed quadratic terms
-            
-            # Update only the linear parts of the operator (drift + diffusion)
-            problem.A = constructA!(stencil, valuefunction, Δt⁻¹, model, G, calibration, withnegative)
-            
-            sol = solve!(problem)
-            if !SciMLBase.successful_retcode(sol)
-                throw("Picard step solver failed at time $(valuefunction.t.t)!")
-            end
-            
-            updateovergrid!(valuefunction.H, problem.u, 0.1)
-        end
-    
-        backwardstep!(problem, stencil, valuefunction, Δt⁻¹, model, G, calibration; withnegative)
-
+        backwardstep!(problem, problemdata, valuefunction, Δt⁻¹, model, G, calibration; withnegative)
         itererror = abserror(problem.u, valuefunction.H)
 
-        updateovergrid!(valuefunction.H, problem.u, 0.3)
+        updateovergrid!(valuefunction.H, problem.u, θ)
 
         if itererror < tolerance
             return valuefunction, (iter, itererror)

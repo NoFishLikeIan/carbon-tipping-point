@@ -17,7 +17,7 @@ export γ, Eᵇ
 
 export Climate, TippingClimate, LinearClimate, JumpingClimate
 export Hogg, Feedback, Jump
-export ExponentialDecay, ConstantDecay
+export ExponentialDecay, ConstantDecay, SaturationDecay
 export δₘ, L, λ, μ, ∂μ∂T, ∂μ∂m
 export mstable, Tstable
 
@@ -26,7 +26,7 @@ export Damages
 export GrowthDamages, WeitzmanGrowth, Kalkuhl, NoDamageGrowth
 export LevelDamages, WeitzmanLevel, NoDamageLevel
 export β, β′, d, D, ϕ, A, ω
-export χopt
+export χopt, variance
 
 export Preferences, LogUtility, CRRA, LogSeparable, EpsteinZin
 export g, f, logg, discount

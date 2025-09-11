@@ -11,11 +11,11 @@ end
 function upperbound(t, Xᵢ, model, calibration, withnegative)
     ifelse(withnegative, 1.5, 1.) * ᾱ(t, Xᵢ, model, calibration)
 end
-function nstencil(::GR) where {N₁, N₂, GR <: AbstractGrid{N₁, N₂}}
-    9 * N₁ * N₂ - 2N₁ - 2N₂
+function stencilsize(::GR) where {N₁, N₂, GR <: AbstractGrid{N₁, N₂}}
+    7 * N₁ * N₂ - 2N₂
 end
 function makestencil(::GR) where {N₁, N₂, S, GR <: AbstractGrid{N₁, N₂, S}}
-    n = nstencil(G)
+    n = stencilsize(G)
     idx = Vector{Int}(undef, n)
     jdx = Vector{Int}(undef, n)
     data = Vector{S}(undef, n)
@@ -31,9 +31,6 @@ end
 function constructA!(stencil::StencilData{S}, V::ValueFunction{S, N₁, N₂}, Δt⁻¹, model::M, G::GR, calibration::Calibration, withnegative) where {N₁, N₂, S, M <: UnitIAM{S}, GR <: AbstractGrid{N₁, N₂, S}}
     (idx, jdx, data) = stencil
 
-    σₜ² = (model.climate.hogg.σₜ / model.climate.hogg.ϵ)^2 / 2
-    σₘ² = model.climate.hogg.σₘ^2 / 2
-
     t = V.t.t
     γₜ = γ(t, calibration)
     ωₜ = ω(t, model.economy.abatement)
@@ -45,6 +42,7 @@ function constructA!(stencil::StencilData{S}, V::ValueFunction{S, N₁, N₂}, �
     @inbounds for j in axes(G, 2), i in axes(G, 1)
         k = LinearIndex((i, j), G)
         Xᵢ = G[k]
+        σₜ² = variance(Xᵢ.T, model.climate.hogg)
 
         (ΔT₋, ΔT₊), (Δm₋, Δm₊) = steps(G, i, j)
  
@@ -55,13 +53,13 @@ function constructA!(stencil::StencilData{S}, V::ValueFunction{S, N₁, N₂}, �
         if (bᵀ ≥ 0 && i < N₁) || (bᵀ < 0 && i == 1)
             ∂ᵀH = (V.H[i + 1, j] - V.H[i, j]) / ΔT₊
 
-            z = bᵀ / ΔT₊ + 2σₜ² * ∂ᵀH
+            z = bᵀ / ΔT₊ + σₜ² * ∂ᵀH
             x = zero(S)
         else
             ∂ᵀH = (V.H[i, j] - V.H[i - 1, j]) / ΔT₋
             
             z = zero(S)
-            x = -bᵀ / ΔT₋ + 2σₜ² * ∂ᵀH
+            x = -bᵀ / ΔT₋ + σₜ² * ∂ᵀH
         end
 
         zdx = min(i + 1, N₁)
@@ -76,8 +74,8 @@ function constructA!(stencil::StencilData{S}, V::ValueFunction{S, N₁, N₂}, �
         # Temperature noise terms (second derivative)
         if i > 1 && i < N₁
             # Central difference for second derivative with variable spacing
-            νT₋ = 2σₜ² / (ΔT₋ * (ΔT₋ + ΔT₊))
-            νT₊ = 2σₜ² / (ΔT₊ * (ΔT₋ + ΔT₊))
+            νT₋ = σₜ² / (ΔT₋ * (ΔT₋ + ΔT₊))
+            νT₊ = σₜ² / (ΔT₊ * (ΔT₋ + ΔT₊))
             
             idx[entrydx] = k; jdx[entrydx] = LinearIndex((i - 1, j), G); data[entrydx] = -νT₋
             entrydx += 1
@@ -85,12 +83,12 @@ function constructA!(stencil::StencilData{S}, V::ValueFunction{S, N₁, N₂}, �
             entrydx += 1
             y -= (νT₋ + νT₊)
         elseif i == 1
-            νT = σₜ² / ΔT₊^2
+            νT = (σₜ² / 2) / ΔT₊^2
             idx[entrydx] = k; jdx[entrydx] = LinearIndex((i + 1, j), G); data[entrydx] = -νT
             entrydx += 1
             y -= νT
         elseif i == N₁
-            νT = σₜ² / ΔT₋^2
+            νT = (σₜ² / 2) / ΔT₋^2
             idx[entrydx] = k; jdx[entrydx] = LinearIndex((i - 1, j), G); data[entrydx] = -νT
             entrydx += 1
             y -= νT
@@ -124,22 +122,22 @@ function constructA!(stencil::StencilData{S}, V::ValueFunction{S, N₁, N₂}, �
 
             if H₊ < H₋ # Minimisation problem
                 V.α[k] = α₊         
-                z = bᵐ₊ / Δm₊ + 2σₘ² * ∂ᵐ₊H
+                z = bᵐ₊ / Δm₊
                 x = zero(S)
             else
                 V.α[k] = α₋
                 z = zero(S)
-                x = -bᵐ₋ / Δm₋ + 2σₘ² * ∂ᵐ₋H
+                x = -bᵐ₋ / Δm₋
             end        
         elseif bᵐ₊ > 0 && bᵐ₋ ≥ 0
             V.α[k] = α₊
 
-            z = bᵐ₊ / Δm₊ + 2σₘ² * ∂ᵐ₊H
+            z = bᵐ₊ / Δm₊
             x = zero(S)
         elseif bᵐ₊ ≤ 0 && bᵐ₋ < 0
             V.α[k] = α₋
 
-            x = -bᵐ₋ / Δm₋ + 2σₘ² * ∂ᵐ₋H
+            x = -bᵐ₋ / Δm₋
             z = zero(S)
         end
 
@@ -151,29 +149,6 @@ function constructA!(stencil::StencilData{S}, V::ValueFunction{S, N₁, N₂}, �
         idx[entrydx] = k; jdx[entrydx] = LinearIndex((i, xdx), G); data[entrydx] = -x
         entrydx += 1
         y -= (z + x)
-
-        # Carbon concentration noise terms (second derivative)
-        if j > 1 && j < N₂
-            # Central difference for second derivative with variable spacing
-            νm₋ = 2σₘ² / (Δm₋ * (Δm₋ + Δm₊))
-            νm₊ = 2σₘ² / (Δm₊ * (Δm₋ + Δm₊))
-            
-            idx[entrydx] = k; jdx[entrydx] = LinearIndex((i, j - 1), G); data[entrydx] = -νm₋
-            entrydx += 1
-            idx[entrydx] = k; jdx[entrydx] = LinearIndex((i, j + 1), G); data[entrydx] = -νm₊
-            entrydx += 1
-            y -= (νm₋ + νm₊)
-        elseif j == 1
-            νm = σₘ² / Δm₊^2
-            idx[entrydx] = k; jdx[entrydx] = LinearIndex((i, j + 1), G); data[entrydx] = -νm
-            entrydx += 1
-            y -= νm
-        elseif j == N₂
-            νm = σₘ² / Δm₋^2
-            idx[entrydx] = k; jdx[entrydx] = LinearIndex((i, j - 1), G); data[entrydx] = -νm
-            entrydx += 1
-            y -= νm
-        end
 
         idx[entrydx] = k; jdx[entrydx] = k; data[entrydx] = r - y
         entrydx += 1
@@ -200,21 +175,17 @@ function constructsource!(source, valuefunction::ValueFunction, Δt⁻¹, model:
     return source
 end
 
-"Constructs advection coefficient `adv(Hⁿ)`."
-function constructadv(valuefunction::ValueFunction, model::M, G::GR, calibration) where {N₁, N₂, S, M <: UnitIAM, GR <: AbstractGrid{N₁, N₂, S}}
-    constructadv!(Vector{S}(undef, length(G)), valuefunction, model, G, calibration)
+"Constructs advection coefficient `adv(Hⁿ)`, which is time independent."
+function constructadv(valuefunction::ValueFunction, model::M, G::GR) where {N₁, N₂, S, M <: UnitIAM, GR <: AbstractGrid{N₁, N₂, S}}
+    constructadv!(Vector{S}(undef, length(G)), valuefunction, model, G)
 end
-"Updates advection coefficient `adv(Hⁿ)`."
-function constructadv!(adv, valuefunction::ValueFunction, model::M, G::GR, calibration) where {N₁, N₂, S, M <: UnitIAM, GR <: AbstractGrid{N₁, N₂, S}}
-    γₜ = γ(valuefunction.t.t, calibration)
-
+"Updates advection coefficient `adv(Hⁿ)`, which is time independent."
+function constructadv!(adv, valuefunction::ValueFunction, model::M, G::GR) where {N₁, N₂, S, M <: UnitIAM, GR <: AbstractGrid{N₁, N₂, S}}
     @inbounds for j in axes(G, 2), i in axes(G, 1)
         k = LinearIndex((i, j), G)
 
         Xᵢ = G[k]
-        αᵢ = valuefunction.α[k]
-
-        (ΔT₋, ΔT₊), (Δm₋, Δm₊) = steps(G, i, j)
+        (ΔT₋, ΔT₊), _ = steps(G, i, j)
 
         bᵀ = μ(Xᵢ.T, Xᵢ.m, model.climate) / model.climate.hogg.ϵ
         ∂ᵀH = if (bᵀ ≥ 0 && i < N₁) || (bᵀ < 0 && i == 1)
@@ -223,56 +194,10 @@ function constructadv!(adv, valuefunction::ValueFunction, model::M, G::GR, calib
            (valuefunction.H[i, j] - valuefunction.H[i - 1, j]) / ΔT₋
         end
 
-        bᵐ = γₜ - αᵢ
-        ∂ᵐH = if (bᵐ ≥ 0 && j < N₂) || (bᵐ < 0 && j == 1)
-            (valuefunction.H[i, j + 1] - valuefunction.H[i, j]) / Δm₊
-        else
-           (valuefunction.H[i, j] - valuefunction.H[i, j - 1]) / Δm₋
-        end
-
-        adv[k] = (∂ᵀH * model.climate.hogg.σₜ / model.climate.hogg.ϵ)^2 + (∂ᵐH * model.climate.hogg.σₘ)^2
+        adv[k] = ∂ᵀH^2 * variance(Xᵢ.T, model.climate.hogg)
     end
 
     return adv
-end
-
-"Constructs source vector minus advection `b = Δt⁻¹ Hⁿ + l - adv(Hⁿ)`."
-function constructb(valuefunction::ValueFunction, Δt⁻¹, model::M, G::GR, calibration) where {N₁, N₂, S, M <: UnitIAM, GR <: AbstractGrid{N₁, N₂, S}}
-    constructb!(Vector{S}(undef, length(G)), valuefunction, Δt⁻¹, model, G, calibration)
-end
-"Updates source vector minus advection `b = Δt⁻¹ Hⁿ + l - adv(Hⁿ)`."
-function constructb!(b, valuefunction::ValueFunction, Δt⁻¹, model::M, G::GR, calibration) where {N₁, N₂, S, M <: UnitIAM, GR <: AbstractGrid{N₁, N₂, S}}
-    t = valuefunction.t.t
-    @inbounds for j in axes(G, 2), i in axes(G, 1)
-        k = LinearIndex((i, j), G)
-        Xᵢ = G[k]
-        αᵢ = valuefunction.α[k]
-        
-        source = l(t, Xᵢ, αᵢ, model, calibration) + Δt⁻¹ * valuefunction.H[k]
-        
-        γₜ = γ(t, calibration)
-        (ΔT₋, ΔT₊), (Δm₋, Δm₊) = steps(G, i, j)
-        
-        bᵀ = μ(Xᵢ.T, Xᵢ.m, model.climate) / model.climate.hogg.ϵ
-        ∂ᵀH = if (bᵀ ≥ 0 && i < size(G, 1)) || (bᵀ < 0 && i == 1)
-            (valuefunction.H[i + 1, j] - valuefunction.H[i, j]) / ΔT₊
-        else
-           (valuefunction.H[i, j] - valuefunction.H[i - 1, j]) / ΔT₋
-        end
-        
-        bᵐ = γₜ - αᵢ
-        ∂ᵐH = if (bᵐ ≥ 0 && j < N₂) || (bᵐ < 0 && j == 1)
-            (valuefunction.H[i, j + 1] - valuefunction.H[i, j]) / Δm₊
-        else
-           (valuefunction.H[i, j] - valuefunction.H[i, j - 1]) / Δm₋
-        end
-        
-        adv = (∂ᵀH * model.climate.hogg.σₜ / model.climate.hogg.ϵ)^2 + (∂ᵐH * model.climate.hogg.σₘ)^2
-        
-        b[k] = source - adv
-    end
-
-    return b
 end
 
 function centralpolicy!(valuefunction::ValueFunction{S, N₁, N₂}, model::M, G::GR, calibration; withnegative = false) where {N₁, N₂, S, M <: UnitIAM{S}, GR <: AbstractGrid{N₁, N₂, S}}

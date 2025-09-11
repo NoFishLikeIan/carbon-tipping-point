@@ -40,34 +40,38 @@ Base.@kwdef struct Jump{S <: Real}
 end
 
 abstract type Decay{S <: Real} end
-Base.@kwdef struct ConstantDecay{S} <: Decay{S}
-    δ::S = 0.0176
+struct ConstantDecay{S} <: Decay{S}
+    δ::S
 end
 struct ExponentialDecay{S} <: Decay{S}
     aδ::S
     bδ::S
     cδ::S
 end
+struct SaturationDecay{S} <: Decay{S}
+    δ₀::S
+    λ̲::S
+    δ̲::S
+    λ̅::S
+end
 
 Base.@kwdef struct Hogg{S <: Real}
-    # Defaults values
-    T₀::S = 1.33 # [K] in deviation from Tᵖ
-    Tᵖ::S = 287.15 # [K]
-    M₀::S = 563.88 # [p.p.m. CO₂e]
-    Mᵖ::S = 383.15 # [p.p.m. CO₂e]
-    N₀::S = 388.38 # [p.p.m.]
+    # Initial values
+    T₀::S # [K] in deviation from Tᵖ
+    Tᵖ::S # [K]
+    M₀::S # [p.p.m. CO₂e]
+    Mᵖ::S # [p.p.m. CO₂e]
 
-    S₀::S = 235.0 # [W m⁻²] Mean solar radiation
-
-    ϵ::S = 1.0440986343061285 # [yr J m⁻² K⁻¹] Speed of temperature
-    η::S = 5.67e-8 # Stefan-Boltzmann constant 
+    # Radiative dynamics
+    S₀::S # [W m⁻²] Mean solar radiation
+    ϵ::S # [yr J m⁻² K⁻¹] Speed of temperature
+    η::S # Stefan-Boltzmann constant 
     
-    G₁::S = 22.685575408165214 # [W m⁻²] Effect of CO₂ on radiation budget
-    G₀::S = 149.62958104691003 # [W m⁻²] Pre-industrial GHG radiation budget
+    G₁::S # [W m⁻²] Effect of CO₂ on radiation budget
+    G₀::S # [W m⁻²] Pre-industrial GHG radiation budget
 
     # Noise
-    σₜ::S = 0.1441620917527504 # Standard deviation of temperature
-    σₘ::S = 0.0078 # Standard deviation of CO₂e growth
+    σ::S # [K / √yr] Std of temperature
 end
 
 "Approximation of CO₂e concentration decay."
@@ -78,6 +82,11 @@ function δₘ(M, decay::ExponentialDecay)
     @unpack aδ, bδ, cδ = decay
 
     return aδ * exp(-((M - bδ) / cδ)^2)
+end
+function δₘ(M, decay::SaturationDecay)
+    @unpack δ₀, λ̲, δ̲, λ̅ = decay
+    
+    return δ₀ * exp(-λ̲ * M) + δ̲ * (1 - exp(-λ̅ * M))
 end
 
 abstract type Climate{S <: Real, D <: Decay{S}} end
@@ -175,6 +184,14 @@ function increase(T, climate::C) where {C <: JumpingClimate}
     climate.jump.j₀ + climate.jump.j₁ * ΔT + climate.jump.j₂ * ΔT^2
 end
 
+"Computes the temperature's standard deviation."
+function std(T, hogg::Hogg)
+    (hogg.σ / hogg.ϵ)
+end
+"Computes the temperature's variance."
+function variance(T, hogg::Hogg)
+    std(T, hogg)^2
+end
 
 "Arrival rate of jump"
 function intensity(T, climate::C) where {C <: JumpingClimate}

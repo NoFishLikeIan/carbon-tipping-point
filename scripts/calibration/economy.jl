@@ -78,7 +78,7 @@ begin # Fill in data coefficients
         abated = @. max(1 - E[validprices] / Eⁿᵖ, 1e-6)
         t = df[validprices, :Year] .- 2020.
         
-        valid_idx = mac .< 2.
+        valid_idx = 0 .< mac .< 0.2
         
         if any(valid_idx)
             append!(ts, t[valid_idx])
@@ -116,13 +116,12 @@ function objective(p, params)
     return residual / length(β′s)
 end
 
-# Initial parameter guess with lower b
-p₀ = MVector(0.00043, 0.05506, 0.0148, 2.2) # Lower initial b
+# Initial parameter guess using Hambel estimates
+p₀ = MVector(0.00264, 0.09, 0.025, 2.8)
 params = (ts, εs, β′s);
 
-# Constrain parameters to reasonable ranges with tighter bound on b
 lower = MVector(0., 0., 0., 2.)
-upper = MVector(Inf, Inf, Inf, 2.8)  # Much tighter upper bound for b
+upper = MVector(0.003, Inf, Inf, 3.)
 
 result = optimize(p -> objective(p, params), lower, upper, p₀, Fminbox(LBFGS()))
 
