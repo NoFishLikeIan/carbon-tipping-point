@@ -5,7 +5,7 @@ using CSV, JLD2
 using DataFrames, TidierData
 using SparseArrays, LinearAlgebra, StaticArrays
 using Optim
-using Plots, LaTeXStrings
+using Plots, LaTeXStrings, Printf
 
 using Model
 
@@ -77,11 +77,24 @@ begin # Fill in data coefficients
         mac = @. max(carbonprice[validprices] * Eⁿᵖ / Y[validprices], 1e-6)
         abated = @. max(1 - E[validprices] / Eⁿᵖ, 1e-6)
         t = df[validprices, :Year] .- 2020.
-
-        append!(ts, t)
-        append!(εs, abated)
-        append!(β′s, mac)
+        
+        valid_idx = mac .< 2.
+        
+        if any(valid_idx)
+            append!(ts, t[valid_idx])
+            append!(εs, abated[valid_idx])
+            append!(β′s, mac[valid_idx])
+        end
     end
+end
+
+begin
+    @printf "Data diagnostics:\n"
+    @printf "N observations: %d\n" length(β′s)
+    @printf "MAC range: %.4f to %.4f\n" minimum(β′s) maximum(β′s)
+    @printf "MAC mean: %.4f, median: %.4f\n" mean(β′s) median(β′s)
+    @printf "Abatement range: %.4f to %.4f\n" minimum(εs) maximum(εs)
+    @printf "Time range: %.1f to %.1f\n" minimum(ts) maximum(ts)
 end
 
 function Model.β′(t, ε, p::StaticVector{4, S}) where S <: Real
@@ -94,41 +107,43 @@ function objective(p, params)
     residual = 0.
 
     for k in eachindex(β′s)
-        mac = β′(ts[k], εs[k], p)
-        residual += abs2(β′s[k] - mac)
+        predicted = β′(ts[k], εs[k], p)
+        observed = β′s[k]
+        
+        residual += abs2(observed - predicted)
     end
 
     return residual / length(β′s)
 end
 
-# Initial parameter guess
-p₀ = MVector(0.00043, 0.05506, 0.0148, 1.95) # DICE initial condition
+# Initial parameter guess with lower b
+p₀ = MVector(0.00043, 0.05506, 0.0148, 2.2) # Lower initial b
 params = (ts, εs, β′s);
 
-# Constrain parameters to reasonable ranges
-lower = MVector(0., 0., 0., 1.)
-upper = MVector(1., 1., Inf, 2.8)  # Increased upper bound for b
+# Constrain parameters to reasonable ranges with tighter bound on b
+lower = MVector(0., 0., 0., 2.)
+upper = MVector(Inf, Inf, Inf, 2.8)  # Much tighter upper bound for b
 
 result = optimize(p -> objective(p, params), lower, upper, p₀, Fminbox(LBFGS()))
 
 begin
     ω̄, Δω, ρ, b = round.(result.minimizer, digits = 6)
 
-    println("Calibrated parameters:")
-    println("ω̄ = $(round(ω̄, digits=6))")
-    println("Δω = $(round(Δω, digits=6))")  
-    println("ρ = $(round(ρ, digits=6))")
-    println("b = $(round(b, digits=4))")
-    println("Objective value: $(round(result.minimum, digits=4))")
+    @printf "Calibrated parameters:\n"
+    @printf "ω̄ = %.6f\n" ω̄
+    @printf "Δω = %.6f\n" Δω
+    @printf "ρ = %.6f\n" ρ
+    @printf "b = %.4f\n" b
+    @printf "Objective value: %.4f\n" result.minimum
 end
 
 abatement = Abatement(ω̄, Δω, ρ, b)
-begin # Calculate R² for goodness of fit 
+begin 
     predicted = [β′(t, ε, abatement) for (t, ε) in zip(ts, εs)]
     residual = sum(abs2, β′s .- predicted)
     total = sum(abs2, β′s .- mean(β′s))
     R² = 1 - residual / total
-    println("R² = $(round(R², digits=4))")
+    @printf "R² = %.4f\n" R²
 end
 
 begin # Create a plot of β′ for various values of t
