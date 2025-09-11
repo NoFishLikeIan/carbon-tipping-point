@@ -5,8 +5,8 @@ function constructsampler(weights, domain)
     N = length(weights)
     space = range(domain[1], domain[2], N)
     u = range(0, 1, N)
-    elasticspace = similar(weights)
 
+    elasticspace = similar(weights)
     for (j, uⱼ) in enumerate(u)
         i = searchsortedfirst(F̂, uⱼ)
         if (i == 1) || uⱼ ≤ 0
@@ -38,7 +38,12 @@ struct ElasticGrid{N₁, N₂, S, R} <: AbstractGrid{N₁, N₂, S, R}
 
             return constructsampler(w, domain)
         end, 2)
-    
+
+        for (i, r) in enumerate(ranges)
+            if any(diff(r) .≤ 0)
+                throw(ArgumentError("Grid points in dimension $(i) must be strictly increasing"))
+            end
+        end
 
         return new{N[1],N[2],S,typeof(ranges[1])}(domains, ranges)
     end

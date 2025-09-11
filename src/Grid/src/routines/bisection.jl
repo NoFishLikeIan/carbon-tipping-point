@@ -59,7 +59,6 @@ function gss(f, a, b; tol = 1e-5)
     end
 end
 
-
 function gssmin(f, a, b; tol = 1e-5)
     Δ = b - a
     

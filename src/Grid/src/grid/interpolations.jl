@@ -1,4 +1,4 @@
-function interpolateovergrid(V::AbstractMatrix, fromgrid::RegularGrid, togrid::RegularGrid)
+function interpolateovergrid(V::AbstractMatrix, fromgrid::G₁, togrid::G₂) where {G₁ <: AbstractGrid, G₂ <: AbstractGrid}
     itp = linear_interpolation(fromgrid.ranges, V; extrapolation_bc = Line())
 
     return [itp(x.T, x.m) for x in togrid] 
