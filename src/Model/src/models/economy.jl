@@ -64,22 +64,19 @@ end
 
 d(_, _, damages::NoDamageGrowth{S}, args...) where S = zero(S)
 function d(T, m, damages::Kalkuhl, climate::C) where {C <: Climate}
-    ΔT = max(T - climate.hogg.Tᵖ, 0)
-    driftdamage = (damages.ξ₁ + damages.ξ₂ * ΔT) * μ(T, m, climate) / climate.hogg.ϵ
-    noisedamage = (climate.hogg.σₜ^2 * ΔT^2) / 2
+    driftdamage = (damages.ξ₁ + damages.ξ₂ * T) * max(μ(T, m, climate), 0) / climate.hogg.ϵ
+    noisedamage = (damages.ξ₂ / 2) * (T * climate.hogg.σₜ / climate.hogg.ϵ)^2
     return noisedamage + driftdamage
 end
 function d(T, _, damages::WeitzmanGrowth, climate::C) where {C <: Climate}
-    ΔT = max(T - climate.hogg.Tᵖ, 0)
-    return damages.ξ * ΔT^damages.ν
+    return damages.ξ * T^damages.ν
 end
 function d(T, damages::WeitzmanLevel, climate::C) where {C <: Climate}
-    ΔT = max(T - climate.hogg.Tᵖ, 0)
-    return inv(1 + damages.ξ * ΔT^2)
+    return inv(1 + damages.ξ * T^2)
 end
 
-function D(ΔT, damages::Kalkuhl)
-    damages.ξ₁ * ΔT + damages.ξ₂ * ΔT^2 / 2.
+function D(T, damages::Kalkuhl)
+    damages.ξ₁ * T + damages.ξ₂ * ΔT^2 / 2.
 end
 
 Base.broadcastable(damages::Damages) = Ref(damages)

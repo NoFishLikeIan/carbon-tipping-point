@@ -30,6 +30,6 @@ export χopt
 
 export Preferences, LogUtility, CRRA, LogSeparable, EpsteinZin
 export g, f, logg, discount
-export IAM, UnitIAM
+export IAM, UnitIAM, determinsticIAM
 
 end # module Model

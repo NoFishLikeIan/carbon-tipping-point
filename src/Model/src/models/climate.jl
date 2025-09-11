@@ -1,8 +1,8 @@
 const Gtonoverppm = 1 / 7.821
 
 Base.@kwdef struct Feedback{S <: Real}
-    Tᶜ::S
-    ΔS::S
+    Tᶜ::S # [K] Critical temperature in deviation from Tᵖ
+    ΔS::S # [W m⁻²] Additional forcing
     L::S
 end
 
@@ -51,10 +51,10 @@ end
 
 Base.@kwdef struct Hogg{S <: Real}
     # Defaults values
-    T₀::S = 288.55 # [K]
+    T₀::S = 1.33 # [K] in deviation from Tᵖ
     Tᵖ::S = 287.15 # [K]
-    M₀::S = 563.88 # [p.p.m. CO₂-eq]
-    Mᵖ::S = 383.15 # [p.p.m. CO₂-eq]
+    M₀::S = 563.88 # [p.p.m. CO₂e]
+    Mᵖ::S = 383.15 # [p.p.m. CO₂e]
     N₀::S = 388.38 # [p.p.m.]
 
     S₀::S = 235.0 # [W m⁻²] Mean solar radiation
@@ -120,10 +120,10 @@ end
 
 "Forcing due to incoming solar radiation."
 @fastpow function radiativeforcing(T, hogg::Hogg)
-    hogg.S₀ - hogg.η * T^4
+    hogg.S₀ - hogg.η * (T + hogg.Tᵖ)^4
 end
 @fastpow function radiativeforcing′(T, hogg::Hogg)
-    - 4hogg.η * T^3
+    -4hogg.η * (T + hogg.Tᵖ)^3
 end
 
 "Temperature drift."
@@ -181,4 +181,34 @@ function intensity(T, climate::C) where {C <: JumpingClimate}
     ΔT = T - climate.hogg.Tᵖ
     
     max(climate.jump.i₀ + climate.jump.i₁ / (1 + climate.jump.e₁ * exp(climate.jump.e₂ * ΔT)), 0)
+end
+
+
+function determnistichogg(hogg::Hogg{S}) where S
+    Hogg{S}(
+        T₀ = hogg.T₀,
+        Tᵖ = hogg.Tᵖ,
+        M₀ = hogg.M₀,
+        Mᵖ = hogg.Mᵖ,
+        N₀ = hogg.N₀,
+        S₀ = hogg.S₀,
+        ϵ = hogg.ϵ,
+        η = hogg.η,
+        G₁ = hogg.G₁,
+        G₀ = hogg.G₀,
+        σₜ = zero(S),
+        σₘ = zero(S)
+    )
+end
+
+function deterministicClimate(climate::LinearClimate)
+    LinearClimate(determnistichogg(climate.hogg), climate.decay)
+end
+
+function deterministicClimate(climate::TippingClimate)
+    TippingClimate(determnistichogg(climate.hogg), climate.decay, climate.feedback)
+end
+
+function deterministicClimate(climate::JumpingClimate)
+    JumpingClimate(determnistichogg(climate.hogg), climate.decay, climate.jump)
 end
