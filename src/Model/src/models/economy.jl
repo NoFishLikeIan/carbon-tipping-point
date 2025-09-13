@@ -4,6 +4,10 @@ struct Abatement{S <: Real}
     ρ::S # Speed of abatement technology cost reduction
     b::S # Coefficient of abatement fraction
 end
+struct PiecewiseAbatement{S <: Real, A₁ <: Abatement{S}, A₂ <: Abatement{S}}
+    abatement::A₁
+    sequestration::A₂
+end
 
 "Abatement tehcnology decay"
 function ω(t, abatement::Abatement)
@@ -18,6 +22,14 @@ function β(t, ε, abatement::Abatement)
 end
 function β′(t, ε, abatement::Abatement)
     abatement.b * ω(t, abatement) * ε^(abatement.b - 1)
+end
+
+function β(t, ε, piecewise::PiecewiseAbatement)
+    β(t, min(ε, 1), piecewise.abatement) + β(t, max(ε - 1, 0), piecewise.sequestration)
+end
+
+function β′(t, ε, piecewise::PiecewiseAbatement)
+    ε < 1 ? β′(t, ε, piecewise.abatement) :  β′(t, ε - 1, piecewise.sequestration)
 end
 
 Base.@kwdef struct Investment{S <: Real}
@@ -48,32 +60,22 @@ Base.@kwdef struct WeitzmanGrowth{S} <: GrowthDamages{S}
     ν::S = 3.25
 end
 Base.@kwdef struct Kalkuhl{S} <: GrowthDamages{S}
-    ξ₁::S = 0.0357 # Linear term in damage function
-    ξ₂::S = 0.0018 # Quadratic term in damage function
-end
-
-# Level Damages
-abstract type LevelDamages{S} <: Damages{S} end
-struct NoDamageLevel{S} <: LevelDamages{S} end
-Base.@kwdef struct WeitzmanLevel{S} <: Damages{S}
-    ξ::S = 0.00266
+    ξ₁::S = 0.035 # [1/°C]
+    ξ₂::S = 0.0018 # [1/°C²]
 end
 
 d(_, _, damages::NoDamageGrowth{S}, args...) where S = zero(S)
 function d(T, m, damages::Kalkuhl, climate::C) where {C <: Climate}
-    driftdamage = (damages.ξ₁ + damages.ξ₂ * T) * max(μ(T, m, climate), 0) / climate.hogg.ϵ
-    noisedamage = (damages.ξ₂ / 2) * variance(T, climate.hogg)
-    return noisedamage + driftdamage
+    driftdamage = damages.ξ₁ * μ(T, m, climate) / climate.hogg.ϵ
+    noisedamage = damages.ξ₂ * variance(T, climate.hogg) / 2
+    return driftdamage + noisedamage
 end
 function d(T, _, damages::WeitzmanGrowth, climate::C) where {C <: Climate}
     return damages.ξ * T^damages.ν
 end
-function d(T, damages::WeitzmanLevel, climate::C) where {C <: Climate}
-    return inv(1 + damages.ξ * T^2)
-end
 
 function D(T, damages::Kalkuhl)
-    damages.ξ₁ * T + damages.ξ₂ * ΔT^2 / 2.
+    damages.ξ₁ * T + damages.ξ₂ * T^2 / 2.
 end
 
 Base.broadcastable(damages::Damages) = Ref(damages)

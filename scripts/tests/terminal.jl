@@ -42,10 +42,7 @@ begin # Construct the model
     @unpack calibration, hogg, feedbacklower, feedback, feedbackhigher, decay = climatefile
     close(climatefile)
 
-    # FIXME: Temporary parameters
-    decay = ConstantDecay(0.)
-
-    threshold = 2.5
+    threshold = 2.5 # Inf
     climate = if 0 < threshold < Inf
         feedback = Model.updateTᶜ(threshold, feedback)
         TippingClimate(hogg, decay, feedback)
@@ -54,28 +51,28 @@ begin # Construct the model
     end
 
     preferences = LogSeparable()
-
     model = IAM(climate, economy, preferences)
 end
 
 begin
     N₁ = 51; N₂ = 51;  # Smaller grid for testing
     N = (N₁, N₂)
-    Tdomain = (0.0, 7.0)  # Smaller, safer domain
+    Tdomain = (0.5, 12.)  # Smaller, safer domain
     mmin = mstable(Tdomain[1] + 0.5, model.climate)
     mmax = mstable(Tdomain[2] - 0.5, model.climate)
     mdomain = (mmin, mmax)
     domains = (Tdomain, mdomain)
-    withnegative = true
+    withnegative = false
 
-    G = constructelasticgrid(N, domains, model)
-    Δt⁻¹ = 200.
+    G = RegularGrid(N, domains)
+    Δt⁻¹ = 50
     Δt = 1 / Δt⁻¹
-    τ = 0.
+    τ = 500.
 end;
 
+valuefunction = ValueFunction(τ, climate, G, calibration)
+
 if false # Optimisation Gif
-    valuefunction = ValueFunction(τ, climate, G, calibration)
     source = constructsource(valuefunction, Δt⁻¹, model, G, calibration)
     adv = constructadv(valuefunction, model, G)
     stencil = makestencil(G)
@@ -89,7 +86,7 @@ if false # Optimisation Gif
     Tspace, mspace = G.ranges
     nullcline = [mstable(T, model.climate) for T in Tspace]
     m₀ = log(hogg.M₀ / hogg.Mᵖ)
-    nframes = 1000
+    nframes = 5000
     @gif for iter in 1:nframes
         if (iter % (nframes ÷ 100)) == 0 print("Iteration $iter / $nframes.\r") end
 
@@ -98,10 +95,10 @@ if false # Optimisation Gif
 
         if any(isnan.(valuefunction.H)) @warn "NaN value in H" end
 
-        valuefig = contourf(mspace, Tspace, valuefunction.H; title = "Value Function H", xlabel = L"m", ylabel = L"T", c=:viridis, xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
+        valuefig = contourf(mspace, Tspace, valuefunction.H; title = "Value Function H ($iter)", xlabel = L"m", ylabel = L"T", c=:viridis, xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
         
         emissionsreduction = ε(valuefunction, model, calibration, G)
-        abatementfig = contourf(mspace, Tspace, emissionsreduction; title = "Abatement", xlabel = L"m", ylabel = L"T", c=:Greens, xlims = extrema(mspace), ylims = extrema(Tspace), clims = (0, max(1, maximum(emissionsreduction))), linewidth = 0.)
+        abatementfig = contourf(mspace, Tspace, emissionsreduction; title = "Abatement ($iter)", xlabel = L"m", ylabel = L"T", c=:Greens, xlims = extrema(mspace), ylims = extrema(Tspace), clims = (0, max(1, maximum(emissionsreduction))), linewidth = 0.)
 
         for fig in (abatementfig, valuefig)
             plot!(fig, nullcline, Tspace; label = false, c = :white)
@@ -110,23 +107,27 @@ if false # Optimisation Gif
 
         plot(abatementfig, valuefig; layout=(1,2), size = 600 .* (2√2, 1))
 
-    end every 5
+    end every 100
 end
 
-valuefunction, result = steadystate!(valuefunction, Δt, model, G, calibration; verbose = 1, tolerance = Error(1e-4, 1e-4), timeiterations = 10_000, printstep = 100, withnegative)
+valuefunction, result = steadystate!(valuefunction, Δt, model, G, calibration; verbose = 1, tolerance = Error(1e-4, 1e-4), timeiterations = 100_000, printstep = 100, withnegative, θ = 1.)
 
 if isinteractive()
-    Tspace, mspace = G.ranges
-    nullcline = [mstable(T, model.climate) for T in Tspace]
+    Gfig = shrink(G, (0., 0.05))
+    Vfig = interpolateovergrid(valuefunction, G, Gfig)
 
-    e = ε(valuefunction, model, calibration, G)
+    Tspace, mspace = Gfig.ranges
+    nullcline = [mstable(T, model.climate) for T in Tspace]
+    m₀ = log(hogg.M₀ / hogg.Mᵖ)
     
-    policyfig = contourf(mspace, Tspace, e; title = "Drift of CO2e", xlabel = L"m", ylabel = L"T", c=:Greens, xlims = extrema(mspace), ylims = extrema(Tspace), clims = (0, max(1, maximum(e))), linewidth = 0.)
-    valuefig = contourf(mspace, Tspace, valuefunction.H; title = "Value Function H", xlabel = L"m", ylabel = L"T", c=:viridis, xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
+    e = ε(Vfig, model, calibration, Gfig)
+    
+    policyfig = contourf(mspace, Tspace, e; title = "Emissions abated τ = $τ", xlabel = L"m", ylabel = L"T", c=:viridis, xlims = extrema(mspace), ylims = extrema(Tspace), clims = (0, max(1, maximum(e))), linewidth = 0, levels = 101)
+    valuefig = contourf(mspace, Tspace, Vfig.H; title = "Value Function H τ = $τ", xlabel = L"m", ylabel = L"T", c=:viridis, xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
 
     for fig in (policyfig, valuefig)
         plot!(fig, nullcline, Tspace; label = false, c = :white)
-        scatter!(fig, [log(hogg.M₀ / hogg.Mᵖ)], [hogg.T₀]; label = false, c = :white)
+        scatter!(fig, [m₀], [hogg.T₀]; label = false, c = :white)
     end
 
     jointfig = plot(policyfig, valuefig; layout=(1,2), size = 600 .* (2√2, 1))

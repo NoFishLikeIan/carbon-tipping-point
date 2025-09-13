@@ -71,7 +71,8 @@ Base.@kwdef struct Hogg{S <: Real}
     G₀::S # [W m⁻²] Pre-industrial GHG radiation budget
 
     # Noise
-    σ::S # [K / √yr] Std of temperature
+    σ::S # [K^α / √yr] Std of temperature
+    α::S # Power of temperature in noise term
 end
 
 "Approximation of CO₂e concentration decay."
@@ -186,7 +187,7 @@ end
 
 "Computes the temperature's standard deviation."
 function std(T, hogg::Hogg)
-    (hogg.σ / hogg.ϵ)
+    (T^hogg.α * hogg.σ / hogg.ϵ)
 end
 "Computes the temperature's variance."
 function variance(T, hogg::Hogg)
@@ -207,14 +208,13 @@ function determnistichogg(hogg::Hogg{S}) where S
         Tᵖ = hogg.Tᵖ,
         M₀ = hogg.M₀,
         Mᵖ = hogg.Mᵖ,
-        N₀ = hogg.N₀,
         S₀ = hogg.S₀,
         ϵ = hogg.ϵ,
         η = hogg.η,
         G₁ = hogg.G₁,
         G₀ = hogg.G₀,
-        σₜ = zero(S),
-        σₘ = zero(S)
+        σ = zero(S),
+        α = hogg.α
     )
 end
 

@@ -449,10 +449,10 @@ begin # Initialize the temperature matching problem
     T₀ = T̂[1]
     u₀ = SVector(m₀, T₀)
 
-    α₀ = 1/2
+    α₀ = 1.2
     ϵ₀ = 0.15
     σ₀ = 0.01
-    p₀ = SVector(ϵ₀, σ₀)
+    p₀ = SVector(ϵ₀, σ₀, α₀)
 end;
 
 # --- Optimization of ϵ first
@@ -497,20 +497,20 @@ end end
 # Optimize loss second
 function noiselinear(u, parameters, t)
     p = first(parameters)
-    ϵ, σ = p 
+    ϵ, σ, α = p
     T = u[2]
 
-    return SVector(0., T * (σ / ϵ))
+    return SVector(0., T^α * (σ / ϵ))
 end
 
-noiseprob = SDEProblem(Flinear, noiselinear, u₀, ghgspan, ((ϵ, σ₀), defaults))
+noiseprob = SDEProblem(Flinear, noiselinear, u₀, ghgspan, ((ϵ, σ₀, α₀), defaults))
 ensemblenoiseprob = EnsembleProblem(noiseprob)
 
 function quantileloss(σ, noiseoptparams)
     ensemblenoiseprob, T̂spread = noiseoptparams
-    (ϵ, _), defaults = ensemblenoiseprob.prob.p
+    (ϵ, _, α), defaults = ensemblenoiseprob.prob.p
 
-    simparameters = (SVector(ϵ, σ), defaults)
+    simparameters = ((ϵ, σ, α), defaults)
     sim = solve(ensemblenoiseprob, ImplicitEM(); p = simparameters, saveat = 1., save_idxs = 2, trajectories = 500)
 
     if !sim.converged return Inf end
@@ -526,7 +526,7 @@ begin
 end
 
 if isinteractive() let
-    p = SVector(ϵ, σ)
+    p = SVector(ϵ, σ, α₀)
     parameters = (p, defaults)
     sol = solve(ensemblenoiseprob, ImplicitEM(); p = parameters, save_idxs = 2, saveat = 1., trajectories = 1_000)
     quantiles = timestep_quantile(sol, (0.05, 0.5, 0.95), 1:81)
@@ -549,7 +549,6 @@ if isinteractive() let
 
     obsfig
 end end
-
 
 if isinteractive() # Check calibration
     u₀ = SVector(m₀, T₀)
@@ -588,8 +587,9 @@ end
 begin # Hogg definition
     hogg = Hogg(
         T₀=T₀, Tᵖ=Tᵖ, M₀=M₀, Mᵖ=Mᵖ,
-        S₀ = S₀, η = η,
-        ϵ=ϵ, G₀=G₀, G₁=G₁, σ=σ
+        S₀=S₀, η=η, ϵ=ϵ, 
+        G₀=G₀, G₁=G₁,
+        σ=σ, α=α₀
     )
 
     linearclimate = LinearClimate(hogg, decay)
@@ -752,11 +752,11 @@ function extendedcoupledsystem!(du, u, parameters, t)
     baselineyear = calibration.calibrationspan[1]
 
     du[1] = γ(t - baselineyear, calibration)
-    dT[1] = μ(T[1], m, linearclimate)
+    dT[1] = μ(T[1], m, linearclimate) / linearclimate.hogg.ϵ
 
     for (i, feedback) in enumerate(feedbacks)
         tippingclimate = TippingClimate(linearclimate.hogg, linearclimate.decay, feedback)
-        dT[i + 1] = μ(T[i + 1], m, tippingclimate)
+        dT[i + 1] = μ(T[i + 1], m, tippingclimate) / linearclimate.hogg.ϵ
     end
 end;
 

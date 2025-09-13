@@ -4,14 +4,17 @@ function interpolateovergrid(V::AbstractMatrix, fromgrid::G₁, togrid::G₂) wh
     return [itp(x.T, x.m) for x in togrid] 
 end
 
-function shrink(domain::Domain, factor)
+function shrink(domain::Domain, factors)
+    leftfactor, rightfactor = factors
     l, r = domain
-    cut = (r - l) * factor / 2
+    
+    leftcut = (r - l) * leftfactor
+    rightcut = (r - l) * rightfactor
 
-    return (l + cut, r - cut)
+    return (l + leftcut, r - rightcut)
 end
 function shrink(G::RegularGrid{N₁, N₂}, factor) where {N₁, N₂}
-    RegularGrid((N₁, N₂), shrink.(G.domains, factor))
+    RegularGrid((N₁, N₂), shrink.(G.domains, Ref(factor)))
 end
 function halfgrid(G::RegularGrid{N₁, N₂}) where {N₁, N₂}
     RegularGrid((N₁ ÷ 2, N₂ ÷ 2), G.domains)

@@ -21,7 +21,7 @@ export ExponentialDecay, ConstantDecay, SaturationDecay
 export δₘ, L, λ, μ, ∂μ∂T, ∂μ∂m
 export mstable, Tstable
 
-export Economy, Abatement, Investment
+export Economy, Abatement, Investment, PiecewiseAbatement
 export Damages
 export GrowthDamages, WeitzmanGrowth, Kalkuhl, NoDamageGrowth
 export LevelDamages, WeitzmanLevel, NoDamageLevel

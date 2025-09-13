@@ -14,7 +14,7 @@ end
 function stencilsize(::GR) where {N₁, N₂, GR <: AbstractGrid{N₁, N₂}}
     7 * N₁ * N₂ - 2N₂
 end
-function makestencil(::GR) where {N₁, N₂, S, GR <: AbstractGrid{N₁, N₂, S}}
+function makestencil(G::GR) where {N₁, N₂, S, GR <: AbstractGrid{N₁, N₂, S}}
     n = stencilsize(G)
     idx = Vector{Int}(undef, n)
     jdx = Vector{Int}(undef, n)
@@ -198,6 +198,27 @@ function constructadv!(adv, valuefunction::ValueFunction, model::M, G::GR) where
     end
 
     return adv
+end
+
+function centralderivative(valuefunction::ValueFunction{S, N₁, N₂}, G::GR) where {N₁, N₂, S, GR <: AbstractGrid{N₁, N₂, S}}
+    @unpack H = valuefunction
+
+    ∂Hₘ = similar(H)
+
+    @inbounds for j in axes(H, 2), i in axes(H, 1)
+        _, (Δm₋, Δm₊) = steps(G, i, j)
+        
+        ∂Hₘ[i, j] = if j == 1
+            (H[i, j + 1] - H[i, j]) / Δm₊
+        elseif j == size(H, 2)
+            (H[i, j] - H[i, j - 1]) / Δm₋
+        else
+            (H[i, j + 1] - H[i, j - 1]) / (Δm₋ + Δm₊)
+        end
+    end
+
+    return ∂Hₘ
+
 end
 
 function centralpolicy!(valuefunction::ValueFunction{S, N₁, N₂}, model::M, G::GR, calibration; withnegative = false) where {N₁, N₂, S, M <: UnitIAM{S}, GR <: AbstractGrid{N₁, N₂, S}}

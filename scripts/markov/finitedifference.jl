@@ -78,31 +78,21 @@ function backwardsimulation!(
         tverbose = copy(valuefunction.t.t)
     end
 
-    Δt⁻¹ = 1 / Δt
-    stencil = makestencil(G)
+    # Initialise problem
     source = constructsource(valuefunction, Δt⁻¹, model, G, calibration)
-    adv = constructadv(valuefunction, model, G, calibration)
+    adv = constructadv(valuefunction, model, G)
+    stencil = makestencil(G)
+    problemdata = (stencil, source, adv)
+
     A₀ = constructA!(stencil, valuefunction, Δt⁻¹, model, G, calibration, withnegative)
     b₀ = source - adv
 
-    problem = LinearSolve.init(LinearProblem(A₀, b₀), alg) # Initialise the problem
+    # Initialise the problem
+    problem = LinearSolve.init(LinearProblem(A₀, b₀), alg)
+    backwardstep!(problem, problemdata, valuefunction, Δt⁻¹, model, G, calibration; withnegative)
  
     while t₀ < valuefunction.t.t
-        constructadv!(adv, valuefunction, model, G, calibration)
-        for _ in 1:picarditerations
-            constructsource!(source, valuefunction, Δt⁻¹, model, G, calibration)
-            problem.b .= source - adv  # Use fixed quadratic terms
-            problem.A = constructA!(stencil, valuefunction, Δt⁻¹, model, G, calibration, withnegative)
-            
-            sol = solve!(problem)
-            if !SciMLBase.successful_retcode(sol)
-                throw("Picard step solver failed at time $(valuefunction.t.t)!")
-            end
-            
-            updateovergrid!(valuefunction.H, problem.u, θ)
-        end
-    
-        backwardstep!(problem, stencil, valuefunction, Δt⁻¹, model, G, calibration; withnegative)
+        backwardstep!(problem, problemdata, valuefunction, Δt⁻¹, model, G, calibration; withnegative)
         updateovergrid!(valuefunction.H, problem.u, 1.)
 
         valuefunction.t.t -= Δt
