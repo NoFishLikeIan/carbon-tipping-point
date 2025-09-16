@@ -302,7 +302,7 @@ end
 # --- Computing parametric emissions form
 begin # Setup CO₂e maximisation problem
     baselineyear = 2020.
-    τ = 2200. - baselineyear
+    τ = 2150. - baselineyear
     co2tspan = baselineyear .+ (0., τ)
 
     tdxs = baselineyear .≤ co2equivalence.Year .≤ (baselineyear + τ)
@@ -362,17 +362,15 @@ if isinteractive() # Check cumulative emissions vs concentration
 end
 
 function saturationdecay(M, p)
-    δ₀, λ̲, δ̲, λ̅ = p
-    earlycomponent = δ₀ * exp(-λ̲ * M)
-    latecomponent = δ̲ * (1 - exp(-λ̅ * M))
-    
-    return earlycomponent + latecomponent
+    δ₀, α, δ₁, β, Mᶜ, δ̄ = p
+    ΔM = M - Mᶜ
+
+    return δ₀ * exp(-α * ΔM) - δ₁ * exp(-β * ΔM) + δ̄
 end
 
 begin # Compute decay rate observations
     γ̂ = [γ(t - baselineyear, calibration) for t in co2calibrationdf.Year]
     δ̂ = co2calibrationdf.Emissions ./ Mₜ - γ̂
-    p₀ = MVector(0.006, 0.005, -0.003, 0.001)
 end
 
 function decayloss(p, optparameters)
@@ -385,19 +383,28 @@ end
 begin # Solve parameters of saturation decay
     decaylossfn = Optimization.OptimizationFunction(decayloss, AutoForwardDiff());
     optparameters = (Mₜ, δ̂);
-    decayproblem = Optimization.OptimizationProblem(decaylossfn, p₀, optparameters)
-    decaysol = solve(decayproblem, LBFGS())
+    
+    # Bounds for double exponential parameters
+    p₀ = MVector(0.005, 0.002, 0.007, 0.001, 1100.0, 0.001)  # δ₀, α, δ₁, β, Mᶜ, δ̄
+    lb = MVector(0.0, 0., 0.0, 0., 0., -Inf) # δ₀, α, δ₁, β, Mᶜ, δ̄
+    ub = MVector(Inf, Inf, Inf, Inf, Inf, 0.002)
+    
+    decayproblem = Optimization.OptimizationProblem(decaylossfn, p₀, optparameters; lb=lb, ub=ub)
+    decaysol = solve(decayproblem, Fminbox(LBFGS()); iterations = 100_000)
 
-    decay = SaturationDecay(decaysol.u...)
+    decay = SaturationRecoveryDecay(decaysol.u...)
 end
 
 if isinteractive() # Check cumulative emissions vs concentration
-    Mspace = range(extrema(Mₜ)..., 101)
-    δfig = scatter(Mₜ, δ̂; xlabel = L"M_t", ylabel = L"\delta", label = "Data", markersize = 2)
-    plot!(Mₜ, M -> δₘ(M, decay) ; c=:black, label = "Fit")
+    Mspace = range(minimum(Mₜ), 1.2maximum(Mₜ), 202)
+    yticks = -0.003:0.001:0.003
+    yticklabels = [L"%$(100y) \%" for y in yticks]
+
+    δfig = scatter(Mₜ, δ̂; xlabel = L"M", ylabel = L"Decay rate $\delta$", label = L"Implied decay $\hat{\delta}$", markersize = 2, c = :black, ytick = (yticks, yticklabels), ylims = extrema(yticks))
+    plot!(Mspace, M -> δₘ(M, decay) ; c=:black, label = L"Fit $\delta_m(M)$")
 
     if SAVEFIG
-        savefig(gapfig, joinpath(PLOTPATH, "delta.tikz"))
+        savefig(δfig, joinpath(PLOTPATH, "delta.tikz"))
     end
 
     δfig
@@ -441,8 +448,7 @@ begin
 end
 
 begin # Initialize the temperature matching problem
-    defaults = (calibration, baselineyear, η, S₀, G₀, G₁, Tᵖ)
-
+    constants = (η, S₀, G₀, G₁, Tᵖ)
     T̂upper = nptemperature[t₀ .≤ nptemperature.Year .≤ t₁, "T upper"]
     T̂lower = nptemperature[t₀ .≤ nptemperature.Year .≤ t₁, "T lower"]
 
@@ -456,13 +462,54 @@ begin # Initialize the temperature matching problem
 end;
 
 # --- Optimization of ϵ first
+function dTimpulse(T, parameters, t)
+    toestimate, constants, impulse = parameters
+    ϵ = toestimate[1]
+    m = impulse[1]
+    
+    η, S, G₀, G₁, Tᵖ = constants
+
+    r = S - η * (T + Tᵖ)^4 # Forcing without tipping element
+    ghgforcing = G₀ + G₁ * m
+
+    return (r + ghgforcing) / ϵ
+end
+
+begin
+    m̄ = (η * (T₀ + Tᵖ)^4 - (S₀ + G₀)) / G₁
+    Δm = log((M₀ + 47 / 0.75) / Mᵖ) # ≈ 47 p.p.m. increase
+    T̄ = find_zero(T -> S₀ - η * (T + Tᵖ)^4 + G₀ + G₁ * Δm, T₀ + Tᵖ)
+    impulse = (Δm, T₀, T̄)
+end
+
+function distancetohalf(T, t, integrator)
+    impulse = integrator.p[end]
+    _, T₀, T̄ = impulse
+
+    return (T̄ - T) - (T̄ - T₀) / 2
+end
+
+impulseproblem = ODEProblem(dTimpulse, T₀, ghgspan, (p₀, constants, impulse))
+
+halflifeloss = ϵ -> begin
+    toestimate = (ϵ, σ₀, α₀)
+
+    sol = solve(impulseproblem, KenCarp4(); p = (toestimate, constants, impulse), callback = ContinuousCallback(distancetohalf, terminate!), save_everystep = false, save_start = false, save_end = false)
+
+    t̄ = (sol.t[end] - baselineyear)
+
+    return SciMLBase.successful_retcode(sol) ? abs2(t̄ - 1 / 4) : Inf
+end
+
+_, ϵ = gssmin(halflifeloss, 0.01, 5.)
+
 function Flinear(u, parameters, t)
-    p, defaults = parameters
-    ϵ = p[1]
-    calibration, baselineyear, η, S, G₀, G₁, Tᵖ = defaults
+    toestimate, defaults = parameters
+    ϵ = toestimate[1]
+    calibration, baselineyear, η, S₀, G₀, G₁, Tᵖ = defaults
 
     m, T = u
-    r = S - η * (T + Tᵖ)^4 # Forcing without tipping element
+    r = S₀ - η * (T + Tᵖ)^4 # Forcing without tipping element
     ghgforcing = G₀ + G₁ * m
 
     dm = γ(t - baselineyear, calibration)
@@ -470,21 +517,13 @@ function Flinear(u, parameters, t)
 
     return SVector(dm, dT)
 end
-medianprob = ODEProblem(Flinear, u₀, ghgspan, (p₀, defaults))
-function medianloss(ϵ, medianoptparameters)
-    medianprob, T̂ = medianoptparameters
-    p, defaults = medianprob.p
 
-    parameters = (SVector(ϵ, p[2]), defaults)
-    sol = solve(medianprob, KenCarp4(); p = parameters, save_idxs = 2, saveat = 1.)
-
-    return SciMLBase.successful_retcode(sol) ? sum(abs2, sol.u .- T̂) : Inf
-end
-_, ϵ = gssmin(ϵ -> medianloss(ϵ, (medianprob, T̂)), 0.01, 2.0)
+defaults = (calibration, baselineyear, η, S₀, G₀, G₁, Tᵖ)
 
 if isinteractive() let
     p = SVector(ϵ, σ₀, α₀)
-    sol = solve(medianprob, KenCarp4(); p = (p, defaults), save_idxs = 2, saveat = 1.)
+    npmedianprob = ODEProblem(Flinear, u₀, ghgspan, (p, defaults))
+    sol = solve(npmedianprob, KenCarp4(); save_idxs = 2, saveat = 1.)
 
     compfig = plot(xlabel="Year", ylabel=L"Temperature $[\si{\degree}]$", title=L"Comparison: $\hat{T}$ vs fitted $T$ with $\epsilon$", legend=:topleft)
 
@@ -724,10 +763,9 @@ begin # Calibrate adjustment speed
         coupledprob = ODEProblem(coupledsystem, u₀, extrema(subdf.Year), parameters)
 
         ΔTtrajectory = subdf.T_Coupled .- subdf.T_Uncoupled
-        optparameters = (coupledprob, ΔTtrajectory)
 
         objfunction = Optimization.OptimizationFunction(tippingelementloss, adtype; cons=constraints!)
-        optproblem = Optimization.OptimizationProblem(objfunction, p₀, optparameters; lcons, ucons)
+        optproblem = Optimization.OptimizationProblem(objfunction, p₀, (coupledprob, ΔTtrajectory); lcons, ucons)
 
         teresult = solve(optproblem, IPNewton(); iterations=10_000)
         Tᶜ, ΔS, L = teresult.u
@@ -794,6 +832,7 @@ if isinteractive()
 
     nullclinefig
 end
+
 
 # Save outcome of calibration in file
 jldopen(joinpath(calibrationpath, "climate.jld2"), "w+") do file

@@ -3,13 +3,26 @@ function αopt(t, Xᵢ::Point, ∂ₘH, model::M, calibration::Calibration) wher
 
     if ∂ₘH ≤ 0 return zero(S) end
 
-    num = ∂ₘH * ᾱ(t, Xᵢ, model, calibration)^economy.abatement.b
-    den = economy.abatement.b * A(t, economy.investments) * ω(t, economy.abatement) * (preferences.θ - 1)
+    @unpack abatement, investments = economy
+    b = abatement.b
 
-    return (num / den)^inv(economy.abatement.b - 1)
+    num = ∂ₘH * ᾱ(t, Xᵢ, model, calibration)^b
+    den = b * A(t, investments) * ω(t, abatement) * (preferences.θ - 1)
+
+    return (num / den)^inv(b - 1)
 end
-function upperbound(t, Xᵢ, model, calibration, withnegative)
-    ifelse(withnegative, 1.5, 1.) * ᾱ(t, Xᵢ, model, calibration)
+function implicit∂ₘH(t, Xᵢ::Point, αᵢ, model::M, calibration::Calibration) where {S, M <: UnitIAM{S}}
+    @unpack economy, preferences = model
+    
+    if αᵢ ≤ 0 return zero(αᵢ) end
+    
+    b = economy.abatement.b
+    
+    return αᵢ^(b - 1) * b * A(t, economy.investments) * ω(t, economy.abatement) * (preferences.θ - 1) / ᾱ(t, Xᵢ, model, calibration)^b
+end
+
+function upperbound(t, Xᵢ, model::M, calibration::Calibration, withnegative) where {S, M <: UnitIAM{S}}
+    ifelse(withnegative, 2, 1) * ᾱ(t, Xᵢ, model, calibration)
 end
 function stencilsize(::GR) where {N₁, N₂, GR <: AbstractGrid{N₁, N₂}}
     7 * N₁ * N₂ - 2N₂
@@ -33,7 +46,6 @@ function constructA!(stencil::StencilData{S}, V::ValueFunction{S, N₁, N₂}, �
 
     t = V.t.t
     γₜ = γ(t, calibration)
-    ωₜ = ω(t, model.economy.abatement)
     r = model.preferences.ρ + Δt⁻¹
 
     n = length(G)
@@ -53,13 +65,13 @@ function constructA!(stencil::StencilData{S}, V::ValueFunction{S, N₁, N₂}, �
         if (bᵀ ≥ 0 && i < N₁) || (bᵀ < 0 && i == 1)
             ∂ᵀH = (V.H[i + 1, j] - V.H[i, j]) / ΔT₊
 
-            z = bᵀ / ΔT₊ + σₜ² * ∂ᵀH
+            z = bᵀ / ΔT₊
             x = zero(S)
         else
             ∂ᵀH = (V.H[i, j] - V.H[i - 1, j]) / ΔT₋
             
             z = zero(S)
-            x = -bᵀ / ΔT₋ + σₜ² * ∂ᵀH
+            x = -bᵀ / ΔT₋
         end
 
         zdx = min(i + 1, N₁)
@@ -96,49 +108,55 @@ function constructA!(stencil::StencilData{S}, V::ValueFunction{S, N₁, N₂}, �
 
         # Carbon concentration is controlled
         αmax = upperbound(t, Xᵢ, model, calibration, withnegative)
+        
+        # Forward direction (positive drift)
         if j < N₂
             ∂ᵐ₊H = (V.H[i, j + 1] - V.H[i, j]) / Δm₊
             α₊ = clamp(αopt(t, Xᵢ, ∂ᵐ₊H, model, calibration), 0, αmax)
-            bᵐ₊ = γₜ - α₊
         else
-            α₊ = ᾱ(t, Xᵢ, model, calibration)
-            ∂ᵐ₊H = γₜ * ωₜ * (model.preferences.θ - 1) / α₊^2
-            bᵐ₊ = zero(S)
+            α₊ = γₜ
+            ∂ᵐ₊H = implicit∂ₘH(t, Xᵢ, α₊, model, calibration)
         end
+
+        bᵐ₊ = γₜ - α₊
 
         if j > 1
             ∂ᵐ₋H = (V.H[i, j] - V.H[i, j - 1]) / Δm₋
             α₋ = clamp(αopt(t, Xᵢ, ∂ᵐ₋H, model, calibration), 0, αmax)
-            bᵐ₋ = γₜ - α₋
         else
-            α₋ = ᾱ(t, Xᵢ, model, calibration)
-            ∂ᵐ₋H = γₜ * ωₜ * (model.preferences.θ - 1) / α₋^2
-            bᵐ₋ = zero(S)
+            α₋ = γₜ
+            ∂ᵐ₋H = implicit∂ₘH(t, Xᵢ, α₋, model, calibration)
         end
         
-        if bᵐ₊ ≥ 0 && bᵐ₋ ≤ 0
+        bᵐ₋ = γₜ - α₋
+
+        if bᵐ₊ > 0 && bᵐ₋ < 0 # Drifts are discordant outwards, use Hamiltonian
             H₊ = l(t, Xᵢ, α₊, model, calibration) + ∂ᵐ₊H * bᵐ₊
             H₋ = l(t, Xᵢ, α₋, model, calibration) + ∂ᵐ₋H * bᵐ₋
 
-            if H₊ < H₋ # Minimisation problem
-                V.α[k] = α₊         
+            if H₊ < H₋ # Use upward derivative
+                V.α[k] = α₊
                 z = bᵐ₊ / Δm₊
                 x = zero(S)
-            else
+            else # Use downard derivative
                 V.α[k] = α₋
                 z = zero(S)
                 x = -bᵐ₋ / Δm₋
-            end        
-        elseif bᵐ₊ > 0 && bᵐ₋ ≥ 0
+            end
+        elseif bᵐ₊ > 0 && bᵐ₋ ≥ 0 # Drifts agree upward
             V.α[k] = α₊
-
             z = bᵐ₊ / Δm₊
             x = zero(S)
-        elseif bᵐ₊ ≤ 0 && bᵐ₋ < 0
+        elseif bᵐ₊ ≤ 0 && bᵐ₋ < 0 # Drifts agree downard
             V.α[k] = α₋
-
-            x = -bᵐ₋ / Δm₋
             z = zero(S)
+            x = -bᵐ₋ / Δm₋
+        elseif bᵐ₊ ≤ 0 && bᵐ₋ ≥ 0 # Drifts disagree inwards, use steady state
+            V.α[k] = γₜ
+            z = zero(S)
+            x = zero(S)
+        else
+            throw("Drift combination not implemented: sign(bᵐ₊)=$(sign(bᵐ₊)), sign(bᵐ₋)=$(sign(bᵐ₋))")
         end
 
         zdx = min(j + 1, N₂)
@@ -149,6 +167,7 @@ function constructA!(stencil::StencilData{S}, V::ValueFunction{S, N₁, N₂}, �
         idx[entrydx] = k; jdx[entrydx] = LinearIndex((i, xdx), G); data[entrydx] = -x
         entrydx += 1
         y -= (z + x)
+
 
         idx[entrydx] = k; jdx[entrydx] = k; data[entrydx] = r - y
         entrydx += 1
@@ -163,41 +182,21 @@ function constructsource(valuefunction::ValueFunction, Δt⁻¹, model::M, G::GR
 end
 "Updates source vector `Δt⁻¹ Hⁿ + b`."
 function constructsource!(source, valuefunction::ValueFunction, Δt⁻¹, model::M, G::GR, calibration) where {N₁, N₂, S, M <: UnitIAM, GR <: AbstractGrid{N₁, N₂, S}}
+    @unpack H, α = valuefunction
     @inbounds for j in axes(G, 2), i in axes(G, 1)
+        Xᵢ = G[i, j]
+        αᵢ = valuefunction.α[i, j]
+        Hᵢ = valuefunction.H[i, j]
+
+        (ΔT₋, ΔT₊), _ = steps(G, i, j)
+        bᵀ = μ(Xᵢ.T, Xᵢ.m, model.climate) / model.climate.hogg.ϵ
+        ∂ᵀH = (bᵀ ≥ 0 && i < N₁) || (bᵀ < 0 && i == 1) ? (H[i + 1, j] - H[i, j]) / ΔT₊ : (H[i - 1, j] - H[i, j]) / ΔT₋
+
         k = LinearIndex((i, j), G)
-
-        Xᵢ = G[k]
-        αᵢ = valuefunction.α[k]
-
-        source[k] = l(valuefunction.t.t, Xᵢ, αᵢ, model, calibration) + Δt⁻¹ * valuefunction.H[k]
+        source[k] = l(valuefunction.t.t, Xᵢ, αᵢ, model, calibration) + Δt⁻¹ * Hᵢ + ∂ᵀH^2 * variance(Xᵢ.T, model.climate.hogg) / 2
     end
 
     return source
-end
-
-"Constructs advection coefficient `adv(Hⁿ)`, which is time independent."
-function constructadv(valuefunction::ValueFunction, model::M, G::GR) where {N₁, N₂, S, M <: UnitIAM, GR <: AbstractGrid{N₁, N₂, S}}
-    constructadv!(Vector{S}(undef, length(G)), valuefunction, model, G)
-end
-"Updates advection coefficient `adv(Hⁿ)`, which is time independent."
-function constructadv!(adv, valuefunction::ValueFunction, model::M, G::GR) where {N₁, N₂, S, M <: UnitIAM, GR <: AbstractGrid{N₁, N₂, S}}
-    @inbounds for j in axes(G, 2), i in axes(G, 1)
-        k = LinearIndex((i, j), G)
-
-        Xᵢ = G[k]
-        (ΔT₋, ΔT₊), _ = steps(G, i, j)
-
-        bᵀ = μ(Xᵢ.T, Xᵢ.m, model.climate) / model.climate.hogg.ϵ
-        ∂ᵀH = if (bᵀ ≥ 0 && i < N₁) || (bᵀ < 0 && i == 1)
-            (valuefunction.H[i + 1, j] - valuefunction.H[i, j]) / ΔT₊
-        else
-           (valuefunction.H[i, j] - valuefunction.H[i - 1, j]) / ΔT₋
-        end
-
-        adv[k] = ∂ᵀH^2 * variance(Xᵢ.T, model.climate.hogg)
-    end
-
-    return adv
 end
 
 function centralderivative(valuefunction::ValueFunction{S, N₁, N₂}, G::GR) where {N₁, N₂, S, GR <: AbstractGrid{N₁, N₂, S}}
@@ -221,8 +220,15 @@ function centralderivative(valuefunction::ValueFunction{S, N₁, N₂}, G::GR) w
 
 end
 
+function centralpolicy(valuefunction::ValueFunction{S, N₁, N₂}, model::M, G::GR, calibration; withnegative = false) where {N₁, N₂, S, M <: UnitIAM{S}, GR <: AbstractGrid{N₁, N₂, S}}
+    α = similar(valuefunction.H)
+    centralpolicy!(α, valuefunction, model, G, calibration; withnegative)
+end
 function centralpolicy!(valuefunction::ValueFunction{S, N₁, N₂}, model::M, G::GR, calibration; withnegative = false) where {N₁, N₂, S, M <: UnitIAM{S}, GR <: AbstractGrid{N₁, N₂, S}}
-    @unpack H, α = valuefunction
+    centralpolicy!(valuefunction.α, valuefunction, model, G, calibration; withnegative)
+end
+function centralpolicy!(α, valuefunction::ValueFunction{S, N₁, N₂}, model::M, G::GR, calibration; withnegative = false) where {N₁, N₂, S, M <: UnitIAM{S}, GR <: AbstractGrid{N₁, N₂, S}}
+    @unpack H = valuefunction
 
     @inbounds for j in axes(H, 2), i in axes(H, 1)
         (ΔT₋, ΔT₊), (Δm₋, Δm₊) = steps(G, i, j)
@@ -242,5 +248,5 @@ function centralpolicy!(valuefunction::ValueFunction{S, N₁, N₂}, model::M, G
         α[i, j] = clamp(αopt(valuefunction.t.t, G[i, j], ∂ₘH, model, calibration), 0, αmax)
     end
 
-    return valuefunction
+    return α
 end

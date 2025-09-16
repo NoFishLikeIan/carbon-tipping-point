@@ -9,12 +9,8 @@ function makesimulationpaths(model::IAM{S, D, P, C}, withnegative::Bool) where {
         throw("Directory not specified for model $(typeof(model))")
     end
 
-    damagedir = if D <: Kalkuhl
+    damagedir = if D <: GrowthDamages
         "growth"
-    elseif D <: WeitzmanLevel 
-        "level"
-    elseif D <: NoDamageGrowth
-        "no-damages"
     else
         throw("Directory not specified for damages $(typeof(model.damages))")
     end
@@ -38,21 +34,20 @@ end
 function makefilename(model::IAM{S, D, P, C}) where {S, D <: Damages{S}, P <: LogSeparable{S}, C <: Climate{S}}
     # 1. Threshold temperature deviation from pre-industrial
     thresholdpart = if C <: TippingClimate
-        deviation = model.feedback.Tᶜ - model.climate.hogg.Tᵖ
+        deviation = model.climate.feedback.Tᶜ
         "T$(Printf.format(Printf.Format("%.1f"), deviation))"
     else
         "Linear"
     end
     
-    # 2. Type of damages
     damagepart = if D <: Kalkuhl
-        "Kalkuhl"
-    elseif D <: WeitzmanLevel 
-        "Weitzman"
+        "kalkuhl"
+    elseif D <: WeitzmanGrowth
+        "weitzman"
     elseif D <: NoDamageGrowth
-        "NoDamage"
+        "no-damages"
     else
-        "$(typeof(model.damages).name.name)"
+        throw("Directory not specified for damages $(typeof(model.damages))")
     end
     
     # 3. RRA θ

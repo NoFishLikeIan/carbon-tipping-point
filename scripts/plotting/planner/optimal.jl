@@ -21,8 +21,9 @@ push!(PGFPlotsX.CUSTOM_PREAMBLE, raw"\usepgfplotslibrary{fillbetween}", raw"\use
 push!(PGFPlotsX.CUSTOM_PREAMBLE, raw"\usepackage{siunitx}")
 push!(PGFPlotsX.CUSTOM_PREAMBLE, raw"\DeclareSIUnit{\ppm}{p.p.m.}")
 
-includet("../../../src/extend/model.jl")
 includet("../../../src/valuefunction.jl")
+includet("../../../src/extend/model.jl")
+includet("../../../src/extend/grid.jl")
 includet("../../../src/extend/valuefunction.jl")
 includet("../utils.jl")
 includet("../../utils/saving.jl")
@@ -31,7 +32,7 @@ includet("../../utils/simulating.jl")
 damage = Kalkuhl;
 withnegative = true
 abatementtype = withnegative ? "negative" : "constrained"
-DATAPATH = "data/simulation-dense"; @assert isdir(DATAPATH)
+DATAPATH = "data/simulation-local-small"; @assert isdir(DATAPATH)
 
 SAVEFIG = false;
 plotpath = joinpath("papers/job-market-paper/submission/plots", abatementtype)
@@ -51,39 +52,52 @@ begin # Read available files
         model, _ = loadproblem(filepath)
         abatementdir = splitpath(filepath)[end - 1]
 
-        if (model.damages isa damage) && (abatementtype == abatementdir)
+        if (model.economy.damages isa damage) && (abatementtype == abatementdir)
             push!(modelfiles, filepath)
         end
     end
 end;
 
 begin # Import available files
-    models = AbstractModel[]
-    valuefunctions = Dict{AbstractModel, OrderedDict{Float64, ValueFunction}}()
-    interpolations = Dict{AbstractModel, NTuple{2, Interpolations.Extrapolation}}()
+    models = IAM[]
+    valuefunctions = Dict{IAM, OrderedDict{Float64, ValueFunction}}()
+    interpolations = Dict{IAM, NTuple{2, Interpolations.Extrapolation}}()
     
     for (i, filepath) = enumerate(modelfiles)
         print("Loading $i / $(length(modelfiles))\r")
         values, model, G = loadtotal(filepath; tspan=(0, 1.2horizon))
         interpolations[model] = buildinterpolations(values, G);
-        valuefunctions[model] = values
+        valuefunctions[model] = values;
         push!(models, model)
     end
 
-    sort!(models)
+    sort!(by = m -> m.climate, models)
 end
 
 begin
-    calibrationfilepath = "data/calibration.jld2"
-    @assert isfile(calibrationfilepath)
+    calibrationpath = "data/calibration"
 
-    calibrationfile = jldopen(calibrationfilepath, "r+")
-    @unpack calibration, hogg, feedbacklower, feedback, feedbackhigher = calibrationfile
-    close(calibrationfile)
+    # Load economic calibration
+    abatementpath = joinpath(calibrationpath, "abatement.jld2")
+    @assert isfile(abatementpath) "Abatement calibration file not found at $abatementpath"
+    abatementfile = jldopen(abatementpath, "r+")
+    @unpack abatement = abatementfile
+    close(abatementfile)
+
+    investments = Investment()
+    damages = Kalkuhl()
+    economy = Economy(investments = investments, damages = damages, abatement = abatement)
+
+    # Load climate claibration
+    climatepath = joinpath(calibrationpath, "climate.jld2")
+    @assert isfile(climatepath) "Climate calibration file not found at $climatepath"
+    climatefile = jldopen(climatepath, "r+")
+    @unpack calibration, hogg, feedbacklower, feedback, feedbackhigher, decay = climatefile
+    close(climatefile)
 end
 
 begin # Plot estetics
-    extremamodel = extrema(models)
+    extremamodel = (models[1], models[end])
     PALETTE = colorschemes[:grays]
     colors = get(PALETTE, range(0, 0.6; length=length(extremamodel)))
 
@@ -101,9 +115,7 @@ begin # Plot estetics
     ΔTmax = Tspace[end] - hogg.Tᵖ
     temperatureticks = makedeviationtickz(ΔTmin, ΔTmax, hogg; step=1, digits=0)
 
-    economy = Economy()
-
-    X₀ = SVector(T₀, m₀, 1.)
+    X₀ = SVector(T₀, m₀, 0.)
     u₀ = SVector(X₀..., 0., 0., 0.) # Introduce three 0s for costs
 end;
 
@@ -124,7 +136,7 @@ end;
 begin
     trajectories = 10_000
 
-    simulations = Dict{AbstractModel,EnsembleSolution}()
+    simulations = Dict{IAM,EnsembleSolution}()
     for (i, model) in enumerate(models)
         αitp = interpolations[model] |> last;
         parameters = (model, calibration, αitp);

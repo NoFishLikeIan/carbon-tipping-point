@@ -17,14 +17,13 @@ export γ, Eᵇ
 
 export Climate, TippingClimate, LinearClimate, JumpingClimate
 export Hogg, Feedback, Jump
-export ExponentialDecay, ConstantDecay, SaturationDecay
+export ExponentialDecay, ConstantDecay, SaturationRecoveryDecay
 export δₘ, L, λ, μ, ∂μ∂T, ∂μ∂m
 export mstable, Tstable
 
 export Economy, Abatement, Investment, PiecewiseAbatement
 export Damages
-export GrowthDamages, WeitzmanGrowth, Kalkuhl, NoDamageGrowth
-export LevelDamages, WeitzmanLevel, NoDamageLevel
+export GrowthDamages, WeitzmanGrowth, Kalkuhl, BurkeHsiangMiguel, NoDamageGrowth
 export β, β′, d, D, ϕ, A, ω
 export χopt, variance
 

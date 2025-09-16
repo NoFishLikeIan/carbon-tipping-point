@@ -5,22 +5,20 @@ function stringifydeviation(ΔT; digits = 2)
     fmt = Printf.Format("$fsign%0.$(digits)f°")
     return Printf.format(fmt, ΔT)
 end
-function makedeviationtickz(from, to, hogg; step = 0.5, digits = 2, addedlabels = Tuple{String, Float64}[])
+function makedeviationtickz(from, to; step = 0.5, digits = 2, addedlabels = Tuple{String, Float64}[])
 
-    preindustrialdev = range(from, to; step = step)
-    ticks = hogg.Tᵖ .+ preindustrialdev
-
-    labels = [stringifydeviation(x; digits = digits) for x in preindustrialdev]
+    ticks = collect(range(from, to; step = step))
+    labels = [stringifydeviation(x; digits = digits) for x in ticks]
 
     if isempty(addedlabels)
-        return (ticks, labels)
+        return ticks, labels
     end
 
     ticks = [ticks..., last.(addedlabels)...]
     labels = [labels..., first.(addedlabels)...]
     idxs = sortperm(ticks)
     
-    return (ticks[idxs], labels[idxs])
+    return ticks[idxs], labels[idxs]
 end
 
 function labelsofclimate(climate::C) where {C <: Climate}

@@ -4,10 +4,6 @@ struct Abatement{S <: Real}
     ρ::S # Speed of abatement technology cost reduction
     b::S # Coefficient of abatement fraction
 end
-struct PiecewiseAbatement{S <: Real, A₁ <: Abatement{S}, A₂ <: Abatement{S}}
-    abatement::A₁
-    sequestration::A₂
-end
 
 "Abatement tehcnology decay"
 function ω(t, abatement::Abatement)
@@ -22,14 +18,6 @@ function β(t, ε, abatement::Abatement)
 end
 function β′(t, ε, abatement::Abatement)
     abatement.b * ω(t, abatement) * ε^(abatement.b - 1)
-end
-
-function β(t, ε, piecewise::PiecewiseAbatement)
-    β(t, min(ε, 1), piecewise.abatement) + β(t, max(ε - 1, 0), piecewise.sequestration)
-end
-
-function β′(t, ε, piecewise::PiecewiseAbatement)
-    ε < 1 ? β′(t, ε, piecewise.abatement) :  β′(t, ε - 1, piecewise.sequestration)
 end
 
 Base.@kwdef struct Investment{S <: Real}
@@ -55,34 +43,51 @@ end
 abstract type Damages{S<:Real} end
 abstract type GrowthDamages{S} <: Damages{S} end
 struct NoDamageGrowth{S} <: GrowthDamages{S} end
+
+d(_, _, damages::NoDamageGrowth{S}, args...) where S = zero(S)
+
 Base.@kwdef struct WeitzmanGrowth{S} <: GrowthDamages{S}
     ξ::S = 2.6e-4
     ν::S = 3.25
 end
+
+d(T, _, damages::WeitzmanGrowth, _) = d(T, damages)
+function d(T, damages::WeitzmanGrowth)
+    damages.ξ * T^damages.ν
+end
+
 Base.@kwdef struct Kalkuhl{S} <: GrowthDamages{S}
-    ξ₁::S = 0.035 # [1/°C]
+    ξ₁::S = 0.0373 # [1/°C]
     ξ₂::S = 0.0018 # [1/°C²]
 end
 
-d(_, _, damages::NoDamageGrowth{S}, args...) where S = zero(S)
 function d(T, m, damages::Kalkuhl, climate::C) where {C <: Climate}
-    driftdamage = damages.ξ₁ * μ(T, m, climate) / climate.hogg.ϵ
-    noisedamage = damages.ξ₂ * variance(T, climate.hogg) / 2
-    return driftdamage + noisedamage
-end
-function d(T, _, damages::WeitzmanGrowth, climate::C) where {C <: Climate}
-    return damages.ξ * T^damages.ν
+    linear = (damages.ξ₁ + damages.ξ₂ * T) * μ(T, m, climate) / climate.hogg.ϵ
+    quadratic = damages.ξ₂ * variance(T, climate.hogg)  
+
+    return linear + quadratic
 end
 
 function D(T, damages::Kalkuhl)
     damages.ξ₁ * T + damages.ξ₂ * T^2 / 2.
 end
 
+"Quadratic temperature damages, as in Burket et al. (2016), with calibration by Kalkuhl & Wenz (2020)."
+Base.@kwdef struct BurkeHsiangMiguel{S} <: GrowthDamages{S}
+    ξ::S = 7.09e-4 
+end
+
+
+d(T, _, damages::BurkeHsiangMiguel, _) = d(T, damages)
+function d(T, damages::BurkeHsiangMiguel)
+    damages.ξ * T^2
+end
+
 Base.broadcastable(damages::Damages) = Ref(damages)
 
 Base.@kwdef struct Economy{S <: Real, D <: Damages{S}}
     Y₀::S = 75.8
-    investments::Investment{S} = Investment{S}()
+    investments::Investment{S}
     abatement::Abatement{S}
     damages::D
 end

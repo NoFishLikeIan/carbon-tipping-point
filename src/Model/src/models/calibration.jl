@@ -10,11 +10,6 @@ struct DynamicCalibration{S} <: Calibration{S}
     γ̂::Vector{S} # Observed growth rates γ̂
 end
 
-struct RegionalCalibration{S<:Real}
-    calibration::Calibration{S}
-    fraction::Vector{S}
-end
-
 function timeinterpolation(t, tspan, v)
     tmin, tmax = tspan
 
@@ -46,4 +41,3 @@ function Eᵇ(t, calibration::DynamicCalibration)
 end
 
 Base.broadcastable(c::Calibration) = Ref(c)
-Base.broadcastable(c::RegionalCalibration) = Ref(c)

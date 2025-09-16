@@ -48,11 +48,29 @@ struct ExponentialDecay{S} <: Decay{S}
     bδ::S
     cδ::S
 end
-struct SaturationDecay{S} <: Decay{S}
-    δ₀::S
-    λ̲::S
-    δ̲::S
-    λ̅::S
+struct SaturationRecoveryDecay{S} <: Decay{S}
+    δ₀::S  # Initial decay rate (positive)
+    α::S   # First exponential decay rate  
+    δ₁::S  # Second exponential amplitude
+    β::S   # Second exponential decay rate
+    Mᶜ::S  # Center concentration
+    δ̄::S   # Asymptotic offset
+end
+
+"CO₂e concentration decay."
+function δₘ(_, decay::ConstantDecay)
+    decay.δ
+end
+function δₘ(M, decay::ExponentialDecay)
+    @unpack aδ, bδ, cδ = decay
+
+    return aδ * exp(-((M - bδ) / cδ)^2)
+end
+function δₘ(M, decay::SaturationRecoveryDecay)
+    @unpack δ₀, α, δ₁, β, Mᶜ, δ̄ = decay
+    ΔM = M - Mᶜ
+    
+    return δ₀ * exp(-α * ΔM) - δ₁ * exp(-β * ΔM) + δ̄
 end
 
 Base.@kwdef struct Hogg{S <: Real}
@@ -73,21 +91,6 @@ Base.@kwdef struct Hogg{S <: Real}
     # Noise
     σ::S # [K^α / √yr] Std of temperature
     α::S # Power of temperature in noise term
-end
-
-"Approximation of CO₂e concentration decay."
-function δₘ(_, decay::ConstantDecay)
-    decay.δ
-end
-function δₘ(M, decay::ExponentialDecay)
-    @unpack aδ, bδ, cδ = decay
-
-    return aδ * exp(-((M - bδ) / cδ)^2)
-end
-function δₘ(M, decay::SaturationDecay)
-    @unpack δ₀, λ̲, δ̲, λ̅ = decay
-    
-    return δ₀ * exp(-λ̲ * M) + δ̲ * (1 - exp(-λ̅ * M))
 end
 
 abstract type Climate{S <: Real, D <: Decay{S}} end

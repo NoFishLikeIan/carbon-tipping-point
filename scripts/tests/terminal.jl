@@ -1,5 +1,5 @@
 using Test, BenchmarkTools, Revise
-using Plots, LaTeXStrings
+using Plots, LaTeXStrings, ColorSchemes
 
 using Model, Grid
 using Base.Threads
@@ -32,17 +32,19 @@ begin # Construct the model
     close(abatementfile)
 
     investments = Investment()
-    damages = Kalkuhl()
+    damages = BurkeHsiangMiguel()
     economy = Economy(investments = investments, damages = damages, abatement = abatement)
 
     # Load climate claibration
     climatepath = joinpath(calibrationpath, "climate.jld2")
     @assert isfile(climatepath) "Climate calibration file not found at $climatepath"
     climatefile = jldopen(climatepath, "r+")
-    @unpack calibration, hogg, feedbacklower, feedback, feedbackhigher, decay = climatefile
+    @unpack calibration, hogg, feedbacklower, feedback, feedbackhigher = climatefile
     close(climatefile)
 
-    threshold = 2.5 # Inf
+    decay = ConstantDecay(0.0)
+
+    threshold = 2.5
     climate = if 0 < threshold < Inf
         feedback = Model.updateTᶜ(threshold, feedback)
         TippingClimate(hogg, decay, feedback)
@@ -55,32 +57,29 @@ begin # Construct the model
 end
 
 begin
-    N₁ = 51; N₂ = 51;  # Smaller grid for testing
+    N₁ = 31; N₂ = 31;  # Smaller grid for testing
     N = (N₁, N₂)
-    Tdomain = (0.5, 12.)  # Smaller, safer domain
-    mmin = mstable(Tdomain[1] + 0.5, model.climate)
-    mmax = mstable(Tdomain[2] - 0.5, model.climate)
+    Tdomain = (0., 20.)  # Smaller, safer domain
+    mmin = mstable(Tdomain[1] + 0.25, model.climate)
+    mmax = mstable(Tdomain[2] - 0.25, model.climate)
     mdomain = (mmin, mmax)
     domains = (Tdomain, mdomain)
-    withnegative = false
+    withnegative = true
 
     G = RegularGrid(N, domains)
-    Δt⁻¹ = 50
+    Δt⁻¹ = 10
     Δt = 1 / Δt⁻¹
-    τ = 500.
+    τ = 0.
 end;
 
-valuefunction = ValueFunction(τ, climate, G, calibration)
 
-if false # Optimisation Gif
-    source = constructsource(valuefunction, Δt⁻¹, model, G, calibration)
-    adv = constructadv(valuefunction, model, G)
+if isinteractive() && false # Optimisation Gif
+    valuefunction = ValueFunction(τ, climate, G, calibration)
     stencil = makestencil(G)
     A₀ = constructA!(stencil, valuefunction, Δt⁻¹, model, G, calibration, withnegative)
-    b₀ = source - adv
+    b₀ = constructsource(valuefunction, Δt⁻¹, model, G, calibration)
 
     # Initialise the problem
-    problemdata = (stencil, source, adv)
     problem = LinearSolve.init(LinearProblem(A₀, b₀), KLUFactorization())
 
     Tspace, mspace = G.ranges
@@ -90,7 +89,7 @@ if false # Optimisation Gif
     @gif for iter in 1:nframes
         if (iter % (nframes ÷ 100)) == 0 print("Iteration $iter / $nframes.\r") end
 
-        backwardstep!(problem, problemdata, valuefunction, Δt⁻¹, model, G, calibration; withnegative)
+        backwardstep!(problem, stencil, valuefunction, Δt⁻¹, model, G, calibration; withnegative)
         updateovergrid!(valuefunction.H, problem.u, 1.)
 
         if any(isnan.(valuefunction.H)) @warn "NaN value in H" end
@@ -110,10 +109,11 @@ if false # Optimisation Gif
     end every 100
 end
 
-valuefunction, result = steadystate!(valuefunction, Δt, model, G, calibration; verbose = 1, tolerance = Error(1e-4, 1e-4), timeiterations = 100_000, printstep = 100, withnegative, θ = 1.)
+valuefunction = ValueFunction(τ, climate, G, calibration)
+valuefunction, result = steadystate!(valuefunction, Δt, model, G, calibration; verbose = 1, tolerance = Error(1e-4, 1e-4), timeiterations = 50_000, printstep = 1_000, withnegative, θ = 1.); result
 
 if isinteractive()
-    Gfig = shrink(G, (0., 0.05))
+    Gfig = shrink(G, (0., 0.))
     Vfig = interpolateovergrid(valuefunction, G, Gfig)
 
     Tspace, mspace = Gfig.ranges
@@ -121,8 +121,10 @@ if isinteractive()
     m₀ = log(hogg.M₀ / hogg.Mᵖ)
     
     e = ε(Vfig, model, calibration, Gfig)
-    
-    policyfig = contourf(mspace, Tspace, e; title = "Emissions abated τ = $τ", xlabel = L"m", ylabel = L"T", c=:viridis, xlims = extrema(mspace), ylims = extrema(Tspace), clims = (0, max(1, maximum(e))), linewidth = 0, levels = 101)
+
+    abatementcolor = cgrad(:RdBu, [0., 2/3, 1])
+
+    policyfig = heatmap(mspace, Tspace, e; title = "Emissions abated τ = $τ", xlabel = L"m", ylabel = L"T", color=abatementcolor, xlims = extrema(mspace), ylims = extrema(Tspace), clims = (0, max(1.5, maximum(e))))
     valuefig = contourf(mspace, Tspace, Vfig.H; title = "Value Function H τ = $τ", xlabel = L"m", ylabel = L"T", c=:viridis, xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
 
     for fig in (policyfig, valuefig)

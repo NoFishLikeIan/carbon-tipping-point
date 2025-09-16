@@ -1,3 +1,10 @@
+function b(t, state::Point, policy::Policy, model::IAM, calibration::Calibration)
+    @unpack economy, climate = model
+    @unpack abatement, damages, investments = economy
+
+    growth = investments.ϱ + ϕ(t, policy.χ, investments) 
+end
+
 SimulationParameters = Tuple{IAM, Calibration, Interpolations.Extrapolation}
 "Drift of system."
 function F(u::SVector{3,R}, parameters::SimulationParameters, t) where R<:Real
@@ -10,7 +17,11 @@ function F(u::SVector{3,R}, parameters::SimulationParameters, t) where R<:Real
 
     dT = μ(T, m, model.climate) / model.climate.hogg.ϵ
     dm = γ(t, calibration) - α
-    dy = b(t, state, policy, model, calibration)
+    
+    growth = investments.ϱ + ϕ(t, policy.χ, model.economy.investments)
+    damage = d(state.T, state.m, model.economy.damages, model.climate)
+    abatement = A(t, model.economy.investments) * β(t, ε(t, state, α, model, calibration), model.economy.abatement)
+    dy = growth - damage - abatement
 
     return SVector(dT, dm, dy)
 end
@@ -25,12 +36,15 @@ function F(u::SVector{6,R}, parameters::SimulationParameters, t) where R<:Real
 
     dT = μ(T, m, model.climate) / model.climate.hogg.ϵ
     dm = γ(t, calibration) - α
-    dy = b(t, state, policy, model, calibration)
+    
+    growth = model.economy.investments.ϱ + ϕ(t, policy.χ, model.economy.investments)
+    damage = d(state.T, state.m, model.economy.damages, model.climate)
+    abatement = A(t, model.economy.investments) * β(t, ε(t, state, α, model, calibration), model.economy.abatement)
+    dy = growth - damage - abatement
 
-    # Cost breakdown
-    abatement, adjustment, damages = costbreakdown(t, state, policy, model, calibration)
+    adjustment = (model.economy.investments.κ / 2) * abatement^2
 
-    return SVector(dT, dm, dy, abatement, adjustment, damages)
+    return SVector(dT, dm, dy, abatement, adjustment, damage)
 end
 
 NpParamaters = Tuple{IAM,Calibration}
@@ -46,27 +60,22 @@ function Fnp(u::SVector{2,R}, parameters::NpParamaters, t) where R<:Real
 end
 function noise(u, parameters::NpParamaters, t)
     model = first(parameters)
-    σT = u[2] * model.climate.hogg.σₜ / model.climate.hogg.ϵ
-    σm = model.climate.hogg.σₘ
-    return SVector(σT, σm)
+    T = u[1]
+    return SVector(Model.std(T, model.climate.hogg), 0.)
 end
 function noise(u::SVector{3}, parameters::SimulationParameters, t)
     model = first(parameters)
-    σT = u[2] * model.climate.hogg.σₜ / model.climate.hogg.ϵ
-    σm = model.climate.hogg.σₘ
-    σk = model.economy.σₖ
-    return SVector(σT, σm, σk)
+    T = u[1]
+    return SVector(Model.std(T, model.climate.hogg), 0., model.economy.investments.σₖ)
 end
 function noise(u::SVector{6}, parameters::SimulationParameters, t)
     model = first(parameters)
-    σT = u[2] * model.climate.hogg.σₜ / model.climate.hogg.ϵ
-    σm = model.climate.hogg.σₘ
-    σk = model.economy.σₖ
-    return SVector(σT, σm, σk, 0.0, 0.0, 0.0)
+    T = u[1]
+    return SVector(Model.std(T, model.climate.hogg), 0., model.economy.investments.σₖ, 0.0, 0.0, 0.0)
 end
 
 "Constructs linear interpolation of results"
-function buildinterpolations(values::Vector{ValueFunction}, G::GR) where {N₁, N₂, S, GR <: AbstractGrid{N₁, N₂, S}}
+function buildinterpolations(values::VS, G::GR) where { N₁, N₂, S, GR <: AbstractGrid{N₁, N₂, S}, VS <: AbstractDict{S, ValueFunction{S, N₁, N₂}} }
     Tspace, mspace = G.ranges
     
     times = diff(collect(keys(values)))

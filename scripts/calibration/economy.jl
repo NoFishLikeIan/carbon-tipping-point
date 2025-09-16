@@ -7,6 +7,7 @@ using SparseArrays, LinearAlgebra, StaticArrays
 using Optim
 using Plots, LaTeXStrings, Printf
 using FastClosures
+using DifferentialEquations, StaticArrays
 
 using Model
 
@@ -16,15 +17,24 @@ filepath = joinpath(DATAPATH, "AR6_Scenarios_Database_World_v1.1.csv"); @assert 
 calibrationpath = joinpath(DATAPATH, "calibration")
 if !isdir(calibrationpath) mkpath(calibrationpath) end
 
+investments = Investment{Float64}()
+
 begin # Load scenarios data
     rawdf = CSV.read(filepath, DataFrame)
     scenarios = @chain rawdf begin
         @filter(Region == "World")
         @filter(Variable ∈ ("Price|Carbon", "Emissions|CO2", "GDP|PPP"))
         @filter(Model ∈ ("REMIND-MAgPIE 2.1-4.2",))
+        # Scenarios filters
         @filter(!occursin(r"EN_NPi.*", Scenario))
         @filter(!occursin("CEMICS_SSP2-Npi", Scenario))
         @filter(!occursin(r"Delayed Transition", Scenario))
+        @filter(Scenario == "EN_NoPolicy" || 
+                occursin(r"PkBudg\d+", Scenario) ||          # Carbon budget scenarios
+                occursin(r"EN_INDCi.*_\d+f?$", Scenario) ||  # Carbon budget scenarios  
+                occursin(r"NGFS2_.*(2°C|Net-Zero)", Scenario) ||  # NGFS climate scenarios
+                occursin(r"CEMICS_SSP\d-1p5C", Scenario) ||  # 1.5°C scenarios
+                occursin(r"CEMICS_SSP\d-2C", Scenario))      # 2°C scenarios
         @group_by(Model, Scenario)
     end
 end
@@ -40,7 +50,7 @@ begin # Construct scenarios dataframes
             unstack(:Variable, :Value)
             dropmissing!()
             @mutate(Year = parsefloat(Year))
-            @filter(Year ≥ 2020.)
+            @filter(Year ≥ 2030.)
         end
 
         isnp = k.Scenario == npscenario
@@ -70,7 +80,7 @@ begin # Fill in data coefficients
 
         # Filter out observations with zero or very low carbon prices
         validprices = carbonprice .> 0.
-        tdx = dfnp.Year .> 2030
+        tdx = dfnp.Year .> 2020
 
         if !any(tdx .& validprices)
             continue
@@ -100,8 +110,8 @@ begin
 end
 
 function Model.β′(t, ε, p::StaticVector{4, S}) where S <: Real
-    ω̄, Δω, ρ, b = p
-    return β′(t, ε, Abatement(ω̄, Δω, ρ, b))
+    ω̄, Δω, ρ, bᵢ = p
+    return β′(t, ε, Abatement(ω̄, Δω, ρ, bᵢ))
 end
 
 function huber(p, params; δ = 1e-2)
@@ -120,19 +130,22 @@ end
 
 # First estimate abatement ε ≤ 1
 begin
-    p₀ = MVector(0.00264, 0.09, 0.025, 2.8)
+    p₀ = MVector(1e-7, 0.09, 0.025, 2.8)
     params = (ts, εs, β′s);
+    
+    lb = MVector(0., 0., 0., 0.)
+    ub = MVector(0.001, Inf, Inf, Inf)
 
-    lower = MVector(0., 0., 0., 0.)
-    upper = MVector(Inf, Inf, Inf, Inf)
+    obj = @closure p -> huber(p, params; δ = 0.15)
+    result = optimize(obj, lb, ub, p₀, Fminbox(LBFGS()))
 
-    obj = @closure p -> huber(p, params)
-    result = optimize(obj, lower, upper, p₀, Fminbox(LBFGS()))
+    ω̄, Δω, ρ, bᵢ = round.(result.minimizer, digits = 6)
+    abatement = Abatement(ω̄, Δω, ρ, bᵢ)
+    hambelabatement = Abatement(p₀...)
 
-    ω̄, Δω, ρ, b = round.(result.minimizer, digits = 6)
-    abatement = Abatement(ω̄, Δω, ρ, b)
+    @printf "\nCalibrated abatement parameters:\nω̄ = %.6f\nΔω = %.6f\nρ = %.6f\nb = %.4f\nObjective value: %.4f\n" ω̄ Δω ρ bᵢ result.minimum
 
-    @printf "\nCalibrated abatement parameters:\nω̄ = %.6f\nΔω = %.6f\nρ = %.6f\nb = %.4f\nObjective value: %.4f\n" ω̄ Δω ρ b result.minimum
+    result
 end
 
 begin # Create a plot of β′ for various values of t
@@ -140,22 +153,20 @@ begin # Create a plot of β′ for various values of t
 
     timespace = sort(unique(ts))
     cs = Dict(timespace .=> palette(:viridis, timespace))
-    tspace = timespace[2:2:end]
+    tspace = timespace[1:2:end]
 
     fig = plot(xlabel=L"Abatement rate $\varepsilon$", ylabel=L"Marginal abatement cost $\beta\prime$", title="Marginal Abatement Cost Function")
 
     for t in tspace
-        plot!(fig, εspace, ε -> β′(t, ε, abatement), label="$(2020 + t)", linewidth=3, c = cs[t])
+        plot!(fig, εspace, ε -> β′(t, ε, hambelabatement), label="$(2020 + t)", linewidth=3, c = cs[t])
     end
 
     # Add scatter plot of actual data points
     zcolors = [cs[t] for t in ts]
-    scatter!(fig, εs, β′s; markersize = 2, alpha=0.3, c = zcolors, label = false)
+    scatter!(fig, εs, β′s; markersize = 3, alpha = 0.5, c = zcolors, label = false, markerstrokewidth = 0.)
 
     fig
 end
-
-
 
 # Save outcome of calibration in file
 jldopen(joinpath(calibrationpath, "abatement.jld2"), "w+") do file

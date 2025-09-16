@@ -18,7 +18,7 @@ cd $HOME/scc-tipping-points # Move to base directory
 
 SCRATCHDATA="$TMPDIR"/data
 mkdir -p $SCRATCHDATA # Create scratch directory with user name
-rsync data/calibration.jld2 $SCRATCHDATA # Copy calibration data to scratch
+rsync data/calibration $SCRATCHDATA # Copy calibration data to scratch
 
 # Run script 
 julia --threads ${SLURM_CPUS_PER_TASK} --project scripts/solve.jl \

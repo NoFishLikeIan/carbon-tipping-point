@@ -43,49 +43,69 @@ using Printf, Dates
 
 include("../src/valuefunction.jl")
 include("../src/extend/model.jl")
+include("../src/extend/grid.jl")
 include("../src/extend/valuefunction.jl")
+
 include("utils/saving.jl")
 include("markov/utils.jl")
 include("markov/chain.jl")
 include("markov/finitedifference.jl")
 
-# Construct model
-begin
-    calibrationfilepath = "data/calibration.jld2"; @assert isfile(calibrationfilepath)
+begin # Construct model
+    DATAPATH = "data"
+    calibrationpath = joinpath(DATAPATH, "calibration")
 
-	calibrationfile = jldopen(calibrationfilepath, "r+")
-	@unpack calibration, hogg, feedbacklower, feedback, feedbackhigher = calibrationfile
-	close(calibrationfile)
+    # Load economic calibration
+    abatementpath = joinpath(calibrationpath, "abatement.jld2")
+    @assert isfile(abatementpath) "Abatement calibration file not found at $abatementpath"
+    abatementfile = jldopen(abatementpath, "r+")
+    @unpack abatement = abatementfile
+    close(abatementfile)
+
+    # Load climate claibration
+    climatepath = joinpath(calibrationpath, "climate.jld2")
+    @assert isfile(climatepath) "Climate calibration file not found at $climatepath"
+    climatefile = jldopen(climatepath, "r+")
+    @unpack calibration, hogg, feedbacklower, feedback, feedbackhigher, decay = climatefile
+    close(climatefile)
+
+    damage = if damages == "kalkuhl"
+        Kalkuhl{Float64}()
+    elseif damages == "nodamages"
+        NoDamageGrowth{Float64}()
+    elseif damages == "weitzman"
+        WeitzmanGrowth{Float64}()
+    else
+        error("Unknown damage type: $damages")
+    end
+
+    investments = Investment{Float64}()
+    economy = Economy(investments = investments, damages = damage, abatement = abatement)
+    decay = ConstantDecay(0.0) # Solve with constant decay first
+
+    climate = if 0 < threshold < Inf
+        feedback = Model.updateTᶜ(threshold, feedback)
+        TippingClimate(hogg, decay, feedback)
+    else
+        LinearClimate(hogg, decay)
+    end
+
+    preferences = LogSeparable(θ = rra);
+    model = IAM(climate, economy, preferences)
 end
 
-preferences = Preferences(θ = rra, ψ = 1.0);
-economy = Economy()
-damage = if damages == "kalkuhl"
-    Kalkuhl{Float64}()
-elseif damages == "nodamages"
-    NoDamageGrowth{Float64}()
-elseif damages == "weitzman"
-    WeitzmanGrowth{Float64}()
-else
-    error("Unknown damage type: $damages")
+begin # Construct Grid
+    Tdomain = (0.5, 10.)  # Smaller, safer domain
+    mmin = mstable(Tdomain[1] + 0.5, model.climate)
+    mmax = mstable(Tdomain[2] - 0.5, model.climate)
+    mdomain = (mmin, mmax)
+    domains = (Tdomain, mdomain)
+    N = (NT, Nm)
+    Gterminal = RegularGrid(N, (Tdomain, mdomain))
 end
-
-model = if threshold > 0
-    feedback = Model.updateTᶜ(threshold + hogg.Tᵖ, feedback)
-    TippingModel(hogg, preferences, damage, economy, feedback)
-else
-    LinearModel(hogg, preferences, damage, economy)
-end
-
-# Construct Grid
-Tmin, Tmax = hogg.Tᵖ .+ (0., 6.);
-Tdomain = (Tmin, Tmax)
-mdomain = mstable(Tmin + 0.5, model), mstable(Tmax - 0.5, model)
-N = (NT, Nm)
-Gterminal = RegularGrid(N, (Tdomain, mdomain))
 
 if (verbose ≥ 1)
-    modelstring = model isa TippingModel ? "tipping model with Tᶜ = $threshold," : "linear model with"
+    modelstring = climate isa TippingClimate ? "tipping model with Tᶜ = $threshold," : "linear model with"
 
     println("$(now()): ","Solving $modelstring ψ = $eis, θ = $rra, $(withnegative ? "with" : "without") negative emissions and $damages damages...")
     flush(stdout)
@@ -99,14 +119,14 @@ if (verbose ≥ 1)
 end
 
 tolerance = Error(tol, 1e-4)
-terminalvaluefunction = ValueFunction(tau, hogg, Gterminal, calibration)
-steadystate!(terminalvaluefunction, dt, model, Gterminal, calibration; verbose, tolerance, withnegative)
+terminalvaluefunction =  ValueFunction(tau, climate, Gterminal, calibration)
+steadystate!(terminalvaluefunction, dt, model, Gterminal, calibration; timeiterations = 100_000, verbose, tolerance, withnegative)
 
 if (verbose ≥ 1)
     println("$(now()): ","Running backward...")
     flush(stdout)
 end
 
-G = shrink(Gterminal, 0.05)
+G = shrink(Gterminal, (0., 0.15))
 valuefunction = interpolateovergrid(terminalvaluefunction, Gterminal, G)
 backwardsimulation!(valuefunction, dt, model, G, calibration; verbose, withnegative, overwrite, outdir, cachestep = cachestep, startcache = 150.)

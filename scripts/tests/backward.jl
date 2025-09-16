@@ -35,7 +35,7 @@ begin # Construct the model
     close(abatementfile)
 
     investments = Investment()
-    damages = WeitzmanGrowth()
+    damages = Kalkuhl()
     economy = Economy(investments = investments, damages = damages, abatement = abatement)
 
     # Load climate claibration
@@ -58,17 +58,17 @@ begin # Construct the model
 end
 
 begin
-    N₁ = 71; N₂ = 71;  # Smaller grid for testing
+    N₁ = 31; N₂ = 31;  # Smaller grid for testing
     N = (N₁, N₂)
     Tdomain = (0.5, 12.)  # Smaller, safer domain
     mmin = mstable(Tdomain[1] + 0.5, model.climate)
     mmax = mstable(Tdomain[2] - 0.5, model.climate)
     mdomain = (mmin, mmax)
     domains = (Tdomain, mdomain)
-    withnegative = false
+    withnegative = true
 
     Gterminal = RegularGrid(N, domains)
-    Δt⁻¹ = 50
+    Δt⁻¹ = 200
     Δt = 1 / Δt⁻¹
     τ = 500.
 end;
@@ -92,7 +92,7 @@ if isinteractive()
     E = ε(terminalvaluefunction, model, calibration, Gterminal)
     nullcline = [mstable(T, model.climate) for T in Tspace]
 
-    policyfig = contourf(mspace, Tspace, E; title = L"Terminal $\bar{\alpha}_{\tau}$", xlabel = L"m", ylabel = L"T", c=:Greens, xlims = extrema(mspace), ylims = extrema(Tspace), clims = (0, 1.2), linewidth = 0.)
+    policyfig = heatmap(mspace, Tspace, E; title = L"Terminal $\bar{\alpha}_{\tau}$", xlabel = L"m", ylabel = L"T", c=:Greens, xlims = extrema(mspace), ylims = extrema(Tspace), clims = (0, max(1., maximum(E))), linewidth = 0.)
 
     valuefig = contourf(mspace, Tspace, terminalvaluefunction.H; title = L"Terminal value $\bar{H}$", xlabel = L"m", ylabel = L"T", xlims = extrema(mspace), ylims = extrema(Tspace), levels = 21)
 
@@ -105,11 +105,10 @@ if isinteractive()
 end
 
 # Simulate backwards
-G = shrink(Gterminal, (0., 0.25))
+G = shrink(Gterminal, (0., 0.05))
 valuefunction = interpolateovergrid(terminalvaluefunction, Gterminal, G)
-backwardsimulation!(valuefunction, Δt, model, G, calibration; t₀ = 0., withnegative = false, withsave = false, verbose = 1)
 
-if false # Optimisation Gif
+if isinteractive() let # Optimisation Gif
     source = constructsource(valuefunction, Δt⁻¹, model, G, calibration)
     adv = constructadv(valuefunction, model, G)
     stencil = makestencil(G)
@@ -123,10 +122,13 @@ if false # Optimisation Gif
     Tspace, mspace = G.ranges
     nullcline = [mstable(T, model.climate) for T in Tspace]
     m₀ = log(hogg.M₀ / hogg.Mᵖ)
-    nframes = floor(Int, τ / Δt)
 
-    anim = @animate for iter in 1:nframes
-        if (iter % (nframes ÷ 100)) == 0 print("Iteration $iter / $nframes.\r") end
+    t₀ = 190.
+    nframes = floor(Int, (valuefunction.t.t - t₀) / Δt)
+    framestep = nframes ÷ 120
+
+    @gif for iter in 1:nframes
+        if (iter % framestep) == 0 print("Iteration $iter / $nframes\r") end
 
         backwardstep!(problem, problemdata, valuefunction, Δt⁻¹, model, G, calibration; withnegative)
         updateovergrid!(valuefunction.H, problem.u, 1.)
@@ -136,8 +138,9 @@ if false # Optimisation Gif
 
         valuefig = contourf(mspace, Tspace, valuefunction.H; title = "Value Function H t = $(valuefunction.t.t)", xlabel = L"m", ylabel = L"T", c=:viridis, xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
         
-        emissionsreduction = ε(valuefunction, model, calibration, G)
-        abatementfig = contourf(mspace, Tspace, emissionsreduction; title = "Abatement t = $(valuefunction.t.t)", xlabel = L"m", ylabel = L"T", c=:Greens, xlims = extrema(mspace), ylims = extrema(Tspace), clims = (0, max(1, maximum(emissionsreduction))), linewidth = 0.)
+        emax = withnegative ? 1.5 : 1.0
+        E = ε(valuefunction, model, calibration, G)
+        abatementfig = contourf(mspace, Tspace, E; title = "Abatement t = $(valuefunction.t.t)", xlabel = L"m", ylabel = L"T", c=:Greens, xlims = extrema(mspace), ylims = extrema(Tspace), clims = (0, emax), linewidth = 0.)
 
         for fig in (abatementfig, valuefig)
             plot!(fig, nullcline, Tspace; label = false, c = :white)
@@ -145,9 +148,11 @@ if false # Optimisation Gif
         end
 
         plot(abatementfig, valuefig; layout=(1,2), size = 600 .* (2√2, 1))
+    end every framestep
+end end
 
-    end
-end
+backwardsimulation!(valuefunction, Δt, model, G, calibration; t₀ = 150, withnegative, withsave = false, verbose = 1)
+
 
 if isinteractive()
     e = ε(valuefunction, model, calibration, G)

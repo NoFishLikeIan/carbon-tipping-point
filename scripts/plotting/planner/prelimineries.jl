@@ -62,8 +62,8 @@ begin # Construct models and grids
     linearmodel = IAM(LinearClimate(hogg, decay), economy, preferences)
     
     tippingmodels = [
-        IAM(TippingClimate(hogg, decay, Model.updateTᶜ(2. + hogg.Tᵖ, feedback)), economy, preferences),
-        IAM(TippingClimate(hogg, decay, Model.updateTᶜ(4. + hogg.Tᵖ, feedback)), economy, preferences)
+        IAM(TippingClimate(hogg, decay, Model.updateTᶜ(2., feedback)), economy, preferences),
+        IAM(TippingClimate(hogg, decay, Model.updateTᶜ(4., feedback)), economy, preferences)
     ]
 
     models = IAM[tippingmodels..., linearmodel]
@@ -73,20 +73,17 @@ end;
 
 begin # Labels, colors and axis
     PALETTE = colorschemes[:grays]
-    colors = get(PALETTE, range(0., 1.; length = length(models)), (0., 1.))
+    colors = get(PALETTE, range(0., 1.; length = length(models)), (0., 1.25))
 
     colorsbymodel = Dict(models .=> colors)
-    ΔTmax = 6.
-    ΔTspace = range(0.0, ΔTmax; length = 101)
-    Tspace = ΔTspace .+ Hogg().Tᵖ
+    Tmin = 0.0; Tmax = 6.0
+    Tspace = range(Tmin, Tmax; length = 101)
 
     horizon = 2100. - first(calibration.calibrationspan)
     yearlytime = 0:1:horizon
     simtspan = (0, horizon)
 
-    temperatureticks = collect.(makedeviationtickz(1., ΔTmax, hogg; step=1, digits=0))
-
-    Tmin, Tmax = extrema(temperatureticks[1])
+    temperatureticks = collect.(makedeviationtickz(0, 6; step=1, digits=0))
 
     m₀ = log(hogg.M₀ / hogg.Mᵖ)
     T₀ = hogg.T₀
@@ -105,6 +102,7 @@ begin # Feedback plot
         xticklabels = temperatureticks[2],
         xtick = temperatureticks[1],
         xmin = Tmin, xmax = Tmax,
+        ymax = 3.,
         legend_cell_align = "left",
         legend_style = { at = {"(0.025, 0.975)"}, anchor = "north west", nodes = {scale = 0.7} }
     })
@@ -132,16 +130,16 @@ end
 begin # Simulate NP problem
     sims = Dict{IAM, DiffEqArray}()
 
-    npprob = SDEProblem(Fnp, noise, X₀, simtspan, (linearmodel, calibration)) |> EnsembleProblem
+    npprob = SDEProblem(Fnp, noise, X₀, simtspan, (linearmodel, calibration))
+    npensemble = EnsembleProblem(npprob)
 
     for model in models
         npparameters = (model, calibration)
-        sol = solve(npprob, SOSRI(); trajectories, p = npparameters)
+        sol = solve(npensemble; trajectories = 1_000, p = npparameters, saveat = 1.0)
 
         @printf "Done with simulation of %s\n" labelsbymodel[model]
 
-        simpath = timeseries_point_quantile(sol, (0.05, 0.5, 0.95), yearlytime)
-
+        simpath = timestep_quantile(sol, (0.1, 0.5, 0.9), :)
         sims[model] = simpath
     end
 end;
@@ -149,7 +147,7 @@ end;
 begin # NP simulation + nullclines
     nullclinevariation = Dict{IAM, Vector{Vector{NTuple{2,Float64}}}}()
 
-    for model in reverse(models)
+    for model in reverse(tippingmodels)
         nullclines = Vector{NTuple{2,Float64}}[]
         currentM = NTuple{2,Float64}[]
         currentlystable = true
@@ -171,7 +169,7 @@ begin # NP simulation + nullclines
         nullclinevariation[model] = nullclines
     end
     
-    mmedianpath = getindex.(getindex.(sims[models[1]].u, 2), 2)
+    mmedianpath = getindex.(getindex.(sims[tippingmodels[1]].u, 2), 2)
     Mmedianpath = @. hogg.Mᵖ * exp(mmedianpath)
     Mticks = Mmedianpath[1:15:end]
     Mmin, Mmax = extrema(Mticks)
@@ -202,7 +200,7 @@ begin # NP simulation + nullclines
         PGFPlotsX.save(joinpath(PLOTPATH, "skeleton-nullcline.tikz"), nullclinefig; include_preamble=true)
     end
 
-    for model in reverse(models) # Nullclines
+    for model in reverse(tippingmodels) # Nullclines
         color = colorsbymodel[model]
         
         stableleft, rest... = nullclinevariation[model]
@@ -220,7 +218,7 @@ begin # NP simulation + nullclines
         end
     end
 
-    for model in reverse(models) # Simulation plots
+    for model in reverse(tippingmodels) # Simulation plots
         color = colorsbymodel[model]
         simpath = sims[model]
 
@@ -268,7 +266,7 @@ begin # Pure nullcline figure
         legend_cell_align = "left"
     })
 
-    for model in reverse(models) # Nullcline plots
+    for model in reverse(tippingmodels) # Nullcline plots
         color = colorsbymodel[model]
         
         stableleft, rest... = nullclinevariation[model]
@@ -300,10 +298,9 @@ end
 # --- No Policy dynamics
 begin # Simulate carbon concentrations
     mbau(m, (hogg, calibration), t) = γ(t, calibration)
-    σₘbau(m, (hogg, calibration), t) = hogg.σₘ    
     parameters = (hogg, calibration)
-    mbauprob = SDEProblem(mbau, σₘbau, m₀, (0.0, 80.0), parameters) |> EnsembleProblem
-    mbausims = solve(mbauprob, SOSRI(); trajectories = 10_000)
+    mnpproblem = ODEProblem(mbau, m₀, (0.0, 80.0), parameters)
+    mnptraj = solve(mbauprob, AutoVern9(Rodas5P()); saveat = 1.)
 end
 
 begin # Growth of carbon concentration 
@@ -350,19 +347,12 @@ begin # Growth of carbon concentration
             scaled_y_ticks = false
         }, curve, markers)
 
-
-    mbaumedian = timeseries_point_median(mbausims, yearlytime)
-    mlower = timeseries_point_quantile(mbausims, 0.05, yearlytime)
-    mupper = timeseries_point_quantile(mbausims, 0.95, yearlytime)
-
     mfig = Axis()
 
-    medianplot = @pgf Plot({line_width = LINE_WIDTH}, Coordinates(yearlytime, hogg.Mᵖ .* exp.(mbaumedian.u)))
+    Mpath = @. exp(mnptraj.u) * hogg.Mᵖ
+    medianplot = @pgf Plot({line_width = LINE_WIDTH}, Coordinates(yearlytime, Mpath))
 
-    lowerplot = @pgf Plot({line_width = LINE_WIDTH, dotted, opacity = 0.5}, Coordinates(yearlytime, hogg.Mᵖ .* exp.(mlower.u)))
-    upperplot = @pgf Plot({line_width = LINE_WIDTH, dotted, opacity = 0.5}, Coordinates(yearlytime, hogg.Mᵖ .* exp.(mupper.u)))
-
-    push!(mfig, medianplot, lowerplot, upperplot)
+    push!(mfig, medianplot)
 
     @pgf push!(gfig, {
             figsize...,
@@ -382,12 +372,10 @@ begin # Growth of carbon concentration
     gfig
 end
 
-
 begin # Carbon decay path
-    npmprob = ODEProblem((m, calibration, t) -> γ(t, calibration), m₀, simtspan, calibration)
-
-    npsim = solve(npmprob, AutoVern9(Rodas5P()); saveat = 1.)
-    mediandecay = [δₘ(M, decay) for M in hogg.Mᵖ * exp.(npsim.u)]
+    mediandecay = [100 * δₘ(M, decay) for M in Mpath]
+    ytick = -0.1:0.1:0.5
+    yticklabels = ["$(round(δ, digits = 2)) \\%" for δ in ytick]
 
     decaypathfig = @pgf Axis({
         width = raw"0.7\textwidth",
@@ -395,12 +383,13 @@ begin # Carbon decay path
         grid = "both",
         xlabel = raw"Carbon concentration $M$",
         ylabel = raw"Decay of CO$_2$ in the atmosphere $\delta_m$",
-        xmin = hogg.M₀, xmax = 800.,
-        scaled_y_ticks = false
+        xmin = minimum(Mpath), xmax = maximum(Mpath),
+        scaled_y_ticks = false,
+        ytick = ytick, yticklabels = yticklabels
     })
 
     @pgf push!(decaypathfig,
-        Plot({line_width = LINE_WIDTH}, Coordinates(npM, mediandecay))
+        Plot({line_width = LINE_WIDTH}, Coordinates(Mpath, mediandecay))
     )
 
     if SAVEFIG
@@ -410,9 +399,17 @@ begin # Carbon decay path
     decaypathfig
 end
 
-begin # Damage fig
-    ΔTspace = range(0, ΔTmax; length = 51)
-    cumulativedamages = Model.D.(ΔTspace, damages)
+let # Damage fig
+    Plots.pgfplotsx()
+    Mmin = exp(mstable(Tspace[1], linearmodel.climate)) * linearmodel.climate.hogg.Mᵖ
+    Mmax = exp(mstable(Tspace[end], linearmodel.climate)) * linearmodel.climate.hogg.Mᵖ
+
+    Mspace = range(Mmin, Mmax; length = 101)
+
+    for model in reverse(tippingmodels)
+        #TODO: Finish        
+
+    end
 
     maxpercentage = ceil(maximum(cumulativedamages), digits=2)
     ytick = 0:0.05:maxpercentage

@@ -20,7 +20,7 @@ cd $HOME/scc-tipping-points # Move to base directory
 
 SCRATCHDATA="$TMPDIR"/data
 mkdir -p $SCRATCHDATA # Create scratch directory with user name
-rsync data/calibration.jld2 $SCRATCHDATA # Copy calibration data to scratch
+rsync data/calibration $SCRATCHDATA # Copy calibration data to scratch
 
 # Extract parameters at the SLURM_ARRAY_TASK_ID from parameters.json
 jq_command='
