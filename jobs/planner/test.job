@@ -3,7 +3,7 @@
 #SBATCH --job-name=test
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --array=0-5
+#SBATCH --array=0-2
 #SBATCH --time=00:30:00
 #SBATCH --partition=rome
 #SBATCH --mail-type=BEGIN,END,FAIL,TIME_LIMIT_80
