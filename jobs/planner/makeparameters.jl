@@ -1,8 +1,8 @@
 using JSON
 
 thresholds = [2., 2.5, 5.] # [2:0.1:5..., -1.];
-damages = ["kalkuhl"]
-withnegatives = [false, true];
+damages = ["burke"]
+withnegatives = [true];
 
 ParamVal = Union{Float64, String, Bool};
 parameters = Dict{String, ParamVal}[];
