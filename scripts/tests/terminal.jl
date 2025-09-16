@@ -69,7 +69,7 @@ begin
     G = RegularGrid(N, domains)
     Δt⁻¹ = 10
     Δt = 1 / Δt⁻¹
-    τ = 0.
+    τ = 500.
 end;
 
 

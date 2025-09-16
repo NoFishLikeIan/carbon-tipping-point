@@ -12,7 +12,7 @@ include("models/preferences.jl")
 include("models/models.jl")
 include("logging.jl")
 
-export Calibration, DynamicCalibration, ConstantCalibration, RegionalCalibration
+export Calibration, DynamicCalibration, ConstantCalibration, DoubleExponentialCalibration
 export γ, Eᵇ
 
 export Climate, TippingClimate, LinearClimate, JumpingClimate

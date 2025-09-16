@@ -75,22 +75,17 @@ function backwardsimulation!(
     end
 
     # Initialise problem
-    # FIXME: Obsolete
     Δt⁻¹ = inv(Δt)
-    source = constructsource(valuefunction, Δt⁻¹, model, G, calibration)
-    adv = constructadv(valuefunction, model, G)
     stencil = makestencil(G)
-    problemdata = (stencil, source, adv)
-
     A₀ = constructA!(stencil, valuefunction, Δt⁻¹, model, G, calibration, withnegative)
-    b₀ = source - adv
+    b₀ =  constructsource(valuefunction, Δt⁻¹, model, G, calibration)
 
     # Initialise the problem
     problem = LinearSolve.init(LinearProblem(A₀, b₀), alg)
-    backwardstep!(problem, problemdata, valuefunction, Δt⁻¹, model, G, calibration; withnegative)
+    backwardstep!(problem, stencil, valuefunction, Δt⁻¹, model, G, calibration; withnegative)
  
     while t₀ < valuefunction.t.t
-        backwardstep!(problem, problemdata, valuefunction, Δt⁻¹, model, G, calibration; withnegative)
+        backwardstep!(problem, stencil, valuefunction, Δt⁻¹, model, G, calibration; withnegative)
         updateovergrid!(valuefunction.H, problem.u, 1.)
 
         valuefunction.t.t -= Δt

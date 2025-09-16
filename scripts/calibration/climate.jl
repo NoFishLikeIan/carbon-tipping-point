@@ -247,7 +247,7 @@ end;
 npscenario = "SSP5 8.5"
 
 if isinteractive() # Figure CO₂ concentration in the no policy scenario
-    co2equivalencefig = plot(xlabel="Year", yaxis="Concentration (ppm)", title="Carbon Dioxide Concentration in SSP5 8.5", xlims=(1900, 2150))
+    co2equivalencefig = plot(xlabel="Year", yaxis="Concentration (ppm)", title="Carbon Dioxide Concentration in SSP5 8.5", xlims=(1900, 2200), legend = :topleft)
 
     concentrationnames = filter(m -> occursin("Concentration", m), names(co2equivalence))
     colors = palette(:tab10, length(concentrationnames); rev=true)
@@ -302,7 +302,7 @@ end
 # --- Computing parametric emissions form
 begin # Setup CO₂e maximisation problem
     baselineyear = 2020.
-    τ = 2150. - baselineyear
+    τ = 2200. - baselineyear
     co2tspan = baselineyear .+ (0., τ)
 
     tdxs = baselineyear .≤ co2equivalence.Year .≤ (baselineyear + τ)
@@ -310,11 +310,33 @@ begin # Setup CO₂e maximisation problem
 
     Mᵖ = mean(co2equivalence[1800 .≤ co2equivalence.Year .≤ 1900, "Concentration"])
     m = @. log(co2calibrationdf.Concentration / Mᵖ)
-    γ̂ₜ = diff(m); smooth!(γ̂ₜ, 1)  # Reduced smoothing to preserve SSP5-8.5 growth dynamics
+    t = co2calibrationdf.Year[1:end-1]
+    γ̂ₜ = diff(m)# ; smooth!(γ̂ₜ, 5)  # Reduced smoothing to preserve SSP5-8.5 growth dynamics
     Eₜ = Vector{Float64}(co2calibrationdf.Emissions)
 end;
 
-calibration = DynamicCalibration(co2tspan, Eₜ, γ̂ₜ)
+function growthrate(t, p)
+    γ₀, α, γ₁, β, γ̄ = p
+
+    return γ₀ * exp(α * t) + γ₁ * exp(β * t) + γ̄
+end
+
+begin
+    growthloss = @closure p -> mean(abs2, growthrate.(t .- co2tspan[1], Ref(p)) .- γ̂ₜ)
+    p₀ = MVector(0.001, -0.02, -0.01, -0.02, 0.002)
+
+    γres = optimize(growthloss, p₀, LBFGS())
+end
+
+γ̲ = 0.002
+calibration = DoubleExponentialCalibration(co2tspan, Eₜ, γres.minimizer..., γ̲)
+
+if isinteractive()
+    fitfig = plot(t, γ̂ₜ; label="Observed growth rate γ̂ₜ", c=:black, linewidth=2.5, xlabel="Year", ylabel="Growth rate")
+    plot!(fitfig, t, t -> γ(t - baselineyear, calibration); label="Fitted growth rate γ(t)", c=:red, linewidth=2.5, linestyle=:dash)
+    fitfig
+end
+
 # --- Implied emissions
 begin
     m₀ = first(m)
@@ -394,6 +416,10 @@ begin # Solve parameters of saturation decay
 
     decay = SaturationRecoveryDecay(decaysol.u...)
 end
+
+# Check feasibility
+δ̲, _ = gssmin(M -> δₘ(M, decay), 400, 3000; tol = 1e-2)
+@assert δ̲ + γ̲ > 0
 
 if isinteractive() # Check cumulative emissions vs concentration
     Mspace = range(minimum(Mₜ), 1.2maximum(Mₜ), 202)

@@ -2,6 +2,9 @@ function αopt(t, Xᵢ::Point, ∂ₘH, model::M, calibration::Calibration) wher
     @unpack economy, preferences = model
 
     if ∂ₘH ≤ 0 return zero(S) end
+    
+    ᾱᵢ = ᾱ(t, Xᵢ, model, calibration)
+    if ᾱᵢ ≤ 0 return zero(S) end
 
     @unpack abatement, investments = economy
     b = abatement.b

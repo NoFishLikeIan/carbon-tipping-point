@@ -42,6 +42,8 @@ function makefilename(model::IAM{S, D, P, C}) where {S, D <: Damages{S}, P <: Lo
     
     damagepart = if D <: Kalkuhl
         "kalkuhl"
+    elseif D <: BurkeHsiangMiguel
+        "burke"
     elseif D <: WeitzmanGrowth
         "weitzman"
     elseif D <: NoDamageGrowth

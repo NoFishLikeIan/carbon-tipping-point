@@ -66,11 +66,15 @@ begin # Construct model
     climatepath = joinpath(calibrationpath, "climate.jld2")
     @assert isfile(climatepath) "Climate calibration file not found at $climatepath"
     climatefile = jldopen(climatepath, "r+")
-    @unpack calibration, hogg, feedbacklower, feedback, feedbackhigher, decay = climatefile
+    @unpack calibration, hogg, feedbacklower, feedback, feedbackhigher = climatefile
     close(climatefile)
+
+    decay = ConstantDecay(0.0)
 
     damage = if damages == "kalkuhl"
         Kalkuhl{Float64}()
+    elseif damages == "burke"
+        BurkeHsiangMiguel{Float64}()
     elseif damages == "nodamages"
         NoDamageGrowth{Float64}()
     elseif damages == "weitzman"
