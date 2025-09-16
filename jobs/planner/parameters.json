@@ -6,12 +6,157 @@
       "withnegative": true
     },
     {
+      "threshold": 2.1,
+      "damage": "burke",
+      "withnegative": true
+    },
+    {
+      "threshold": 2.2,
+      "damage": "burke",
+      "withnegative": true
+    },
+    {
+      "threshold": 2.3,
+      "damage": "burke",
+      "withnegative": true
+    },
+    {
+      "threshold": 2.4,
+      "damage": "burke",
+      "withnegative": true
+    },
+    {
       "threshold": 2.5,
       "damage": "burke",
       "withnegative": true
     },
     {
+      "threshold": 2.6,
+      "damage": "burke",
+      "withnegative": true
+    },
+    {
+      "threshold": 2.7,
+      "damage": "burke",
+      "withnegative": true
+    },
+    {
+      "threshold": 2.8,
+      "damage": "burke",
+      "withnegative": true
+    },
+    {
+      "threshold": 2.9,
+      "damage": "burke",
+      "withnegative": true
+    },
+    {
+      "threshold": 3.0,
+      "damage": "burke",
+      "withnegative": true
+    },
+    {
+      "threshold": 3.1,
+      "damage": "burke",
+      "withnegative": true
+    },
+    {
+      "threshold": 3.2,
+      "damage": "burke",
+      "withnegative": true
+    },
+    {
+      "threshold": 3.3,
+      "damage": "burke",
+      "withnegative": true
+    },
+    {
+      "threshold": 3.4,
+      "damage": "burke",
+      "withnegative": true
+    },
+    {
+      "threshold": 3.5,
+      "damage": "burke",
+      "withnegative": true
+    },
+    {
+      "threshold": 3.6,
+      "damage": "burke",
+      "withnegative": true
+    },
+    {
+      "threshold": 3.7,
+      "damage": "burke",
+      "withnegative": true
+    },
+    {
+      "threshold": 3.8,
+      "damage": "burke",
+      "withnegative": true
+    },
+    {
+      "threshold": 3.9,
+      "damage": "burke",
+      "withnegative": true
+    },
+    {
+      "threshold": 4.0,
+      "damage": "burke",
+      "withnegative": true
+    },
+    {
+      "threshold": 4.1,
+      "damage": "burke",
+      "withnegative": true
+    },
+    {
+      "threshold": 4.2,
+      "damage": "burke",
+      "withnegative": true
+    },
+    {
+      "threshold": 4.3,
+      "damage": "burke",
+      "withnegative": true
+    },
+    {
+      "threshold": 4.4,
+      "damage": "burke",
+      "withnegative": true
+    },
+    {
+      "threshold": 4.5,
+      "damage": "burke",
+      "withnegative": true
+    },
+    {
+      "threshold": 4.6,
+      "damage": "burke",
+      "withnegative": true
+    },
+    {
+      "threshold": 4.7,
+      "damage": "burke",
+      "withnegative": true
+    },
+    {
+      "threshold": 4.8,
+      "damage": "burke",
+      "withnegative": true
+    },
+    {
+      "threshold": 4.9,
+      "damage": "burke",
+      "withnegative": true
+    },
+    {
       "threshold": 5.0,
+      "damage": "burke",
+      "withnegative": true
+    },
+    {
+      "threshold": -1.0,
       "damage": "burke",
       "withnegative": true
     }
