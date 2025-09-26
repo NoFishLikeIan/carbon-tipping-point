@@ -1,255 +1,298 @@
-function αopt(t, Xᵢ::Point, ∂ₘH, model::M, calibration::Calibration) where {S, M <: UnitIAM{S}}
+"Optimal abatement policy"
+function φ(t, x::Point, ∂ₘH, model::M, calibration::Calibration) where {S, M <: UnitIAM{S}}
     @unpack economy, preferences = model
 
     if ∂ₘH ≤ 0 return zero(S) end
-    
-    ᾱᵢ = ᾱ(t, Xᵢ, model, calibration)
-    if ᾱᵢ ≤ 0 return zero(S) end
 
     @unpack abatement, investments = economy
-    b = abatement.b
+    @unpack b = abatement
 
-    num = ∂ₘH * ᾱ(t, Xᵢ, model, calibration)^b
+    num = ∂ₘH * ᾱ(t, x, model, calibration)^b
     den = b * A(t, investments) * ω(t, abatement) * (preferences.θ - 1)
 
     return (num / den)^inv(b - 1)
 end
-function implicit∂ₘH(t, Xᵢ::Point, αᵢ, model::M, calibration::Calibration) where {S, M <: UnitIAM{S}}
+function φ⁻¹(t, x::Point, αᵢ, model::M, calibration::Calibration) where {S, M <: UnitIAM{S}}
     @unpack economy, preferences = model
-    
+
     if αᵢ ≤ 0 return zero(αᵢ) end
     
-    b = economy.abatement.b
+    @unpack abatement, investments = economy
+    @unpack b = abatement
     
-    return αᵢ^(b - 1) * b * A(t, economy.investments) * ω(t, economy.abatement) * (preferences.θ - 1) / ᾱ(t, Xᵢ, model, calibration)^b
+    return αᵢ^(b - 1) * b * A(t, investments) * ω(t, abatement) * (preferences.θ - 1) / ᾱ(t, x, model, calibration)^b
 end
 
-function upperbound(t, Xᵢ, model::M, calibration::Calibration, withnegative) where {S, M <: UnitIAM{S}}
-    ifelse(withnegative, 2, 1) * ᾱ(t, Xᵢ, model, calibration)
+function upperbound(t, x, model::M, calibration::Calibration, withnegative) where {S, M <: UnitIAM{S}}
+    ifelse(withnegative, Inf, 1) * ᾱ(t, x, model, calibration)
 end
-function stencilsize(::GR) where {N₁, N₂, GR <: AbstractGrid{N₁, N₂}}
-    7 * N₁ * N₂ - 2N₂
+function stencilsizes(::GR) where {N₁, N₂, GR <: AbstractGrid{N₁, N₂}}
+    nᵀ = N₂ * (3N₁ - 2)
+    nᵐ = N₁ * (3N₂ - 2)
+
+    return (nᵀ, nᵐ)
 end
 function makestencil(G::GR) where {N₁, N₂, S, GR <: AbstractGrid{N₁, N₂, S}}
-    n = stencilsize(G)
-    idx = Vector{Int}(undef, n)
-    jdx = Vector{Int}(undef, n)
+    n = stencilsizes(G)
+    stencils = ntuple(j -> begin
+            rows = Vector{Int}(undef, n[j])
+            columns = Vector{Int}(undef, n[j])
+            data = Vector{S}(undef, n[j])
+
+            (rows, columns, data)
+        end, 2)
+
+    return stencils
+end
+function makeequilibriumstencil(::GR) where {N₁, N₂, S, GR <: AbstractGrid{N₁, N₂, S}}
+    n = 3N₂ - 2 
+    rows = Vector{Int}(undef, n)
+    columns = Vector{Int}(undef, n)
     data = Vector{S}(undef, n)
 
-    return (idx, jdx, data)
+    return (rows, columns, data)
 end
 
 StencilData{S} = Tuple{Vector{Int}, Vector{Int}, Vector{S}}
-"Constructs upwind-downwind scheme discretiser `(ρ + Δt⁻¹)I - L - B(Hⁿ)` and updates policy accordingly."
-function constructA!(V, Δt⁻¹, model, G::GR, calibration, withnegative) where {N₁, N₂, S, GR <: AbstractGrid{N₁, N₂, S}}
-    constructA!(makestencil(G), V, Δt⁻¹, model, G, calibration, withnegative)
-end
-function constructA!(stencil::StencilData{S}, V::ValueFunction{S, N₁, N₂}, Δt⁻¹, model::M, G::GR, calibration::Calibration, withnegative) where {N₁, N₂, S, M <: UnitIAM{S}, GR <: AbstractGrid{N₁, N₂, S}}
-    (idx, jdx, data) = stencil
+"Constructs upwind-downwind scheme discretiser `Dᵀ` for temperature `T`."
+function constructDᵀ!(stencil::StencilData{S}, model::M, G::RegularGrid{N₁, N₂, S}) where {N₁, N₂, S, M <: UnitIAM{S}}
+    ΔT = step(G, 1)
+    Tspace, mspace = G.ranges
 
-    t = V.t.t
-    γₜ = γ(t, calibration)
-    r = model.preferences.ρ + Δt⁻¹
-
-    n = length(G)
-    
-    entrydx = 1
+    rows, columns, data = stencil
+    counter = 1
     @inbounds for j in axes(G, 2), i in axes(G, 1)
         k = LinearIndex((i, j), G)
-        Xᵢ = G[k]
-        σₜ² = variance(Xᵢ.T, model.climate.hogg)
-
-        (ΔT₋, ΔT₊), (Δm₋, Δm₊) = steps(G, i, j)
- 
+        x = Point(Tspace[i], mspace[j])
+        
         y = zero(S) # Diagonal values
         
-        # Temperature, which is uncontrolled
-        bᵀ = μ(Xᵢ.T, Xᵢ.m, model.climate) / model.climate.hogg.ϵ
-        if (bᵀ ≥ 0 && i < N₁) || (bᵀ < 0 && i == 1)
-            ∂ᵀH = (V.H[i + 1, j] - V.H[i, j]) / ΔT₊
+        σₜ² = variance(x.T, model.climate.hogg) / ΔT^2
+        bᵀ = μ(x.T, x.m, model.climate) / (model.climate.hogg.ϵ * ΔT)
 
-            z = bᵀ / ΔT₊
-            x = zero(S)
-        else
-            ∂ᵀH = (V.H[i, j] - V.H[i - 1, j]) / ΔT₋
+        if 1 < i < N₁
+            z = σₜ² / 2 + max(bᵀ, 0)
+            rows[counter] = k; columns[counter] = LinearIndex((i + 1, j), G)
+            data[counter] = z; counter += 1
             
-            z = zero(S)
-            x = -bᵀ / ΔT₋
+            x = σₜ² / 2 + max(-bᵀ, 0)
+            rows[counter] = k; columns[counter] = LinearIndex((i - 1, j), G)
+            data[counter] = x; counter += 1
+
+            y -= (x + z)
+        elseif i == 1 # Lower boundary
+            z = max(bᵀ, 0) + σₜ²
+            rows[counter] = k; columns[counter] = LinearIndex((2, j), G)
+            data[counter] = z; counter += 1
+
+            y -= z
+        else # Upper boundary
+            x = max(-bᵀ, 0) + σₜ²
+            rows[counter] = k; columns[counter] = LinearIndex((N₁ - 1, j), G)
+            data[counter] = x; counter += 1
+
+            y -= x
         end
 
-        zdx = min(i + 1, N₁)
-        idx[entrydx] = k; jdx[entrydx] = LinearIndex((zdx, j), G); data[entrydx] = -z
-        entrydx += 1
-        xdx = max(i - 1, 1)
-        idx[entrydx] = k; jdx[entrydx] = LinearIndex((xdx, j), G); data[entrydx] = -x
-        entrydx += 1
+        rows[counter] = k; columns[counter] = k;
+        data[counter] = y;
 
-        y -= (z + x)
+        counter += 1
+    end
+end
+"Constructs upwind-downwind scheme discretiser `Dᵐ` for CO2e log-concentration `m` and updates policy `α`."
+function constructDᵐ!(stencil::StencilData{S}, valuefunction::ValueFunction{S, N₁, N₂}, model::M, G::RegularGrid{N₁, N₂, S}, calibration::Calibration, withnegative::Bool) where {N₁, N₂, S, M <: UnitIAM{S}}
+    @unpack t, H, α = valuefunction
+    γₜ = γ(t.t, calibration)
+    
+    Δm = step(G, 2)
+    Tspace, mspace = G.ranges
+    rows, columns, data = stencil
+    counter = 1
+    @inbounds for j in axes(G, 2), i in axes(G, 1)
+        k = LinearIndex((i, j), G)
+        x = Point(Tspace[i], mspace[j])
+        αmax = upperbound(t.t, x, model, calibration, withnegative)
 
-        # Temperature noise terms (second derivative)
-        if i > 1 && i < N₁
-            # Central difference for second derivative with variable spacing
-            νT₋ = σₜ² / (ΔT₋ * (ΔT₋ + ΔT₊))
-            νT₊ = σₜ² / (ΔT₊ * (ΔT₋ + ΔT₊))
-            
-            idx[entrydx] = k; jdx[entrydx] = LinearIndex((i - 1, j), G); data[entrydx] = -νT₋
-            entrydx += 1
-            idx[entrydx] = k; jdx[entrydx] = LinearIndex((i + 1, j), G); data[entrydx] = -νT₊
-            entrydx += 1
-            y -= (νT₋ + νT₊)
-        elseif i == 1
-            νT = (σₜ² / 2) / ΔT₊^2
-            idx[entrydx] = k; jdx[entrydx] = LinearIndex((i + 1, j), G); data[entrydx] = -νT
-            entrydx += 1
-            y -= νT
-        elseif i == N₁
-            νT = (σₜ² / 2) / ΔT₋^2
-            idx[entrydx] = k; jdx[entrydx] = LinearIndex((i - 1, j), G); data[entrydx] = -νT
-            entrydx += 1
-            y -= νT
-        end
-
-        # Carbon concentration is controlled
-        αmax = upperbound(t, Xᵢ, model, calibration, withnegative)
-        
-        # Forward direction (positive drift)
+        # Choose consistent drift / derivative pair
         if j < N₂
-            ∂ᵐ₊H = (V.H[i, j + 1] - V.H[i, j]) / Δm₊
-            α₊ = clamp(αopt(t, Xᵢ, ∂ᵐ₊H, model, calibration), 0, αmax)
+            ∂ᵐ₊H = (H[i, j + 1] - H[i, j]) / Δm
+            α₊ = min(φ(t.t, x, ∂ᵐ₊H, model, calibration), αmax)
         else
             α₊ = γₜ
-            ∂ᵐ₊H = implicit∂ₘH(t, Xᵢ, α₊, model, calibration)
+            ∂ᵐ₊H = φ⁻¹(t.t, x, α₊, model, calibration)
         end
-
-        bᵐ₊ = γₜ - α₊
 
         if j > 1
-            ∂ᵐ₋H = (V.H[i, j] - V.H[i, j - 1]) / Δm₋
-            α₋ = clamp(αopt(t, Xᵢ, ∂ᵐ₋H, model, calibration), 0, αmax)
+            ∂ᵐ₋H = (H[i, j] - H[i, j - 1]) / Δm
+            α₋ = min(φ(t.t, x, ∂ᵐ₋H, model, calibration), αmax)
         else
             α₋ = γₜ
-            ∂ᵐ₋H = implicit∂ₘH(t, Xᵢ, α₋, model, calibration)
+            ∂ᵐ₋H = φ⁻¹(t.t, x, α₋, model, calibration)
         end
-        
-        bᵐ₋ = γₜ - α₋
 
-        if bᵐ₊ > 0 && bᵐ₋ < 0 # Drifts are discordant outwards, use Hamiltonian
-            H₊ = l(t, Xᵢ, α₊, model, calibration) + ∂ᵐ₊H * bᵐ₊
-            H₋ = l(t, Xᵢ, α₋, model, calibration) + ∂ᵐ₋H * bᵐ₋
+        bᵐ₊ = (γₜ - α₊) / Δm
+        bᵐ₋ = (γₜ - α₋) / Δm
 
-            if H₊ < H₋ # Use upward derivative
-                V.α[k] = α₊
-                z = bᵐ₊ / Δm₊
+        if bᵐ₊ > 0 && bᵐ₋ ≥ 0 # Drifts agree forward
+            α[i, j] = α₊
+            z = bᵐ₊
+            x = zero(S)
+        elseif bᵐ₋ < 0 && bᵐ₊ ≤ 0 # Drifts agree backward
+            α[i, j] = α₋
+            z = zero(S)
+            x = -bᵐ₋
+        elseif bᵐ₊ ≤ 0 && bᵐ₋ ≥ 0 # Drifts point inwards, steady-state
+            α[i, j] = γₜ
+            z = zero(S)
+            x = zero(S)
+        elseif bᵐ₊ > 0 && bᵐ₋ < 0 # Drifts point outwards, non-concavity, follow Hamiltonian
+            H₊ = l(t.t, x, α₊, model, calibration) + ∂ᵐ₊H * bᵐ₊ * Δm
+            H₋ = l(t.t, x, α₋, model, calibration) + ∂ᵐ₋H * bᵐ₋ * Δm
+
+            if H₊ < H₋
+                α[i, j] = α₊
+                z = bᵐ₊
                 x = zero(S)
-            else # Use downard derivative
-                V.α[k] = α₋
+            else
+                α[i, j] = α₋
                 z = zero(S)
-                x = -bᵐ₋ / Δm₋
+                x = -bᵐ₋
             end
-        elseif bᵐ₊ > 0 && bᵐ₋ ≥ 0 # Drifts agree upward
-            V.α[k] = α₊
-            z = bᵐ₊ / Δm₊
-            x = zero(S)
-        elseif bᵐ₊ ≤ 0 && bᵐ₋ < 0 # Drifts agree downard
-            V.α[k] = α₋
-            z = zero(S)
-            x = -bᵐ₋ / Δm₋
-        elseif bᵐ₊ ≤ 0 && bᵐ₋ ≥ 0 # Drifts disagree inwards, use steady state
-            V.α[k] = γₜ
-            z = zero(S)
-            x = zero(S)
-        else
-            throw("Drift combination not implemented: sign(bᵐ₊)=$(sign(bᵐ₊)), sign(bᵐ₋)=$(sign(bᵐ₋))")
+        else throw("Unhandled pair of drifts: bᵐ₊ = $(bᵐ₊), bᵐ₋ = $(bᵐ₋)") end
+
+        if j < N₂
+            rows[counter] = k; columns[counter] = LinearIndex((i, j + 1), G)
+            data[counter] = z; counter += 1
         end
 
-        zdx = min(j + 1, N₂)
-        idx[entrydx] = k; jdx[entrydx] = LinearIndex((i, zdx), G); data[entrydx] = -z
-        entrydx += 1
-        
-        xdx = max(j - 1, 1)
-        idx[entrydx] = k; jdx[entrydx] = LinearIndex((i, xdx), G); data[entrydx] = -x
-        entrydx += 1
-        y -= (z + x)
+        if j > 1
+            rows[counter] = k; columns[counter] = LinearIndex((i, j - 1), G)
+            data[counter] = x; counter += 1
+        end
 
-
-        idx[entrydx] = k; jdx[entrydx] = k; data[entrydx] = r - y
-        entrydx += 1
+        rows[counter] = k; columns[counter] = k
+        data[counter] = -(x + z); counter += 1
     end
+end
+"Constructs the one-dimensional discretiser `Dᵐ` for CO2e log-concentration `m` and updates policy `α`, under `ϵ → 0`. Requires climate model to be linear."
+function constructequilibriumDᵐ!(equilibriumstencil::StencilData{S}, (t, H, α), model::M, G::RegularGrid{N₁, N₂, S}, calibration::Calibration, withnegative::Bool) where {N₁, N₂, S, D, P, C <: LinearClimate, M <: UnitIAM{S, D, P, C}}
+    _, mspace = G.ranges
+	Δm = step(mspace)
+    γₜ = γ(t, calibration)
 
-    return SparseArrays.sparse(idx, jdx, data, n, n)
+    rows, columns, data = equilibriumstencil
+    counter = 1
+	@inbounds for j in axes(G, 2)
+		m = mspace[j]
+        T = Tstable(m, model.climate) |> only
+        x = Point(T, m)
+
+        if j < N₂
+            ∂ᵐ₊H = (H[j + 1] - H[j]) / Δm
+            α₊ = φ(t, x, ∂ᵐ₊H, model, calibration)
+        else
+            α₊ = γₜ
+            ∂ᵐ₊H = φ⁻¹(t, x, α₊, model, calibration)
+        end
+        
+		if j > 1
+            ∂ᵐ₋H = (H[j] - H[j - 1]) / Δm
+            α₋ = φ(t, x, ∂ᵐ₋H, model, calibration)
+        else
+            α₋ = γₜ
+            ∂ᵐ₋H = φ⁻¹(t, x, α₋, model, calibration)
+        end
+
+        bᵐ₊ = (γₜ - α₊) / Δm
+        bᵐ₋ = (γₜ - α₋) / Δm
+		
+        if bᵐ₊ > 0 && bᵐ₋ ≥ 0 # Drifts agree forward
+            α[j] = α₊
+            z = bᵐ₊
+            x = zero(S)
+        elseif bᵐ₋ < 0 && bᵐ₊ ≤ 0 # Drifts agree backward
+            α[j] = α₋
+            z = zero(S)
+            x = -bᵐ₋
+        elseif bᵐ₊ ≤ 0 && bᵐ₋ ≥ 0 # Drifts point inwards, steady-state
+            α[j] = γₜ
+            z = zero(S)
+            x = zero(S)
+        elseif bᵐ₊ > 0 && bᵐ₋ < 0 # Drifts point outwards, non-concavity, follow Hamiltonian
+            H₊ = l(t, x, α₊, model, calibration) + ∂ᵐ₊H * bᵐ₊ * Δm
+            H₋ = l(t, x, α₋, model, calibration) + ∂ᵐ₋H * bᵐ₋ * Δm
+
+            if H₊ < H₋
+                α[j] = α₊
+                z = bᵐ₊
+                x = zero(S)
+            else
+                α[j] = α₋
+                z = zero(S)
+                x = -bᵐ₋
+            end
+        else throw("Unhandled pair of drifts: bᵐ₊ = $(bᵐ₊), bᵐ₋ = $(bᵐ₋)") end
+
+        if j < N₂
+            rows[counter] = j; columns[counter] = j + 1
+            data[counter] = z; counter += 1
+        end
+
+        if j > 1
+            rows[counter] = j; columns[counter] = j - 1
+            data[counter] = x; counter += 1
+        end
+
+        rows[counter] = j; columns[counter] = j
+        data[counter] = -(x + z); counter += 1
+	end
 end
 
 "Constructs source vector `Δt⁻¹ Hⁿ + b`."
 function constructsource(valuefunction::ValueFunction, Δt⁻¹, model::M, G::GR, calibration) where {N₁, N₂, S, M <: UnitIAM, GR <: AbstractGrid{N₁, N₂, S}}
-    constructsource!(Vector{S}(undef, length(G)), valuefunction, Δt⁻¹, model, G, calibration)
+    constructsource!(Vector{S}(undef, N₁ * N₂), valuefunction, Δt⁻¹, model, G, calibration)
 end
 "Updates source vector `Δt⁻¹ Hⁿ + b`."
 function constructsource!(source, valuefunction::ValueFunction, Δt⁻¹, model::M, G::GR, calibration) where {N₁, N₂, S, M <: UnitIAM, GR <: AbstractGrid{N₁, N₂, S}}
-    @unpack H, α = valuefunction
+    @unpack t, H, α = valuefunction
+    Tspace, mspace = G.ranges
     @inbounds for j in axes(G, 2), i in axes(G, 1)
-        Xᵢ = G[i, j]
-        αᵢ = valuefunction.α[i, j]
-        Hᵢ = valuefunction.H[i, j]
+        x = Point(Tspace[i], mspace[j])
+        αᵢ = α[i, j]
+        Hᵢ = H[i, j]
 
-        (ΔT₋, ΔT₊), _ = steps(G, i, j)
-        bᵀ = μ(Xᵢ.T, Xᵢ.m, model.climate) / model.climate.hogg.ϵ
-        ∂ᵀH = (bᵀ ≥ 0 && i < N₁) || (bᵀ < 0 && i == 1) ? (H[i + 1, j] - H[i, j]) / ΔT₊ : (H[i - 1, j] - H[i, j]) / ΔT₋
+        ΔT = step(G, 1)
+        bᵀ = μ(x.T, x.m, model.climate)
+        useforward = (bᵀ ≥ 0 && i < N₁) || (bᵀ < 0 && i == 1) 
+
+        ∂ᵀH = ((useforward ? H[i + 1, j] : H[i - 1, j]) - Hᵢ) / ΔT
+        advection = ∂ᵀH^2 * variance(x.T, model.climate.hogg) / 2
 
         k = LinearIndex((i, j), G)
-        source[k] = l(valuefunction.t.t, Xᵢ, αᵢ, model, calibration) + Δt⁻¹ * Hᵢ + ∂ᵀH^2 * variance(Xᵢ.T, model.climate.hogg) / 2
+        source[k] = advection + l(t.t, x, αᵢ, model, calibration) + Δt⁻¹ * Hᵢ
     end
 
     return source
 end
 
-function centralderivative(valuefunction::ValueFunction{S, N₁, N₂}, G::GR) where {N₁, N₂, S, GR <: AbstractGrid{N₁, N₂, S}}
-    @unpack H = valuefunction
+function constructequilibriumsource((t, H, α), Δt⁻¹, model::M, G::GR, calibration) where {N₁, N₂, S, D, P, C <: LinearClimate, M <: UnitIAM{S, D, P, C}, GR <: AbstractGrid{N₁, N₂, S}}
+    constructequilibriumsource!(Vector{S}(undef, N₂), (t, H, α), Δt⁻¹, model, G, calibration)
+end
+"Updates source vector `Δt⁻¹ Hⁿ + b`."
+function constructequilibriumsource!(equilibriumsource, (t, H, α), Δt⁻¹, model::M, G::GR, calibration) where {N₁, N₂, S, D, P, C <: LinearClimate, M <: UnitIAM{S, D, P, C}, GR <: AbstractGrid{N₁, N₂, S}}
+    mspace = G.ranges[2]
 
-    ∂Hₘ = similar(H)
+    @inbounds for j in axes(G, 2)
+        m = mspace[j]
+        T = Tstable(m, model.climate) |> only
+        x = Point(T, m)
 
-    @inbounds for j in axes(H, 2), i in axes(H, 1)
-        _, (Δm₋, Δm₊) = steps(G, i, j)
-        
-        ∂Hₘ[i, j] = if j == 1
-            (H[i, j + 1] - H[i, j]) / Δm₊
-        elseif j == size(H, 2)
-            (H[i, j] - H[i, j - 1]) / Δm₋
-        else
-            (H[i, j + 1] - H[i, j - 1]) / (Δm₋ + Δm₊)
-        end
+        αᵢ = α[j]
+        Hᵢ = H[j]
+
+        equilibriumsource[j] = l(t, x, αᵢ, model, calibration) + Δt⁻¹ * Hᵢ
     end
 
-    return ∂Hₘ
-
-end
-
-function centralpolicy(valuefunction::ValueFunction{S, N₁, N₂}, model::M, G::GR, calibration; withnegative = false) where {N₁, N₂, S, M <: UnitIAM{S}, GR <: AbstractGrid{N₁, N₂, S}}
-    α = similar(valuefunction.H)
-    centralpolicy!(α, valuefunction, model, G, calibration; withnegative)
-end
-function centralpolicy!(valuefunction::ValueFunction{S, N₁, N₂}, model::M, G::GR, calibration; withnegative = false) where {N₁, N₂, S, M <: UnitIAM{S}, GR <: AbstractGrid{N₁, N₂, S}}
-    centralpolicy!(valuefunction.α, valuefunction, model, G, calibration; withnegative)
-end
-function centralpolicy!(α, valuefunction::ValueFunction{S, N₁, N₂}, model::M, G::GR, calibration; withnegative = false) where {N₁, N₂, S, M <: UnitIAM{S}, GR <: AbstractGrid{N₁, N₂, S}}
-    @unpack H = valuefunction
-
-    @inbounds for j in axes(H, 2), i in axes(H, 1)
-        (ΔT₋, ΔT₊), (Δm₋, Δm₊) = steps(G, i, j)
-        
-        ∂ₘH = (
-            if j == 1
-                (H[i, j + 1] - H[i, j]) / Δm₊
-            elseif j == size(H, 2)
-                (H[i, j] - H[i, j - 1]) / Δm₋
-            else
-                (H[i, j + 1] - H[i, j - 1]) / (Δm₋ + Δm₊)
-            end
-        )
-        
-        αmax = upperbound(valuefunction.t.t, G[i, j], model, calibration, withnegative)
-
-        α[i, j] = clamp(αopt(valuefunction.t.t, G[i, j], ∂ₘH, model, calibration), 0, αmax)
-    end
-
-    return α
+    return equilibriumsource
 end
