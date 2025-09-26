@@ -11,6 +11,8 @@ using DifferentialEquations, StaticArrays
 
 using Model
 
+include("constants.jl")
+
 DATAPATH = "data"
 filepath = joinpath(DATAPATH, "AR6_Scenarios_Database_World_v1.1.csv"); @assert isfile(filepath)
 
@@ -18,12 +20,10 @@ calibrationpath = joinpath(DATAPATH, "calibration")
 if !isdir(calibrationpath) mkpath(calibrationpath) end
 
 investments = Investment{Float64}()
-
 begin # Load scenarios data
     rawdf = CSV.read(filepath, DataFrame)
     scenarios = @chain rawdf begin
         @filter(Region == "World")
-        @filter(Variable ∈ ("Price|Carbon", "Emissions|CO2", "GDP|PPP"))
         @filter(Model ∈ ("REMIND-MAgPIE 2.1-4.2",))
         # Scenarios filters
         @filter(!occursin(r"EN_NPi.*", Scenario))
@@ -50,50 +50,44 @@ begin # Construct scenarios dataframes
             unstack(:Variable, :Value)
             dropmissing!()
             @mutate(Year = parsefloat(Year))
-            @filter(Year ≥ 2030.)
+            @filter(Year ≥ 2020.)
         end
 
-        isnp = k.Scenario == npscenario
+        isnpscenario = k.Scenario == npscenario
+        hasvalidprices = ("Price|Carbon" ∈ names(df) && !all((df[!, "Price|Carbon"]) .≈ 0))
 
-        if !isnp && ("Price|Carbon" ∉ names(df) || all((df[!, "Price|Carbon"]) .≈ 0))
-            continue
+        if isnpscenario || hasvalidprices
+            dfs[k.Scenario] = df
         end
-
-        dfs[k.Scenario] = df
     end
+    dfnp = dfs[npscenario]
+    filter!(((scenario, df), ) -> scenario != npscenario, dfs)
+    nmodels = length(dfs)
 end
 
-dfnp = dfs[npscenario]
-filter!(((scenario, df), ) -> scenario != npscenario, dfs)
-nmodels = length(dfs)
 
 begin # Fill in data coefficients
-    macmax = Inf
+    macupper = Inf
+
+    emissionkey = "AR6 climate diagnostics|Infilled|Emissions|Kyoto Gases (AR6-GWP100)"
 
     ts = Float64[]
     εs = Float64[]
     β′s = Float64[]
     for (k, (scenario, df)) in enumerate(dfs)
-        carbonprice = df[:, "Price|Carbon"]
+        carbonprice = df[:, "Price|Carbon"] # $ / tCO2
         Y = df[:, "GDP|PPP"]
-        E = df[:, "Emissions|CO2"] / 1000
+        years = df.Year
+        dfnpmatch = filter(r -> r.Year in years, dfnp)
+        
+        E = df[:, emissionkey] ./ 1000
+        Eⁿᵖ = dfnpmatch[:, emissionkey] ./ 1000
 
-        # Filter out observations with zero or very low carbon prices
-        validprices = carbonprice .> 0.
-        tdx = dfnp.Year .> 2020
+        mac = @. carbonprice * Eⁿᵖ / Y
+        abated = @. 1 - E / Eⁿᵖ
+        t = df[:, :Year] .- 2020.
 
-        if !any(tdx .& validprices)
-            continue
-        end
-
-        Eⁿᵖ = dfnp[tdx .& validprices, "Emissions|CO2"] / 1000
-        Yⁿᵖ = dfnp[tdx .& validprices, "GDP|PPP"]
-
-        mac = @. carbonprice[tdx .& validprices] * Eⁿᵖ / Y[tdx .& validprices]
-        abated = @. 1 - E[tdx .& validprices] / Eⁿᵖ
-        t = df[tdx .& validprices, :Year] .- 2020.
-
-        macdx = mac .< macmax
+        macdx = mac .< macupper
         append!(ts, t[macdx])
         append!(εs, abated[macdx])
         append!(β′s, mac[macdx])
@@ -134,9 +128,9 @@ begin
     params = (ts, εs, β′s);
     
     lb = MVector(0., 0., 0., 0.)
-    ub = MVector(0.001, Inf, Inf, Inf)
+    ub = MVector(Inf, Inf, Inf, Inf)
 
-    obj = @closure p -> huber(p, params; δ = 0.15)
+    obj = @closure p -> huber(p, params; δ = 0.05)
     result = optimize(obj, lb, ub, p₀, Fminbox(LBFGS()))
 
     ω̄, Δω, ρ, bᵢ = round.(result.minimizer, digits = 6)
@@ -158,7 +152,7 @@ begin # Create a plot of β′ for various values of t
     fig = plot(xlabel=L"Abatement rate $\varepsilon$", ylabel=L"Marginal abatement cost $\beta\prime$", title="Marginal Abatement Cost Function")
 
     for t in tspace
-        plot!(fig, εspace, ε -> β′(t, ε, hambelabatement), label="$(2020 + t)", linewidth=3, c = cs[t])
+        plot!(fig, εspace, ε -> β′(t, ε, abatement), label="$(2020 + t)", linewidth=3, c = cs[t])
     end
 
     # Add scatter plot of actual data points

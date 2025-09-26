@@ -28,6 +28,7 @@ includet("../../src/valuefunction.jl")
 includet("../../src/extend/model.jl")
 includet("../utils/saving.jl")
 includet("../utils/simulating.jl")
+includet("constants.jl")
 
 PLOTPATH = "papers/job-market-paper/submission/plots"
 DATAPATH = "data"
@@ -130,93 +131,44 @@ if isinteractive() # Figure CO₂ concentration
     impulsefig = plot(co2fig, excesstfig; layout=(1, 2), size=600 .* (2√2, 1), margins=5Plots.mm, legend=:topleft)
 end
 
-# -- Construct CO2 equivalent concentration
-function computeco2equivalence(concentration, quantile, gwp)
-    co2equivalence = deepcopy(concentration[("SSP5 8.5", "carbon_dioxide", quantile)])
+"Construct CO2e concentration"
+function computeco2equivalence(concentration, q, gwpdict)
+    co2equivalence = deepcopy(concentration[("SSP5 8.5", "carbon_dioxide", q)])
     co2equivalence[!, "CO2 Concentration"] .= co2equivalence[:, "Concentration"]
     co2equivalence[!, "CO2 Emissions"] .= co2equivalence[:, "Emissions"]
 
-    # --- Concentration: Radiative-forcing-equivalent in CO2-ppm ---
-    # Start with CO2 (already in ppm)
-    co2e_conc = copy(co2equivalence[:, "Concentration"])
-    # Add GWP-weighted concentrations from other gases
-    for (particle, (gwpvalue, concentration_unitfactor, emission_unitfactor, mass_to_conc_factor)) in gwp
-        df = concentration[("SSP5 8.5", particle, quantile)]
+    # Concentration
+    co2econcentration = copy(co2equivalence[:, "Concentration"])
+    for (particle, (gwpvalue, concentrationconverter, factor)) in gwpdict
+        df = concentration[("SSP5 8.5", particle, q)]
+        
         # Convert to ppm, then weight by GWP for radiative equivalence
-        conc_ppm = df.Concentration .* concentration_unitfactor
-        co2e_conc .+= conc_ppm .* gwpvalue
-        co2equivalence[!, "$particle Concentration"] .= conc_ppm
-        co2equivalence[!, "$particle CO2e Concentration"] .= conc_ppm .* gwpvalue
+        concppm = df.Concentration .* concentrationconverter * factor
+        co2econcentration .+= concppm .* gwpvalue
+        co2equivalence[!, "$particle Concentration"] .= concppm
+        co2equivalence[!, "$particle CO2e Concentration"] .= concppm .* gwpvalue
     end
-    co2equivalence[!, "Concentration"] .= co2e_conc
+    co2equivalence[!, "Concentration"] .= co2econcentration
 
-    # --- Emissions: CO2e emissions converted to ppm/yr ---
-    # Start with CO2 emissions: convert from Gt CO2/yr to ppm CO2/yr
-    co2e_emissions_ppm = co2equivalence[:, "CO2 Emissions"] .* Model.Gtonoverppm
+    # Emissions
+    co2masstoconcentration = gwpdict["carbon_dioxide"][3]
+    co2eemissions = co2equivalence[:, "CO2 Emissions"] .* co2masstoconcentration
     
     # Add other gases: each contributes ppm/yr based on its own molecular weight and GWP
-    for (particle, (gwpvalue, concentration_unitfactor, emission_unitfactor, mass_to_conc_factor)) in gwp
-        df = concentration[("SSP5 8.5", particle, quantile)]
-        # Step 1: Convert emissions to Gt/yr
-        emis_gt = df.Emissions .* emission_unitfactor
-        # Step 2: Convert to ppm/yr using gas-specific molecular weight factor
-        emis_ppm_per_year = emis_gt .* mass_to_conc_factor
-        # Step 3: Apply GWP to get CO2-equivalent radiative effect
-        co2e_emissions_ppm .+= emis_ppm_per_year .* gwpvalue
-        
-        # Store intermediate results for diagnostics
-        co2equivalence[!, "$particle Emissions"] .= emis_gt
-        co2equivalence[!, "$particle ppm per year"] .= emis_ppm_per_year
-        co2equivalence[!, "$particle CO2e ppm per year"] .= emis_ppm_per_year .* gwpvalue
+    for (particle, (gwpvalue, concentrationconverter, factor)) in gwpdict
+        df = concentration[("SSP5 8.5", particle, q)]
+        emissionsppmfactor = concentrationconverter * factor
+
+        emissions = df.Emissions .* emissionsppmfactor
+        co2eemissions .+= emissions .* gwpvalue
+        co2equivalence[!, "$particle Emissions"] .= emissions
     end
-    co2equivalence[!, "Emissions"] .= co2e_emissions_ppm
+    co2equivalence[!, "Emissions"] .= co2eemissions
 
     return co2equivalence
 end
 
 begin
-    # Molecular weights (g/mol)
-    molweights = Dict(
-        "carbon_dioxide" => 44.01,
-        "methane" => 16.04,
-        "nitrous_oxide" => 44.01, 
-        "nf3" => 71.00,      
-        "sf6" => 146.06
-    )
-    
-    # Mass-to-concentration conversion factors (accounts for molecular weight differences)
-    masstoconcentration = Dict(
-        "carbon_dioxide" => Model.Gtonoverppm,
-        "methane" => Model.Gtonoverppm * molweights["carbon_dioxide"] / molweights["methane"],
-        "nitrous_oxide" => Model.Gtonoverppm * molweights["carbon_dioxide"] / molweights["nitrous_oxide"], 
-        "nf3" => Model.Gtonoverppm * molweights["carbon_dioxide"] / molweights["nf3"],
-        "sf6" => Model.Gtonoverppm * molweights["carbon_dioxide"] / molweights["sf6"]
-    )
-    
-    # Unit conversions
-    concentration_conversions = Dict(
-        "methane" => 1e-3,      # ppb to ppm
-        "nitrous_oxide" => 1e-3, # ppb to ppm  
-        "nf3" => 1e-6,          # ppt to ppm
-        "sf6" => 1e-6           # ppt to ppm
-    )
-    
-    emission_conversions = Dict(
-        "methane" => 1e-3,      # Mt to Gt
-        "nitrous_oxide" => 1e-3, # Mt to Gt
-        "nf3" => 1e-6,          # kt to Gt  
-        "sf6" => 1e-6           # kt to Gt
-    )
-    
-    # GWP values (AR6, 100-year)
-    gwp_values = Dict(
-        "methane" => 29.8,
-        "nitrous_oxide" => 273.0,
-        "nf3" => 17_400.0,
-        "sf6" => 24_300.0
-    )
-    
-    println("=== CO2-equivalent conversion setup ===")
     println("Molecular weights (g/mol):")
     for (gas, mw) in molweights
         println("  $gas: $mw")
@@ -226,21 +178,16 @@ begin
         println("  $gas: $(round(factor, digits=4))")
     end
     println("\nGWP values (AR6, 100-year):")
-    for (gas, gwp_val) in gwp_values
-        println("  $gas: $(gwp_val)")
+    for (gas, gwpval) in gwpvalues
+        println("  $gas: $(gwpval)")
     end
 
     # GWP dictionary: (gwp_value, concentration_unit_factor, emission_unit_factor, mass_to_conc_factor)
-    gwp = Dict(
-        "methane" => (gwp_values["methane"], concentration_conversions["methane"], emission_conversions["methane"], masstoconcentration["methane"]),
-        "nitrous_oxide" => (gwp_values["nitrous_oxide"], concentration_conversions["nitrous_oxide"], emission_conversions["nitrous_oxide"], masstoconcentration["nitrous_oxide"]),
-        "nf3" => (gwp_values["nf3"], concentration_conversions["nf3"], emission_conversions["nf3"], masstoconcentration["nf3"]),
-        "sf6" => (gwp_values["sf6"], concentration_conversions["sf6"], emission_conversions["sf6"], masstoconcentration["sf6"])
-    )
+    gwpdict = Dict(mol => (gwpvalue, converter[mol], masstoconcentration[mol]) for (mol, gwpvalue) in gwpvalues)
 
-    co2equivalence = computeco2equivalence(concentration, 0.5, gwp)
-    co2equivalencelower = computeco2equivalence(concentration, 0.05, gwp)
-    co2equivalenceupper = computeco2equivalence(concentration, 0.95, gwp)
+    co2equivalence = computeco2equivalence(concentration, 0.5, gwpdict)
+    co2equivalencelower = computeco2equivalence(concentration, 0.05, gwpdict)
+    co2equivalenceupper = computeco2equivalence(concentration, 0.95, gwpdict)
 end;
 
 # Define the no-policy scenario for calibration
@@ -280,7 +227,7 @@ if isinteractive() # Figure fraction of forcing
         grid = "both",
         xlabel = raw"Year, $t$",
         ylabel = raw"$\hat{M}^{\mathrm{np}}_{t, \mathrm{CO}_2} / \hat{M}^{\mathrm{np}}_t$",
-        title = raw"Fraction of $\mathrm{CO}_2$ to $\mathrm{CO}_2$-e concentration",
+        title = raw"Fraction of $\mathrm{CO}_2$ to $\mathrm{CO}_2$e concentration",
         ylabel_style = {align = "center"},
         xmin = yearbound[1], xmax = yearbound[2],
         xtick = xtick, xticklabels = xticklabels,
@@ -311,7 +258,7 @@ begin # Setup CO₂e maximisation problem
     Mᵖ = mean(co2equivalence[1800 .≤ co2equivalence.Year .≤ 1900, "Concentration"])
     m = @. log(co2calibrationdf.Concentration / Mᵖ)
     t = co2calibrationdf.Year[1:end-1]
-    γ̂ₜ = diff(m)# ; smooth!(γ̂ₜ, 5)  # Reduced smoothing to preserve SSP5-8.5 growth dynamics
+    γ̂ₜ = diff(m); smooth!(γ̂ₜ, 5)  # Reduced smoothing to preserve SSP5-8.5 growth dynamics
     Eₜ = Vector{Float64}(co2calibrationdf.Emissions)
 end;
 
@@ -328,7 +275,7 @@ begin
     γres = optimize(growthloss, p₀, LBFGS())
 end
 
-γ̲ = 0.002
+γ̲ = 0.005
 calibration = DoubleExponentialCalibration(co2tspan, Eₜ, γres.minimizer..., γ̲)
 
 if isinteractive()
@@ -423,8 +370,8 @@ end
 
 if isinteractive() # Check cumulative emissions vs concentration
     Mspace = range(minimum(Mₜ), 1.2maximum(Mₜ), 202)
-    yticks = -0.003:0.001:0.003
-    yticklabels = [L"%$(100y) \%" for y in yticks]
+    yticks = -0.001:0.001:0.01
+    yticklabels = [L"%$(round(100y, digits = 2)) \%" for y in yticks]
 
     δfig = scatter(Mₜ, δ̂; xlabel = L"M", ylabel = L"Decay rate $\delta$", label = L"Implied decay $\hat{\delta}$", markersize = 2, c = :black, ytick = (yticks, yticklabels), ylims = extrema(yticks))
     plot!(Mspace, M -> δₘ(M, decay) ; c=:black, label = L"Fit $\delta_m(M)$")
