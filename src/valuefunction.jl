@@ -12,9 +12,10 @@ struct ValueFunction{S <: Real, N₁, N₂}
         ValueFunction(calibration.τ, climate, G, calibration)
     end
     function ValueFunction(τ, climate::C, G::GR, calibration::Calibration) where {N₁, N₂, S, GR <: AbstractGrid{N₁, N₂, S}, C <: Climate{S}}
+        Tspace, mspace = G.ranges
         t = Time(τ)
         H = ones(S, size(G))
-        α = [ γ(τ, calibration) + δₘ(exp(x.m) * climate.hogg.Mᵖ, climate.decay) for x in G ]
+        α = [ γ(τ, calibration) + δₘ(exp(m) * climate.hogg.Mᵖ, climate.decay) for _ in Tspace, m in mspace ]
         
         return new{S, N₁, N₂}(H, α, t)
     end

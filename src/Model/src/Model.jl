@@ -29,6 +29,6 @@ export χopt, variance
 
 export Preferences, LogUtility, CRRA, LogSeparable, EpsteinZin
 export g, f, logg, discount
-export IAM, UnitIAM, determinsticIAM
+export IAM, UnitIAM, determinsticIAM, linearIAM
 
 end # module Model

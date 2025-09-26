@@ -93,6 +93,25 @@ Base.@kwdef struct Hogg{S <: Real}
     α::S # Power of temperature in noise term
 end
 
+"""
+Copy a Hogg but set epsilon to a small value (fast temperature limit)
+"""
+function fastHogg(ϵ, hogg::Hogg{S}) where {S}
+    return Hogg{S}(
+        T₀ = hogg.T₀,
+        Tᵖ = hogg.Tᵖ,
+        M₀ = hogg.M₀,
+        Mᵖ = hogg.Mᵖ,
+        S₀ = hogg.S₀,
+        ϵ = ϵ,
+        η = hogg.η,
+        G₁ = hogg.G₁,
+        G₀ = hogg.G₀,
+        σ = hogg.σ,
+        α = hogg.α
+    )
+end
+
 abstract type Climate{S <: Real, D <: Decay{S}} end
 abstract type PiecewiseLinearClimate{S <: Real, D <: Decay{S}} <: Climate{S, D} end
 struct LinearClimate{S, D} <: PiecewiseLinearClimate{S, D}
@@ -170,8 +189,14 @@ function mstable(T, climate::TippingClimate)
 end
 
 "Temperature(s) consistent with CO₂e log-concentration m"
-function Tstable(m, climate::C; Tmin = 0.8climate.hogg.Tᵖ, Tmax = 2climate.hogg.Tᵖ) where {C <: Climate}
+function Tstable(m, climate::TippingClimate; Tmin = -10., Tmax = 20.)
     find_zeros(T -> mstable(T, climate) - m, Tmin, Tmax)
+end
+function Tstable(m, climate::LinearClimate)
+    @unpack hogg = climate
+    T̄ = ((hogg.S₀ + hogg.G₀ + hogg.G₁ * m) / hogg.η)^(1/4) - hogg.Tᵖ
+
+    return [T̄]
 end
 
 const log2 = log(2)
@@ -190,7 +215,7 @@ end
 
 "Computes the temperature's standard deviation."
 function std(T, hogg::Hogg)
-    (T^hogg.α * hogg.σ / hogg.ϵ)
+    (max(T, 0)^hogg.α * hogg.σ / hogg.ϵ)
 end
 "Computes the temperature's variance."
 function variance(T, hogg::Hogg)

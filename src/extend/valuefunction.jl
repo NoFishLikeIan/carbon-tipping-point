@@ -3,5 +3,5 @@ function Grid.interpolateovergrid(valuefunction::ValueFunction{S, N₁, N₂}, f
     H′ = Grid.interpolateovergrid(valuefunction.H, fromgrid, togrid)
     α′ = Grid.interpolateovergrid(valuefunction.α, fromgrid, togrid)
 
-    return ValueFunction{S, M₁, M₂}(H′, α′, valuefunction.t)
+    return ValueFunction{S, M₁, M₂}(H′, α′, deepcopy(valuefunction.t))
 end

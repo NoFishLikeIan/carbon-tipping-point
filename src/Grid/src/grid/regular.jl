@@ -12,12 +12,15 @@ struct RegularGrid{N₁, N₂, S, R} <: AbstractGrid{N₁, N₂, S, R}
     end
 end
 
+function Base.step(grid::RegularGrid, d)
+    step(grid.ranges[d])
+end
 function Base.step(grid::RegularGrid)
-    ntuple(i -> step(grid.ranges[i]), 2)
+    ntuple(i -> step(grid, i), 2)
 end
 
 function inversestep(grid::RegularGrid)
-    ntuple(i -> inv(step(grid.ranges[i])), 2)
+    ntuple(i -> inv(step(grid, i)), 2)
 end
 
 "Returns the previous and next step of grid at positions `(i, j)`."

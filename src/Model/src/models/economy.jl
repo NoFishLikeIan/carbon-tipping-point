@@ -5,6 +5,8 @@ struct Abatement{S <: Real}
     b::S # Coefficient of abatement fraction
 end
 
+const HambelAbatement = Abatement{Float64}(4.3e-4, 5.506e-2, 1.48e-2, 2.8)
+
 "Abatement tehcnology decay"
 function ω(t, abatement::Abatement)
     @unpack ω̄, Δω, ρ = abatement
@@ -53,7 +55,10 @@ end
 
 d(T, _, damages::WeitzmanGrowth, _) = d(T, damages)
 function d(T, damages::WeitzmanGrowth)
-    damages.ξ * T^damages.ν
+    damages.ξ * abs(T)^damages.ν
+end
+function d′(T, damages::WeitzmanGrowth)
+    sign(T) * damages.ν * damages.ξ * abs(T)^(damages.ν - 1)
 end
 
 Base.@kwdef struct Kalkuhl{S} <: GrowthDamages{S}
@@ -77,10 +82,9 @@ Base.@kwdef struct BurkeHsiangMiguel{S} <: GrowthDamages{S}
     ξ::S = 7.09e-4 
 end
 
-
 d(T, _, damages::BurkeHsiangMiguel, _) = d(T, damages)
 function d(T, damages::BurkeHsiangMiguel)
-    damages.ξ * T^2
+    damages.ξ * max(T, 0)^2
 end
 
 Base.broadcastable(damages::Damages) = Ref(damages)

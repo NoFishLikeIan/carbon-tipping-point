@@ -10,5 +10,14 @@ Base.broadcastable(m::IAM) = Ref(m)
 
 "Construct an equivalent IAM with no noise. Used for the terminal problem."
 function determinsticIAM(model::IAM{S}) where S
-    IAM(deterministicClimate(model.climate), model.economy, model.preferences)
+    determinsticIAM(model.climate, model.economy, model.preferences)
+end
+function determinsticIAM(climate::C, economy::Economy, preferences::P) where {C <: Climate, P <: Preferences}
+    IAM(deterministicClimate(climate), economy, preferences)
+end
+function linearIAM(model::IAM{S}) where S
+    linearIAM(model.climate, model.economy, model.preferences)
+end
+function linearIAM(climate::C, economy::Economy, preferences::P) where {C <: Climate, P <: Preferences}
+    IAM(LinearClimate(climate.hogg, climate.decay), economy, preferences)
 end
