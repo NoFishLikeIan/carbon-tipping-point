@@ -8,7 +8,7 @@ using FastClosures
 include("../utils/saving.jl")
 include("../utils/simulating.jl")
 
-withnegative = false;
+withnegative = true;
 trajectories = 5_000;
 datapath = "data/simulation-small";
 

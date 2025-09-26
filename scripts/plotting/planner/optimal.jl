@@ -29,10 +29,10 @@ includet("../utils.jl")
 includet("../../utils/saving.jl")
 includet("../../utils/simulating.jl")
 
-damage = Kalkuhl;
+damagetype = BurkeHsiangMiguel;
 withnegative = true
 abatementtype = withnegative ? "negative" : "constrained"
-DATAPATH = "data/simulation-local-small"; @assert isdir(DATAPATH)
+DATAPATH = "data/simulation-dense"; @assert isdir(DATAPATH)
 
 SAVEFIG = false;
 plotpath = joinpath("papers/job-market-paper/submission/plots", abatementtype)
@@ -52,7 +52,7 @@ begin # Read available files
         model, _ = loadproblem(filepath)
         abatementdir = splitpath(filepath)[end - 1]
 
-        if (model.economy.damages isa damage) && (abatementtype == abatementdir)
+        if (model.economy.damages isa damagetype) && (abatementdir == abatementtype)
             push!(modelfiles, filepath)
         end
     end
@@ -111,9 +111,8 @@ begin # Plot estetics
     m₀ = log(hogg.M₀ / hogg.Mᵖ)
     x₀ = Point(T₀, m₀)
 
-    ΔTmin = Tspace[1] - hogg.Tᵖ
-    ΔTmax = Tspace[end] - hogg.Tᵖ
-    temperatureticks = makedeviationtickz(ΔTmin, ΔTmax, hogg; step=1, digits=0)
+
+    temperatureticks = makedeviationtickz(Tspace[1], Tspace[end]; step=1, digits=2)
 
     X₀ = SVector(T₀, m₀, 0.)
     u₀ = SVector(X₀..., 0., 0., 0.) # Introduce three 0s for costs
@@ -134,8 +133,6 @@ end;
 
 # -- Make simulation of optimal trajectories
 begin
-    trajectories = 10_000
-
     simulations = Dict{IAM,EnsembleSolution}()
     for (i, model) in enumerate(models)
         αitp = interpolations[model] |> last;
@@ -144,8 +141,8 @@ begin
         problem = SDEProblem(F, noise, u₀, tspan, parameters)
         ensembleprob = EnsembleProblem(problem)
 
-        simulation = solve(ensembleprob, SRA3(); trajectories)
-        println("Done with simulation of $i / $(length(models))\n$model")
+        simulation = solve(ensembleprob, SRA3(); trajectories = 100)
+        println("Done with simulation of $i / $(length(models))\n$model\n")
 
         simulations[model] = simulation
     end
@@ -166,7 +163,7 @@ begin
     figopts = @pgf {width = raw"0.5\textwidth", height = raw"0.35\textwidth", grid = "both", xmin = 0, xmax = horizon}
 
     qs = (0.05, 0.5, 0.95)
-    temperatureticks = makedeviationtickz(1, 2.5, hogg; step=0.5, digits=1)
+    temperatureticks = makedeviationtickz(1, 2.5; step=0.5, digits=1)
 
     # Carbon concentration in first row
     for (k, model) in enumerate(extremamodel) 

@@ -69,8 +69,6 @@ begin # Construct model
     @unpack calibration, hogg, feedbacklower, feedback, feedbackhigher = climatefile
     close(climatefile)
 
-    decay = ConstantDecay(0.0)
-
     damage = if damages == "kalkuhl"
         Kalkuhl{Float64}()
     elseif damages == "burke"
@@ -85,8 +83,8 @@ begin # Construct model
 
     investments = Investment{Float64}()
     economy = Economy(investments = investments, damages = damage, abatement = abatement)
+    
     decay = ConstantDecay(0.0) # Solve with constant decay first
-
     climate = if 0 < threshold < Inf
         feedback = Model.updateTᶜ(threshold, feedback)
         TippingClimate(hogg, decay, feedback)
@@ -99,7 +97,7 @@ begin # Construct model
 end
 
 begin # Construct Grid
-    Tdomain = (0.5, 10.)  # Smaller, safer domain
+    Tdomain = (0., 12.)  # Smaller, safer domain
     mmin = mstable(Tdomain[1] + 0.5, model.climate)
     mmax = mstable(Tdomain[2] - 0.5, model.climate)
     mdomain = (mmin, mmax)
@@ -131,6 +129,6 @@ if (verbose ≥ 1)
     flush(stdout)
 end
 
-G = shrink(Gterminal, (0., 0.15))
+G = shrink(Gterminal, (0.05, 0.05))
 valuefunction = interpolateovergrid(terminalvaluefunction, Gterminal, G)
 backwardsimulation!(valuefunction, dt, model, G, calibration; verbose, withnegative, overwrite, outdir, cachestep = cachestep, startcache = 150.)

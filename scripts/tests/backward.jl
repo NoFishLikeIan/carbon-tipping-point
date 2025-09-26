@@ -19,6 +19,7 @@ includet("../../src/extend/model.jl")
 includet("../../src/extend/grid.jl")
 includet("../../src/extend/valuefunction.jl")
 includet("../utils/saving.jl")
+includet("../plotting/utils.jl")
 includet("../markov/utils.jl")
 includet("../markov/chain.jl")
 includet("../markov/finitedifference.jl")
@@ -34,8 +35,10 @@ begin # Construct the model
     @unpack abatement = abatementfile
     close(abatementfile)
 
+    abatement = Model.HambelAbatement
+
     investments = Investment()
-    damages = Kalkuhl()
+    damages = WeitzmanGrowth() # NoDamageGrowth{Float64}()
     economy = Economy(investments = investments, damages = damages, abatement = abatement)
 
     # Load climate claibration
@@ -45,7 +48,8 @@ begin # Construct the model
     @unpack calibration, hogg, feedbacklower, feedback, feedbackhigher = climatefile
     close(climatefile)
 
-    decay = ConstantDecay(0.)
+    decay = ConstantDecay(0.0)
+    calibration = ConstantCalibration(0.02)
 
     threshold = Inf
     climate = if 0 < threshold < Inf
@@ -57,14 +61,15 @@ begin # Construct the model
 
     preferences = LogSeparable()
     model = IAM(climate, economy, preferences)
+    model = determinsticIAM(model) 
 end
 
 begin
-    N₁ = 31; N₂ = 31;  # Smaller grid for testing
+    N₁ = 51; N₂ = 51;  # Smaller grid for testing
     N = (N₁, N₂)
-    Tdomain = (0.5, 12.)  # Smaller, safer domain
-    mmin = mstable(Tdomain[1] + 0.5, model.climate)
-    mmax = mstable(Tdomain[2] - 0.5, model.climate)
+    Tdomain = (-10., 20.)  # Smaller, safer domain
+    mmin = mstable(Tdomain[1], model.climate)
+    mmax = mstable(Tdomain[2], model.climate)
     mdomain = (mmin, mmax)
     domains = (Tdomain, mdomain)
     withnegative = true
@@ -72,30 +77,33 @@ begin
     Gterminal = RegularGrid(N, domains)
     Δt⁻¹ = 10
     Δt = 1 / Δt⁻¹
-    τ = 500.
+    τ = 0.
 end;
 
-terminalvaluefunction = ValueFunction(τ, climate, Gterminal, calibration)
-terminalvaluefunction, result = steadystate!(terminalvaluefunction, Δt, model, Gterminal, calibration; verbose = 1, tolerance = Error(1e-4, 1e-4), timeiterations = 100_000, printstep = 100, withnegative, θ = 1.)
+valuefunction = ValueFunction(τ, climate, Gterminal, calibration)
+valuefunction, result = steadystate!(valuefunction, Δt, model, Gterminal, calibration; verbose = 2, tolerance = Error(1e-6, 1e-6), timeiterations = 50, printstep = 100, withnegative = withnegative, θ = 1.)
 
 begin # HJB error
     Ā = constructA!(terminalvaluefunction, Δt⁻¹, model, Gterminal, calibration, withnegative)
     b̄ = constructsource(terminalvaluefunction, Δt⁻¹, model, Gterminal, calibration)
 
     hjb = reshape(Ā * vec(terminalvaluefunction.H) - b̄, size(Gterminal))
+
+    hjberror = maximum(abs, hjb)
+    println("Maximum HJB error: ", hjberror)
 end;
 
 if isinteractive()
     Tspace, mspace = Gterminal.ranges
-    hjberrorfig = heatmap(mspace, Tspace, hjb; title = "HJB error", xlabel = L"m", ylabel = L"T", c=:Greens, xlims = extrema(mspace), ylims = extrema(Tspace))
+    hjberrorfig = heatmap(mspace, Tspace, abs.(hjb); title = "HJB error", xlabel = L"m", ylabel = L"T", c=:Reds, xlims = extrema(mspace), ylims = extrema(Tspace), clims = (0, hjberror))
 end
 
 if isinteractive()
-    abatementcolor = cgrad(:RdBu, [0., 2/3, 1])
     E = ε(terminalvaluefunction, model, calibration, Gterminal)
+    Ē = max(maximum(E), 1)
     nullcline = [mstable(T, model.climate) for T in Tspace]
 
-    policyfig = heatmap(mspace, Tspace, E; title = L"Terminal $\bar{\alpha}_{\tau}$", xlabel = L"m", ylabel = L"T", xlims = extrema(mspace), ylims = extrema(Tspace), clims = (0, max(1., maximum(E))), linewidth = 0., color = abatementcolor)
+    policyfig = heatmap(mspace, Tspace, E; title = L"Terminal $\bar{\alpha}_{\tau} / \gamma_t$", xlabel = L"m", ylabel = L"T", xlims = extrema(mspace), ylims = extrema(Tspace), clims = (0, Ē), linewidth = 0., color = abatementcolorbar(Ē))
 
     valuefig = contourf(mspace, Tspace, terminalvaluefunction.H; title = L"Terminal value $\bar{H}$", xlabel = L"m", ylabel = L"T", xlims = extrema(mspace), ylims = extrema(Tspace), levels = 21)
 
@@ -108,7 +116,7 @@ if isinteractive()
 end
 
 # Simulate backwards
-G = shrink(Gterminal, (0., 0.05))
+G = shrink(Gterminal, (0., 0.))
 valuefunction = interpolateovergrid(terminalvaluefunction, Gterminal, G)
 
 if isinteractive() let # Optimisation Gif
@@ -123,10 +131,7 @@ if isinteractive() let # Optimisation Gif
     nullcline = [mstable(T, model.climate) for T in Tspace]
     m₀ = log(hogg.M₀ / hogg.Mᵖ)
 
-    abatementcolor = cgrad(:RdBu, [0., 2/3, 1])
-    clims = (0, withnegative ? 2.0 : 1.0)
-
-    t₀ = 0.
+    t₀ = 25.
     nframes = floor(Int, (valuefunction.t.t - t₀) / Δt)
     framestep = max(nframes ÷ 240, 1)
 
@@ -139,10 +144,13 @@ if isinteractive() let # Optimisation Gif
 
         if any(isnan.(valuefunction.H)) @warn "NaN value in H" end
 
-        valuefig = heatmap(mspace, Tspace, valuefunction.H; title = "Value Function H t = $(valuefunction.t.t)", xlabel = L"m", ylabel = L"T", c=:viridis, xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
+        t = round(valuefunction.t.t; digits = 2)
+        valuefig = heatmap(mspace, Tspace, valuefunction.H; title = "Value Function H t = $t", xlabel = L"m", ylabel = L"T", c=:viridis, xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
         
         E = ε(valuefunction, model, calibration, G)
-        abatementfig = contourf(mspace, Tspace, E; title = "Abatement t = $(valuefunction.t.t)", xlabel = L"m", ylabel = L"T", color = abatementcolor, xlims = extrema(mspace), ylims = extrema(Tspace), clims = clims, linewidth = 0.)
+        Ē = 1.5 # max(maximum(E), 1)
+        
+        abatementfig = contourf(mspace, Tspace, E; title = "Abatement t = $t", xlabel = L"m", ylabel = L"T", color = abatementcolorbar(Ē), xlims = extrema(mspace), ylims = extrema(Tspace), clims = (0, Ē), linewidth = 0.)
 
         for fig in (abatementfig, valuefig)
             plot!(fig, nullcline, Tspace; label = false, c = :white)
@@ -153,12 +161,14 @@ if isinteractive() let # Optimisation Gif
     end every framestep
 end end
 
-backwardsimulation!(valuefunction, Δt, model, G, calibration; t₀ = 150, withnegative, withsave = false, verbose = 1)
+valuefunction = interpolateovergrid(terminalvaluefunction, Gterminal, G) # Re-initialise the valuefunction
+backwardsimulation!(valuefunction, Δt, model, G, calibration; t₀ = 0., withnegative, withsave = false, verbose = 1)
 
 if isinteractive()
-    e = ε(valuefunction, model, calibration, G)
+    E = ε(valuefunction, model, calibration, G)
+    Ē = max(1., maximum(E))
 
-    policyfig = heatmap(mspace, Tspace, e; xlabel = L"m", ylabel = L"T", xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0., c = cgrad(:RdBu, [0., 2/3, 1]), clims = (0, withnegative ? 2.0 : 1.0))
+    policyfig = heatmap(mspace, Tspace, E; xlabel = L"m", ylabel = L"T", xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0., c = abatementcolorbar(Ē), clims = (0, Ē))
     valuefig = contourf(mspace, Tspace, valuefunction.H; title = L"Initial value $H_0$", xlabel = L"m", ylabel = L"T", c=:viridis, xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
 
     for fig in (policyfig, valuefig)

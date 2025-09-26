@@ -45,3 +45,11 @@ function smoother(vs, n)
 
     return out
 end
+
+function abatementcolorbar(Ē)
+    if Ē ≤ 1.0
+        cgrad([RGB(0.8392, 0.1882, 0.1529), :white])
+    else
+        cgrad(:RdBu, [0., 1 / Ē, 1])
+    end
+end

@@ -22,7 +22,7 @@ includet("../../utils/saving.jl")
 includet("../../utils/simulating.jl")
 
 SAVEFIG = true;
-withnegative = false;
+withnegative = true;
 datapath = "data/simulation-large";
 experimentpath = "data/experiments/simulation-large";
 PLOT_HORIZON = 80.
