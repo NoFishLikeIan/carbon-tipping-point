@@ -1,7 +1,7 @@
 using JSON
 
 thresholds = [2:0.1:5..., -1.];
-damages = ["burke"]
+damages = ["burke", "weitzman"]
 withnegatives = [true];
 
 ParamVal = Union{Float64, String, Bool};
