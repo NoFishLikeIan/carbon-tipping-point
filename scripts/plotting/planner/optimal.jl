@@ -186,7 +186,7 @@ begin
         labeloption = @pgf k > 1 ? { yticklabel = raw"\empty" } : { ylabel = L"`Conecntration $M_t \; [\si{ppm}]$" }
         @pgf push!(simfig, {figopts...,
                 xticklabel = raw"\empty",
-                title = labelofmodel(model), labeloption...,
+                title = labelsofclimate(model.climate), labeloption...,
             }, medianplot, lowerplot, upperplot, fill)
     end
 
@@ -276,7 +276,7 @@ begin
 
         barchart = @pgf Axis({
             figopts..., kopts...,
-            title = labelofmodel(model)
+            title = labelsofclimate(model.climate)
         })
 
         for i in 1:3

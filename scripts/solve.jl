@@ -84,7 +84,6 @@ begin # Construct model
     investments = Investment{Float64}()
     economy = Economy(investments = investments, damages = damage, abatement = abatement)
     
-    decay = ConstantDecay(0.0) # Solve with constant decay first
     climate = if 0 < threshold < Inf
         feedback = Model.updateTᶜ(threshold, feedback)
         TippingClimate(hogg, decay, feedback)
@@ -121,7 +120,9 @@ if (verbose ≥ 1)
 end
 
 tolerance = Error(tol, 1e-4)
-terminalvaluefunction =  ValueFunction(tau, climate, Gterminal, calibration)
+terminalvaluefunction = ValueFunction(tau, climate, Gterminal, calibration)
+
+equilibriumsteadystate!(terminalvaluefunction, Δt, linearIAM(model), Gterminal, calibration; timeiterations = 100_000, verbose, tolerance)
 steadystate!(terminalvaluefunction, dt, model, Gterminal, calibration; timeiterations = 100_000, verbose, tolerance, withnegative)
 
 if (verbose ≥ 1)

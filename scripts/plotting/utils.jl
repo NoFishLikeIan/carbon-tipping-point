@@ -25,7 +25,7 @@ function labelsofclimate(climate::C) where {C <: Climate}
     if C <: Model.PiecewiseLinearClimate
         "No tipping element"
     elseif C <: TippingClimate
-        Tᶜ = round(model.feedback.Tᶜ - model.climate.hogg.Tᵖ; digits = 2)
+        Tᶜ = round(climate.feedback.Tᶜ; digits = 2)
         L"T^c = %$(Tᶜ)"
     else
         error("Model type not implemented")

@@ -43,11 +43,7 @@ begin # Construct the model
     @unpack calibration, hogg, feedbacklower, feedback, feedbackhigher, decay = climatefile
     close(climatefile)
 
-    # decay = ConstantDecay(0.)
-    # calibration = ConstantCalibration(0.02)
-    # hogg = Model.fastHogg(1e-8, hogg)
-
-    threshold = Inf
+    threshold = 2.
     climate = if 0 < threshold < Inf
         feedback = Model.updateTᶜ(threshold, feedback)
         TippingClimate(hogg, decay, feedback)
