@@ -32,7 +32,7 @@ includet("../../utils/simulating.jl")
 damagetype = BurkeHsiangMiguel;
 withnegative = true
 abatementtype = withnegative ? "negative" : "constrained"
-DATAPATH = "data/simulation-dense"; @assert isdir(DATAPATH)
+DATAPATH = "data/simulation-local"; @assert isdir(DATAPATH)
 
 SAVEFIG = false;
 plotpath = joinpath("papers/job-market-paper/submission/plots", abatementtype)

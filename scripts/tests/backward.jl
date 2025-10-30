@@ -7,7 +7,7 @@ using Base.Threads
 using SciMLBase
 using Statistics
 using StaticArrays, SparseArrays
-using Interpolations
+using Interpolations, DataStructures
 
 using LinearSolve, LinearAlgebra
 
@@ -19,6 +19,7 @@ includet("../../src/extend/model.jl")
 includet("../../src/extend/grid.jl")
 includet("../../src/extend/valuefunction.jl")
 includet("../utils/saving.jl")
+includet("../utils/simulating.jl")
 includet("../plotting/utils.jl")
 includet("../markov/utils.jl")
 includet("../markov/chain.jl")
@@ -36,16 +37,17 @@ begin # Construct the model
     close(abatementfile)
 
     investments = Investment()
-    damages = WeitzmanGrowth() # NoDamageGrowth{Float64}()
+    damages = BurkeHsiangMiguel() # WeitzmanGrowth()
     economy = Economy(investments = investments, damages = damages, abatement = abatement)
 
     # Load climate claibration
     climatepath = joinpath(calibrationpath, "climate.jld2")
     @assert isfile(climatepath) "Climate calibration file not found at $climatepath"
     climatefile = jldopen(climatepath, "r+")
-    @unpack calibration, hogg, feedbacklower, feedback, feedbackhigher, decay = climatefile
+    @unpack calibration, hogg, feedbacklower, feedback, feedbackhigher = climatefile
     close(climatefile)
 
+    decay = ConstantDecay(0.)
     threshold = 2.
     climate = if 0 < threshold < Inf
         feedback = Model.updateTᶜ(threshold, feedback)
@@ -60,9 +62,9 @@ begin # Construct the model
 end
 
 begin
-    N₁ = 71; N₂ = 71;
+    N₁ = 100; N₂ = 101;
     N = (N₁, N₂)
-    Tmin = 0.; Tmax = 10.;
+    Tmin = 0.; Tmax = 8.;
     mmin = mstable(Tmin + 0.1, model.climate)
     mmax = mstable(Tmax - 0.1, model.climate)
     
@@ -73,14 +75,14 @@ begin
     withnegative = true
 
     G = RegularGrid(N, domains)
-    Δt⁻¹ = 12.
+    Δt⁻¹ = 24.
     Δt = 1 / Δt⁻¹
     τ = 500.
 end;
 
 valuefunction = ValueFunction(τ, climate, G, calibration)
 
-equilibriumsteadystate!(valuefunction, Δt, linearIAM(model), G, calibration; verbose = 2, timeiterations = 100_000, printstep = 10_000, tolerance = Error(1e-8, 1e-8))
+equilibriumsteadystate!(valuefunction, Δt, linearIAM(model), G, calibration; verbose = 1, timeiterations = 100_000, printstep = 10_000, tolerance = Error(1e-8, 1e-8))
 eqvaluefunction = deepcopy(valuefunction)
 
 steadystate!(valuefunction, Δt, model, G, calibration; timeiterations = 10_000, printstep = 1_000, verbose = 1, tolerance = Error(1e-7, 1e-8))
@@ -125,19 +127,75 @@ if isinteractive()
 end
 
 # Simulate backwards
-backwardsimulation!(valuefunction, Δt, model, G, calibration; t₀ = 0., withnegative, withsave = false, verbose = 1)
+valuefunctiontraj = backwardsimulation!(valuefunction, Δt, model, G, calibration; t₀ = 0., withnegative, withsave = false, verbose = 1, storetrajectory = true)
 
 if isinteractive()
-    E = ε(valuefunction, model, calibration, G)
-    Ē = max(1., maximum(E))
+    Ē = 1.5
+    anim = @animate for (t, valuefunction) in valuefunctiontraj
+        E = ε(valuefunction, model, calibration, G)
 
-    policyfig = heatmap(mspace, Tspace, E; xlabel = L"m", ylabel = L"T", xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0., c = abatementcolorbar(Ē), clims = (0, Ē))
-    valuefig = contourf(mspace, Tspace, valuefunction.H; title = L"Initial value $H_0$", xlabel = L"m", ylabel = L"T", c=:viridis, xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0.)
+        policyfig = heatmap(mspace, Tspace, E; xlabel = L"m", ylabel = L"T", title = "Time $(round(t, digits = 2))", xlims = extrema(mspace), ylims = extrema(Tspace), linewidth = 0., c = abatementcolorbar(Ē), clims = (0, Ē))
 
-    for fig in (policyfig, valuefig)
-        plot!(fig, nullcline, Tspace; label = false, c = :white)
-        scatter!(fig, [log(hogg.M₀ / hogg.Mᵖ)], [hogg.T₀]; label = false, c = :white)
+        plot!(policyfig, nullcline, Tspace; label = false, c = :white)
+        scatter!(policyfig, [log(hogg.M₀ / hogg.Mᵖ)], [hogg.T₀]; label = false, c = :white)
+
+        policyfig
     end
 
-    plot(policyfig, valuefig; layout=(1,2), size = 600 .* (2√2, 1))
+    gif(anim, fps = 30)
 end
+
+
+# Test simulation
+using DifferentialEquations
+
+Hitp, αitp = buildinterpolations(valuefunctiontraj, G);
+X₀ = SVector(hogg.T₀, log(hogg.M₀ / hogg.Mᵖ), 0., 0., 0., 0.)
+simulationparameters = (model, calibration, αitp);
+
+prob = ODEProblem(F, X₀, (0., 500.), simulationparameters)
+sol = solve(prob)
+
+# Compute α and ε along the solution trajectory `sol`
+begin
+    ts = sol.t
+    n = length(ts)
+    αsol = Vector{Float64}(undef, n)
+    εsol = Vector{Float64}(undef, n)
+    γsol = Vector{Float64}(undef, n)
+    δsol = Vector{Float64}(undef, n)
+
+    for (i, t) in enumerate(ts)
+        u = sol.u[i]
+        T, m = @view u[1:2]
+        α = αitp(T, m, t)
+        αsol[i] = α
+        εsol[i] = ε(t, Point(T, m), α, model, calibration)
+        γsol[i] = γ(t, calibration)
+        # δₘ takes absolute CO₂e concentration M (ppm), convert from log-m
+        M = exp(m) * model.climate.hogg.Mᵖ
+        δsol[i] = δₘ(M, model.climate.decay)
+    end
+end
+
+# Plot α and ε through time and save figures
+begin
+    # Derived series for checks/combined plotting
+    dm_dt = γsol .- αsol
+    ε_calc = αsol ./ (γsol .+ δsol)
+
+    p1 = plot(ts, αsol; xlabel = "t", ylabel = L"\alpha, \gamma", title = "α and γ (and dm/dt) along solution", label = "α", lw=2)
+    plot!(p1, ts, γsol; label = "γ", lw=2, ls = :dash)
+    plot!(p1, ts, dm_dt; label = "dm/dt = γ - α", lw=1, ls = :dot)
+
+    p2 = plot(ts, εsol; xlabel = "t", ylabel = L"\epsilon", title = "ε and reconstructed ε = α / (γ + δₘ)", label = "ε (from VF)", lw=2)
+    plot!(p2, ts, ε_calc; label = "ε_calc = α/(γ+δₘ)", lw=2, ls=:dash)
+
+    p3 = plot(ts, δsol; xlabel = "t", ylabel = L"\delta_m", title = "δ_m(t) along solution", label = "δ_m", lw=2)
+    plot!(p3, ts, γsol .+ δsol; label = "γ + δ_m", lw=2, ls=:dash)
+
+    p4 = plot(ts, dm_dt; xlabel = "t", ylabel = L"dm/dt", title = "dm/dt along solution", label = "dm/dt", lw=2)
+
+    p = plot(p1, p2, p3, p4; layout = (2, 2), size = (1000, 800))
+end
+

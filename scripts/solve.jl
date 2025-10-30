@@ -84,6 +84,7 @@ begin # Construct model
     investments = Investment{Float64}()
     economy = Economy(investments = investments, damages = damage, abatement = abatement)
     
+    decay = ConstantDecay(0.)
     climate = if 0 < threshold < Inf
         feedback = Model.updateTᶜ(threshold, feedback)
         TippingClimate(hogg, decay, feedback)
@@ -96,7 +97,7 @@ begin # Construct model
 end
 
 begin # Construct Grid
-    Tdomain = (0., 12.)  # Smaller, safer domain
+    Tdomain = (0., 10.)  # Smaller, safer domain
     mmin = mstable(Tdomain[1] + 0.5, model.climate)
     mmax = mstable(Tdomain[2] - 0.5, model.climate)
     mdomain = (mmin, mmax)
@@ -122,8 +123,9 @@ end
 tolerance = Error(tol, 1e-4)
 terminalvaluefunction = ValueFunction(tau, climate, Gterminal, calibration)
 
-equilibriumsteadystate!(terminalvaluefunction, Δt, linearIAM(model), Gterminal, calibration; timeiterations = 100_000, verbose, tolerance)
-steadystate!(terminalvaluefunction, dt, model, Gterminal, calibration; timeiterations = 100_000, verbose, tolerance, withnegative)
+Δt̄ = 1 / 12 # Steady state convergence is time step independent
+equilibriumsteadystate!(terminalvaluefunction, Δt̄, linearIAM(model), Gterminal, calibration; timeiterations = 200_000, verbose, tolerance)
+steadystate!(terminalvaluefunction, Δt̄, model, Gterminal, calibration; timeiterations = 200_000, verbose, tolerance, withnegative)
 
 if (verbose ≥ 1)
     println("$(now()): ","Running backward...")

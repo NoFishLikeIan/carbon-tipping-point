@@ -24,10 +24,10 @@ end
 
 Base.@kwdef struct Investment{S <: Real}
     κ::S = 11.2 # Adjustment costs of abatement technology
-    δₖᵖ::S = 0.0162 # Initial depreciation rate of capital
+    δₖᵖ::S = 0.0162 # Depreciation rate of capital
     σₖ::S = 0.0162 # Variance of GDP
     
-    ϱ::S = 1e-3 # Growth of TFP
+    ϱ::S = 0. # Exogenous growth of TFP
     A₀::S = 0.113 # Initial TFP
 end
 
@@ -79,7 +79,7 @@ end
 
 "Quadratic temperature damages, as in Burket et al. (2016), with calibration by Kalkuhl & Wenz (2020)."
 Base.@kwdef struct BurkeHsiangMiguel{S} <: GrowthDamages{S}
-    ξ::S = 7.09e-4 
+    ξ::S = 7.09e-4
 end
 
 d(T, _, damages::BurkeHsiangMiguel, _) = d(T, damages)

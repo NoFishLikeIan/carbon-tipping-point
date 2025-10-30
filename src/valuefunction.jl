@@ -2,6 +2,10 @@ mutable struct Time{S <: Real}
     t::S
 end
 
+function Base.copy(t::Time{S}) where S
+    Time{S}(t.t)
+end
+
 "Finite Difference representation of the value function at time `t`"
 struct ValueFunction{S <: Real, N₁, N₂}
     H::Matrix{S} # Matrix representation of the value function
@@ -23,6 +27,14 @@ struct ValueFunction{S <: Real, N₁, N₂}
     function ValueFunction{S, N₁, N₂}(H, α, t) where {S, N₁, N₂}
         new{S, N₁, N₂}(H, α, t)
     end
+end
+
+function Base.copy(valuefunction::ValueFunction{S, N₁, N₂}) where {S, N₁, N₂}
+    H′ = copy(valuefunction.H)
+    α′ = copy(valuefunction.α)
+    t′ = copy(valuefunction.t)
+
+    return ValueFunction{S, N₁, N₂}(H′, α′, t′)
 end
 
 # Base.show method for ValueFunction

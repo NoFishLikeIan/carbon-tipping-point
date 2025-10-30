@@ -143,16 +143,14 @@ function inwardoutwardsteadystate!(valuefunction::ValueFunction{S, N₁, N₂}, 
 
 end
 
-function backwardsimulation!(
-    valuefunction::ValueFunction{S, N₁, N₂}, Δt::S, model::M, G::GR, calibration::Calibration; 
-    t₀ = zero(S), withnegative = true,
-    verbose = 0, printstep = S(10), 
-    withsave = true, outdir = "data", overwrite = false,
-    startcache = valuefunction.t.t, cachestep = S(1), alg = KLUFactorization()) where {S, N₁, N₂, M <: UnitIAM{S}, GR <: AbstractGrid{N₁, N₂, S}}
+"Backward simulation of `valuefunction` from `valuefunction.t` to `t₀`. Returns a `OrderedDict` with either starting and terminal `valuefunction`, if `storetrajectory` is `false`, or the whole trajectory, otherwise."
+function backwardsimulation!(valuefunction::ValueFunction{S, N₁, N₂}, Δt::S, model::M, G::GR, calibration::Calibration; t₀ = zero(S), withnegative = true, verbose = 0, printstep = 10, withsave = true, outdir = "data", overwrite = false, startcache = valuefunction.t.t, cachestep = S(1), alg = KLUFactorization(), storetrajectory = false) where {S, N₁, N₂, M <: UnitIAM{S}, GR <: AbstractGrid{N₁, N₂, S}}
     
+    tcache = copy(startcache)
+    valuefunctiontraj = OrderedDict(valuefunction.t.t => copy(valuefunction))
+
     if withsave
         cachepath, cachefile = initcachefile(model,G, outdir, withnegative; overwrite)
-        tcache = copy(startcache)
         magnitude = -floor(Int, log10(abs(cachestep)))
         keyformat = Printf.Format("%.$(magnitude)f")
     end
@@ -161,7 +159,7 @@ function backwardsimulation!(
         tverbose = copy(valuefunction.t.t)
     end
 
- # Initialise problem
+    # Initialise problem
     Δt⁻¹ = 1 / Δt
     n = length(G)
     stencilT, stencilm = makestencil(G)
@@ -188,12 +186,20 @@ function backwardsimulation!(
             @printf "Time %.2f\r" valuefunction.t.t
         end
 
-        if withsave && valuefunction.t.t ≤ tcache
-            cachekey = Printf.format(keyformat, tcache)
-            if verbose > 1 @printf "\nSaving cache with key %s\n" cachekey end
-            
-            group = JLD2.Group(cachefile, cachekey)
-            group["V"] = valuefunction
+        if valuefunction.t.t ≤ tcache
+            if withsave
+                cachekey = Printf.format(keyformat, tcache)
+                if verbose > 1
+                    @printf "\nSaving cache with key %s\n" cachekey
+                end
+                
+                group = JLD2.Group(cachefile, cachekey)
+                group["V"] = valuefunction
+            end
+
+            if storetrajectory
+                valuefunctiontraj[valuefunction.t.t] = copy(valuefunction)
+            end
 
             tcache = tcache - cachestep
         end
@@ -204,5 +210,8 @@ function backwardsimulation!(
         if verbose > 0 @printf "\nCached in %s\n" cachepath end
     end
 
-    return valuefunction
+    valuefunctiontraj[valuefunction.t.t] = copy(valuefunction)
+    sort!(valuefunctiontraj)
+    
+    return valuefunctiontraj
 end

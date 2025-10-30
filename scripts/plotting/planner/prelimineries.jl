@@ -27,10 +27,10 @@ includet("../../../src/extend/model.jl")
 
 begin # Global variables
     DATAPATH = "data"
-    PLOTPATH = "papers/job-market-paper/submission/plots"
+    PLOTPATH = "../job-market-paper/submission/plots"
     PRESENTATIONPATH = joinpath(PLOTPATH, "presentation")
 
-    SAVEFIG = false
+    SAVEFIG = true
     LINE_WIDTH = 2.5
     SEED = 11148705
 
@@ -55,7 +55,9 @@ begin # Construct models and grids
     @unpack abatement = abatementfile
     close(abatementfile)
 
-    economy = Economy(investments = Investment(), damages = Kalkuhl(), abatement = abatement)
+    investments = Investment()
+    damages = WeitzmanGrowth() # NoDamageGrowth{Float64}()
+    economy = Economy(investments = investments, damages = damages, abatement = abatement)
     
     preferences = LogSeparable()
 
@@ -115,9 +117,9 @@ begin # Feedback plot
         rad = @view additionalradiation[:, mdx]
         model = tippingmodels[mdx]
         
-        curve = @pgf Plot({ color = colorsbymodel[model], line_width = LINE_WIDTH, opacity = 0.8 }, Coordinates(Tspace, rad))
+        radiationcurve = @pgf Plot({ color = colorsbymodel[model], line_width = LINE_WIDTH, opacity = 0.8 }, Coordinates(Tspace, rad))
 
-        push!(feedbackfig, curve, LegendEntry(labelsbymodel[model]))
+        push!(feedbackfig, radiationcurve, LegendEntry(labelsbymodel[model]))
     end
 
     if SAVEFIG
@@ -300,7 +302,7 @@ begin # Simulate carbon concentrations
     mbau(m, (hogg, calibration), t) = γ(t, calibration)
     parameters = (hogg, calibration)
     mnpproblem = ODEProblem(mbau, m₀, (0.0, 80.0), parameters)
-    mnptraj = solve(mbauprob, AutoVern9(Rodas5P()); saveat = 1.)
+    mnptraj = solve(mnpproblem, AutoVern9(Rodas5P()); saveat = 1.)
 end
 
 begin # Growth of carbon concentration 
@@ -374,7 +376,7 @@ end
 
 begin # Carbon decay path
     mediandecay = [100 * δₘ(M, decay) for M in Mpath]
-    ytick = -0.1:0.1:0.5
+    ytick = 0:0.1:1
     yticklabels = ["$(round(δ, digits = 2)) \\%" for δ in ytick]
 
     decaypathfig = @pgf Axis({
@@ -400,23 +402,14 @@ begin # Carbon decay path
 end
 
 let # Damage fig
-    Plots.pgfplotsx()
-    Mmin = exp(mstable(Tspace[1], linearmodel.climate)) * linearmodel.climate.hogg.Mᵖ
-    Mmax = exp(mstable(Tspace[end], linearmodel.climate)) * linearmodel.climate.hogg.Mᵖ
-
-    Mspace = range(Mmin, Mmax; length = 101)
-
-    for model in reverse(tippingmodels)
-        #TODO: Finish        
-
-    end
+    cumulativedamages = [d(T, linearmodel.economy.damages) for T in Tspace]
 
     maxpercentage = ceil(maximum(cumulativedamages), digits=2)
-    ytick = 0:0.05:maxpercentage
+    ytick = 0:0.02:maxpercentage
     yticklabels = [@sprintf("%.0f \\%%", 100 * y) for y in ytick]
 
-    _, xticklabels = makedeviationtickz(ΔTspace[1], ΔTspace[end], hogg; step = 1, digits = 0)
-    xtick = ΔTspace[1]:1:ΔTspace[end]
+    _, xticklabels = makedeviationtickz(Tspace[1], Tspace[end]; step = 1, digits = 0)
+    xtick = Tspace[1]:1:Tspace[end]
 
     damagefig = @pgf Axis({
         width = raw"0.5\textwidth",
@@ -424,7 +417,7 @@ let # Damage fig
         grid = "both",
         xlabel = TLABEL,
         ylabel = raw"Cumulative damages $D(T_t)$",
-        xmin = 0, xmax = ΔTmax,
+        xmin = 0, xmax = Tspace[end],
         xticklabel_style = {rotate = 45},
         yticklabels = yticklabels, ytick = ytick, ymin = 0.,
         xticklabels = xticklabels, xtick = xtick,
@@ -432,7 +425,7 @@ let # Damage fig
     })
 
     @pgf damagecurve = Plot({line_width = LINE_WIDTH},
-        Coordinates(ΔTspace, cumulativedamages)
+        Coordinates(Tspace, cumulativedamages)
     )
 
     push!(damagefig, damagecurve)
@@ -454,7 +447,7 @@ begin # Marginal abatement curve
     xticks = range(extrema(emissivity)..., step = 0.2)
     xticklabels = [@sprintf("%.0f\\%%", 100 * x) for x in xticks]
 
-    ytick = 0.02:0.04:0.26
+    ytick = 0:0.1:0.5
     yticklabels = [@sprintf("%.f\\%%", 100 * y) for y in ytick]
 
     abatementfig = @pgf Axis({

@@ -7,7 +7,7 @@ end
 
 SimulationParameters = Tuple{IAM, Calibration, Interpolations.Extrapolation}
 "Drift of system."
-function F(u::SVector{3,R}, parameters::SimulationParameters, t) where R<:Real
+function F(u::V, parameters::SimulationParameters, t) where {R<:Real, V <: StaticVector{3, R}}
     model, calibration, αitp = parameters
     T, m = @view u[1:2]
     state = Point(T, m)
@@ -18,7 +18,7 @@ function F(u::SVector{3,R}, parameters::SimulationParameters, t) where R<:Real
     dT = μ(T, m, model.climate) / model.climate.hogg.ϵ
     dm = γ(t, calibration) - α
     
-    growth = investments.ϱ + ϕ(t, policy.χ, model.economy.investments)
+    growth = model.economy.investments.ϱ + ϕ(t, policy.χ, model.economy.investments)
     damage = d(state.T, state.m, model.economy.damages, model.climate)
     abatement = A(t, model.economy.investments) * β(t, ε(t, state, α, model, calibration), model.economy.abatement)
     dy = growth - damage - abatement
@@ -26,7 +26,7 @@ function F(u::SVector{3,R}, parameters::SimulationParameters, t) where R<:Real
     return SVector(dT, dm, dy)
 end
 "Drift of system which cumulates abatement, adjustments, and damages."
-function F(u::SVector{6,R}, parameters::SimulationParameters, t) where R<:Real
+function F(u::V, parameters::SimulationParameters, t) where {R<:Real, V <: StaticVector{6, R}}
     model, calibration, αitp = parameters
     T, m = @view u[1:2]
     state = Point(T, m)
@@ -49,7 +49,7 @@ end
 
 NpParamaters = Tuple{IAM,Calibration}
 "Drift of system in the no-policy scenario."
-function Fnp(u::SVector{2,R}, parameters::NpParamaters, t) where R<:Real
+function Fnp(u::V, parameters::NpParamaters, t) where {R<:Real, V <: StaticVector{2, R}}
     model, calibration = parameters
     T, m = u
 
@@ -77,13 +77,7 @@ end
 "Constructs linear interpolation of results"
 function buildinterpolations(values::VS, G::GR) where { N₁, N₂, S, GR <: AbstractGrid{N₁, N₂, S}, VS <: AbstractDict{S, ValueFunction{S, N₁, N₂}} }
     Tspace, mspace = G.ranges
-    
-    times = diff(collect(keys(values)))
-    timestep = only(unique(times))
-    t₀, t₁ = extrema(keys(values))
-    tspace = t₀:timestep:t₁
-    
-    nodes = (Tspace, mspace, tspace)
+    tspace = collect(keys(values))
 
     H = Array{S, 3}(undef, N₁, N₂, length(tspace))
     α = similar(H)
@@ -92,9 +86,10 @@ function buildinterpolations(values::VS, G::GR) where { N₁, N₂, S, GR <: Abs
         H[:, :, i] .= V.H
         α[:, :, i] .= V.α
     end
-
-    Hitp = extrapolate(scale(interpolate(H, BSpline(Linear())), nodes...), Flat())
-    αitp = extrapolate(scale(interpolate(α, BSpline(Linear())), nodes...), Flat())
+    
+    knots = (Tspace, mspace, tspace)
+    Hitp = linear_interpolation(knots, H; extrapolation_bc = Flat())
+    αitp = linear_interpolation(knots, α; extrapolation_bc = Flat())
 
     return Hitp, αitp
 end
