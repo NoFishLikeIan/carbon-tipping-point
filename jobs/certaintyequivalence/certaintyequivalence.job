@@ -19,7 +19,7 @@ cd $HOME/scc-tipping-points # Move to base directory
 SCRATCHDATA="$TMPDIR"/data
 
 mkdir -p $SCRATCHDATA # Create scratch directory with user name
-rsync data/calibration $SCRATCHDATA # Copy calibration data to scratch
+rsync -az data/calibration $SCRATCHDATA # Copy calibration data to scratch
 
 mkdir -p $SCRATCHDATA/simulation-large
 rsync -a data/simulation-large $SCRATCHDATA # Copy simulation data to scratch

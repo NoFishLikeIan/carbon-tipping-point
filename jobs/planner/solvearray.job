@@ -3,7 +3,7 @@
 #SBATCH --job-name=solve
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --array=0-31
+#SBATCH --array=0-63
 #SBATCH --time=5:30:00
 #SBATCH --partition=rome
 #SBATCH --mail-type=BEGIN,END,FAIL,TIME_LIMIT_80
@@ -18,7 +18,7 @@ cd $HOME/scc-tipping-points # Move to base directory
 
 SCRATCHDATA="$TMPDIR"/data
 mkdir -p $SCRATCHDATA # Create scratch directory with user name
-rsync data/calibration $SCRATCHDATA # Copy calibration data to scratch
+rsync -az data/calibration $SCRATCHDATA # Copy calibration data to scratch
 
 # Extract parameters at the SLURM_ARRAY_TASK_ID from parameters.json
 jq_command='

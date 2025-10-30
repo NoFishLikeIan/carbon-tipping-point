@@ -66,7 +66,7 @@ begin # Construct model
     climatepath = joinpath(calibrationpath, "climate.jld2")
     @assert isfile(climatepath) "Climate calibration file not found at $climatepath"
     climatefile = jldopen(climatepath, "r+")
-    @unpack calibration, hogg, feedbacklower, feedback, feedbackhigher = climatefile
+    @unpack calibration, hogg, feedbacklower, feedback, feedbackhigher, decay = climatefile
     close(climatefile)
 
     damage = if damages == "kalkuhl"
