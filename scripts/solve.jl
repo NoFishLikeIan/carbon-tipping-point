@@ -34,6 +34,7 @@ using SciMLBase
 using Statistics
 using StaticArrays, SparseArrays
 using LinearSolve, LinearAlgebra
+using DataStructures
 
 using Optimization, OptimizationOptimJL, LineSearches
 using ForwardDiff
