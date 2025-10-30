@@ -88,8 +88,8 @@ function buildinterpolations(values::VS, G::GR) where { N₁, N₂, S, GR <: Abs
     end
     
     knots = (Tspace, mspace, tspace)
-    Hitp = linear_interpolation(knots, H; extrapolation_bc = Flat())
-    αitp = linear_interpolation(knots, α; extrapolation_bc = Flat())
+    Hitp = linear_interpolation(knots, H; extrapolation_bc = Interpolations.Flat())
+    αitp = linear_interpolation(knots, α; extrapolation_bc = Interpolations.Flat())
 
     return Hitp, αitp
 end

@@ -66,11 +66,8 @@ Base.@kwdef struct Kalkuhl{S} <: GrowthDamages{S}
     ξ₂::S = 0.0018 # [1/°C²]
 end
 
-function d(T, m, damages::Kalkuhl, climate::C) where {C <: Climate}
-    linear = (damages.ξ₁ + damages.ξ₂ * T) * μ(T, m, climate) / climate.hogg.ϵ
-    quadratic = damages.ξ₂ * variance(T, climate.hogg)  
-
-    return linear + quadratic
+function d(T, _, damages::Kalkuhl, _)
+    damages.ξ₁ * max(T, 0) + damages.ξ₂ * max(T, 0)^2
 end
 
 function D(T, damages::Kalkuhl)
@@ -79,7 +76,7 @@ end
 
 "Quadratic temperature damages, as in Burket et al. (2016), with calibration by Kalkuhl & Wenz (2020)."
 Base.@kwdef struct BurkeHsiangMiguel{S} <: GrowthDamages{S}
-    ξ::S = 7.09e-4
+    ξ::S = 2 * 7.09e-4
 end
 
 d(T, _, damages::BurkeHsiangMiguel, _) = d(T, damages)

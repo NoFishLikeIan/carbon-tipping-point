@@ -154,7 +154,7 @@ X₀ = SVector(hogg.T₀, log(hogg.M₀ / hogg.Mᵖ), 0., 0., 0., 0.)
 simulationparameters = (model, calibration, αitp);
 
 prob = ODEProblem(F, X₀, (0., 500.), simulationparameters)
-sol = solve(prob)
+sol = solve(prob, Tsit5())
 
 # Compute α and ε along the solution trajectory `sol`
 begin

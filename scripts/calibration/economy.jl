@@ -67,7 +67,7 @@ end
 
 
 begin # Fill in data coefficients
-    macupper = Inf
+    macupper = 0.5
 
     emissionkey = "AR6 climate diagnostics|Infilled|Emissions|Kyoto Gases (AR6-GWP100)"
 

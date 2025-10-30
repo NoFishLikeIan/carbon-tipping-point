@@ -275,7 +275,7 @@ begin
     γres = optimize(growthloss, p₀, LBFGS())
 end
 
-γ̲ = 0.005
+γ̲ = 0.
 calibration = DoubleExponentialCalibration(co2tspan, Eₜ, γres.minimizer..., γ̲)
 
 if isinteractive()
