@@ -534,7 +534,7 @@ end
 begin
     noiseoptparams = (ensemblenoiseprob, (T̂upper - T̂lower))
     σobjfn = @closure σ -> quantileloss(σ, noiseoptparams) # Tests
-    _, σ = gssmin(σobjfn, 0., 1.; tol = 1e-2)
+    _, σ = gssmin(σobjfn, 0., 0.5; tol = 1e-2)
 end
 
 if isinteractive() let
