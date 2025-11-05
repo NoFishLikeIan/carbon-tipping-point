@@ -151,7 +151,7 @@ function listfiles(simpath::String; exclude = ["terminal"])
         end
 
         for filename in filenames
-            if occursin("jld2", filename)
+            if occursin("jld2", filename) && !occursin("Zone.Identifier", filename)
                 push!(files, joinpath(root, filename))
             end
         end

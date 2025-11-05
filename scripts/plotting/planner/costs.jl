@@ -120,8 +120,7 @@ begin
     end
 
     function updatepolicy!(integrator)
-        return
-        integrator.p[2] = (interpolations[imminentmodel][:χ], interpolations[imminentmodel][:α])
+        return integrator.p[2] = (interpolations[imminentmodel][:χ], interpolations[imminentmodel][:α])
     end
 
     cb = ContinuousCallback(discovery, updatepolicy!)

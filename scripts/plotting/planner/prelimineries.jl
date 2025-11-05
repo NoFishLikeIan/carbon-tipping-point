@@ -137,7 +137,7 @@ begin # Simulate NP problem
 
     for model in models
         npparameters = (model, calibration)
-        sol = solve(npensemble; trajectories = 1_000, p = npparameters, saveat = 1.0)
+        sol = solve(npensemble; trajectories = 10_000, p = npparameters, saveat = 1.0)
 
         @printf "Done with simulation of %s\n" labelsbymodel[model]
 
@@ -359,7 +359,7 @@ begin # Growth of carbon concentration
     @pgf push!(gfig, {
             figsize...,
             grid = "both",
-            ylabel = L"\footnotesize \\$M_t^{b} \; [\si{\ppm}]$",
+            ylabel = L"\footnotesize CO2e concentration \\$M_t^{\textrm{np}} \; [\si{\ppm}]$",
             ylabel_style = {align = "center"},
             xtick = xtick,
             xmin = 0, xmax = horizon,

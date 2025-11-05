@@ -1,9 +1,20 @@
-function b(t, state::Point, policy::Policy, model::IAM, calibration::Calibration)
-    @unpack economy, climate = model
-    @unpack abatement, damages, investments = economy
+NpParamaters = Tuple{IAM,Calibration}
+"Drift of system in the no-policy scenario."
+function Fnp(u::V, parameters::NpParamaters, t) where {R<:Real, V <: StaticVector{2, R}}
+    model, calibration = parameters
+    T, m = u
 
-    growth = investments.ϱ + ϕ(t, policy.χ, investments) 
+    dT = μ(T, m, model.climate) / model.climate.hogg.ϵ
+    dm = γ(t, calibration)
+
+    return SVector(dT, dm)
 end
+function noise(u, parameters::NpParamaters, t)
+    model = first(parameters)
+    T = u[1]
+    return SVector(Model.std(T, model.climate.hogg), 0.)
+end
+
 
 SimulationParameters = Tuple{IAM, Calibration, Interpolations.Extrapolation}
 "Drift of system."
@@ -24,6 +35,11 @@ function F(u::V, parameters::SimulationParameters, t) where {R<:Real, V <: Stati
     dy = growth - damage - abatement
 
     return SVector(dT, dm, dy)
+end
+function noise(u::V, parameters::SimulationParameters, t) where {R<:Real, V <: StaticVector{3, R}}
+    model = first(parameters)
+    T = u[1]
+    return SVector(Model.std(T, model.climate.hogg), 0., model.economy.investments.σₖ)
 end
 "Drift of system which cumulates abatement, adjustments, and damages."
 function F(u::V, parameters::SimulationParameters, t) where {R<:Real, V <: StaticVector{6, R}}
@@ -46,32 +62,19 @@ function F(u::V, parameters::SimulationParameters, t) where {R<:Real, V <: Stati
 
     return SVector(dT, dm, dy, abatement, adjustment, damage)
 end
-
-NpParamaters = Tuple{IAM,Calibration}
-"Drift of system in the no-policy scenario."
-function Fnp(u::V, parameters::NpParamaters, t) where {R<:Real, V <: StaticVector{2, R}}
-    model, calibration = parameters
-    T, m = u
-
-    dT = μ(T, m, model.climate) / model.climate.hogg.ϵ
-    dm = γ(t, calibration)
-
-    return SVector(dT, dm)
-end
-function noise(u, parameters::NpParamaters, t)
-    model = first(parameters)
-    T = u[1]
-    return SVector(Model.std(T, model.climate.hogg), 0.)
-end
-function noise(u::SVector{3}, parameters::SimulationParameters, t)
-    model = first(parameters)
-    T = u[1]
-    return SVector(Model.std(T, model.climate.hogg), 0., model.economy.investments.σₖ)
-end
-function noise(u::SVector{6}, parameters::SimulationParameters, t)
+function noise(u::V, parameters::SimulationParameters, t) where {R<:Real, V <: StaticVector{6, R}}
     model = first(parameters)
     T = u[1]
     return SVector(Model.std(T, model.climate.hogg), 0., model.economy.investments.σₖ, 0.0, 0.0, 0.0)
+end
+
+# Holds the running simulation, the true model and interpolations, the discovery time, and whether discovery has happened
+DiscoveryParameters{S <: SimulationParameters, M <: IAM, α <: Interpolations.Extrapolation, R <: Real} = Tuple{S, M, α, R, Bool}
+function F!(du, u, parameters::DiscoveryParameters, t)
+    du .= F(u, first(parameters), t)
+end
+function noise!(Σ, u, parameters::DiscoveryParameters, t)
+    Σ .= noise(u, first(parameters), t)
 end
 
 "Constructs linear interpolation of results"
@@ -123,12 +126,4 @@ function scc(t, Y, Xᵢ::Point, itp, model::IAM)
     outputfactor = Y / (1 - model.preferences.θ)
 
     return -outputfactor * (Fₘ / Fᵢ) * Model.Gtonoverppm / dm
-end
-
-sampletemperature(model::IAM, trajectories) = sampletemperature(default_rng(), model, trajectories)
-function sampletemperature(rng, model::IAM, trajectories; σ=0.15)
-    T̄ = minimum(Model.Tstable(log(model.climate.hogg.M₀), model))
-    z = randn(rng, trajectories)
-
-    return @. T̄ + z * σ
 end
