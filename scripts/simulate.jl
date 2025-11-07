@@ -81,10 +81,18 @@ prob = SDEProblem(F!, noise!, u₀, (0., horizon), initialparameters)
 ensembleprob = EnsembleProblem(prob)
 
 callback = ContinuousCallback(temperaturetodiscovery, updatepolicy!);
+
+if (verbose ≥ 1) println("$(now()): ", "Starting simulation..."); flush(stdout) end
 sol = solve(ensembleprob, ImplicitEM(); callback, trajectories)
+
+
 quantiles = EnsembleAnalysis.timeseries_point_quantile(sol, (0.01, 0.1, 0.5, 0.9, 0.99), 0:0.1:80)
 
 outpath = joinpath("simulations", simulationdir)
 if !ispath(outpath) mkpath(outpath) end
-outfile = joinpath(outpath, "$simulationdir.json")
+thresholdkey = replace("T$(Printf.format(Printf.Format("%.1f"), threshold))", "." => ",")
+discoverykey = replace("D$(Printf.format(Printf.Format("%.1f"), discovery))", "." => ",")
+outfile = joinpath(outpath, "$(thresholdkey)_$(discoverykey).jld2")
+
+if (verbose ≥ 1) println("$(now()): ", "Saving in ", outfile); flush(stdout) end
 JLD2.save_object(outfile, quantiles)

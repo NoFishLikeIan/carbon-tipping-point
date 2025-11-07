@@ -1,5 +1,5 @@
 #!/bin/bash
 julia --threads 6 --project scripts/solve.jl --NT 100 --Nm 101 \
     --cachestep 0.5 --verbose 1 --tol 0.001 --dt 0.005 \
-    --datapath "data"  --simulationpath "simulation-local" --overwrite \
-    --threshold 4.0 --damage "burke" --withnegative
+    --datapath "data" --simulationpath "simulation-local" --overwrite \
+    --threshold -1.0 --damage "burke" --withnegative

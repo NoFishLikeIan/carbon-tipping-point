@@ -5,7 +5,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=64
 #SBATCH --array=0-1
-#SBATCH --time=00:10:00
+#SBATCH --time=01:00:00
 #SBATCH --partition=rome
 #SBATCH --mail-type=BEGIN,END,FAIL,TIME_LIMIT_80
 #SBATCH -o ./logs/out/EXPERIMENT%A_%a.out 
@@ -30,7 +30,7 @@ jq_command='
 params=$(jq -r --arg id "$SLURM_ARRAY_TASK_ID" "$jq_command" jobs/experiments/parameters.json)
 
 julia --threads "auto" --project scripts/simulate.jl \
-    --trajectories 10 --datapath "$SCRATCHDATA"  --simulationpath "simulation-dense" \
+    --trajectories 10000 --datapath "$SCRATCHDATA"  --simulationdir "simulation-dense" \
     $paramss
 
 # Copy results back to home
