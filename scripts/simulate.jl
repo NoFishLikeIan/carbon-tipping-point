@@ -88,7 +88,7 @@ sol = solve(ensembleprob, ImplicitEM(); callback, trajectories)
 
 quantiles = EnsembleAnalysis.timeseries_point_quantile(sol, (0.01, 0.1, 0.5, 0.9, 0.99), 0:0.1:80)
 
-outpath = joinpath("simulations", simulationdir)
+outpath = joinpath(datapath, "simulations", simulationdir)
 if !ispath(outpath) mkpath(outpath) end
 thresholdkey = replace("T$(Printf.format(Printf.Format("%.1f"), threshold))", "." => ",")
 discoverykey = replace("D$(Printf.format(Printf.Format("%.1f"), discovery))", "." => ",")
