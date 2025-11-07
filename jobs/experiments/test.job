@@ -3,13 +3,13 @@
 #SBATCH --job-name=experiment
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=64
+#SBATCH --cpus-per-task=12
 #SBATCH --array=0-1
 #SBATCH --time=01:00:00
 #SBATCH --partition=rome
 #SBATCH --mail-type=BEGIN,END,FAIL,TIME_LIMIT_80
-#SBATCH -o ./logs/out/EXPERIMENT%A_%a.out 
-#SBATCH -e ./logs/error/EXPERIMENT%A_%a.out
+#SBATCH -o ./logs/out/TEST_EXPERIMENT%A_%a.out 
+#SBATCH -e ./logs/error/TEST_EXPERIMENT%A_%a.out
 #SBATCH --mail-user=andrea.titton2@unibo.it
 
 module load 2024
@@ -17,9 +17,12 @@ module load Julia/1.10.4-linux-x86_64
 
 cd $HOME/scc-tipping-points # Move to base directory
 
+echo "Copying simulation data to scratch..."
 SCRATCHDATA="$TMPDIR"/data
 mkdir -p $SCRATCHDATA # Create scratch directory with user name
 rsync -az data/simulation-dense $SCRATCHDATA # Copy simulation data to scratch
+rsync -az data/calibration $SCRATCHDATA # Copy calibration data to scratch
+echo "...done!"
 
 # Extract parameters at the SLURM_ARRAY_TASK_ID from parameters.json
 jq_command='
@@ -29,12 +32,9 @@ jq_command='
 
 params=$(jq -r --arg id "$SLURM_ARRAY_TASK_ID" "$jq_command" jobs/experiments/parameters.json)
 
-julia --threads "auto" --project scripts/simulate.jl \
+julia --threads "auto" --project scripts/simulate.jl --verbose 2 \
     --trajectories 10000 --datapath "$SCRATCHDATA"  --simulationdir "simulation-dense" \
-    $paramss
+    $params
 
 # Copy results back to home
-SIMPATH="$TMPDIR"/simulations
-rsync -avzu $SIMPATH $HOME/scc-tipping-points
-rm -r $SCRATCHDATA # Remove scratch directory
-rm -r $SIMPATH
+rsync -avzu $SCRATCHDATA $HOME/scc-tipping-points

@@ -90,8 +90,8 @@ quantiles = EnsembleAnalysis.timeseries_point_quantile(sol, (0.01, 0.1, 0.5, 0.9
 
 outpath = joinpath(datapath, "simulations", simulationdir)
 if !ispath(outpath) mkpath(outpath) end
-thresholdkey = replace("T$(Printf.format(Printf.Format("%.1f"), threshold))", "." => ",")
-discoverykey = replace("D$(Printf.format(Printf.Format("%.1f"), discovery))", "." => ",")
+thresholdkey = replace("T$(Printf.format(Printf.Format("%.2f"), threshold))", "." => ",")
+discoverykey = replace("D$(Printf.format(Printf.Format("%.2f"), discovery))", "." => ",")
 outfile = joinpath(outpath, "$(thresholdkey)_$(discoverykey).jld2")
 
 if (verbose ≥ 1) println("$(now()): ", "Saving in ", outfile); flush(stdout) end
