@@ -9,7 +9,7 @@
 #SBATCH --mail-type=BEGIN,END,FAIL,TIME_LIMIT_80
 #SBATCH -o ./logs/out/SOLVE.out 
 #SBATCH -e ./logs/error/SOLVE.out
-#SBATCH --mail-user=a.titton@uva.nl
+#SBATCH --mail-user=andrea.titton2@unibo.it
 
 module load 2024
 module load Julia/1.10.4-linux-x86_64

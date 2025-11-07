@@ -3,13 +3,13 @@
 #SBATCH --job-name=solve
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --array=0-63
+#SBATCH --array=0-41
 #SBATCH --time=5:30:00
 #SBATCH --partition=rome
 #SBATCH --mail-type=BEGIN,END,FAIL,TIME_LIMIT_80
 #SBATCH -o ./logs/out/SOLVE%A_%a.out 
 #SBATCH -e ./logs/error/SOLVE%A_%a.out
-#SBATCH --mail-user=a.titton@uva.nl
+#SBATCH --mail-user=andrea.titton2@unibo.it
 
 module load 2024
 module load Julia/1.10.4-linux-x86_64

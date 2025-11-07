@@ -5,12 +5,12 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=64
 #SBATCH --array=0-1
-#SBATCH --time=00:10;00
+#SBATCH --time=00:10:00
 #SBATCH --partition=rome
 #SBATCH --mail-type=BEGIN,END,FAIL,TIME_LIMIT_80
 #SBATCH -o ./logs/out/EXPERIMENT%A_%a.out 
 #SBATCH -e ./logs/error/EXPERIMENT%A_%a.out
-#SBATCH --mail-user=a.titton@uva.nl
+#SBATCH --mail-user=andrea.titton2@unibo.it
 
 module load 2024
 module load Julia/1.10.4-linux-x86_64

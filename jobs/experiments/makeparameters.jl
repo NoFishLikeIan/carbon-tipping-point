@@ -15,6 +15,6 @@ end
 
 println("Constructed $(length(parameters)) parameters object.")
 
-open("jobs/planner/parameters.json", "w") do f
+open("jobs/experiments/parameters.json", "w") do f
     JSON.print(f, Dict("parameters" => parameters), 2)
 end
