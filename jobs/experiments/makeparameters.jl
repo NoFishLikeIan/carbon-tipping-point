@@ -1,11 +1,20 @@
 using JSON
-include("../../scripts/utils/saving.jl")
 
-inputdir = isempty(ARGS) ? "data/simulation-medium" : first(ARGS);
-inputfiles = listfiles(inputdir; exclude = ["terminal", "jump"]); # FIXME: Jump is not working for now.
+thresholds = 2:0.05:4;
+discoveries = -1:0.25:0.1
 
-obj = Dict("inputfiles" => inputfiles);
+parameters = Dict{String, Float64}[];
+for discovery in discoveries, threshold in thresholds
+    obj = Dict(
+        "discovery" => discovery,
+        "threshold" => threshold
+    )
 
-open("jobs/experiments/parameters.json", "w") do file
-    JSON.print(file, obj, 2)
+    push!(parameters, obj)
+end
+
+println("Constructed $(length(parameters)) parameters object.")
+
+open("jobs/planner/parameters.json", "w") do f
+    JSON.print(f, Dict("parameters" => parameters), 2)
 end

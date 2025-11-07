@@ -17,31 +17,24 @@ module load Julia/1.10.4-linux-x86_64
 
 cd $HOME/scc-tipping-points # Move to base directory
 
+SCRATCHDATA="$TMPDIR"/data
+mkdir -p $SCRATCHDATA # Create scratch directory with user name
+rsync -az data/simulation-dense $SCRATCHDATA # Copy simulation data to scratch
+
 # Extract parameters at the SLURM_ARRAY_TASK_ID from parameters.json
-SIMFILE=$(jq -r --arg id "$SLURM_ARRAY_TASK_ID" '.inputfiles[$id | tonumber]' jobs/experiments/parameters.json)
+jq_command='
+.parameters[$id | tonumber] | 
+"--threshold \(.threshold) --discovery \(.discovery)"
+'
 
-# Move the simulation file to scratch
-SIMFILENAME=$(basename $SIMFILE)        # Get the filename
-SIMDIR=$(dirname $SIMFILE)              # Get the directory of the local input file
-TMPSIMDIR=$TMPDIR/$SIMDIR           # Define the temporary directory
-mkdir -p $TMPSIMDIR                     # Make the temporary directory
-rsync -v $SIMFILE $TMPSIMDIR            # Copy the input file to the temporary directory
+params=$(jq -r --arg id "$SLURM_ARRAY_TASK_ID" "$jq_command" jobs/experiments/parameters.json)
 
-INPUTFILE=($TMPSIMDIR/$SIMFILENAME) # Get the filename
-
-# Add experiments between /data/ and /path/to/file
-TYPEFOLDER=$(echo "$SIMDIR" | sed 's|.*data/||')
-OUTPUTDIR=($TMPDIR/data/experiments/$TYPEFOLDER)
-
-OUTPUTFILE=($OUTPUTDIR/$SIMFILENAME)
-
-# Run script
-julia --threads ${SLURM_CPUS_PER_TASK} --project scripts/experiments/run.jl $INPUTFILE $OUTPUTFILE \
-    --trajectories 10000 --verbose 1
+julia --threads "auto" --project scripts/simulate.jl \
+    --trajectories 10000 --datapath "$SCRATCHDATA"  --simulationpath "simulation-dense" \
+    $paramss
 
 # Copy results back to home
-# Copy results back to home
-LOCALOUTPUTDIR=$HOME/scc-tipping-points/data/experiments/$TYPEFOLDER
-mkdir -p $LOCALOUTPUTDIR # Locally make space for simulation
-rsync -avzu $OUTPUTFILE $LOCALOUTPUTDIR # Sync back output file to local directory
-rm -r $TMPSIMDIR # Remove temporary directory
+SIMPATH="$TMPDIR"/simulations
+rsync -avzu $SIMPATH $HOME/scc-tipping-points
+rm -r $SCRATCHDATA # Remove scratch directory
+rm -r $SIMPATH

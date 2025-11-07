@@ -71,8 +71,8 @@ begin # Import available files
     
     for (i, filepath) = enumerate(modelfiles)
         print("Loading $i / $(length(modelfiles))\r")
-        values, model, G = loadtotal(filepath; tspan=(0, 1.2horizon))
-        interpolations[model] = buildinterpolations(values, G);
+        values, model, Gᵢ = loadtotal(filepath; tspan=(0, 2horizon))
+        interpolations[model] = buildinterpolations(values, Gᵢ);
         valuefunctions[model] = values;
         push!(models, model)
     end
@@ -111,44 +111,44 @@ begin # Plot estetics
     LINE_WIDTH = 2.5
 
     Tspace, mspace = G.ranges
-
-    yearlytime = range(tspan[1], tspan[2]; step=1.)
-    T₀ = hogg.T₀
-    m₀ = log(hogg.M₀ / hogg.Mᵖ)
-    x₀ = Point(T₀, m₀)
-
     temperatureticks = makedeviationtickz(Tspace[1], Tspace[end]; step=1, digits=2)
 
-    X₀ = MVector(T₀, m₀, 0.)
-    u₀ = MVector(X₀..., 0., 0., 0.) # Introduce three 0s for costs
+    yearlytime = range(tspan[1], tspan[2]; step=1.)
 end;
 
-function discovery(u, _, integrator)
-    _, truemodel, _, ΔTᵈ, _ = integrator.p
-    discoverytemperature = truemodel.climate.feedback.Tᶜ + ΔTᵈ
-    return discoverytemperature - u[1]
-end
+function solvecorrectedpolicy(truemodel, initialmodel, ΔTᵈ, interpolations; tspan = (0., 80.), trajectories = 1_000)
+    α₀ = interpolations[initialmodel][2]
+    α = interpolations[truemodel][2];
 
-"Updates the simulation model and policy to be the true ones. Sets the discovery to true, such that this happens once."
-function discoveryupdate!(integrator)
-    ignorantparameters, truemodel, truepolicy, ΔTᵈ, isdiscovered = integrator.p
-
-    if !isdiscovered
-        calibration = ignorantparameters[2]
-        simulationparameters = (truemodel, calibration, truepolicy)
-        integrator.p = (simulationparameters, truemodel, truepolicy, ΔTᵈ, true)
-        @info "Discovery callback triggered" time=integrator.t temperature=integrator.u[1] ΔTᵈ=ΔTᵈ
+    discovery = @closure (u, _, _) -> begin # Assumes T₀ < Tᶜ + ΔTᵈ
+        discoverytemperature = truemodel.climate.feedback.Tᶜ + ΔTᵈ
+        return discoverytemperature - u[1]
     end
+
+    updatepolicy! = @closure integrator -> begin
+        model, calibration, _ = integrator.p
+        integrator.p = (model, calibration, α)
+    end
+
+    callback = ContinuousCallback(discovery, updatepolicy!)
+    initialparameters = (truemodel, calibration, α₀);
+
+    T₀ = truemodel.climate.hogg.T₀
+    m₀ = log(truemodel.climate.hogg.M₀ / truemodel.climate.hogg.Mᵖ)
+    u₀ = MVector(T₀, m₀, 0., 0., 0., 0.)
+
+    prob = SDEProblem(F!, noise!, u₀, tspan, initialparameters)
+    ensembleprob = EnsembleProblem(prob)
+
+    return solve(ensembleprob, SKenCarp(); callback, trajectories)
 end
 
-callback = ContinuousCallback(discovery, discoveryupdate!)
+begin
+    fig = plot(xlabel = "Year", ylabel = "Carbon concentration")
+    for ΔTᵈ in -1:3
+        sol = solvecorrectedpolicy(extremamodels[1], extremamodels[2], ΔTᵈ, interpolations)
+        plot!(fig, sol; idxs = 2, label = ΔTᵈ, linewidth = 2.5)
+    end
 
-begin model = first(models)
-    imminentmodel, remotemodel = extremamodels
-    ignorantparameters = (remotemodel, calibration, interpolations[remotemodel][2]);
-
-    ΔTᵈ = 0.
-    
-    parameters = (ignorantparameters, imminentmodel, interpolations[imminentmodel][2], ΔTᵈ, false);
-    prob = ODEProblem(F!, u₀, (0, horizon), parameters)
+    fig
 end

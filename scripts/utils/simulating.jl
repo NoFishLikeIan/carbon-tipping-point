@@ -68,6 +68,13 @@ function noise(u::V, parameters::SimulationParameters, t) where {R<:Real, V <: S
     return SVector(Model.std(T, model.climate.hogg), 0., model.economy.investments.σₖ, 0.0, 0.0, 0.0)
 end
 
+function F!(du, u, parameters::SimulationParameters, t)
+    du .= F(u, parameters, t)
+end
+function noise!(Σ, u, parameters::SimulationParameters, t)
+    Σ .= noise(u, parameters, t)
+end
+
 # Holds the running simulation, the true model and interpolations, the discovery time, and whether discovery has happened
 DiscoveryParameters{S <: SimulationParameters, M <: IAM, α <: Interpolations.Extrapolation, R <: Real} = Tuple{S, M, α, R, Bool}
 function F!(du, u, parameters::DiscoveryParameters, t)
