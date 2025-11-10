@@ -88,5 +88,6 @@ begin # Save
     outfile = joinpath(outpath, "$(thresholdkey)_$(discoverykey).jld2")
 
     if (verbose ≥ 1) println("$(now()): ", "Saving in ", outfile); flush(stdout) end
-    JLD2.save_object(outfile, valuefunction)
+
+    JLD2.@save outfile threshold discovery valuefunction
 end
