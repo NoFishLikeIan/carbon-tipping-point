@@ -1,7 +1,7 @@
 using JSON
 
 thresholds = 2:0.05:4;
-discoveries = -1:0.25:0.1
+discoveries = -1:0.25:1
 
 parameters = Dict{String, Float64}[];
 for discovery in discoveries, threshold in thresholds
