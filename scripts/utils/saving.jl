@@ -35,7 +35,7 @@ function makefilename(model::IAM{S, D, P, C}) where {S, D <: Damages{S}, P <: Lo
     # 1. Threshold temperature deviation from pre-industrial
     thresholdpart = if C <: TippingClimate
         deviation = model.climate.feedback.Tᶜ
-        "T$(Printf.format(Printf.Format("%.1f"), deviation))"
+        "T$(Printf.format(Printf.Format("%.2f"), deviation))"
     else
         "Linear"
     end
@@ -54,7 +54,7 @@ function makefilename(model::IAM{S, D, P, C}) where {S, D <: Damages{S}, P <: Lo
     
     # 3. RRA θ
     θ = model.preferences.θ
-    rrapart = "RRA$(Printf.format(Printf.Format("%.1f"), θ))"
+    rrapart = "RRA$(Printf.format(Printf.Format("%.2f"), θ))"
     
     filename = "$(thresholdpart)_$(damagepart)_$(rrapart).jld2"
     return replace(filename, "." => ",")
