@@ -90,9 +90,9 @@ end
 
 ceargstable = ArgParseSettings()
 @add_arg_table ceargstable begin
-    "--simulationpath", "-s"
+    "--simulationdir", "-s"
         arg_type = String
-        default = "simulation-small"
+        default = "simulation-local"
         help = "Path to simulation folder"
 
     "--datapath", "-d"
@@ -100,22 +100,26 @@ ceargstable = ArgParseSettings()
         default = "data"
         help = "Path to data folder"
     
+    "--calibrationpath"
+        arg_type = String
+        default = "calibration/"
+    
     "--verbose" , "-v"
         arg_type = Int
         default = 0
         help = "Verbosity can be set to 0, 1, or 2 and larger."
 
-    "--remotethreshold"
+    "--threshold"
         arg_type = Float64
-        default = 2.5
-
-    "--eis"
+        default = 2.0
+    
+    "--discovery"
         arg_type = Float64
-        default = 0.75
-
-    "--rra"
+        default = 0.0
+    
+    "--dt"
         arg_type = Float64
-        default = 10.
+        default = 1 / 24
 end
 
 simulateargtable = ArgParseSettings()

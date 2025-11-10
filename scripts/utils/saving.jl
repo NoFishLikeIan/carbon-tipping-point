@@ -77,7 +77,7 @@ function loadterminal(model::IAM; outdir = "data/simulation", addpath = "")
     return state, G
 end
 
-function loadtotal(model::IAM; outdir = "data/simulation", loadkwargs...)
+function loadtotal(model::IAM; outdir = "data/simulation", withnegative = true, loadkwargs...)
     if !isdir(outdir)
         error("Output directory does not exist: $(outdir)\nHave you not solved the constrained or negative problem?")
     end

@@ -233,18 +233,22 @@ begin
 
     # Carbon concentration in first row
     for (k, model) in enumerate(extremamodels) 
-        simulation = simulations[model] |> first # Carbon concentration is the same in all simulations now as σₘ ≈ 0
+        ensemble = simulations[model]
+        paths = EnsembleAnalysis.timeseries_point_quantile(ensemble, qs, 0:horizon)
+        mpaths = getindex.(paths.u, 2)
+        Mpaths = [@. hogg.Mᵖ * exp(m) for m in mpaths]
 
-        m = getindex.(simulation.u, 2)
-        M = @. hogg.Mᵖ * exp(m)
+        Mmedianplot = @pgf Plot(medianopts, Coordinates(0:horizon, getindex.(Mpaths, 2)))
+        Mlowerplot = @pgf Plot({confidenceopts..., name_path = "Mlower"}, Coordinates(0:horizon, getindex.(Mpaths, 1)))
+        Mupperplot = @pgf Plot({confidenceopts..., name_path = "Mupper"}, Coordinates(0:horizon, getindex.(Mpaths, 3)))
 
-        medianplot = @pgf Plot(medianopts, Coordinates(simulation.t, M))
+        Mfill = @pgf Plot(fillopts, raw"fill between [of=Mlower and Mupper]")
 
         labeloption = @pgf k > 1 ? { yticklabel = raw"\empty" } : { ylabel = L"`Conecntration $M_t \; [\si{ppm}]$" }
         @pgf push!(simfig, {figopts...,
-                xticklabel = raw"\empty",
-                title = labelsofclimate(model.climate), labeloption...,
-            }, medianplot)
+            xticklabel = raw"\empty",
+            title = labelsofclimate(model.climate), labeloption...,
+            }, Mmedianplot, Mlowerplot, Mupperplot, Mfill)
     end
 
     # Temperature in second row
@@ -255,10 +259,10 @@ begin
         Tpaths = first.(paths.u)
 
         Tmedianplot = @pgf Plot(medianopts, Coordinates(0:horizon, getindex.(Tpaths, 2)))
-        Tlowerplot = @pgf Plot({confidenceopts..., name_path = "lower"}, Coordinates(0:horizon, getindex.(Tpaths, 1)))
-        Tupperplot = @pgf Plot({confidenceopts..., name_path = "upper"}, Coordinates(0:horizon, getindex.(Tpaths, 3)))
+        Tlowerplot = @pgf Plot({confidenceopts..., name_path = "Tlower"}, Coordinates(0:horizon, getindex.(Tpaths, 1)))
+        Tupperplot = @pgf Plot({confidenceopts..., name_path = "Tupper"}, Coordinates(0:horizon, getindex.(Tpaths, 3)))
 
-        Tfill = @pgf Plot(fillopts, raw"fill between [of=lower and upper]")
+        Tfill = @pgf Plot(fillopts, raw"fill between [of=Tlower and Tupper]")
 
         figticks = yearticks[1:(k > 1 ? end : end - 1)]
 
