@@ -3,7 +3,7 @@
 #SBATCH --job-name=ce
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --array=0-204
+#SBATCH --array=0-368
 #SBATCH --time=0:30:00
 #SBATCH --partition=rome
 #SBATCH --mail-type=BEGIN,END,FAIL,TIME_LIMIT_80
