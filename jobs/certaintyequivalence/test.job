@@ -29,7 +29,7 @@ jq_command='
 "--threshold \(.threshold) --discovery \(.discovery)"
 '
 
-params=$(jq -r --arg id "$SLURM_ARRAY_TASK_ID" "$jq_command" jobs/planner/parameters.json)
+params=$(jq -r --arg id "$SLURM_ARRAY_TASK_ID" "$jq_command" jobs/certaintyequivalence/parameters.json)
 
 # Run script 
 julia --threads "auto" --project scripts/certaintyequivalence.jl --verbose 2 \
