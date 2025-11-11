@@ -456,5 +456,5 @@ papers/presentations/figures
 # Snellius unnecessary files
 jobs/example.job
 papers/*
-localtest.sh
 notebooks
+jobs/**/localtest.job

@@ -56,8 +56,10 @@ function makefilename(model::IAM{S, D, P, C}) where {S, D <: Damages{S}, P <: Lo
     θ = model.preferences.θ
     rrapart = "RRA$(Printf.format(Printf.Format("%.2f"), θ))"
     
-    filename = "$(thresholdpart)_$(damagepart)_$(rrapart).jld2"
-    return replace(filename, "." => ",")
+    filename = replace("$(thresholdpart)_$(damagepart)_$(rrapart)", "." => ",")
+
+
+    return "$filename.jld2"
 end
 
 function loadterminal(model::IAM; outdir = "data/simulation", addpath = "")

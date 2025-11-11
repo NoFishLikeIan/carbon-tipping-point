@@ -54,15 +54,15 @@ begin # Load climate claibration
 end
 
 begin # Load linear model
-    linearsolpath = joinpath(simulationpath, "linear", "growth", "logseparable", "negative", "Linear_burke_RRA10,0,jld2")
+    linearsolpath = joinpath(simulationpath, "linear", "growth", "logseparable", "negative", "Linear_burke_RRA10,00.jld2")
     @assert ispath(linearsolpath) "The linear simulation path does not exist: $linearsolpath"
 
     linearsimulation = loadtotal(linearsolpath);
 end
 
 begin # Load true threshold model
-    thresholdkey = replace("T$(Printf.format(Printf.Format("%.1f"), threshold))", "." => ",")
-    thresholdsolfile = "$(thresholdkey)_burke_RRA10,0,jld2"
+    thresholdkey = replace("T$(Printf.format(Printf.Format("%.2f"), threshold))", "." => ",")
+    thresholdsolfile = "$(thresholdkey)_burke_RRA10,00.jld2"
     thresholdsolpath = joinpath(simulationpath, "tipping", "growth", "logseparable", "negative", thresholdsolfile)
 
     @assert ispath(thresholdsolpath) "The specified simulation file does not exist: $thresholdsolpath"

@@ -34,9 +34,6 @@ includet("../utils.jl")
 includet("../../utils/saving.jl")
 includet("../../utils/simulating.jl")
 
-damagetype = BurkeHsiangMiguel;
-withnegative = true
-abatementtype = withnegative ? "negative" : "constrained"
 CEPATH = "data/ce/simulation-dense"; @assert isdir(CEPATH)
 DATAPATH = "data/simulation-dense"; @assert isdir(DATAPATH)
 
@@ -45,54 +42,34 @@ PLOTPATH = "../job-market-paper/submission/plots"
 plotpath = joinpath(PLOTPATH, abatementtype)
 if !isdir(plotpath) mkpath(plotpath) end
 
-discoveries = -1:0.25:1
+function findthreshold(threshold, simulationfiles)
 
-begin # Read available simulation files
-    simulationfiles = listfiles(DATAPATH)
-    nfiles = length(simulationfiles)
-    G = simulationfiles |> first |> loadproblem |> last
-    
-    modelfiles = String[]
-    for (i, filepath) in enumerate(simulationfiles)
-        print("Reading $i / $(length(simulationfiles))\r")
-        model, _ = loadproblem(filepath)
+    for filepath in simulationfiles
+        model = loadproblem(filepath) |> first
         abatementdir = splitpath(filepath)[end - 1]
 
-        if (model.economy.damages isa damagetype) && (abatementdir == abatementtype)
-            push!(modelfiles, filepath)
+        istype = (model.economy.damages isa BurkeHsiangMiguel) && (abatementdir == "negative")
+        isthreshold = model.climate isa TippingClimate && model.climate.feedback.Tᶜ ≈ threshold
+
+
+        if istype && isthreshold
+            return filepath
         end
     end
-end;
+
+    return nothing
+end
+
 
 
 begin # Import available simulation and CE files
     cefiles = listfiles(CEPATH)
+    simulationfiles = listfiles(DATAPATH)
+
+    thresholds = 2:0.05:4;
+    discoveries = -1:0.25:1
 
     models = IAM[]
     valuefunctions = Dict{IAM, NTuple{2, ValueFunction}}()
-    
-    for (i, filepath) = enumerate(modelfiles)
-        print("Loading $i / $(length(modelfiles))\r")
-        values, model, _ = loadtotal(filepath; tspan=(0, 0.05))
 
-        if model.climate isa LinearClimate continue end
-            
-        for 
-        
-        truevalue =  values[0.0]
-        valuefunctions[model] = (truevalue, )
-        push!(models, model)
-    end
-
-    sort!(by = m -> m.climate, models)
-
-    cefiles = listfiles(CEPATH)
-    nfiles = length(cefiles)
-
-    discoveryvaluefunctions = Tuple{Float64, Float64, ValueFunction}[]
-
-    for cefile in cefiles
-        JLD2.@load cefile threshold discovery valuefunction
-        push!(discoveryvaluefunctions, (threshold, discovery, valuefunction))
-    end
 end;
