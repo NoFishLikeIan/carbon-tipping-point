@@ -51,6 +51,8 @@ begin # Read available files
     simulationfiles = listfiles(DATAPATH)
     nfiles = length(simulationfiles)
     G = simulationfiles |> first |> loadproblem |> last
+
+    maximumthreshold = 2.5
     
     modelfiles = String[]
     for (i, filepath) in enumerate(simulationfiles)
@@ -58,10 +60,16 @@ begin # Read available files
         model, _ = loadproblem(filepath)
         abatementdir = splitpath(filepath)[end - 1]
 
-        if (model.economy.damages isa damagetype) && (abatementdir == abatementtype)
+        isdamage = model.economy.damages isa damagetype
+        isabatement = (abatementdir == abatementtype)
+        isthreshold = model.climate isa LinearClimate || model.climate.feedback.Tᶜ ≤ maximumthreshold
+
+        if isdamage && isabatement && isthreshold
             push!(modelfiles, filepath)
         end
     end
+
+    println("$(length(modelfiles)) models detected.")
 end;
 
 begin # Import available files
@@ -77,10 +85,10 @@ begin # Import available files
         push!(models, model)
     end
 
-    sort!(by = m -> m.climate, models)
+    sort!(by = m -> m.climate, models, rev = true)
 end
 
-begin
+begin # Load calibration
     calibrationpath = "data/calibration"
 
     # Load economic calibration
@@ -104,8 +112,9 @@ end
 
 begin # Plot estetics
     extremamodels = (models[1], models[end])
+    extremalabels = ("Linear", "Tipping")
     PALETTE = colorschemes[:grays]
-    colors = get(PALETTE, range(0, 0.6; length=length(extremamodels)))
+    colors = reverse(get(PALETTE, range(0, 0.6; length=length(extremamodels))))
 
     TEMPLABEL = raw"Temperature deviations $T_t \; [\si{\degree\Celsius}]$"
     LINE_WIDTH = 2.5
@@ -125,26 +134,40 @@ end;
 
 # Initial policies
 begin
-    
     mnpprob = ODEProblem((_, calibration, t) -> γ(t, calibration), m₀, (0, horizon), calibration)
     mnp = solve(mnpprob, Tsit5())
 
-    mmedianpath = mnp(0:20:horizon).u
+    mediantspan = 0:10:60
+    years = 2020 .+ Int.(mediantspan)
+    mmedianpath = mnp(mediantspan).u
     Mmedianpath = @. hogg.Mᵖ * exp(mmedianpath)
     mmin, mmax = extrema(mmedianpath)
     
     Mtickslabels = [
-        L"\small $%$M$"
-        for (M, y) in zip(round.(Int, Mmedianpath), 2020:20:2100)
+        L"\footnotesize $%$M$ \\ \footnotesize ($%$y$)"
+        for (M, y) in zip(round.(Int, Mmedianpath), years)
     ]
     
-    policyfig = @pgf GroupPlot({
-        group_style = {group_size = "2 by 1", horizontal_sep = "1em"},
-        ymin = 0, ymax = 1.5, 
-        xlabel = L"\footnotesize \si{\CO} concentration \\$M_t^{\textrm{np}} \; [\si{\ppm}]$",
+    ytick = 0.4:0.2:1.4
+    yticklabels = [ @sprintf("\\footnotesize %.0f\\%%", 100y) for y in ytick ]  
+
+    policyfig = @pgf Axis({
+        ymin = 0.35, ymax = 1.45, 
+        ytick = ytick, yticklabels = yticklabels,
+        xlabel = L"\footnotesize \si{\CO} concentration $M_t^{\textrm{np}} \; [\si{\ppm}]$",
+        ylabel = L"\footnotesize Fraction of abated emissions $\varepsilon_t$", 
+        xtick = mmedianpath, xticklabels = Mtickslabels,
         xmin = mmin, xmax = mmax,
-        width = raw"0.5\textwidth"
+        width = raw"0.8\textwidth", xticklabel_style = {align = "center"},
+        grid = "both"
     });
+
+    # Add gray band for ε > 1 (negative emissions)
+    bandx = [mmin, mmax]
+    bandy = [1.0, 1.45]
+    bandcoords = vcat([(x, bandy[1]) for x in bandx], [(x, bandy[2]) for x in reverse(bandx)])
+    bandpoly = @pgf Plot({fill = "gray", opacity = 0.25, draw = "none", forget_plot}, Coordinates(bandcoords))
+    push!(policyfig, bandpoly)
     
     timepoints = 0:0.1:horizon
     for (i, model) in enumerate(extremamodels)
@@ -171,23 +194,10 @@ begin
         εₜlow = [ ε(t, Point(T, m), α(T, m, t), model, calibration) for (T, m, t) in zip(T̄low, mlow, tlow)]
         εₜhigh = [ ε(t, Point(T, m), α(T, m, t), model, calibration) for (T, m, t) in zip(T̄high, mhigh, thigh)]
         
-        ytick = 0:0.2:1.5
-        yticklabels = i > 1 ? raw"\empty" : [ @sprintf("\\footnotesize %.0f\\%%", 100y) for y in ytick ]   
-
         lowcurve = @pgf Plot({ line_width = LINE_WIDTH, color = colors[i], solid }, Coordinates(mlow, εₜlow))
-        highcurve = @pgf Plot({ line_width = LINE_WIDTH, color = colors[i], dashed }, Coordinates(mhigh, εₜhigh))
+        highcurve = @pgf Plot({ line_width = LINE_WIDTH, color = colors[i], dashed, forget_plot }, Coordinates(mhigh, εₜhigh))
 
-        nticks = length(mmedianpath)
-        xdx = i ≤ length(extremamodels) ? (1:(nticks - 1)) : 1:nticks
-        xtick = mmedianpath[xdx]
-        xticklabels = Mtickslabels[xdx]
-
-        @pgf push!(policyfig,
-            { 
-                grid = "both", ytick = ytick, yticklabels = yticklabels, 
-                xtick = mmedianpath[xdx], xticklabels = Mtickslabels[xdx]
-            },
-            lowcurve, highcurve)
+        @pgf push!(policyfig, lowcurve, LegendEntry(extremalabels[i]), highcurve)
     end
 
     if SAVEFIG
@@ -215,6 +225,79 @@ begin
 end
 
 begin
+    optabatementfig = @pgf GroupPlot({
+        group_style = {
+            group_size = "$(length(extremamodels)) by 1",
+            horizontal_sep = raw"1em"
+    }})
+
+    yearticks = 0:20:horizon
+
+    medianopts = @pgf {line_width = LINE_WIDTH}
+    confidenceopts = @pgf {draw = "none", forget_plot}
+    fillopts = @pgf {fill = "gray", opacity = 0.5}
+    figopts = @pgf {width = raw"0.5\textwidth", height = raw"0.4\textwidth", grid = "both", xmin = 0, xmax = horizon, ymin = 0.4, ymax = 1.2}
+    
+    εtick = 0.4:0.2:1.4
+    εticklabels = [ @sprintf("\\footnotesize %.0f\\%%", 100y) for y in εtick ]  
+
+    qs = (0.05, 0.5, 0.95)
+
+    # Add gray band for ε > 1 (negative emissions)
+    bandx = (0, horizon)
+    bandy = [1.0, 1.45]
+    bandcoords = vcat([(x, bandy[1]) for x in bandx], [(x, bandy[2]) for x in reverse(bandx)])
+    bandpoly = @pgf Plot({fill = "gray", opacity = 0.25, draw = "none", forget_plot}, Coordinates(bandcoords))
+
+    # Temperature in second row
+    for (k, model) in enumerate(extremamodels)
+        ensemble = simulations[model]
+        _, αitp = interpolations[model]
+
+        paths = EnsembleAnalysis.timeseries_point_quantile(ensemble, qs, 0:horizon)
+
+        epaths = NTuple{3, Float64}[]
+
+        for (t, u) in zip(paths.t, paths.u)
+            T, m = u[1:2]
+            εₜ = ntuple(i -> ε(t, Point(T[i], m[i]), αitp(T[i], m[i], t), model, calibration), 3)
+
+            push!(epaths, εₜ)
+        end
+
+        emedianplot = @pgf Plot({medianopts..., color = colors[k],}, Coordinates(0:horizon, getindex.(epaths, 2)))
+        elowerplot = @pgf Plot({confidenceopts..., color = colors[k], name_path = "elower"}, Coordinates(0:horizon, getindex.(epaths, 1)))
+        eupperplot = @pgf Plot({confidenceopts...,  color = colors[k], name_path = "eupper"}, Coordinates(0:horizon, getindex.(epaths, 3)))
+
+        efill = @pgf Plot(fillopts, raw"fill between [of=elower and eupper]")
+
+        figticks = yearticks[1:(k > 1 ? end : end - 1)]
+
+        eoptionfirst = @pgf k > 1 ? {
+            yticklabel = raw"\empty"
+        } : {
+            ylabel = raw"\footnotesize Optimal fraction of abated emissions $\varepsilon_t$",
+            ytick = εtick,
+            yticklabels = εticklabels
+        }
+
+        @pgf push!(optabatementfig, {figopts...,
+                xtick = figticks,
+                xticklabels = 2020 .+ Int.(figticks),
+                xticklabel_style = {rotate = 45},
+                xlabel = "Year", title = extremalabels[k],
+                eoptionfirst...
+            }, emedianplot, elowerplot, eupperplot, efill, bandpoly)
+    end
+
+    if SAVEFIG
+        PGFPlotsX.save(joinpath(plotpath, "optabatementfig.tikz"), optabatementfig; include_preamble=true)
+    end
+
+    optabatementfig
+end
+
+begin 
     simfig = @pgf GroupPlot({
         group_style = {
             group_size = "$(length(extremamodels)) by 2",
@@ -245,10 +328,11 @@ begin
         Mfill = @pgf Plot(fillopts, raw"fill between [of=Mlower and Mupper]")
 
         labeloption = @pgf k > 1 ? { yticklabel = raw"\empty" } : { ylabel = L"`Conecntration $M_t \; [\si{ppm}]$" }
+
         @pgf push!(simfig, {figopts...,
             xticklabel = raw"\empty",
-            title = labelsofclimate(model.climate), labeloption...,
-            }, Mmedianplot, Mlowerplot, Mupperplot, Mfill)
+            title = extremalabels[k], labeloption...,
+        }, Mmedianplot, Mlowerplot, Mupperplot, Mfill)
     end
 
     # Temperature in second row
@@ -319,7 +403,7 @@ begin
         ybar_stacked, bar_width = "2.5ex",
         x = "3ex", ytick = ytick, yticklabels = yticklabels, reverse_legend,
         scaled_y_ticks = false,
-        legend_style = {at = "{(0.8, 0.8)}", anchor = "west"}
+        legend_style = {at = "{(1.1, 0.8)}", anchor = "east"}
     }
 
     for (k, model) in enumerate(extremamodels)
@@ -336,7 +420,7 @@ begin
 
         barchart = @pgf Axis({
             figopts..., kopts...,
-            title = labelsofclimate(model.climate)
+            title = extremalabels[k]
         })
 
         for i in 1:3

@@ -81,6 +81,9 @@ begin # Solve backward with discovery policy
 end
 
 begin # Save
+    x₀ = Point(model.climate.hogg.T₀, log(model.climate.hogg.M₀ / model.climate.hogg.Mᵖ))
+    H₀ = interpolateovergrid(valuefunction.H, G, x₀)
+
     outpath = joinpath(datapath, "ce", simulationdir)
     if !ispath(outpath) mkpath(outpath) end
     thresholdkey = replace("T$(Printf.format(Printf.Format("%.2f"), threshold))", "." => ",")
@@ -89,5 +92,5 @@ begin # Save
 
     if (verbose ≥ 1) println("$(now()): ", "Saving in ", outfile); flush(stdout) end
 
-    JLD2.@save outfile threshold discovery valuefunction
+    JLD2.@save outfile threshold discovery H₀
 end

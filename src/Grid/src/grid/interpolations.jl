@@ -6,6 +6,11 @@ function interpolateovergrid(V::AbstractMatrix, fromgrid::G₁, togrid::G₂) wh
     return [itp(T, m) for T in Tspace, m in mspace] 
 end
 
+function interpolateovergrid(V::AbstractMatrix, fromgrid::G, x::Point) where {G <: AbstractGrid}
+    itp = linear_interpolation(fromgrid.ranges, V; extrapolation_bc = Line())
+    return itp(x.T, x.m)
+end
+
 function shrink(domain::Domain, factors)
     leftfactor, rightfactor = factors
     l, r = domain

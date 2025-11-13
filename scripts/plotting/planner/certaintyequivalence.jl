@@ -39,11 +39,18 @@ DATAPATH = "data/simulation-dense"; @assert isdir(DATAPATH)
 
 SAVEFIG = true;
 PLOTPATH = "../job-market-paper/submission/plots"
-plotpath = joinpath(PLOTPATH, abatementtype)
+plotpath = joinpath(PLOTPATH, "negative")
 if !isdir(plotpath) mkpath(plotpath) end
 
-function findthreshold(threshold, simulationfiles)
+begin # Load climate claibration
+    climatepath = joinpath("data", "calibration", "climate.jld2")
+    @assert isfile(climatepath) "Climate calibration file not found at $climatepath"
+    climatefile = jldopen(climatepath, "r+")
+    @unpack calibration, hogg = climatefile
+    close(climatefile)
+end
 
+function findthreshold(threshold, simulationfiles)
     for filepath in simulationfiles
         model = loadproblem(filepath) |> first
         abatementdir = splitpath(filepath)[end - 1]
@@ -60,16 +67,45 @@ function findthreshold(threshold, simulationfiles)
     return nothing
 end
 
-
-
 begin # Import available simulation and CE files
-    cefiles = listfiles(CEPATH)
+    x₀ = Point(hogg.T₀, log(hogg.M₀ / hogg.Mᵖ))
+    horizon = 80.
     simulationfiles = listfiles(DATAPATH)
 
-    thresholds = 2:0.05:4;
+    thresholds = 2:0.05:4
     discoveries = -1:0.25:1
 
-    models = IAM[]
-    valuefunctions = Dict{IAM, NTuple{2, ValueFunction}}()
+    truevalue = fill(NaN, length(thresholds))
+    discoveryvalue = fill(NaN, length(thresholds), length(discoveries))
 
+    for (i, threshold) in enumerate(thresholds)
+        @printf("Loading threshold=%.2f\r", threshold)
+
+        filepath = findthreshold(threshold, simulationfiles)
+        optimalvalue, _, G = loadtotal(filepath; tspan = (0., 1.2horizon))
+        Hopt, _ = buildinterpolations(optimalvalue, G);
+        H₀ = Hopt(x₀.T, x₀.m, 0.)
+
+        truevalue[i] = H₀
+
+        for (j, discovery) in enumerate(discoveries)
+
+            thresholdkey = replace("T$(Printf.format(Printf.Format("%.2f"), threshold))", "." => ",")
+            discoverykey = replace("D$(Printf.format(Printf.Format("%.2f"), discovery))", "." => ",")
+            outfile = joinpath(CEPATH, "$(thresholdkey)_$(discoverykey).jld2")
+
+            if !isfile(outfile)
+                @warn "Outfile $outfile not found!"
+                continue
+            end
+
+            JLD2.@load outfile valuefunction
+            Hᵈ₀ = interpolateovergrid(valuefunction.H, G, x₀)
+            discoveryvalue[i, j] = Hᵈ₀
+        end
+    end
 end;
+
+begin # CE surface
+    
+end
