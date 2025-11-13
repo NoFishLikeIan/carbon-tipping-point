@@ -3,7 +3,7 @@
 #SBATCH --job-name=test-ce
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --array=0-1
+#SBATCH --array=0
 #SBATCH --time=0:30:00
 #SBATCH --partition=rome
 #SBATCH --mail-type=BEGIN,END,FAIL,TIME_LIMIT_80
@@ -16,13 +16,6 @@ module load Julia/1.10.4-linux-x86_64
 
 cd $HOME/scc-tipping-points # Move to base directory
 
-echo "Copying simulation data to scratch..."
-SCRATCHDATA="$TMPDIR"/data
-mkdir -p $SCRATCHDATA # Create scratch directory with user name
-rsync -az data/simulation-dense $SCRATCHDATA # Copy simulation data to scratch
-rsync -az data/calibration $SCRATCHDATA # Copy calibration data to scratch
-echo "...done!"
-
 # Extract parameters at the SLURM_ARRAY_TASK_ID from parameters.json
 jq_command='
 .parameters[$id | tonumber] | 
@@ -33,8 +26,5 @@ params=$(jq -r --arg id "$SLURM_ARRAY_TASK_ID" "$jq_command" jobs/certaintyequiv
 
 # Run script 
 julia --threads "auto" --project scripts/certaintyequivalence.jl --verbose 2 \
-    --datapath "$SCRATCHDATA"  --simulationdir "simulation-dense" \
+    --datapath "./data"  --simulationdir "simulation-dense" \
     $params
-
-# Copy results back to home
-rsync -avzu $SCRATCHDATA $HOME/scc-tipping-points

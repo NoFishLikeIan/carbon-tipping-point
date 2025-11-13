@@ -43,7 +43,7 @@ include("markov/chain.jl")
 include("markov/certaintyequivalence.jl")
 
 simulationpath = joinpath(datapath, simulationdir)
-@assert ispath(simulationpath)
+@assert ispath(simulationpath) "Simulationpath does not exist: $simulationpath"
 
 begin # Load climate claibration
     climatepath = joinpath(datapath, "calibration", "climate.jld2")

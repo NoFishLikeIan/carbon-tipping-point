@@ -3,8 +3,8 @@
 #SBATCH --job-name=solve
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --array=0-41
-#SBATCH --time=5:30:00
+#SBATCH --array=11-41
+#SBATCH --time=1:30:00
 #SBATCH --partition=rome
 #SBATCH --mail-type=BEGIN,END,FAIL,TIME_LIMIT_80
 #SBATCH -o ./logs/out/SOLVE%A_%a.out 
@@ -15,10 +15,6 @@ module load 2024
 module load Julia/1.10.4-linux-x86_64
 
 cd $HOME/scc-tipping-points # Move to base directory
-
-SCRATCHDATA="$TMPDIR"/data
-mkdir -p $SCRATCHDATA # Create scratch directory with user name
-rsync -az data/calibration $SCRATCHDATA # Copy calibration data to scratch
 
 # Extract parameters at the SLURM_ARRAY_TASK_ID from parameters.json
 jq_command='
@@ -32,9 +28,5 @@ params=$(jq -r --arg id "$SLURM_ARRAY_TASK_ID" "$jq_command" jobs/planner/parame
 # Run script 
 julia --threads "auto" --project scripts/solve.jl --NT 200 --Nm 250 \
     --cachestep 0.5 --verbose 1 --tol 0.001 --dt 0.005 \
-    --datapath "$SCRATCHDATA"  --simulationpath "simulation-dense" --overwrite \
+    --datapath "./data"  --simulationpath "simulation-dense" --overwrite \
     $params
-
-# Copy results back to home
-rsync -avzu $SCRATCHDATA $HOME/scc-tipping-points
-rm -r $SCRATCHDATA # Remove scratch directory
