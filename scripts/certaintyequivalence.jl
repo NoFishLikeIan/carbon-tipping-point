@@ -24,7 +24,7 @@ using Base.Threads
 using SciMLBase
 using Statistics
 using StaticArrays, SparseArrays
-using Interpolations, DataStructures
+using Interpolations, DataStructures, ForwardDiff 
 
 using LinearSolve, LinearAlgebra
 
@@ -82,7 +82,11 @@ end
 
 begin # Save
     x₀ = Point(model.climate.hogg.T₀, log(model.climate.hogg.M₀ / model.climate.hogg.Mᵖ))
-    H₀ = interpolateovergrid(valuefunction.H, G, x₀)
+
+    Hitp = x -> interpolateovergrid(valuefunction.H, G, x)
+    
+    H₀ = Hitp(x₀)
+    ∇H₀ = ForwardDiff.gradient(Hitp, x₀)
 
     outpath = joinpath(datapath, "ce", simulationdir)
     if !ispath(outpath) mkpath(outpath) end
@@ -92,5 +96,5 @@ begin # Save
 
     if (verbose ≥ 1) println("$(now()): ", "Saving in ", outfile); flush(stdout) end
 
-    JLD2.@save outfile threshold discovery H₀
+    JLD2.@save outfile threshold discovery H₀ ∇H₀
 end

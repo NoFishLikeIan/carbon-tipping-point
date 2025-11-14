@@ -92,7 +92,7 @@ ceargstable = ArgParseSettings()
 @add_arg_table ceargstable begin
     "--simulationdir", "-s"
         arg_type = String
-        default = "simulation-local"
+        default = "simulation-dense"
         help = "Path to simulation folder"
 
     "--datapath", "-d"
