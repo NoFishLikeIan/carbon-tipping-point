@@ -25,7 +25,7 @@ export Economy, Abatement, Investment, PiecewiseAbatement
 export Damages
 export GrowthDamages, WeitzmanGrowth, Kalkuhl, BurkeHsiangMiguel, NoDamageGrowth
 export β, β′, d, D, ϕ, A, ω
-export χopt, variance
+export χopt, variance, consumptiongrowth
 
 export Preferences, LogUtility, CRRA, LogSeparable, EpsteinZin
 export g, f, logg, discount

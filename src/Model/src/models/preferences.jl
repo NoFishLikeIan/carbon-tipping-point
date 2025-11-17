@@ -102,3 +102,9 @@ function χopt(t, economy::Economy, preferences::LogSeparable)
 
     return num / (2r)
 end
+
+function consumptiongrowth(t, economy::Economy, preferences::LogSeparable)
+    χ = χopt(t, economy, preferences)
+    growth = economy.investments.ϱ + ϕ(t, χ, economy.investments) + preferences.ρ * log(χ)
+    return (1 - preferences.θ) * growth
+end

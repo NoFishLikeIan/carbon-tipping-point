@@ -1,16 +1,18 @@
 function discoveryvalues(discovery, (truevalues, truemodel, trueG), (linearvalues, linearmodel, linearG))
-    effectivevalues = copy(linearvalues)
+    effectivevalues = copy(truevalues)
     i = searchsortedfirst(linearG.ranges[1], truemodel.climate.feedback.Tᶜ + discovery)
 
-    for (t, value) in effectivevalues
-        itplinearvalue = interpolateovergrid(linearvalues[t], linearG, trueG)
-        value.α[1:(i - 1), :] .= itplinearvalue.α[1:(i - 1), :]
+    if i > 1
+        for (t, value) in effectivevalues
+            itplinearvalue = interpolateovergrid(linearvalues[t], linearG, trueG)
+            value.α[1:(i - 1), :] .= itplinearvalue.α[1:(i - 1), :]
+        end
     end
 
     return effectivevalues, truemodel, linearG
 end
 
-function constructstaticDᵐ!(stencil, αitp, t, model, G::RegularGrid{N₁, N₂, S}, calibration) where {N₁, N₂, S}
+function constructstaticDᵐ!(stencil, αitp, t, G::RegularGrid{N₁, N₂, S}, calibration) where {N₁, N₂, S}
     γₜ = γ(t, calibration)
     
     Δm = step(G, 2)
@@ -75,7 +77,7 @@ function staticbackwardstep!(problem, R, stencilm, αitp, valuefunction, Δt⁻�
     @unpack t, H = valuefunction
     n = length(G)
 
-    constructstaticDᵐ!(stencilm, αitp, t.t, model, G, calibration)
+    constructstaticDᵐ!(stencilm, αitp, t.t, G, calibration)
     constructstaticsource!(problem.b, αitp, t.t, H, Δt⁻¹, model, G, calibration)
     
     A = R - sparse(stencilm[1], stencilm[2], stencilm[3], n, n)
@@ -98,7 +100,7 @@ function staticbackward!(valuefunction::ValueFunction{S, N₁, N₂}, Δt::S, α
     n = length(G)
     stencilT, stencilm = makestencil(G)
     constructDᵀ!(stencilT, model, G)
-    constructstaticDᵐ!(stencilm, αitp, valuefunction.t.t, model, G, calibration)
+    constructstaticDᵐ!(stencilm, αitp, valuefunction.t.t, G, calibration)
     b₀ = constructstaticsource(αitp, valuefunction.t.t, valuefunction.H, Δt⁻¹, model, G, calibration)
     Sᵨ = (preferences.ρ + Δt⁻¹) * I
     R = Sᵨ - sparse(stencilT[1], stencilT[2], stencilT[3], n, n)

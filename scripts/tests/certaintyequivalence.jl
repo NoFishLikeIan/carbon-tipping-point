@@ -62,7 +62,7 @@ begin # Construct the model
     linearmodel = linearIAM(truemodel)
 end
 
-discovery = 0.
+discovery = -2.
 linearsimulation = loadtotal(linearmodel; outdir = joinpath(DATAPATH, "simulation-dense"))
 truesimulation = loadtotal(truemodel; outdir = joinpath(DATAPATH, "simulation-dense"))
 
@@ -73,3 +73,6 @@ _, αitp = buildinterpolations(values, G);
 valuefunction = copy(values[τ])
 Δt = 0.1
 staticbackward!(valuefunction, Δt, αitp, model, G, calibration; t₀ = 0., verbose = 2, alg = KLUFactorization())
+
+# Compare to optimal value function
+optimalvaluefunction = truesimulation[1][0.0]

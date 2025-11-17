@@ -125,12 +125,13 @@ function smooth!(v, window)
 end
 
 "Computes the social cost of carbon at a given point Xᵢ"
-function scc(t, Y, Xᵢ::Point, itp, model::IAM)
-    Fₘ = FiniteDiff.finite_difference_derivative(m -> itp[:F](Xᵢ.T, m, t), Xᵢ.m)
-    Fᵢ = itp[:F](Xᵢ.T, Xᵢ.m, t)
-    dm = γ(t, model.calibration) + δₘ(exp(Xᵢ.m), model.climate.hogg) - itp[:α](T, m, t)
+function scc(∂ₘH, Y, M, model::IAM)
+    outputfactor = Y / (model.preferences.θ - 1)
+    co2factor =  Model.Gtonoverppm / M
 
-    outputfactor = Y / (1 - model.preferences.θ)
+    return 3.667 * 1_000 * outputfactor * co2factor * ∂ₘH # Factor converts t$ / GtCO2e to $ / tCe
+end
 
-    return -outputfactor * (Fₘ / Fᵢ) * Model.Gtonoverppm / dm
+function consumptionfactor(C, model::IAM, t)
+    model.preferences.ρ * C - consumptiongrowth(t, model.economy, model.preferences)
 end
