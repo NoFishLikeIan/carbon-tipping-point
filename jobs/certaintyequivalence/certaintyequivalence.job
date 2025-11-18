@@ -3,8 +3,8 @@
 #SBATCH --job-name=ce
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --array=0-2992%300
-#SBATCH --time=0:07:00
+#SBATCH --array=0-1681
+#SBATCH --time=0:10:00
 #SBATCH --partition=rome
 #SBATCH --mail-type=BEGIN,END,FAIL,TIME_LIMIT_80
 #SBATCH -o ./logs/out/CE%A_%a.out 
