@@ -5,7 +5,7 @@ using Base.Threads
 using SciMLBase
 using Statistics
 using SciMLBase, DifferentialEquations, DiffEqBase
-using Interpolations, Dierckx
+using Interpolations, ForwardDiff
 using StaticArrays
 
 using Model, Grid
@@ -44,7 +44,7 @@ PLOTPATH = "../job-market-paper/submission/plots"
 plotpath = joinpath(PLOTPATH, abatementtype)
 if !isdir(plotpath) mkpath(plotpath) end
 
-horizon = 80.
+horizon = 100.
 tspan = (0., horizon)
 
 begin # Read available files
@@ -52,7 +52,7 @@ begin # Read available files
     nfiles = length(simulationfiles)
     G = simulationfiles |> first |> loadproblem |> last
 
-    maximumthreshold = 2.5
+    maximumthreshold = Inf
     
     modelfiles = String[]
     for (i, filepath) in enumerate(simulationfiles)
@@ -79,7 +79,7 @@ begin # Import available files
     
     for (i, filepath) = enumerate(modelfiles)
         print("Loading $i / $(length(modelfiles))\r")
-        values, model, G = loadtotal(filepath; tspan=(0, 1.2horizon))
+        values, model, G = loadtotal(filepath; tspan=(0, 1.01horizon))
         interpolations[model] = buildinterpolations(values, G);
         valuefunctions[model] = values;
         push!(models, model)
@@ -210,6 +210,7 @@ end
 # -- Make simulation of optimal trajectories
 begin
     simulations = Dict{IAM,EnsembleSolution}()
+
     for (i, model) in enumerate(extremamodels)
         αitp = interpolations[model] |> last;
         parameters = (model, calibration, αitp);
@@ -217,7 +218,7 @@ begin
         problem = SDEProblem(F, noise, u₀, tspan, parameters)
         ensembleprob = EnsembleProblem(problem)
 
-        simulation = solve(ensembleprob; trajectories = 10_000)
+        simulation = solve(ensembleprob; trajectories = 1_000)
         println("Done with simulation of $i / $(length(extremamodels))\n$model\n")
 
         simulations[model] = simulation
@@ -265,13 +266,17 @@ begin
             push!(epaths, εₜ)
         end
 
-        emedianplot = @pgf Plot({medianopts..., color = colors[k],}, Coordinates(0:horizon, getindex.(epaths, 2)))
+        medianpath = getindex.(epaths, 2)
+        fullabatementdx = searchsortedfirst(medianpath, 1.)
+        fullabatementyear = (0:horizon)[fullabatementdx]
+
+        emedianplot = @pgf Plot({medianopts..., color = colors[k],}, Coordinates(0:horizon, medianpath))
         elowerplot = @pgf Plot({confidenceopts..., color = colors[k], name_path = "elower"}, Coordinates(0:horizon, getindex.(epaths, 1)))
         eupperplot = @pgf Plot({confidenceopts...,  color = colors[k], name_path = "eupper"}, Coordinates(0:horizon, getindex.(epaths, 3)))
 
         efill = @pgf Plot(fillopts, raw"fill between [of=elower and eupper]")
 
-        figticks = yearticks[1:(k > 1 ? end : end - 1)]
+        figticks = sort([yearticks[1:(k > 1 ? end : end - 1)]..., fullabatementyear])
 
         eoptionfirst = @pgf k > 1 ? {
             yticklabel = raw"\empty"
@@ -281,13 +286,18 @@ begin
             yticklabels = εticklabels
         }
 
+        fullabatementline = @pgf Plot({ line_width = 1.5, dashed, color = colors[k] }, Coordinates([fullabatementyear, fullabatementyear], [0., 1.]))
+
+        fullabatementscatter = @pgf Plot({ only_marks, color = colors[k] }, Coordinates([fullabatementyear], [1.]))
+
+        yearticklabels = [L"\footnotesize $%$y$" for y in 2020 .+ Int.(figticks)]
+
         @pgf push!(optabatementfig, {figopts...,
-                xtick = figticks,
-                xticklabels = 2020 .+ Int.(figticks),
+                xtick = figticks, xticklabels = yearticklabels,
                 xticklabel_style = {rotate = 45},
                 xlabel = "Year", title = extremalabels[k],
                 eoptionfirst...
-            }, emedianplot, elowerplot, eupperplot, efill, bandpoly)
+            }, emedianplot, elowerplot, eupperplot, efill, bandpoly, fullabatementline, fullabatementscatter)
     end
 
     if SAVEFIG
@@ -311,8 +321,10 @@ begin
     fillopts = @pgf {fill = "gray", opacity = 0.5}
     figopts = @pgf {width = raw"0.5\textwidth", height = raw"0.35\textwidth", grid = "both", xmin = 0, xmax = horizon}
 
-    qs = (0.05, 0.5, 0.95)
-    temperatureticks = makedeviationtickz(1, 2.5; step=0.5, digits=1)
+    qs = (0.1, 0.5, 0.9)
+    temperatureticks = makedeviationtickz(1, 3; step=0.5, digits=1)
+    mnppath = mnp(0:horizon)
+    Mnppath = @. exp(mnppath) * hogg.Mᵖ
 
     # Carbon concentration in first row
     for (k, model) in enumerate(extremamodels) 
@@ -329,10 +341,12 @@ begin
 
         labeloption = @pgf k > 1 ? { yticklabel = raw"\empty" } : { ylabel = L"`Conecntration $M_t \; [\si{ppm}]$" }
 
+        nppath = @pgf Plot({ dashed, color = "gray", line_width = LINE_WIDTH }, Coordinates(0:horizon, Mnppath.u))
+
         @pgf push!(simfig, {figopts...,
-            xticklabel = raw"\empty",
+            xticklabel = raw"\empty", ymin = hogg.M₀, ymax = 600.,
             title = extremalabels[k], labeloption...,
-        }, Mmedianplot, Mlowerplot, Mupperplot, Mfill)
+        }, Mmedianplot, Mlowerplot, Mupperplot, Mfill, nppath)
     end
 
     # Temperature in second row
@@ -347,6 +361,9 @@ begin
         Tupperplot = @pgf Plot({confidenceopts..., name_path = "Tupper"}, Coordinates(0:horizon, getindex.(Tpaths, 3)))
 
         Tfill = @pgf Plot(fillopts, raw"fill between [of=Tlower and Tupper]")
+
+        Tnppath = [Tstable(m, model.climate) |> first for m in mnppath.u]
+        nppath = @pgf Plot({ dashed, color = "gray", line_width = LINE_WIDTH }, Coordinates(0:horizon, Tnppath))
 
         figticks = yearticks[1:(k > 1 ? end : end - 1)]
 
@@ -366,7 +383,7 @@ begin
                 xticklabel_style = {rotate = 45},
                 xlabel = "Year",
                 Toptionfirst...
-            }, Tmedianplot, Tlowerplot, Tupperplot, Tfill)
+            }, Tmedianplot, Tlowerplot, Tupperplot, Tfill, nppath)
     end
 
     if SAVEFIG
@@ -400,10 +417,11 @@ begin
         xticklabel_style = {rotate = 45, align = "right"}, xtick = "data",
         enlarge_x_limits = 0.1,
         ymin = 0, ymax = maximum(ytick),
-        ybar_stacked, bar_width = "2.5ex",
-        x = "3ex", ytick = ytick, yticklabels = yticklabels, reverse_legend,
+        ybar_stacked, bar_width = "2ex",
+        x = "2.5ex", ytick = ytick, yticklabels = yticklabels, reverse_legend,
         scaled_y_ticks = false,
-        legend_style = {at = "{(1.1, 0.8)}", anchor = "east"}
+        legend_style = {at = "{(1.1, 0.8)}", anchor = "east"},
+        ticklabel_style = {font=L"\footnotesize"}
     }
 
     for (k, model) in enumerate(extremamodels)
@@ -450,4 +468,59 @@ begin
     end
 
     costfig
+end
+
+begin # SCC
+    tippingmodels = filter(m -> m.climate isa TippingClimate, models)
+    thresholds = Float64[]
+    sccs = Float64[]
+    scclinear = NaN
+
+    for model in models
+        Hitp, _ = interpolations[model]
+        m₀ = log(model.climate.hogg.M₀ / model.climate.hogg.Mᵖ)
+        ∂Hₘ = ForwardDiff.derivative(m -> Hitp(model.climate.hogg.T₀, m, 0.), m₀)
+        s = scc(∂Hₘ, model.economy.Y₀, model.climate.hogg.M₀, model)
+        
+        if model.climate isa TippingClimate
+            push!(sccs, s)
+            push!(thresholds, model.climate.feedback.Tᶜ)
+        else
+            scclinear = s
+        end
+    end
+
+end
+
+begin
+    sccfig = @pgf Axis({ xlabel = L"Critical threshold $T^c$ [\si{\degree}]", ylabel = L"Social cost of carbon $[\si{US\mathdollar / tCe}]$", grid = "both", xmin = minimum(thresholds), xmax = maximum(thresholds) })
+
+    curve = @pgf Plot({ color = colors[2], line_width = LINE_WIDTH }, Coordinates(thresholds, sccs))
+    push!(sccfig, curve, LegendEntry(L"\mathrm{SCC}^{T^c}_0"))
+
+    if SAVEFIG
+        PGFPlotsX.save(joinpath(plotpath, "scc.tikz"), sccfig; include_preamble=true)
+    end
+
+    sccfig
+end
+
+begin # Optimal SCC
+    thresholds = [2.0, 2.5, 4.0]
+    sccmodels = filter(m -> m.climate isa LinearClimate || (m.climate isa TippingClimate && m.climate.feedback.Tᶜ ∈ thresholds), models)
+
+    for model in sccmodels
+        Hitp, αitp = interpolations[model]
+        m₀ = log(model.climate.hogg.M₀ / model.climate.hogg.Mᵖ)
+        ∂Hₘ = ForwardDiff.derivative(m -> Hitp(model.climate.hogg.T₀, m, 0.), m₀)
+        s = scc(∂Hₘ, model.economy.Y₀, model.climate.hogg.M₀, model)
+        
+        if model.climate isa TippingClimate
+            push!(sccs, s)
+            push!(thresholds, model.climate.feedback.Tᶜ)
+        else
+            scclinear = s
+        end
+    end
+
 end
