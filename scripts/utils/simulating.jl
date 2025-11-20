@@ -115,13 +115,18 @@ function timequantiles(M::AbstractMatrix, ps; kwargs...)
     return qs
 end
 function smooth!(v, window)
-    vo = copy(v)
+    v .= smooth(v, window)
+end
+function smooth(v, window)
+    vo = similar(v)
 
     for j in eachindex(v)
         l = max(j - window, 1)
         r = min(j + window, length(v))
-        v[j] = mean(vo[l:r])
+        vo[j] = mean(@view v[l:r])
     end
+
+    return vo
 end
 
 "Computes the social cost of carbon at a given point Xᵢ"

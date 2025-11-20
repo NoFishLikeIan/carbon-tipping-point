@@ -238,7 +238,7 @@ begin # NP simulation + nullclines
         # Add shading between lower and upper curves
         lowerpath = @pgf Plot({draw = "none", name_path = "lower", forget_plot}, Coordinates(Mmedianpath, lower))
         upperpath = @pgf Plot({draw = "none", name_path = "upper", forget_plot}, Coordinates(Mmedianpath, upper))
-        shading = @pgf Plot({fill = color, opacity = 0.15, forget_plot}, raw"fill between [of=lower and upper]")
+        shading = @pgf Plot({fill = color, opacity = 0.05, forget_plot}, raw"fill between [of=lower and upper]")
 
         push!(nullclinefig, curve, legend, markers, lowerpath, upperpath, shading)
     end
@@ -416,7 +416,7 @@ let # Damage fig
         height = raw"0.5\textwidth",
         grid = "both",
         xlabel = TLABEL,
-        ylabel = raw"Cumulative damages $D(T_t)$",
+        ylabel = raw"Damage function $d(T_t)$",
         xmin = 0, xmax = Tspace[end],
         xticklabel_style = {rotate = 45},
         yticklabels = yticklabels, ytick = ytick, ymin = 0.,

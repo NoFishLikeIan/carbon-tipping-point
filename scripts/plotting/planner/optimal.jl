@@ -218,7 +218,7 @@ begin
         problem = SDEProblem(F, noise, u₀, tspan, parameters)
         ensembleprob = EnsembleProblem(problem)
 
-        simulation = solve(ensembleprob; trajectories = 1_000)
+        simulation = solve(ensembleprob; trajectories = 10_000)
         println("Done with simulation of $i / $(length(extremamodels))\n$model\n")
 
         simulations[model] = simulation

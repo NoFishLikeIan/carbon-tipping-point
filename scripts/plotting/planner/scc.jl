@@ -5,7 +5,7 @@ using Base.Threads
 using SciMLBase
 using Statistics
 using SciMLBase, DifferentialEquations, DiffEqBase
-using Interpolations, ForwardDiff
+using Interpolations, ForwardDiff, Dierckx
 using StaticArrays
 
 using Model, Grid
@@ -167,31 +167,90 @@ begin
 end
 
 begin # Optimal SCC paths
-    thresholds = [2.0, 2.5, 4.0]
-    sccmodels = filter(m -> m.climate isa LinearClimate || (m.climate isa TippingClimate && m.climate.feedback.Tᶜ ∈ thresholds), models)
-    m₀ = log(model.climate.hogg.M₀ / model.climate.hogg.Mᵖ)
+    slicethresholds = [2.0]
+    sccmodels = filter(m -> m.climate isa LinearClimate || (m.climate isa TippingClimate && m.climate.feedback.Tᶜ ∈ slicethresholds), models)
+    m₀ = log(hogg.M₀ / hogg.Mᵖ)
     X₀ = SVector(hogg.T₀, m₀, 0.)
+    trajectories = 10_000
+    savestep = 0.5
 
-    sccpaths = Dict{IAM, Vector{Float64}}()
-    for model in sccmodels
+    sccquantiles = Dict{IAM, Matrix{Float64}}()
+    for (n, model) in enumerate(sccmodels)
+        println("Solving model $n / $(length(sccmodels))")
         Hitp, αitp = interpolations[model]
         
-        medianproblem = ODEProblem(F, X₀, tspan, (model, calibration, αitp))
-        medianpath = solve(medianproblem)
-        
-        sccH = @closure (T, m, y, t) -> begin
+        simulationproblem = SDEProblem(F, noise, X₀, (0, horizon), (model, calibration, αitp))
+
+        sccfromstate = (u, t, integrator) -> begin
+            model, calibration, _ = integrator.p
+            T, m, y = u
             Y = exp(y) * model.economy.Y₀
             M = exp(m) * model.climate.hogg.Mᵖ
-            ∂Hₘ = ForwardDiff.derivative(m -> Hitp(T, m, t), m)
+            ∂Hₘ = ForwardDiff.derivative(m′ -> Hitp(T, m′, t), m)
             return scc(∂Hₘ, Y, M, model)
         end
-        
-        if model.climate isa TippingClimate
-            push!(sccs, s)
-            push!(thresholds, model.climate.feedback.Tᶜ)
-        else
-            scclinear = s
+
+        savedvalues = SavedValues(Float64, Float64)
+        savecallback = SavingCallback(sccfromstate, savedvalues; saveat=savestep)
+
+        paths = Matrix{Float64}(undef, length(0:savestep:horizon), trajectories)
+
+        for i in 1:trajectories
+            if i % (trajectories ÷ 1000) == 0
+                @printf("Progress %.1f%%\r", 100i / trajectories)
+            end
+            solve(simulationproblem; callback = savecallback)
+            paths[:, i] .= savedvalues.saveval
         end
+
+        quantiles = Matrix{Float64}(undef, size(paths, 1), 3)
+        for i in axes(paths, 1), (j, q) in enumerate((0.05, 0.5, 0.9))
+            v = @view paths[i, :]
+            quantiles[i, j] = quantile(v, q)
+        end
+
+        sccquantiles[model] = quantiles
+    end
+end
+
+let 
+    yearticks = 0:20:horizon
+    fig = @pgf Axis({
+        xlabel = L"Year",
+        ylabel = L"Social cost of carbon $[\si{US\mathdollar / tCe}]$",
+        grid = "both",
+        xmin = 0, ymin = 0,
+        xmax = horizon,
+        xtick = yearticks, xticklabels = floor.(Int64, yearticks .+ 2020),
+        legend_pos = "north west"
+    })
+
+    timegrid = 0:savestep:horizon
+
+    for (i, model) in enumerate(sccmodels)
+        quantiles = sccquantiles[model]
+
+        for col in eachcol(quantiles) smooth!(col, 10) end
+
+        label = model.climate isa LinearClimate ? "Linear" : "Tipping"
+        color = colors[i]
+        
+        # Median line
+        median_coords = Coordinates(timegrid, quantiles[:, 2])
+        push!(fig, @pgf Plot({color = color, line_width = LINE_WIDTH}, median_coords))
+        push!(fig, LegendEntry(label))
+        
+        # Shaded region for 5th-95th percentile
+        lower_coords = Coordinates(timegrid, quantiles[:, 1])
+        upper_coords = Coordinates(timegrid, quantiles[:, 3])
+        
+        push!(fig, @pgf Plot({color = color, opacity = 0.15, fill = color, forget_plot = true}, 
+            Table([timegrid; reverse(timegrid)], [quantiles[:, 1]; reverse(quantiles[:, 3])])))
     end
 
+    if SAVEFIG
+        PGFPlotsX.save(joinpath(plotpath, "scc-paths.tikz"), fig; include_preamble=true)
+    end
+
+    fig
 end
