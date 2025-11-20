@@ -12,10 +12,15 @@ argtable = ArgParseSettings()
         default = "simulation-small"
         help = "Path to simulation folder"
     
-    "-N"
+    "--NT"
         arg_type = Int
-        default = 51
-        help = "Size of grid"
+        default = 21
+        help = "Size of grid in temperature"
+    
+    "--Nm"
+        arg_type = Int
+        default = 21
+        help = "Size of grid in log-CO2e"
 
     "--verbose" , "-v"
         arg_type = Int
@@ -27,7 +32,11 @@ argtable = ArgParseSettings()
 
     "--tol"
         arg_type = Float64
-        default = 1e-5
+        default = 1e-3
+
+    "--dt"
+        arg_type = Float64
+        default = 1 / 24
     
     "--stopat"
         arg_type = Float64
@@ -37,24 +46,26 @@ argtable = ArgParseSettings()
         arg_type = Float64
         default = 0.25
 
-    "--procs", "-p"
-        arg_type = Int
-        default = 0
-
     "--threshold"
         arg_type = Float64
-        default = 1.5
 
-    "--leveldamages"
-        action = :store_true
+    "--damages"
+        arg_type = String
     
     "--eis"
         arg_type = Float64
-        default = 0.75
+        default = 1.0
 
     "--rra"
         arg_type = Float64
         default = 10.
+
+    "--withnegative"
+        action = :store_true
+
+    "--tau"
+        arg_type = Float64
+        default = 500.
 end
 
 resumeargtable = ArgParseSettings()
@@ -79,9 +90,9 @@ end
 
 ceargstable = ArgParseSettings()
 @add_arg_table ceargstable begin
-    "--simulationpath", "-s"
+    "--simulationdir", "-s"
         arg_type = String
-        default = "simulation-small"
+        default = "simulation-dense"
         help = "Path to simulation folder"
 
     "--datapath", "-d"
@@ -89,20 +100,62 @@ ceargstable = ArgParseSettings()
         default = "data"
         help = "Path to data folder"
     
+    "--calibrationpath"
+        arg_type = String
+        default = "calibration/"
+    
     "--verbose" , "-v"
         arg_type = Int
         default = 0
         help = "Verbosity can be set to 0, 1, or 2 and larger."
 
-    "--remotethreshold"
+    "--threshold"
         arg_type = Float64
-        default = 2.5
+        default = 2.0
+    
+    "--discovery"
+        arg_type = Float64
+        default = 0.0
+    
+    "--dt"
+        arg_type = Float64
+        default = 1 / 24
+end
 
-    "--eis"
-        arg_type = Float64
-        default = 0.75
+simulateargtable = ArgParseSettings()
+@add_arg_table simulateargtable begin
+    "--simulationdir", "-s"
+        arg_type = String
+        default = "simulation-local"
+        help = "Path to simulation folder"
 
-    "--rra"
+    "--datapath", "-d"
+        arg_type = String
+        default = "data"
+        help = "Path to data folder"
+    
+    "--calibrationpath"
+        arg_type = String
+        default = "calibration/"
+    
+    "--verbose" , "-v"
+        arg_type = Int
+        default = 0
+        help = "Verbosity can be set to 0, 1, or 2 and larger."
+
+    "--threshold"
         arg_type = Float64
-        default = 10.
+        default = 2.0
+    
+    "--discovery"
+        arg_type = Float64
+        default = 0.0
+
+    "--horizon"
+        arg_type = Float64
+        default = 80.0
+        
+    "--trajectories"
+        arg_type = Int64
+        default = 100
 end

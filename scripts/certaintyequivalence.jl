@@ -9,180 +9,92 @@ include("arguments.jl") # Import argument parser
 
 parsedargs = ArgParse.parse_args(ceargstable)
 
-@unpack simulationpath, eis, rra, remotethreshold, verbose, datapath = parsedargs
+@unpack simulationdir, datapath, calibrationpath, dt = parsedargs
+@unpack threshold, datapath, discovery = parsedargs
+@unpack verbose = parsedargs
 
 if (verbose ≥ 1)
-    println("$(now()): ", "Running with $(nthreads()) threads for ψ=$eis, θ=$rra and remote threshold=$remotethreshold...")
+    println("$(now()): ", "Running with $(nthreads()) threads with threshold $threshold and discovery $discovery...")
     flush(stdout)
 end
 
 # Begin script
 using Model, Grid
+using Base.Threads
+using SciMLBase
+using Statistics
+using StaticArrays, SparseArrays
+using Interpolations, DataStructures, ForwardDiff 
 
-using Interpolations
-using Roots
-using QuadGK
+using LinearSolve, LinearAlgebra
+
+using JLD2, UnPack
+using Dates, Printf
+
+include("../src/valuefunction.jl")
+include("../src/extend/model.jl")
+include("../src/extend/grid.jl")
+include("../src/extend/valuefunction.jl")
 
 include("utils/saving.jl")
-include("markov/forward.jl")
+include("utils/simulating.jl")
+include("markov/utils.jl")
+include("markov/chain.jl")
+include("markov/certaintyequivalence.jl")
 
-calibrationdirectory = joinpath(datapath, "calibration.jld2")
-calibration = load_object(calibrationdirectory)
+simulationpath = joinpath(datapath, simulationdir)
+@assert ispath(simulationpath) "Simulationpath does not exist: $simulationpath"
 
-damages = GrowthDamages()
-hogg = Hogg()
-preferences = EpsteinZin(θ = rra, ψ = eis);
-economy = Economy()
+begin # Load climate claibration
+    climatepath = joinpath(datapath, "calibration", "climate.jld2")
+    @assert isfile(climatepath) "Climate calibration file not found at $climatepath"
+    climatefile = jldopen(climatepath, "r+")
+    @unpack calibration = climatefile
+    close(climatefile)
+end
 
-imminentmodel = TippingModel(Albedo(1.5), hogg, preferences, damages, economy)
-remotemodel = TippingModel(Albedo(remotethreshold), hogg, preferences, damages, economy)
+begin # Load linear model
+    linearsolpath = joinpath(simulationpath, "linear", "growth", "logseparable", "negative", "Linear_burke_RRA10,00.jld2")
+    @assert ispath(linearsolpath) "The linear simulation path does not exist: $linearsolpath"
 
-# Constructs wishful thinker and prudent policies
-outdir = joinpath(datapath, simulationpath, "constrained")
+    linearsimulation = loadtotal(linearsolpath);
+end
 
-timestepsimm, _, imminentpolicy, _ = loadtotal(imminentmodel; outdir)
-timestepsrem, _, remotepolicy, G = loadtotal(remotemodel; outdir)
+begin # Load true threshold model
+    thresholdkey = replace("T$(Printf.format(Printf.Format("%.2f"), threshold))", "." => ",")
+    thresholdsolfile = "$(thresholdkey)_burke_RRA10,00.jld2"
+    thresholdsolpath = joinpath(simulationpath, "tipping", "growth", "logseparable", "negative", thresholdsolfile)
 
-# Ensure the same size of the two policies FIXME: This is very ugly
-if length(timestepsrem) < length(timestepsimm)
-    extendedremote = similar(imminentpolicy)
-    indxs = findall(in(timestepsrem), timestepsimm)
-    extendedremote[:, :, :, indxs] .= remotepolicy
+    @assert ispath(thresholdsolpath) "The specified simulation file does not exist: $thresholdsolpath"
+
+    thresholdsimulation = loadtotal(thresholdsolpath);
+end
+
+begin # Solve backward with discovery policy
+    values, model, G = discoveryvalues(discovery, thresholdsimulation, linearsimulation)
+    _, αitp = buildinterpolations(values, G);
+
+    τ = maximum(keys(values))
+    valuefunction = copy(values[τ])
+
+    staticbackward!(valuefunction, dt, αitp, model, G, calibration; t₀ = 0., verbose = verbose, alg = KLUFactorization())
+end
+
+begin # Save
+    x₀ = Point(model.climate.hogg.T₀, log(model.climate.hogg.M₀ / model.climate.hogg.Mᵖ))
+
+    Hitp = x -> interpolateovergrid(valuefunction.H, G, x)
     
-    outdxs = findall(!in(timestepsrem), timestepsimm)
+    H₀ = Hitp(x₀)
+    ∇H₀ = ForwardDiff.gradient(Hitp, x₀)
 
-    for idx in outdxs
-        _, closest = findmin(jdx -> abs(idx - jdx), indxs)
-        extendedremote[:, :, :, idx] .= remotepolicy[:, :, :, indxs[closest]]
-    end
+    outpath = joinpath(datapath, "ce", simulationdir)
+    if !ispath(outpath) mkpath(outpath) end
+    thresholdkey = replace("T$(Printf.format(Printf.Format("%.2f"), threshold))", "." => ",")
+    discoverykey = replace("D$(Printf.format(Printf.Format("%.2f"), discovery))", "." => ",")
+    outfile = joinpath(outpath, "$(thresholdkey)_$(discoverykey).jld2")
 
-    remotepolicy = extendedremote
+    if (verbose ≥ 1) println("$(now()): ", "Saving in ", outfile); flush(stdout) end
 
-elseif length(timestepsrem) > length(timestepsimm)
-    extendedimminent = similar(remotepolicy)
-    indxs = findall(in(timestepsimm), timestepsrem)
-    extendedimminent[:, :, :, indxs] .= imminentpolicy
-    
-    outdxs = findall(!in(timestepsimm), timestepsrem)
-
-    for idx in outdxs
-        _, closest = findmin(jdx -> abs(idx - jdx), indxs)
-        extendedimminent[:, :, :, idx] .= imminentpolicy[:, :, :, indxs[closest]]
-    end
-
-    imminentpolicy = extendedimminent
+    JLD2.@save outfile threshold discovery H₀ ∇H₀
 end
-
-@assert size(imminentpolicy) == size(remotepolicy)
-
-wfpolicy = NaN * zeros(size(remotepolicy))
-
-imminenttipregion = @. getindex(G.X, 1) ≥ 1.5 + hogg.Tᵖ
-wfpolicy[imminenttipregion, :, :] .= imminentpolicy[imminenttipregion, :, :]
-wfpolicy[.~imminenttipregion, :, :] .= remotepolicy[.~imminenttipregion, :, :]
-
-prudpolicy = NaN * zeros(size(remotepolicy))
-
-remotetippedregion = @. getindex(G.X, 1) ≥ remotethreshold + hogg.Tᵖ
-prudpolicy[remotetippedregion, :, :] .= remotepolicy[remotetippedregion, :, :]
-prudpolicy[.~remotetippedregion, :, :] .= imminentpolicy[.~remotetippedregion, :, :]
-
-Tspace = range(G.domains[1]...; length = size(G, 1))
-mspace = range(G.domains[2]...; length = size(G, 2))
-
-nodes = (Tspace, mspace, timestepsimm)
-
-χwfitp = linear_interpolation(nodes, wfpolicy[:, :, 1, :]; extrapolation_bc = Line())
-αwfitp = linear_interpolation(nodes, wfpolicy[:, :, 2, :]; extrapolation_bc = Line())
-
-χpitp = linear_interpolation(nodes, prudpolicy[:, :, 1, :]; extrapolation_bc = Line())
-αpitp = linear_interpolation(nodes, prudpolicy[:, :, 2, :]; extrapolation_bc = Line())
-
-χremoteitp = linear_interpolation(nodes, remotepolicy[:, :, 1, :]; extrapolation_bc = Line())
-αremoteitp = linear_interpolation(nodes, remotepolicy[:, :, 2, :]; extrapolation_bc = Line())
-
-χimminentitp = linear_interpolation(nodes, imminentpolicy[:, :, 1, :]; extrapolation_bc = Line())
-αimminentitp = linear_interpolation(nodes, imminentpolicy[:, :, 2, :]; extrapolation_bc = Line())
-
-# Compute the climate change cost the wishful thinker and the prudent policies
-if (verbose ≥ 1)
-    println("$(now()): ","Running forward mode...")
-    flush(stdout)
-end
-
-(verbose ≥ 1) && println("$(now()): ","Remote optimal...")
-F̄ = computebackward(χremoteitp, αremoteitp, remotemodel, calibration; outdir, verbose)
-
-(verbose ≥ 1) && println("$(now()): ","Imminent optimal...")
-F̲ = computebackward(χimminentitp, αimminentitp, remotemodel, calibration; outdir, verbose)
-
-
-(verbose ≥ 1) && println("$(now()): ","Wishful thinker...")
-Fw = computebackward(χwfitp, αwfitp, imminentmodel, calibration; outdir, verbose)
-
-
-(verbose ≥ 1) && println("$(now()): ","Cautious...")
-Fp = computebackward(χpitp, αpitp, remotemodel, calibration; outdir, verbose)
-
-# Get values at X₀
-X₀ = [imminentmodel.hogg.T₀, log(imminentmodel.hogg.M₀)];
-Y₀ = imminentmodel.economy.Y₀;
-
-function getV₀(F, X₀, model)
-    F₀ = linear_interpolation((Tspace, mspace), F)(X₀[1], X₀[2])
-    
-    θ = model.preferences.θ
-    F₀ * Y₀^(1 - θ) / (1 - θ)
-end
-
-
-# Only care about relative size
-V̄ = getV₀(F̄, X₀, imminentmodel)
-V̲ = getV₀(F̲, X₀, imminentmodel)
-Vw = getV₀(Fw, X₀, imminentmodel)
-Vp = getV₀(Fp, X₀, imminentmodel)
-
-# FIXME: It does not find a root for ψ ≥ 1.
-# Certainty equilvanece
-function ∫f(x, V, model)
-    QuadGK.quadgk(
-        t -> f(x * exp(economy.ϱ * t), V, model.preferences), 0., 1_000
-    ) |> first
-end
-
-function ce(V₀, model; interval = (0.005, Inf))
-    a = f(interval[1], V₀, model.preferences) - V₀
-    b = f(interval[2], V₀, model.preferences) - V₀
-
-    if a * b > 0.
-        throw("Interval is not bracketing: ∫f ∈ [$a, $b]")
-    end
-
-    find_zero(x ->  ∫f(x, V₀, model) - V₀, interval)
-end
-
-if (verbose ≥ 1)
-    println("$(now()): ","Computing certainty equivalence...")
-    flush(stdout)
-end
-
-ceᵖ = ce(Vp, remotemodel)
-ceʷ = ce(Vw, imminentmodel) 
-cē = ce(V̄, remotemodel) # Optimal with remote
-ce̲ = ce(V̲, imminentmodel) # Optimal with imminent
-
-results = Dict(
-    "ceᵖ" => ceᵖ,
-    "ceʷ" => ceʷ,
-    "cē" => cē,
-    "ce̲" => ce̲
-)
-
-paramname = @sprintf("θ=%.2f_ψ=%.2f_threshold=%.2f", rra, eis, remotethreshold)
-filename = "$(replace(paramname, "." => ",")).jld2"
-
-outpath = joinpath(datapath, "certaintyequivalence")
-if !isdir(outpath) mkdir(outpath) end
-
-outfile = joinpath(outpath, filename) 
-JLD2.save_object(outfile, results)

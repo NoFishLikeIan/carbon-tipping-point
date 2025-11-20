@@ -29,7 +29,7 @@ interpolations = buildinterpolations(result);
 model = last(result); timesteps = first(result);
 
 begin # Setup
-    initialpoints = [[T₀, log(model.hogg.M₀), log(model.economy.Y₀)] for T₀ in sampletemperature(model, trajectories)];
+    initialpoints = [[T₀, log(model.climate.hogg.M₀), log(model.economy.Y₀)] for T₀ in sampletemperature(model, trajectories)];
 
     resample = (prob, id, _) -> begin
         prob = prob isa JumpProblem ? prob.prob : prob

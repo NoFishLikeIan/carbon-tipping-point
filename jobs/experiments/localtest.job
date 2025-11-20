@@ -1,0 +1,2 @@
+julia --threads "auto" --project scripts/simulate.jl \
+    --trajectories 10 --datapath "data" --simulationdir "simulation-local" --verbose 2

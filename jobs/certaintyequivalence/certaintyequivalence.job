@@ -1,43 +1,30 @@
 #!/bin/bash
 
-#SBATCH --job-name=certaintyequivalence
+#SBATCH --job-name=ce
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=64
-#SBATCH --array=0-7
-#SBATCH --time=3:00:00
+#SBATCH --array=0-1681
+#SBATCH --time=0:10:00
 #SBATCH --partition=rome
 #SBATCH --mail-type=BEGIN,END,FAIL,TIME_LIMIT_80
-#SBATCH -o ./logs/out/CERTAINTYEQUIVALENCE%A_%a.out 
-#SBATCH -e ./logs/error/CERTAINTYEQUIVALENCE%A_%a.out
-#SBATCH --mail-user=a.titton@uva.nl
+#SBATCH -o ./logs/out/CE%A_%a.out 
+#SBATCH -e ./logs/error/CE%A_%a.out
+#SBATCH --mail-user=andrea.titton2@unibo.it
 
-module load 2023
-module load Julia/1.9.2-linux-x86_64
+module load 2024
+module load Julia/1.10.4-linux-x86_64
 
 cd $HOME/scc-tipping-points # Move to base directory
-SCRATCHDATA="$TMPDIR"/data
-
-mkdir -p $SCRATCHDATA # Create scratch directory with user name
-rsync data/calibration.jld2 $SCRATCHDATA # Copy calibration data to scratch
-
-mkdir -p $SCRATCHDATA/simulation-large
-rsync -a data/simulation-large $SCRATCHDATA # Copy simulation data to scratch
 
 # Extract parameters at the SLURM_ARRAY_TASK_ID from parameters.json
 jq_command='
-.certaintyequivalence[$id | tonumber] | 
-"--rra \(.rra) --eis \(.eis) --remotethreshold \(.remotethreshold)"
+.parameters[$id | tonumber] | 
+"--threshold \(.threshold) --discovery \(.discovery)"
 '
 
 params=$(jq -r --arg id "$SLURM_ARRAY_TASK_ID" "$jq_command" jobs/certaintyequivalence/parameters.json)
 
-# Run script
-julia --threads ${SLURM_CPUS_PER_TASK} \
-    --project scripts/certaintyequivalence.jl \
-    --verbose 1 --datapath "$SCRATCHDATA"  --simulationpath "simulation-large" \
+# Run script 
+julia --threads "auto" --project scripts/certaintyequivalence.jl --verbose 2 \
+    --datapath "./data"  --simulationdir "simulation-dense" \
     $params
-
-# Copy results back to home
-rsync -avzu $SCRATCHDATA $HOME/scc-tipping-points
-rm -r $SCRATCHDATA

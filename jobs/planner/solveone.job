@@ -1,0 +1,22 @@
+#!/bin/bash
+
+#SBATCH --job-name=solve
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --time=00:30:00
+#SBATCH --partition=rome
+#SBATCH --mail-type=BEGIN,END,FAIL,TIME_LIMIT_80
+#SBATCH -o ./logs/out/SOLVE.out 
+#SBATCH -e ./logs/error/SOLVE.out
+#SBATCH --mail-user=andrea.titton2@unibo.it
+
+module load 2024
+module load Julia/1.10.4-linux-x86_64
+
+cd $HOME/scc-tipping-points # Move to base directory
+# Run script 
+julia --threads "auto" --project scripts/solve.jl --NT 30 --Nm 31 \
+    --cachestep 0.5 --verbose 1 --tol 0.001 --dt 0.005 \
+    --datapath "./data"  --simulationpath "simulation-dense" \
+    --threshold 2.5 --damages "burke" --withnegative

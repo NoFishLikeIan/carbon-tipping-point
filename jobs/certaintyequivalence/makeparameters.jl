@@ -1,17 +1,20 @@
 using JSON
 
-rras = [2.0, 10.0];
-eiss = [0.75, 1.5];
-remote = [2.5, 3.5];
+thresholds = 2:0.05:4;
+discoveries = -1:0.05:1
 
-tippingparameters = Dict{String, Union{Float64, Bool}}[];
+parameters = Dict{String, Float64}[];
+for discovery in discoveries, threshold in thresholds
+    obj = Dict(
+        "discovery" => discovery,
+        "threshold" => threshold
+    )
 
-for rra in rras, eis in eiss, remotethreshold in remote
-    push!(tippingparameters, Dict("rra" => rra, "eis" => eis, "remotethreshold" => remotethreshold))
+    push!(parameters, obj)
 end
 
-obj = Dict("certaintyequivalence" => tippingparameters)
+println("Constructed $(length(parameters)) parameters object.")
 
 open("jobs/certaintyequivalence/parameters.json", "w") do f
-    JSON.print(f, obj, 2)
+    JSON.print(f, Dict("parameters" => parameters), 2)
 end

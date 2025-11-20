@@ -1,80 +1,86 @@
-struct LogUtility
-    ρ::Float64  # Discount rate 
+abstract type Preferences{S <: Real} end
+
+Base.@kwdef struct LogUtility{S} <: Preferences{S}
+    ρ::S = 0.015 # Discount rate
 end
 
-struct CRRA
-    ρ::Float64  # Discount rate 
-    θ::Float64  # Relative risk aversion
+Base.@kwdef struct CRRA{S} <: Preferences{S}
+    ρ::S = 0.015  # Discount rate 
+    θ::S = 10.  # Relative risk aversion
 end
 
-struct LogSeparable
-    ρ::Float64  # Discount rate 
-    θ::Float64  # Relative risk aversion
+Base.@kwdef struct LogSeparable{S} <: Preferences{S}
+    ρ::S = 0.015  # Discount rate 
+    θ::S = 10.  # Relative risk aversion
 end
 
-struct EpsteinZin
-    ρ::Float64 # Discount rate 
-    θ::Float64 # Relative Risk Aversion
-    ψ::Float64 # Elasticity of Intertemporal Complementarity
+Base.@kwdef struct EpsteinZin{S} <: Preferences{S}
+    ρ::S = 0.015 # Discount rate
+    θ::S = 10. # Relative Risk Aversion
+    ψ::S = 0.75 # Elasticity of Intertemporal Complementarity
+end
 
-    function EpsteinZin(; ρ = 0.015, θ = 10., ψ = 0.75)
-        inelastic = ψ ≈ 1.
-        timeadditive = ψ ≈ 1 / θ
-
-        if inelastic && timeadditive
-            LogUtility(ρ)
-        elseif inelastic && !timeadditive
-            LogSeparable(ρ, θ)
-        elseif !inelastic && timeadditive
-            CRRA(ρ, θ)
-        else
-            new(ρ, θ, ψ)
-        end
+function Preferences(; ρ = 0.015, θ = 10., ψ = 1.)
+    if ψ ≈ θ ≈ 1.
+        LogUtility(ρ)
+    elseif ψ ≈ 1.
+        LogSeparable(ρ, θ)
+    elseif ψ ≈ 1 / θ
+        CRRA(ρ, θ)
+    else
+        EpsteinZin(ρ, θ, ψ)
     end
 end
 
-Preferences = Union{CRRA, EpsteinZin, LogUtility}
-Base.broadcastable(p::Preferences) = Ref(p)
+discount(ρ, Δt) = exp(-ρ * Δt) # inv(1 + ρ * Δt)
 
+"Climate damage aggregator. `χ` is the consumtpion rate, `F′` is the expected value of `F` at `t + Δt` and `Δt` is the time step"
+function g(χ, F′, Δt, p::EpsteinZin)
+    β = discount(p.ρ, Δt)
+    ψ⁻¹ = inv(p.ψ)
+    agg = (1 - ψ⁻¹) / (1 - p.θ)
+
+    consumption = χ^(1 - ψ⁻¹)
+    value = (F′)^agg
+
+    return ((1 -  β) * consumption + β * value)^inv(agg)
+end
+function g(χ, F′, Δt, p::LogSeparable)
+    β = discount(p.ρ, Δt)
+    consumption = χ^((1 - p.θ) * (1 - β))
+
+    return consumption * max(F′, eps(F′))^β
+end
+function g(χ, F′, Δt, p::CRRA)
+    β = discount(p.ρ, Δt)
+
+    return (1 - β) * χ^(1 - p.θ) + β * F′
+end
+function g(χ, F′, Δt, p::LogUtility)
+   β = discount(p.ρ, Δt)
+   
+   return (1 - β) * log(χ) + β * F′
+end
+
+function logg(χ, logF′, Δt, p::LogSeparable)
+    β = discount(p.ρ, Δt)
+
+    return (1 - p.θ) * (1 - β) * log(χ) + β * logF′
+end
+
+
+"Epstein-Zin aggregator"
 function f(c, v, Δt, p::EpsteinZin)
     ψ⁻¹ = 1 / p.ψ
     aggregator = (1 - p.θ) / (1 - ψ⁻¹)
 
-    β = exp(-p.ρ * Δt)
+    β = discount(p.ρ, Δt)
 
     consumption = Δt * c^(1 - ψ⁻¹)
     value = β * ((1 - p.θ) * v)^inv(aggregator)
 
     return ((consumption + value)^aggregator) / (1 - p.θ)
 end
-
-"""
-Climate damage aggregator. `χ` is the consumtpion rate, `F′` is the expected value of `F` at `t + Δt` and `Δt` is the time step
-"""
-function g(χ, F′, Δt, p::EpsteinZin)
-    ψ⁻¹ = inv(p.ψ)
-    agg = (1 - ψ⁻¹) / (1 - p.θ)
-
-    consumption = χ^(1 - ψ⁻¹)
-
-    β = exp(-p.ρ * Δt)
-    value = max(F′, 0.)^agg
-
-    return ((1 -  β) * consumption + β * value)^inv(agg)
-end
-
-function logg(χ, F′, Δt, p::EpsteinZin)
-    ψ⁻¹ = inv(p.ψ)
-    agg = (1 - ψ⁻¹) / (1 - p.θ)
-
-    consumption = χ^(1 - ψ⁻¹)
-
-    β = exp(-p.ρ * Δt)
-    value = max(F′, 0.)^agg
-
-    return inv(agg) * log((1 -  β) * consumption + β * value)
-end
-
 function f(c, v, Δt, p::CRRA)
     u = (c^(1 - p.θ)) / (1 - p.θ)
 
@@ -88,11 +94,17 @@ function f(c, v, Δt, p::LogUtility)
     βᵢ * v + Δt * log(c)
 end
 
-function f(c, v, p::EpsteinZin)
-    u = (1 - p.θ) * v
-    eis = 1 - 1 / p.ψ
+Base.broadcastable(p::Preferences) = Ref(p)
 
-    cratio = (c / (u)^inv(1 - p.θ))^eis
+function χopt(t, economy::Economy, preferences::LogSeparable)
+    r = economy.investments.κ * A(t, economy.investments)
+    num = (r - 1) + √((r - 1)^2 + 4economy.investments.κ * preferences.ρ)
 
-    return (p.ρ * u / eis) * (cratio - 1) 
+    return num / (2r)
+end
+
+function consumptiongrowth(t, economy::Economy, preferences::LogSeparable)
+    χ = χopt(t, economy, preferences)
+    growth = economy.investments.ϱ + ϕ(t, χ, economy.investments) + preferences.ρ * log(χ)
+    return (1 - preferences.θ) * growth
 end

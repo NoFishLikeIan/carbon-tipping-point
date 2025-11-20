@@ -1,103 +1,69 @@
-using Model
-using Grid: Policy, RegularGrid
-using Printf: @sprintf
-using UnPack: @unpack
-using JLD2: jldopen
-using FileIO: load
-
-
-const SIMPATHS = Dict(
-    LinearModel{LevelDamages, EpsteinZin}  => "linear/level",
-    LinearModel{GrowthDamages, EpsteinZin} => "linear/growth",
-    TippingModel{LevelDamages, EpsteinZin}  => "albedo/level",
-    TippingModel{GrowthDamages, EpsteinZin} => "albedo/growth",
-    JumpModel{LevelDamages, EpsteinZin}  => "jump/level",
-    JumpModel{GrowthDamages, EpsteinZin}  => "jump/growth"
-)
-
-function makefilename(model::LinearModel{LevelDamages, EpsteinZin})
-    @unpack ρ, θ, ψ = model.preferences
-    @unpack ωᵣ = model.economy
-    @unpack σₜ, σₘ = model.hogg
-    @unpack ξ = model.damages
-
-    filename = @sprintf("ρ=%.5f_θ=%.2f_ψ=%.2f_σT=%.4f_σm=%.4f_ωr=%.5f_ξ=%.6f", ρ, θ, ψ, σₜ, σₘ, ωᵣ, ξ)
-
-    return "$(replace(filename, "." => ",")).jld2"
-end
-
-function makefilename(model::LinearModel{GrowthDamages, EpsteinZin})
-    @unpack ρ, θ, ψ = model.preferences
-    @unpack ωᵣ = model.economy
-    @unpack σₜ, σₘ = model.hogg
-    @unpack ξ, υ = model.damages
-
-    filename = @sprintf("ρ=%.5f_θ=%.2f_ψ=%.2f_σT=%.4f_σm=%.4f_ωr=%.5f_ξ=%.6f_υ=%.3f", ρ, θ, ψ, σₜ, σₘ, ωᵣ, ξ, υ)
-
-    return "$(replace(filename, "." => ",")).jld2"
-end
-
-function makefilename(model::TippingModel{LevelDamages, EpsteinZin})
-    @unpack ρ, θ, ψ = model.preferences
-    @unpack ωᵣ = model.economy
-    @unpack σₜ, σₘ = model.hogg
-    @unpack Tᶜ = model.albedo
-    @unpack ξ = model.damages
-
-    filename = @sprintf("Tc=%.2f_ρ=%.5f_θ=%.2f_ψ=%.2f_σT=%.4f_σm=%.4f_ωr=%.5f_ξ=%.6f", Tᶜ, ρ, θ, ψ, σₜ, σₘ, ωᵣ, ξ)
-
-    return "$(replace(filename, "." => ",")).jld2"
-end
-
-function makefilename(model::TippingModel{GrowthDamages, EpsteinZin})
-    @unpack ρ, θ, ψ = model.preferences
-    @unpack ωᵣ = model.economy
-    @unpack σₜ, σₘ = model.hogg
-    @unpack Tᶜ = model.albedo
-    @unpack ξ, υ = model.damages
-
-    filename = @sprintf("Tc=%.2f_ρ=%.5f_θ=%.2f_ψ=%.2f_σT=%.4f_σm=%.4f_ωr=%.5f_ξ=%.6f_υ=%.3f", Tᶜ, ρ, θ, ψ, σₜ, σₘ, ωᵣ, ξ, υ)
-
-    return "$(replace(filename, "." => ",")).jld2"
-end
-
-function makefilename(model::JumpModel{GrowthDamages, EpsteinZin})
-    @unpack ρ, θ, ψ = model.preferences
-    @unpack ωᵣ = model.economy
-    @unpack σₜ, σₘ = model.hogg
-    @unpack ξ, υ = model.damages
-
-    filename = @sprintf("ρ=%.5f_θ=%.2f_ψ=%.2f_σT=%.4f_σm=%.4f_ωr=%.5f_ξ=%.6f_υ=%.3f", ρ, θ, ψ, σₜ, σₘ, ωᵣ, ξ, υ)
-
-    return "$(replace(filename, "." => ",")).jld2"
-end
-
-function makefilename(model::JumpModel{LevelDamages, EpsteinZin})
-    @unpack ρ, θ, ψ = model.preferences
-    @unpack ωᵣ = model.economy
-    @unpack σₜ, σₘ = model.hogg
-    @unpack ξ = model.damages
-
-    filename = @sprintf("ρ=%.5f_θ=%.2f_ψ=%.2f_σT=%.4f_σm=%.4f_ωr=%.5f_ξ=%.6f", ρ, θ, ψ, σₜ, σₘ, ωᵣ, ξ)
-
-    return "$(replace(filename, "." => ",")).jld2"
-end
-
-function makefilename(models::Vector{<:AbstractModel})
-
-    filenames = String[]
-
-    for model in models
-        filename = makefilename(model)
-
-        push!(filenames, replace(filename, ".jld2" => ""))
+function makesimulationpaths(model::IAM{S, D, P, C}, withnegative::Bool) where {S, D <: Damages{S}, P <: LogSeparable{S}, C <: Climate{S}}
+    basedir = if C <: TippingClimate
+        "tipping"
+    elseif C <: LinearClimate
+        "linear"
+    elseif C <: JumpingClimate
+        "jump"
+    else
+        throw("Directory not specified for model $(typeof(model))")
     end
 
-    return "$(join(filenames, "-")).jld2"
+    damagedir = if D <: GrowthDamages
+        "growth"
+    else
+        throw("Directory not specified for damages $(typeof(model.damages))")
+    end
+
+    preferencedir = if P <: EpsteinZin
+        "epsteinzin"
+    elseif P <: CRRA
+        "crra"
+    elseif P <: LogSeparable
+        "logseparable"
+    elseif P <: LogUtility
+        "logutility"
+    else
+        throw("Directory not specified for preferences $(typeof(model.preferences))")
+    end
+
+    controldir = withnegative ? "negative" : "constrained"
+
+    return joinpath(basedir, damagedir, preferencedir, controldir)
+end
+function makefilename(model::IAM{S, D, P, C}) where {S, D <: Damages{S}, P <: LogSeparable{S}, C <: Climate{S}}
+    # 1. Threshold temperature deviation from pre-industrial
+    thresholdpart = if C <: TippingClimate
+        deviation = model.climate.feedback.Tᶜ
+        "T$(Printf.format(Printf.Format("%.2f"), deviation))"
+    else
+        "Linear"
+    end
+    
+    damagepart = if D <: Kalkuhl
+        "kalkuhl"
+    elseif D <: BurkeHsiangMiguel
+        "burke"
+    elseif D <: WeitzmanGrowth
+        "weitzman"
+    elseif D <: NoDamageGrowth
+        "no-damages"
+    else
+        throw("Directory not specified for damages $(typeof(model.damages))")
+    end
+    
+    # 3. RRA θ
+    θ = model.preferences.θ
+    rrapart = "RRA$(Printf.format(Printf.Format("%.2f"), θ))"
+    
+    filename = replace("$(thresholdpart)_$(damagepart)_$(rrapart)", "." => ",")
+
+
+    return "$filename.jld2"
 end
 
-function loadterminal(model::AbstractModel; outdir = "data/simulation", addpath = "")
-    folder = SIMPATHS[typeof(model)]
+function loadterminal(model::IAM; outdir = "data/simulation", addpath = "")
+    folder = makesimulationpaths(model, withnegative)
     filename = makefilename(model)
     
     savedir = joinpath(outdir, folder, "terminal", addpath)
@@ -107,88 +73,72 @@ function loadterminal(model::AbstractModel; outdir = "data/simulation", addpath 
         error("File $filename does not exist in $savedir.\nAvailable files are:\n$(join(readdir(savedir), "\n"))")
     end
 
-    F̄ = load(savepath, "F̄")
-    policy = load(savepath, "policy")
+    state = load(savepath, "state")
     G = load(savepath, "G")
 
-    return F̄, policy, G
-end
-function loadterminal(models::Vector{<:AbstractModel}; outdir = "data/simulation", addpaths = repeat([""], length(models)))
-    return [loadterminal(model; outdir = outdir, addpath = addpaths[i]) for (i, model) ∈ enumerate(models)] 
+    return state, G
 end
 
+function loadtotal(model::IAM; outdir = "data/simulation", withnegative = true, loadkwargs...)
+    if !isdir(outdir)
+        error("Output directory does not exist: $(outdir)\nHave you not solved the constrained or negative problem?")
+    end
 
-function loadtotal(model::AbstractModel; outdir = "data/simulation")
-    folder = SIMPATHS[typeof(model)]
+    folder = makesimulationpaths(model, withnegative)
     cachefolder = joinpath(outdir, folder)
+    
+    if !isdir(cachefolder)
+        error("Cache folder does not exist: $(folder)\nHave you solved this combination of problems?")
+    end
+    
     filename = makefilename(model)
-    cachepath = joinpath(cachefolder, filename)
+    filepath = joinpath(cachefolder, filename)
+    
+    if !isfile(filepath)
+        error("Cache file does not exist: $filename\nHave you solved the problem for these parameters?")
+    end
 
-    return loadtotal(cachepath)
+    return loadtotal(filepath; loadkwargs...)
 end
-
-function loadtotal(cachepath::String)
-    cachefile = jldopen(cachepath, "r")
+function loadtotal(filepath::String; tspan = (0, Inf))
+    cachefile = jldopen(filepath, "r")
     G = cachefile["G"]
     model = cachefile["model"]
-    timekeys = filter(key -> key ∉ ["G", "model"], keys(cachefile))
+    timekeys = filter(key -> key ∉ ("G", "model"), keys(cachefile))
     timesteps = round.(parse.(Float64, timekeys), digits = 4)
 
     ix = sortperm(timesteps)
     timesteps = timesteps[ix]
     timekeys = timekeys[ix]
 
-    T = length(timesteps)
-    F = Array{Float64, 3}(undef, size(G)..., T)
-    policy = Array{Float64, 4}(undef, size(G)..., 2, T)
+    t₀, t₁ = tspan
+    selectidx = t₀ .≤ timesteps .≤ t₁
+    timesteps = timesteps[selectidx]
+    timekeys = timekeys[selectidx]
 
-    for (k, key) ∈ enumerate(timekeys)
-        F[:, :, k] .= cachefile[key]["F"]
-        policy[:, :, :, k] .= cachefile[key]["policy"]
+    N₁, N₂ = size(G)
+    S = eltype(G)
+    values = ValueFunction{S, N₁, N₂}[]
+    for key ∈ timekeys
+        V = cachefile[key]["V"]
+        push!(values, V)
     end
-
+    
     close(cachefile)
 
-    return timesteps, F, policy, G, model
+    outdict = OrderedDict(timesteps .=> values)
+
+    return outdict, model, G
 end
 
-function loadgame(models::Vector{<:AbstractModel}; outdir = "data/simulation")
-    filename = makefilename(models)
-    cachepath = joinpath(outdir, filename)
-
-    return loadgame(cachepath)
-end
-
-function loadgame(cachepath::String)
-    cachefile = jldopen(cachepath, "r")
+function loadproblem(filepath)
+    cachefile = jldopen(filepath, "r")
     G = cachefile["G"]
-    models = cachefile["models"]
-    timekeys = filter(key -> key ∉ ["G", "models"], keys(cachefile))
-    timesteps = round.(parse.(Float64, timekeys), digits = 4)
-
-    ix = sortperm(timesteps)
-    timesteps = timesteps[ix]
-    timekeys = timekeys[ix]
-
-    T = length(timesteps)
-
-    F = Dict{AbstractModel, Array{Float64, 3}}(model => Array{Float64, 3}(undef, size(G)..., T) for model ∈ models)
-    policy = Dict{AbstractModel, Array{Float64, 4}}(model => Array{Float64, 4}(undef, size(G)..., 2, T) for model ∈ models)
-
-    for (k, key) in enumerate(timekeys)
-        # TODO: This assumes the order of Fs to be the same of models, think of a check for this
-        Fs = cachefile[key]["Fs"]
-        policies = cachefile[key]["policies"]
-
-        for (j, model) in enumerate(models)
-            F[model][:, :, k] .= Fs[j]
-            policy[model][:, :, :, k] .= policies[j]
-        end
-    end
+    model = cachefile["model"]
 
     close(cachefile)
 
-    return timesteps, F, policy, G, models
+    return model, G
 end
 
 function listfiles(simpath::String; exclude = ["terminal"])
@@ -197,13 +147,15 @@ function listfiles(simpath::String; exclude = ["terminal"])
     end
 
     files = String[]
-    for (root, _, file_names) in walkdir(simpath)
+    for (root, _, filenames) in walkdir(simpath)
         if any(occursin.(exclude, root))
             continue
         end
 
-        for file_name in file_names
-            push!(files, joinpath(root, file_name))
+        for filename in filenames
+            if occursin("jld2", filename) && !occursin("Zone.Identifier", filename)
+                push!(files, joinpath(root, filename))
+            end
         end
     end
 

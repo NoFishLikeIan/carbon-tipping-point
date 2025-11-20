@@ -1,0 +1,56 @@
+{
+  "parameters": [
+    {
+      "threshold": 2.0,
+      "discovery": -0.05
+    },
+    {
+      "threshold": 2.05,
+      "discovery": -0.05
+    },
+    {
+      "threshold": 2.1,
+      "discovery": -0.05
+    },
+    {
+      "threshold": 2.2,
+      "discovery": -0.05
+    },
+    {
+      "threshold": 2.25,
+      "discovery": -0.05
+    },
+    {
+      "threshold": 3.2,
+      "discovery": -0.2
+    },
+    {
+      "threshold": 3.65,
+      "discovery": -0.1
+    },
+    {
+      "threshold": 3.7,
+      "discovery": -0.1
+    },
+    {
+      "threshold": 3.8,
+      "discovery": -0.1
+    },
+    {
+      "threshold": 3.85,
+      "discovery": -0.1
+    },
+    {
+      "threshold": 3.9,
+      "discovery": -0.1
+    },
+    {
+      "threshold": 3.95,
+      "discovery": -0.1
+    },
+    {
+      "threshold": 4.0,
+      "discovery": -0.1
+    }
+  ]
+}

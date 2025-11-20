@@ -1,69 +1,34 @@
 module Model
 
-# Models
-export Economy, Hogg, Albedo, Jump
-export Calibration, RegionalCalibration
-export Damages, GrowthDamages, LevelDamages
-export equilibriumHogg
-export intensity, increase, d
-export μ, b, bterminal, costbreakdown, γ, mstable, δₘ, ϕ
-export β, ε
-export criticaltemperature
-export potential, density
-export terminaloutputfct, outputfct
-export Preferences, EpsteinZin, LogSeparable, CRRA, LogUtility
-export f, g, logg
-export TippingModel, LinearModel, JumpModel
-export AbstractModel
-export terminalgrid
-export RegionalEconomies, RegionalCalibration
-
-# Packages
-using Grid: Point, Policy, RegularGrid, gss
-using UnPack: @unpack
 using Roots: find_zero, find_zeros
-using FastClosures: @closure
+using UnPack: @unpack
+using LogExpFunctions: logistic
+using FastPow: @fastpow
 
 include("models/calibration.jl")
 include("models/climate.jl")
 include("models/economy.jl")
 include("models/preferences.jl")
+include("models/models.jl")
+include("logging.jl")
 
-struct LinearModel{D <: Damages, P <: Preferences}
-    hogg::Hogg
+export Calibration, DynamicCalibration, ConstantCalibration, DoubleExponentialCalibration
+export γ, Eᵇ
 
-    preferences::P
-    damages::D
+export Climate, TippingClimate, LinearClimate, JumpingClimate
+export Hogg, Feedback, Jump
+export ExponentialDecay, ConstantDecay, SaturationRecoveryDecay
+export δₘ, L, λ, μ, ∂μ∂T, ∂μ∂m
+export mstable, Tstable
 
-    economy::Economy
-end
+export Economy, Abatement, Investment, PiecewiseAbatement
+export Damages
+export GrowthDamages, WeitzmanGrowth, Kalkuhl, BurkeHsiangMiguel, NoDamageGrowth
+export β, β′, d, D, ϕ, A, ω
+export χopt, variance, consumptiongrowth
 
-struct TippingModel{D <: Damages, P <: Preferences}
-    albedo::Albedo
-    hogg::Hogg
-
-    preferences::P
-    damages::D
-
-    economy::Economy
-end
-
-struct JumpModel{D <: Damages, P <: Preferences}
-    jump::Jump
-    hogg::Hogg
-
-    preferences::P
-    damages::D
-
-    economy::Economy
-end
-
-AbstractModel{D, P} = Union{
-    TippingModel{D, P}, JumpModel{D, P}, LinearModel{D, P}
-} where {D <: Damages, P <: Preferences}
-
-Base.broadcastable(m::AbstractModel) = Ref(m)
-
-include("models/functions.jl")
+export Preferences, LogUtility, CRRA, LogSeparable, EpsteinZin
+export g, f, logg, discount
+export IAM, UnitIAM, determinsticIAM, linearIAM
 
 end # module Model

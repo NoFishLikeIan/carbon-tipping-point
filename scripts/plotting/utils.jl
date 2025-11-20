@@ -1,40 +1,35 @@
-using Model: AbstractModel, JumpModel, TippingModel
-using Printf: format, Format
-
 const kelvintocelsius = 273.15
 
 function stringifydeviation(ΔT; digits = 2)
     fsign = ΔT > 0 ? "+" : ""
-    fmt = Format("$fsign%0.$(digits)f°")
-    return format(fmt, ΔT)
+    fmt = Printf.Format("$fsign%0.$(digits)f°")
+    return Printf.format(fmt, ΔT)
 end
+function makedeviationtickz(from, to; step = 0.5, digits = 2, addedlabels = Tuple{String, Float64}[])
 
-function makedeviationtickz(from, to, model; step = 0.5, digits = 2, addedlabels = Tuple{String, Float64}[])
-
-    preindustrialdev = range(from, to; step = step)
-    ticks = model.hogg.Tᵖ .+ preindustrialdev
-
-    labels = [stringifydeviation(x; digits = digits) for x in preindustrialdev]
+    ticks = collect(range(from, to; step = step))
+    labels = [stringifydeviation(x; digits = digits) for x in ticks]
 
     if isempty(addedlabels)
-        return (ticks, labels)
+        return ticks, labels
     end
 
     ticks = [ticks..., last.(addedlabels)...]
     labels = [labels..., first.(addedlabels)...]
     idxs = sortperm(ticks)
     
-    return (ticks[idxs], labels[idxs])
+    return ticks[idxs], labels[idxs]
 end
 
-function labelofmodel(model::AbstractModel)
-    if model isa JumpModel
-        return "Benchmark"
-    elseif model isa TippingModel
-        return model.albedo.Tᶜ < 2. ? "Imminent" : "Remote"
+function labelsofclimate(climate::C) where {C <: Climate}
+    if C <: Model.PiecewiseLinearClimate
+        "No tipping element"
+    elseif C <: TippingClimate
+        Tᶜ = round(climate.feedback.Tᶜ; digits = 2)
+        L"T^c = %$(Tᶜ)"
+    else
+        error("Model type not implemented")
     end
-
-    throw("Not found label for model $model")
 end
 
 function smoother(vs, n)
@@ -49,4 +44,12 @@ function smoother(vs, n)
     end
 
     return out
+end
+
+function abatementcolorbar(Ē)
+    if Ē ≤ 1.0
+        cgrad([RGB(0.8392, 0.1882, 0.1529), :white])
+    else
+        cgrad(:RdBu, [0., 1 / Ē, 1])
+    end
 end

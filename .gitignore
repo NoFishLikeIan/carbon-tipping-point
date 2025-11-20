@@ -4,6 +4,7 @@
 
 # Folders to ignore - files may be too large, too many, etc. NOTE: EDIT IF NEEDED.
 /data
+/simulations
 /videos
 /plots
 /_research
@@ -455,5 +456,5 @@ papers/presentations/figures
 # Snellius unnecessary files
 jobs/example.job
 papers/*
-localtest.sh
 notebooks
+jobs/**/localtest.job

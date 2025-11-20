@@ -2,11 +2,11 @@ The following repository contains the code for the paper "The Cost of Uncertaint
 
 ### Reproducing the paper
 
-Running simulations (`scripts/runtipping.jl`, `scripts/rungame.jl` or `scripts/runbenchmark.jl`) requires `Julia 1.9.2`.
+Running simulations (`scripts/solve.jl`, `scripts/rungame.jl` or `scripts/runbenchmark.jl`) requires `Julia 1.9.2`.
 
 ```bash
 julia +1.9.2 --project scripts/runbenchmark.jl \
-    -N 11 -s simulation/test-small \
+    --N 11 -s simulation/test-small \
     --overwrite -v 2 -p 8
 ```
 
@@ -22,7 +22,7 @@ All simulation scripts take the following arguments:
     - default = "simulation/planner"
     - help = "Path to simulation folder"
 
-- `"-N"`
+- `"--N"`
     - type = `Int`
     - default = 51
     - help = "Size of grid"

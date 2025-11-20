@@ -1,19 +1,25 @@
-using Test: @test
+using Test, BenchmarkTools
 using Revise
 using Grid
 
-N = 3;
-domains = [(0., 1.), (0., 1.), (0., 1.)]; 
-grid = RegularGrid(domains, N);
+# Test `RegularGrid`
+N = (101, 100);
+domains = ((0., 2.), (1., 2.));
 
-indices = Base.CartesianIndices(grid, Dict(1 => (true, false), 3 => (false, true)));
+regulargrid = RegularGrid(N, domains);
 
-# Indexing
-@test first(indices) == CartesianIndex((2, 1, 1))
-@test last(indices) == CartesianIndex((3, 3, 2))
+# Test elastic grid
+μ(T) = T - T^3 / 3 
+w(T) = abs(1 - T^2)
+domain = domains[1]
+weights = [w(T) for T in range(domain..., N[1])]
 
+uniformweights = ones(N[2])
+
+elasticgrid = ElasticGrid(N, domains, (weights, uniformweights))
+
+# Test interpolations
 V = rand(size(grid)...);
-densergrid = RegularGrid(domains, 2N);
-interpolateovergrid(grid, V, densergrid);
+densergrid = RegularGrid(2 .* N, domains);
+interpolateovergrid(V, grid, densergrid)
 
-Q = DiagonalRedBlackQueue(grid);

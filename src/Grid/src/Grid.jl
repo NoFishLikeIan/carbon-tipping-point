@@ -1,24 +1,31 @@
 module Grid
 
-export bisection, gss, gssmin
-
-export Point, Policy
-export Domain, RegularGrid, I, DiagonalRedBlackQueue
-export interpolateovergrid
-
 using Base.Iterators: product, flatten
 
 using StaticArraysCore: StaticArray
-using StaticArrays: FieldVector, MVector
+using StaticArrays
 
 using Statistics: mean, middle
-using Interpolations: interpolate, extrapolate, scale
+using Interpolations: interpolate, extrapolate, scale, linear_interpolation
 using Interpolations: BSpline, Linear, Line
-using ZigZagBoomerang: PartialQueue, dequeue!, saturate, rkey, div1, peek
-using Graphs: Edge, Graph, SimpleGraphs
+using ZigZagBoomerang: PartialQueue, dequeue!
+using Graphs: SimpleGraphs
 
 include("routines/bisection.jl")
-include("grid/grids.jl")
+include("routines/interpolations.jl")
+include("grid/state.jl")
+include("grid/regular.jl")
+include("grid/elastic.jl")
+include("grid/iterating.jl")
 include("grid/interpolations.jl")
+include("logging.jl")
+
+export bisection, gss, gssmin
+
+export Point, Policy
+export Domain, AbstractGrid, RegularGrid, ElasticGrid
+export LinearIndex
+export interpolateovergrid, shrink, halfgrid
+export steps, inversestep
 
 end

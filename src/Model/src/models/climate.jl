@@ -1,168 +1,259 @@
-const secondstoyears = 60 * 60 * 24 * 365.25
 const Gtonoverppm = 1 / 7.821
 
-struct Albedo
-	Tᶜ::Float64  # Initiation of Albedo from pre industrial levels
-    ΔT::Float64  # Temperature change until ice loss
-     
-    λ₁::Float64 # Pre-transition albedo
-    Δλ::Float64 # Albedo loss
-
-    function Albedo(Tᶜ; sensitivity = 4.5, boundaries = [0., 0.1], λ₁ = 0.31, ΔT = 1.8)
-        hogg = Hogg()
-        function deviation(Δλ)
-            albedo = new(Tᶜ, ΔT, λ₁, Δλ)
-            T =  maximum(find_zeros(T -> mstable(T, hogg, albedo) - log(2hogg.Mᵖ), hogg.Tᵖ .+ (0., 12.))) - hogg.Tᵖ
-
-            return T - sensitivity
-        end
-        
-        Δλ = find_zero(deviation, boundaries)
-        
-        return new(Tᶜ, ΔT, λ₁, Δλ)
-    end
-
-    Albedo(Tᶜ, ΔT, λ₁, Δλ) = new(Tᶜ, ΔT, λ₁, Δλ)
+Base.@kwdef struct Feedback{S <: Real}
+    Tᶜ::S # [K] Critical temperature in deviation from Tᵖ
+    ΔS::S # [W m⁻²] Additional forcing
+    L::S
 end
 
-Base.@kwdef struct Jump
-    j₂::Float64 = -0.0029
-    j₁::Float64 = 0.0568
-    j₀::Float64 = -0.0577
+# Feedback functions
+function L(T, feedback::Feedback)
+    logistic(feedback.L * (T - feedback.Tᶜ))
+end
+function L′(T, feedback::Feedback)
+    l = L(T, feedback)
+    return feedback.L * l * (1 - l)
+end
 
-    i₀::Float64 = -0.25
-    i₁::Float64 = 0.95
+function λ(T, feedback::Feedback)
+    feedback.ΔS * L(T, feedback)
+end
+function λ′(T, feedback::Feedback)
+    feedback.ΔS * L′(T, feedback) 
+end
+
+"Creates new Feedback object with updated critical temperature Tᶜ."
+function updateTᶜ(Tᶜ, feedback::Feedback)
+    Feedback(Tᶜ = Tᶜ, ΔS = feedback.ΔS, L = feedback.L)
+end
+
+Base.@kwdef struct Jump{S <: Real}
+    j₂::S = -0.0029
+    j₁::S = 0.0568
+    j₀::S = -0.0577
+
+    i₀::S = -0.25
+    i₁::S = 0.95
     
-    e₁::Float64 = 2.8
-    e₂::Float64 = -0.3325
+    e₁::S = 2.8
+    e₂::S = -0.3325
 end
 
-Base.@kwdef struct Hogg
-    # Current and pre-industrial data temperature and carbon concentration
-    T₀::Float64 = 288.29 # [K]
-    Tᵖ::Float64 = 287.15 # [K]
-    M₀::Float64 = 412.21 # [p.p.m.]
-    Mᵖ::Float64 = 280 # [p.p.m.]
+abstract type Decay{S <: Real} end
+struct ConstantDecay{S} <: Decay{S}
+    δ::S
+end
+struct ExponentialDecay{S} <: Decay{S}
+    aδ::S
+    bδ::S
+    cδ::S
+end
+struct SaturationRecoveryDecay{S} <: Decay{S}
+    δ₀::S  # Initial decay rate (positive)
+    α::S   # First exponential decay rate  
+    δ₁::S  # Second exponential amplitude
+    β::S   # Second exponential decay rate
+    Mᶜ::S  # Center concentration
+    δ̄::S   # Asymptotic offset
+end
 
-    N₀::Float64 = 286.65543 # [p.p.m.]
+"CO₂e concentration decay."
+function δₘ(_, decay::ConstantDecay)
+    decay.δ
+end
+function δₘ(M, decay::ExponentialDecay)
+    @unpack aδ, bδ, cδ = decay
+
+    return aδ * exp(-((M - bδ) / cδ)^2)
+end
+function δₘ(M, decay::SaturationRecoveryDecay)
+    @unpack δ₀, α, δ₁, β, Mᶜ, δ̄ = decay
+    ΔM = M - Mᶜ
     
-    σₜ::Float64 = 1.584 # Standard deviation of temperature
-    σₘ::Float64 = 0.0078 # Standard deviation of CO₂ 
+    return δ₀ * exp(-α * ΔM) - δ₁ * exp(-β * ΔM) + δ̄
+end
 
-    # Climate sensitwivity
-    S₀::Float64 = 340.5 # [W / m²] Mean solar radiation
+Base.@kwdef struct Hogg{S <: Real}
+    # Initial values
+    T₀::S # [K] in deviation from Tᵖ
+    Tᵖ::S # [K]
+    M₀::S # [p.p.m. CO₂e]
+    Mᵖ::S # [p.p.m. CO₂e]
 
-    ϵ::Float64 = 5e8 / secondstoyears # years * [J / m² K] / s Heat capacity of the ocean
-    η::Float64 = 5.67e-8 # Stefan-Boltzmann constant 
+    # Radiative dynamics
+    S₀::S # [W m⁻²] Mean solar radiation
+    ϵ::S # [yr J m⁻² K⁻¹] Speed of temperature
+    η::S # Stefan-Boltzmann constant 
     
-    G₁::Float64 = 20.5 # [W / m²] Effect of CO₂ on radiation budget
-    G₀::Float64 = 150 # [W / m²] Pre-industrial GHG radiation budget
-    
-    # Decay rate of carbon concentration
-    aδ::Float64 = 0.0176
-    bδ::Float64 = -27.63
-    cδ::Float64 = 384.8
+    G₁::S # [W m⁻²] Effect of CO₂ on radiation budget
+    G₀::S # [W m⁻²] Pre-industrial GHG radiation budget
+
+    # Noise
+    σ::S # [K^α / √yr] Std of temperature
+    α::S # Power of temperature in noise term
 end
 
-Base.broadcastable(m::Albedo) = Ref(m)
-Base.broadcastable(m::Jump) = Ref(m)
-Base.broadcastable(m::Hogg) = Ref(m)
-
-"Obtain an Hogg calibration consistent with the Albedo calibration"
-function equilibriumHogg(albedo::Albedo; b = (330., 380.))::Hogg
-    d = Hogg()
-    eq = @closure S₀ ->  Model.Mstable(d.T₀, Hogg(S₀ = S₀), albedo) - d.M₀
-
-    S₀ = find_zero(eq, b)
-
-    return Hogg(S₀ = S₀)
+"""
+Copy a Hogg but set epsilon to a small value (fast temperature limit)
+"""
+function fastHogg(ϵ, hogg::Hogg{S}) where {S}
+    return Hogg{S}(
+        T₀ = hogg.T₀,
+        Tᵖ = hogg.Tᵖ,
+        M₀ = hogg.M₀,
+        Mᵖ = hogg.Mᵖ,
+        S₀ = hogg.S₀,
+        ϵ = ϵ,
+        η = hogg.η,
+        G₁ = hogg.G₁,
+        G₀ = hogg.G₀,
+        σ = hogg.σ,
+        α = hogg.α
+    )
 end
 
-"Decay of carbon"
-function δₘ(M, hogg::Hogg)
-    N = M * (hogg.N₀ / hogg.M₀)
-    return hogg.aδ * exp(-(N - hogg.cδ)^2 / hogg.bδ^2)
+abstract type Climate{S <: Real, D <: Decay{S}} end
+abstract type PiecewiseLinearClimate{S <: Real, D <: Decay{S}} <: Climate{S, D} end
+struct LinearClimate{S, D} <: PiecewiseLinearClimate{S, D}
+    hogg::Hogg{S}
+    decay::D
+end
+struct TippingClimate{S, D} <: Climate{S, D}
+    hogg::Hogg{S}
+    decay::D
+    feedback::Feedback{S}
+end
+struct JumpingClimate{S, D} <: PiecewiseLinearClimate{S, D}
+    hogg::Hogg{S}
+    decay::D
+    jump::Jump{S}
 end
 
-function δₘ⁻¹(δ, hogg::Hogg)
-    N = hogg.cδ + hogg.bδ * √(log(hogg.aδ / δ))
-    return log(N * hogg.M₀ / hogg.N₀)
+function Base.isless(a::C₁, b::C₂) where {C₁ <: TippingClimate, C₂ <: TippingClimate}
+    isless(a.feedback.Tᶜ, b.feedback.Tᶜ)
+end
+function Base.isless(::C₁, ::C₂) where {C₁ <: PiecewiseLinearClimate, C₂ <: TippingClimate}
+    false # Consistent with linear ≡ (Tᶜ → ∞)
+end
+function Base.isless(a::C₁, b::C₂) where {C₁ <: TippingClimate, C₂ <: PiecewiseLinearClimate}
+    !isless(b, a)
 end
 
-# Albedo functions
-sigmoid(x; β = 3.5) = inv(1 + exp(-x * β))
-sigmoid′(x; β = 3.5) = β * sigmoid(x; β) * (1 - sigmoid(x; β))
-
-function L(T, hogg::Hogg, albedo::Albedo)
-    T₁ = albedo.Tᶜ + hogg.Tᵖ
-    T₂ = T₁ + albedo.ΔT
-    inflexion = (T₁ + T₂) / 2
-
-    sigmoid(T - inflexion)
+"Forcing due to greenhouse gasses."
+function ghgforcing(m, hogg::Hogg)
+    hogg.G₀ + hogg.G₁ * m
 end
-function L′(T, hogg::Hogg, albedo::Albedo)
-    T₁ = albedo.Tᶜ + hogg.Tᵖ
-    T₂ = T₁ + albedo.ΔT
-    inflexion = (T₁ + T₂) / 2
-
-    sigmoid′(T - inflexion)
+function ghgforcing′(m, hogg::Hogg)
+    hogg.G₁
+end
+function ghgforcinginverse(r, hogg::Hogg)
+    (r - hogg.G₀) / hogg.G₁
 end
 
-λ(T, hogg::Hogg, albedo::Albedo) = albedo.λ₁ - albedo.Δλ * L(T, hogg, albedo)
-λ′(T, hogg::Hogg, albedo::Albedo) = -albedo.Δλ * L′(T, hogg, albedo)
-
-"Radiative forcing."
-radiativeforcing(T, hogg::Hogg, albedo::Albedo) = hogg.S₀ * (1 - λ(T, hogg, albedo)) - hogg.η * T^4
-radiativeforcing(T, hogg::Hogg) = hogg.S₀ * 0.69 - hogg.η * T^4
-radiativeforcing′(T, hogg::Hogg, albedo::Albedo) = -hogg.S₀ * λ′(T, hogg, albedo) - 4hogg.η * T^3
-
-"Greenhouse gases"
-ghgforcing(m, hogg::Hogg) = hogg.G₀ + hogg.G₁ * (m - log(hogg.Mᵖ))
-ghgforcing⁻¹(r, hogg::Hogg) = log(hogg.Mᵖ) + (r - hogg.G₀) / hogg.G₁
-
-
-"Drift temperature dynamics"
-μ(T, m, hogg::Hogg, albedo::Albedo) = radiativeforcing(T, hogg, albedo) + ghgforcing(m, hogg)
-μ(T, m, hogg::Hogg) = radiativeforcing(T, hogg) + ghgforcing(m, hogg)
-
-"Compute CO₂ concentration consistent with temperature T"
-mstable(T, hogg::Hogg, albedo::Albedo) = ghgforcing⁻¹(-radiativeforcing(T, hogg, albedo), hogg)
-mstable(T, hogg::Hogg) = ghgforcing⁻¹(-radiativeforcing(T, hogg), hogg)
-Mstable(T, args...) = exp(mstable(T, args...))
-
-function Tstable(m, hogg::Hogg, albedo::Albedo)
-    find_zeros(T -> mstable(T, hogg, albedo) - m, hogg.Tᵖ, 1.2hogg.Tᵖ)
+"Forcing due to incoming solar radiation."
+@fastpow function radiativeforcing(T, hogg::Hogg)
+    hogg.S₀ - hogg.η * (T + hogg.Tᵖ)^4
+end
+@fastpow function radiativeforcing′(T, hogg::Hogg)
+    -4hogg.η * (T + hogg.Tᵖ)^3
 end
 
-function Tstable(m, hogg::Hogg)
-    find_zeros(T -> mstable(T, hogg) - m, hogg.Tᵖ, 1.2hogg.Tᵖ)
+"Temperature drift."
+function μ(T, m, climate::C) where {C <: PiecewiseLinearClimate}
+    ghgforcing(m, climate.hogg) + radiativeforcing(T, climate.hogg)
+end
+function μ(T, m, climate::TippingClimate)
+    ghgforcing(m, climate.hogg) + 
+    radiativeforcing(T, climate.hogg) + 
+    λ(T, climate.feedback)
 end
 
-function potential(T, m, hogg::Hogg, albedo::Albedo)
-	@unpack λ₁, Δλ = albedo
-    T₁ = albedo.Tᶜ + hogg.Tᵖ
-    T₂ = T₁ + albedo.ΔT
-    inflexion = (T₁ + T₂) / 2
-	G = ghgforcing(m, hogg)
-
-	(hogg.η / 5) * T^5 - G * T - (1 - λ₁) * hogg.S₀ * T - hogg.S₀ * Δλ * log(1 + exp(T - inflexion))
+function ∂μ∂T(T, climate::C) where {C <: PiecewiseLinearClimate}
+    radiativeforcing′(T, climate.hogg)
+end
+function ∂μ∂T(T, climate::TippingClimate)
+    radiativeforcing′(T, climate.hogg) + λ′(T, climate.feedback)
+end
+function ∂μ∂m(m, climate::C) where {C <: Climate}
+    ghgforcing′(m, climate.hogg)
 end
 
-function density(T, m, hogg::Hogg, albedo::Albedo; normalisation = 1e-5)
-    exp(-normalisation * potential(T, m, hogg, albedo))
+"CO₂e log-concentration consistent with temperature T."
+function mstable(T, climate::C) where {C <: PiecewiseLinearClimate}
+    r = radiativeforcing(T, climate.hogg)
+    return ghgforcinginverse(-r, climate.hogg)
+end
+function mstable(T, climate::TippingClimate)
+    r = radiativeforcing(T, climate.hogg) + λ(T, climate.feedback)
+    return ghgforcinginverse(-r, climate.hogg)
+end
+
+"Temperature(s) consistent with CO₂e log-concentration m"
+function Tstable(m, climate::TippingClimate; Tmin = -10., Tmax = 20.)
+    find_zeros(T -> mstable(T, climate) - m, Tmin, Tmax)
+end
+function Tstable(m, climate::LinearClimate)
+    @unpack hogg = climate
+    T̄ = ((hogg.S₀ + hogg.G₀ + hogg.G₁ * m) / hogg.η)^(1/4) - hogg.Tᵖ
+
+    return [T̄]
+end
+
+const log2 = log(2)
+
+"Compute equilibrium climate sensitivity"
+function ecs(climate::C) where {C <: Climate}
+    only(Tstable(log2, climate)) - climate.hogg.Tᵖ
 end
 
 "Size of jump"
-function increase(T, hogg::Hogg, jump::Jump)
-    ΔT = T - hogg.Tᵖ
+function increase(T, climate::C) where {C <: JumpingClimate}
+    ΔT = T - climate.hogg.Tᵖ
 
-    jump.j₀ + jump.j₁ * ΔT + jump.j₂ * ΔT^2
+    climate.jump.j₀ + climate.jump.j₁ * ΔT + climate.jump.j₂ * ΔT^2
+end
+
+"Computes the temperature's standard deviation."
+function std(T, hogg::Hogg)
+    (max(T, 0)^hogg.α * hogg.σ / hogg.ϵ)
+end
+"Computes the temperature's variance."
+function variance(T, hogg::Hogg)
+    std(T, hogg)^2
+end
+
+"Arrival rate of jump"
+function intensity(T, climate::C) where {C <: JumpingClimate}
+    ΔT = T - climate.hogg.Tᵖ
+    
+    max(climate.jump.i₀ + climate.jump.i₁ / (1 + climate.jump.e₁ * exp(climate.jump.e₂ * ΔT)), 0)
 end
 
 
-"Arrival rate of jump"
-function intensity(T, hogg::Hogg, jump::Jump)
-    ΔT = T - hogg.Tᵖ
-    
-    max(jump.i₀ + jump.i₁ / (1 + jump.e₁ * exp(jump.e₂ * ΔT)), 0)
+function determnistichogg(hogg::Hogg{S}) where S
+    Hogg{S}(
+        T₀ = hogg.T₀,
+        Tᵖ = hogg.Tᵖ,
+        M₀ = hogg.M₀,
+        Mᵖ = hogg.Mᵖ,
+        S₀ = hogg.S₀,
+        ϵ = hogg.ϵ,
+        η = hogg.η,
+        G₁ = hogg.G₁,
+        G₀ = hogg.G₀,
+        σ = zero(S),
+        α = hogg.α
+    )
+end
+
+function deterministicClimate(climate::LinearClimate)
+    LinearClimate(determnistichogg(climate.hogg), climate.decay)
+end
+
+function deterministicClimate(climate::TippingClimate)
+    TippingClimate(determnistichogg(climate.hogg), climate.decay, climate.feedback)
+end
+
+function deterministicClimate(climate::JumpingClimate)
+    JumpingClimate(determnistichogg(climate.hogg), climate.decay, climate.jump)
 end

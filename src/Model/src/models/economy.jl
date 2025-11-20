@@ -1,72 +1,94 @@
-Base.@kwdef struct GrowthDamages
-    ξ::Float64 = 0.000075
-    υ::Float64 = 3.25
+struct Abatement{S <: Real}
+    ω̄::S # Fraction of GDP required long term to abate
+    Δω::S # Additional fraction of GDP required to abate today
+    ρ::S # Speed of abatement technology cost reduction
+    b::S # Coefficient of abatement fraction
 end
 
-Base.@kwdef struct LevelDamages
-    ξ::Float64 = 0.00266
-end
+const HambelAbatement = Abatement{Float64}(4.3e-4, 5.506e-2, 1.48e-2, 2.8)
 
-Damages = Union{GrowthDamages, LevelDamages}
+"Abatement tehcnology decay"
+function ω(t, abatement::Abatement)
+    @unpack ω̄, Δω, ρ = abatement
 
-Base.@kwdef struct Economy
-    # Technology
-    ωᵣ::Float64 = 0.017558043747351086 # Speed of abatement technology cost reduction
-    ω₀::Float64 = 2 * 0.11 # Fraction of GDP required today to abate
-    ϱ::Float64 = 1e-3 # Growth of TFP
-    κ::Float64 = 11.2 # Adjustment costs of abatement technology
-    δₖᵖ::Float64 = 0.0162 # Initial depreciation rate of capital
-
-    # Output
-    A₀::Float64 = 0.113 # Initial TFP
-    Y₀::Float64 = 75.8
-    σₖ::Float64 = 0.0162 # Variance of GDP
-
-    τ::Float64 = 500. # Steady state horizon
+    return ω̄ + Δω * exp(-ρ * t)
 end
 
 "Cost of abatement as a fraction of GDP"
-function β(t, e, economy::Economy)
-    economy.ω₀ * exp(-economy.ωᵣ * t) * e^2 / 2.
+function β(t, ε, abatement::Abatement)
+    ω(t, abatement) * ε^abatement.b
+end
+function β′(t, ε, abatement::Abatement)
+    abatement.b * ω(t, abatement) * ε^(abatement.b - 1)
 end
 
-function β′(t, e, economy::Economy)
-    exp(-economy.ωᵣ * t) * e
+Base.@kwdef struct Investment{S <: Real}
+    κ::S = 11.2 # Adjustment costs of abatement technology
+    δₖᵖ::S = 0.0162 # Depreciation rate of capital
+    σₖ::S = 0.0162 # Variance of GDP
+    
+    ϱ::S = 0. # Exogenous growth of TFP
+    A₀::S = 0.113 # Initial TFP
 end
 
-function d(T, damages::GrowthDamages, hogg::Hogg)
-    damages.ξ * max(T - hogg.Tᵖ, 0.)^damages.υ
+function A(t, investments::Investment)
+    investments.A₀ * exp(investments.ϱ * t)
+end
+function ϕ(t, χ, investments::Investment)
+    investmentrate = (1 - χ) * A(t, investments)
+    adjcosts = investments.κ * investmentrate^2 / 2.
+
+    return investmentrate - adjcosts
 end
 
-function d(T, damages::LevelDamages, hogg::Hogg)
-    inv(1 + damages.ξ * max(T - hogg.Tᵖ, 0.)^2)
+# Growth Damages
+abstract type Damages{S<:Real} end
+abstract type GrowthDamages{S} <: Damages{S} end
+struct NoDamageGrowth{S} <: GrowthDamages{S} end
+
+d(_, _, damages::NoDamageGrowth{S}, args...) where S = zero(S)
+
+Base.@kwdef struct WeitzmanGrowth{S} <: GrowthDamages{S}
+    ξ::S = 2.6e-4
+    ν::S = 3.25
 end
 
-function ϕ(t, χ, economy::Economy)
-    productivity = (1 - χ) * A(t, economy)
-    adjcosts = economy.κ * productivity^2 / 2.
-        
-    productivity - adjcosts
+d(T, _, damages::WeitzmanGrowth, _) = d(T, damages)
+function d(T, damages::WeitzmanGrowth)
+    damages.ξ * abs(T)^damages.ν
+end
+function d′(T, damages::WeitzmanGrowth)
+    sign(T) * damages.ν * damages.ξ * abs(T)^(damages.ν - 1)
 end
 
-function A(t, economy::Economy)
-    economy.A₀ * exp(economy.ϱ * t)
+Base.@kwdef struct Kalkuhl{S} <: GrowthDamages{S}
+    ξ₁::S = 0.0373 # [1/°C]
+    ξ₂::S = 0.0018 # [1/°C²]
 end
 
-function RegionalEconomies(kwargs...)
-    economyhigh = Economy(
-        Y₀ = 47.54,
-        A₀ = 0.13, # Initial TFP
-        ϱ = 0.000052,
-        kwargs...
-    )
+function d(T, _, damages::Kalkuhl, _)
+    damages.ξ₁ * max(T, 0) + damages.ξ₂ * max(T, 0)^2
+end
 
-    economylow = Economy(
-        Y₀ = 28.25,
-        A₀ = 0.09,
-        ϱ = 0.004322045780109746,
-        kwargs...
-    )
+function D(T, damages::Kalkuhl)
+    damages.ξ₁ * T + damages.ξ₂ * T^2 / 2.
+end
 
-    return (economyhigh, economylow)
+"Quadratic temperature damages, as in Burket et al. (2016), with calibration by Kalkuhl & Wenz (2020)."
+Base.@kwdef struct BurkeHsiangMiguel{S} <: GrowthDamages{S}
+    ξ::S = 2 * 7.09e-4
+end
+
+d(T, _, damages::BurkeHsiangMiguel, _) = d(T, damages)
+function d(T, damages::BurkeHsiangMiguel)
+    damages.ξ * max(T, 0)^2
+end
+
+Base.broadcastable(damages::Damages) = Ref(damages)
+
+Base.@kwdef struct Economy{S <: Real, D <: Damages{S}}
+    Y₀::S = 75.8
+    investments::Investment{S}
+    abatement::Abatement{S}
+    damages::D
 end
