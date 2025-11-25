@@ -81,23 +81,3 @@ equilibriumsteadystate!(valuefunction, Δt, linearIAM(model), G, calibration; ve
 eqvaluefunction = deepcopy(valuefunction)
 
 steadystate!(valuefunction, Δt, model, G, calibration; timeiterations = 10_000, printstep = 1_000, verbose = 1, tolerance = Error(1e-7, 1e-8))
-
-begin
-    Tspace, mspace = G.ranges
-    E = ε(valuefunction, model, calibration, G)
-    Ē = maximum(abs, E)
-
-    nuccline = [mstable(T, model.climate) for T in Tspace]
-
-    contourf(mspace, Tspace, E;
-        c = abatementcolorbar(Ē),
-        clims = (0, Ē),
-        xlabel = L"Carbon concentration $m$",
-        ylabel = L"Temperature $T$",
-        title = L"Abatement $\varepsilon$",
-        linewidth = 0., levels = 51,
-        xlims = extrema(mspace), ylims = extrema(Tspace)
-    )
-
-    plot!(nuccline, Tspace; c = :gray, linestyle = :dash, label = false)
-end

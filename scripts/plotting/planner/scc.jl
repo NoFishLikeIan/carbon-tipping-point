@@ -170,6 +170,8 @@ begin # SCC as a function Tᶜ
             line_width = LINE_WIDTH
         }, Coordinates([minimum(thresholds), maximum(thresholds)], [scclinear, scclinear]))
         push!(sccfig, baseline, LegendEntry(L"\overline{\mathrm{SCC}}_{2020}"))
+    else 
+        @warn "Linear model SCC not available"
     end
 
     if SAVEFIG
@@ -349,6 +351,7 @@ end
 
 begin # SCC surfaces combined
     discoveries = -1:0.05:1
+    camera = "{65}{50}"
     
     sccmatrix = fill(NaN, length(thresholds), length(discoveries))
     
@@ -372,7 +375,7 @@ begin # SCC surfaces combined
         xlabel_style = "{sloped}",
         ylabel_style = "{sloped}",
         zlabel_style = "{sloped}",
-        view = "{60}{50}",
+        view = camera,
         grid = "both",
         xmin = minimum(discoveries),
         xmax = maximum(discoveries),
@@ -386,7 +389,7 @@ begin # SCC surfaces combined
         width = "0.85\\textwidth",
         height = "0.85\\textwidth",
         ztick_distance = 10,
-        legend_pos = "north east"
+        legend_pos = "north west"
     })
     
     ploteverythreshold = max(1, length(thresholds) ÷ 6)
@@ -503,7 +506,7 @@ begin # SCC percent difference surface
         ylabel = L"Critical threshold $T^c$ [\si{\degree}]",
         xlabel_style = "{sloped}",
         ylabel_style = "{sloped}",
-        view = "{60}{50}",
+        view = camera,
         grid = "both",
         xmin = minimum(discoveries), xmax = maximum(discoveries),
         ymin = minimum(thresholds), ymax = maximum(thresholds),

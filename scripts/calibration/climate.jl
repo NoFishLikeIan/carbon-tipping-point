@@ -14,7 +14,7 @@ using LogExpFunctions
 
 using Plots, Printf, PGFPlotsX, Colors, ColorSchemes, LaTeXStrings
 
-# pgfplotsx()
+pgfplotsx()
 default(label = false, dpi = 180, linewidth = 2.5)
 push!(PGFPlotsX.CUSTOM_PREAMBLE,
     raw"\usepgfplotslibrary{fillbetween}",
@@ -30,9 +30,9 @@ includet("../utils/saving.jl")
 includet("../utils/simulating.jl")
 includet("constants.jl")
 
-PLOTPATH = "papers/job-market-paper/submission/plots"
+PLOTPATH = "../job-market-paper/submission/plots"
 DATAPATH = "data"
-SAVEFIG = false
+SAVEFIG = true
 PALETTE = colorschemes[:grays];
 calibrationpath = joinpath(DATAPATH, "calibration")
 if !isdir(calibrationpath) mkpath(calibrationpath) end

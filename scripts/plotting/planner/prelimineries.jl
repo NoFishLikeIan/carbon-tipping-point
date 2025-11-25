@@ -69,7 +69,7 @@ begin # Construct models and grids
     ]
 
     models = IAM[tippingmodels..., linearmodel]
-    labels = ["Imminent", "Remote", "No Feedback"]
+    labels = [L"T^c = 2\si{\degree}", L"T^c = 4\si{\degree}", "Linear"]
     labelsbymodel = Dict(models .=> labels)
 end;
 
