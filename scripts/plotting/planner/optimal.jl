@@ -240,7 +240,7 @@ begin
     figopts = @pgf {width = raw"0.5\textwidth", height = raw"0.4\textwidth", grid = "both", xmin = 0, xmax = horizon, ymin = 0.4, ymax = 1.2}
     
     εtick = 0.4:0.2:1.4
-    εticklabels = [ @sprintf("\\footnotesize %.0f\\%%", 100y) for y in εtick ]  
+    εticklabels = [ @sprintf("\\footnotesize %.0f\\%%", 100y) for y in εtick ]
 
     qs = (0.05, 0.5, 0.95)
 

@@ -1,15 +1,13 @@
 function discoveryvalues(discovery, (truevalues, truemodel, trueG), (linearvalues, linearmodel, linearG))
-    effectivevalues = copy(truevalues)
-    i = searchsortedfirst(linearG.ranges[1], truemodel.climate.feedback.Tᶜ + discovery)
+    effectivevalues = deepcopy(truevalues)
+    i = searchsortedfirst(trueG.ranges[1], truemodel.climate.feedback.Tᶜ + discovery)
 
-    if i > 1
-        for (t, value) in effectivevalues
-            itplinearvalue = interpolateovergrid(linearvalues[t], linearG, trueG)
-            value.α[1:(i - 1), :] .= itplinearvalue.α[1:(i - 1), :]
-        end
+    for (t, value) in effectivevalues
+        itplinearvalue = interpolateovergrid(linearvalues[t], linearG, trueG)
+        value.α[1:(i - 1), :] .= itplinearvalue.α[1:(i - 1), :]
     end
 
-    return effectivevalues, truemodel, linearG
+    return effectivevalues, truemodel, trueG
 end
 
 function constructstaticDᵐ!(stencil, αitp, t, G::RegularGrid{N₁, N₂, S}, calibration) where {N₁, N₂, S}
