@@ -121,8 +121,8 @@ begin # SCC surfaces combined
         ytick = thresholdticks,
         yticklabels = thresholdlabels,
         y_dir = "reverse", x_dir = "reverse",
-        width = "0.85\\textwidth",
-        height = "0.85\\textwidth",
+        width = "0.7225\\textwidth",
+        height = "0.7225\\textwidth",
         ztick_distance = 10,
         legend_pos = "north east"
     })
@@ -252,8 +252,8 @@ begin # SCC percent difference surface
         ytick = thresholdticks,
         yticklabels = thresholdlabels,
         x_dir = "reverse", y_dir  = "reverse",
-        width = "0.85\\textwidth",
-        height = "0.85\\textwidth"
+        width = "0.7225\\textwidth",
+        height = "0.7225\\textwidth"
     })
 
     # Subsample the data for coarser mesh

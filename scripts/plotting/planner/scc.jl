@@ -134,7 +134,7 @@ begin # SCC
     tippingmodels = filter(m -> m.climate isa TippingClimate, models)
     thresholds = Float64[]
     sccs = Float64[]
-    scclinear = NaN
+    global scclinear = NaN
 
     for model in models
         Hitp, _ = interpolations[model]
@@ -146,7 +146,7 @@ begin # SCC
             push!(sccs, s)
             push!(thresholds, model.climate.feedback.Tᶜ)
         else
-            scclinear = s
+            global scclinear = s
         end
     end
 end
@@ -241,8 +241,8 @@ let
             group_size = "2 by 1",
             horizontal_sep = "2.5em"
         },
-        width = "7cm",
-        height = "6cm",
+        width = "5.95cm",
+        height = "5.1cm",
         grid = "both",
         xmin = 0,
         xmax = 80,
@@ -302,7 +302,7 @@ end
 begin # SCC and load CE gradients
     thresholds = Float64[]
     sccs = Float64[]
-    scclinear = NaN
+    global scclinear = NaN
 
     for model in models
         Hitp, _ = interpolations[model]
@@ -314,7 +314,7 @@ begin # SCC and load CE gradients
             push!(sccs, s)
             push!(thresholds, model.climate.feedback.Tᶜ)
         else
-            scclinear = s
+            global scclinear = s
         end
     end
     
@@ -386,8 +386,8 @@ begin # SCC surfaces combined
         ytick = thresholdticks,
         yticklabels = thresholdlabels,
         y_dir = "reverse", x_dir = "reverse",
-        width = "0.85\\textwidth",
-        height = "0.85\\textwidth",
+        width = "0.595\\textwidth",
+        height = "0.595\\textwidth",
         ztick_distance = 10,
         legend_pos = "north west"
     })
@@ -407,8 +407,8 @@ begin # SCC surfaces combined
     push!(sccsurfacefig, baselinesurface)
     
     # Lines along discovery direction (constant threshold)
-    firstdiscoveryline = true
-    firstbaselineline = true
+    global firstdiscoveryline = true
+    global firstbaselineline = true
     
     for (i, threshold) in enumerate(thresholds)
         if (i - 1) % ploteverythreshold != 0 && i != length(thresholds)
@@ -427,7 +427,7 @@ begin # SCC surfaces combined
         push!(sccsurfacefig, lineplot)
         if firstdiscoveryline
             push!(sccsurfacefig, LegendEntry("Discovery"))
-            firstdiscoveryline = false
+            global firstdiscoveryline = false
         end
         
         baseline = @pgf Plot3({
@@ -441,7 +441,7 @@ begin # SCC surfaces combined
         push!(sccsurfacefig, baseline)
         if firstbaselineline
             push!(sccsurfacefig, LegendEntry("Optimal"))
-            firstbaselineline = false
+            global firstbaselineline = false
         end
     end
     
@@ -517,8 +517,8 @@ begin # SCC percent difference surface
         ytick = thresholdticks,
         yticklabels = thresholdlabels,
         x_dir = "reverse", y_dir  = "reverse",
-        width = "0.85\\textwidth",
-        height = "0.85\\textwidth"
+        width = "0.595\\textwidth",
+        height = "0.595\\textwidth"
     })
 
     # Subsample the data for coarser mesh
