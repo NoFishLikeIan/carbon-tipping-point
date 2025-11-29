@@ -38,9 +38,9 @@ damagetype = BurkeHsiangMiguel;
 withnegative = true
 abatementtype = withnegative ? "negative" : "constrained"
 DATAPATH = "data/simulation-dense"; @assert isdir(DATAPATH)
-CEPATH = "data/ce/simulation-dense"; @assert isdir(CEPATH)
+CEPATH = "data/ce/simulation-dense/negative"; @assert isdir(CEPATH)
 
-SAVEFIG = true;
+SAVEFIG = false;
 PLOTPATH = "../job-market-paper/submission/plots"
 plotpath = joinpath(PLOTPATH, abatementtype)
 if !isdir(plotpath) mkpath(plotpath) end
@@ -130,7 +130,7 @@ begin # Plot estetics
     u₀ = SVector(X₀..., 0., 0., 0.) # Introduce three 0s for costs
 end;
 
-begin # SCC
+begin # Compute SCC
     tippingmodels = filter(m -> m.climate isa TippingClimate, models)
     thresholds = Float64[]
     sccs = Float64[]
@@ -151,10 +151,10 @@ begin # SCC
     end
 end
 
-begin # SCC as a function Tᶜ
+begin # Plot SCC as a function of Tᶜ
     sccfig = @pgf Axis({
-        xlabel = L"Critical threshold $T^c$ [\si{\degree}]",
-        ylabel = L"Social cost of carbon $[\si{US\mathdollar / tCe}]$",
+            xlabel = L"Critical threshold $T^c$ [\si{\degree}]",
+            ylabel = L"Social cost of carbon $[\si{US\mathdollar / tCe}]$",
         grid = "both",
         xmin = minimum(thresholds),
         xmax = maximum(thresholds)
@@ -181,7 +181,7 @@ begin # SCC as a function Tᶜ
     sccfig
 end
 
-begin # Optimal SCC paths
+begin # Compute optimal SCC paths
     slicethresholds = [2.0]
     sccmodels = filter(m -> m.climate isa LinearClimate || (m.climate isa TippingClimate && m.climate.feedback.Tᶜ ∈ slicethresholds), models)
     m₀ = log(hogg.M₀ / hogg.Mᵖ)
@@ -232,7 +232,7 @@ begin # Optimal SCC paths
     end
 end
 
-let 
+begin # Plot optimal SCC paths
     yearticks = 0:20:horizon
     timegrid = 0:savestep:horizon
 
@@ -260,7 +260,7 @@ let
         ylabel = L"$[\si{US\mathdollar / tCe}]$",
         ymin = 0, ymax = 2_000,
         legend_pos = "north west",
-        title = L"\mathrm{SCC}"
+        title = L"\mathrm{SCC}_t"
     })
 
     
@@ -286,7 +286,7 @@ let
     @pgf push!(fig, {
         xlabel = "Year",
         ymin = 0,
-        title = L"\Delta \mathrm{SCC}"
+        title = L"\mathrm{SCC}^{T^c}_t - \overline{SCC}_t"
     })
     
     diffcoords = Coordinates(timegrid, mediandifference)
@@ -299,7 +299,7 @@ let
     fig
 end
 
-begin # SCC and load CE gradients
+begin # Compute discovery SCC and load CE gradients
     thresholds = Float64[]
     sccs = Float64[]
     global scclinear = NaN
@@ -344,12 +344,14 @@ begin # SCC and load CE gradients
             if isfile(outfile)
                 JLD2.@load outfile H₀ ∇H₀
                 discoverygradient[i, j] = ∇H₀
+            else 
+                error("CE gradient file not found: $(outfile) (threshold=$(threshold), discovery=$(discovery))")
             end
         end
     end
 end
 
-begin # SCC surfaces combined
+begin # Plot SCC surfaces combined
     discoveries = -1:0.05:1
     camera = "{65}{50}"
     
@@ -371,7 +373,7 @@ begin # SCC surfaces combined
     sccsurfacefig = @pgf Axis({
         xlabel = L"Discovery temperature $\Delta T^{\mathrm{d}}$ [\si{\degree}]",
         ylabel = L"Critical threshold $T^c$ [\si{\degree}]",
-        zlabel = L"SCC $[\si{US\mathdollar / tCe}]$",
+        zlabel = L"\mathrm{SCC}_{2020} \; [\si{US\mathdollar / tCe}]",
         xlabel_style = "{sloped}",
         ylabel_style = "{sloped}",
         zlabel_style = "{sloped}",
@@ -480,7 +482,7 @@ begin # SCC surfaces combined
     sccsurfacefig
 end
 
-begin # SCC percent difference surface
+begin # Plot SCC percent difference surface
     # relies on sccmatrix, sccs, discoveries, thresholds already created
     percentdiffmatrix = fill(NaN, size(sccmatrix))
     for i in eachindex(thresholds)
@@ -540,4 +542,59 @@ begin # SCC percent difference surface
     end
 
     percentdiffaxis
+end
+
+begin # Plot value of discovery
+    discoveries_slice = [-1.0, 0.0]
+
+    discoverysccfig = @pgf GroupPlot({
+        group_style = { group_size = "1 by 2", vertical_sep = "1em" },
+        width = raw"0.6\linewidth",
+        height = raw"0.3\linewidth",
+        grid = "both",
+        "every axis/.append style" = "{label style={font=\\footnotesize}}"
+    })
+
+    # Left: SCC level vs threshold
+    @pgf push!(discoverysccfig, {
+        ylabel = L"$\mathrm{SCC}_{2020} \; [\si{US\mathdollar / tCe}]$",
+        xmin = minimum(thresholds),
+        xmax = maximum(thresholds),
+        legend_pos = "north east",
+        legend_style = "{legend cell align=left}",
+        xticklabels = {},
+    })
+
+    for (i, discovery) in enumerate(discoveries_slice)
+        j = findfirst(d -> d ≈ discovery, discoveries)
+        slice_values = sccmatrix[:, j]
+        color = length(colors) >= i ? colors[i] : "black"
+        push!(discoverysccfig, @pgf Plot({ color = color, line_width = LINE_WIDTH }, Coordinates(thresholds, slice_values)))
+        push!(discoverysccfig, LegendEntry(L"\Delta T^d = %$(discovery)"))
+    end
+
+    # Right: percent difference vs threshold
+    ytick = 0:10:50
+    yticklabels = [ @sprintf("\\footnotesize %.0f\\%%", y) for y in ytick ]
+    @pgf push!(discoverysccfig, {
+        xlabel = L"Critical threshold $T^c$ [\si{\degree}]",
+        xmin = minimum(thresholds),
+        xmax = maximum(thresholds),
+        ymin = 0, ymax = 50,
+        ytick = ytick,
+        yticklabels = yticklabels
+    })
+
+    for (i, discovery) in enumerate(discoveries_slice)
+        j = findfirst(d -> d ≈ discovery, discoveries)
+        slice_percent = percentdiffmatrix[:, j]
+        color = length(colors) >= i ? colors[i] : "black"
+        push!(discoverysccfig, @pgf Plot({ color = color, line_width = LINE_WIDTH }, Coordinates(thresholds, slice_percent)))
+    end
+
+    if SAVEFIG
+        PGFPlotsX.save(joinpath(plotpath, "scc_discovery_levels.tikz"), discoverysccfig; include_preamble=true)
+    end
+
+    discoverysccfig
 end
