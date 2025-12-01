@@ -476,6 +476,99 @@ end
 
 _, ϵ = gssmin(halflifeloss, 0.01, 5.)
 
+if isinteractive() # Plot impulse response with SDE
+    function noiseimpulse(T, parameters, t)
+        toestimate, constants, impulse = parameters
+        ϵ, σ, α = toestimate
+        
+        return T^α * (σ / ϵ)
+    end
+    
+    toestimate = (ϵ, 0.2, α₀)
+    timpulsemin = 2020.
+    timpulsemax = 2040.
+
+    impulsesdeproblem = SDEProblem(dTimpulse, noiseimpulse, T₀, (timpulsemin, timpulsemax), (toestimate, constants, impulse))
+    ensembleimpulseproblem = EnsembleProblem(impulsesdeproblem)
+    
+    impulsesol = solve(ensembleimpulseproblem, ImplicitEM(); trajectories=10_000)
+    
+    if impulsesol.converged
+        impulseyears = range(ghgspan...; step = 1.)
+
+        Tlower = timeseries_point_quantile(impulsesol, 0.05, impulseyears).u
+        Tmedian = timeseries_point_quantile(impulsesol, 0.5, impulseyears).u
+        Tupper = timeseries_point_quantile(impulsesol, 0.95, impulseyears).u
+        
+        # Half-life line
+        _, T₀_impulse, T̄_impulse = impulse
+        Thalf = T₀_impulse + (T̄_impulse - T₀_impulse) / 2
+        
+        impulsetickyears = timpulsemin:1:timpulsemax
+        impulselabelyears = timpulsemin:5:timpulsemax
+        impulsexticklabels = [t ∈ impulselabelyears ? string(Int(t)) : "" for t in impulsetickyears]
+        
+        impulsefig = @pgf Axis({
+            width = raw"0.7\textwidth",
+            height = raw"0.5\textwidth",
+            grid = "both",
+            xlabel = L"Year, $t$",
+            ylabel = L"Temperature $[\si{\degree}]$",
+            legend_pos = "south east",
+            legend_style = "{legend cell align=left}", 
+            xmin = timpulsemin,
+            xmax = timpulsemax,
+            xtick = impulsetickyears,
+            xticklabels = impulsexticklabels
+        })
+        
+        # Lower bound
+        lowerplot = @pgf Plot({
+            color = "black",
+            forget_plot = true,
+            name_path = "Tlower"
+        }, Coordinates(impulseyears, Tlower))
+        push!(impulsefig, lowerplot)
+        
+        # Upper bound
+        upperplot = @pgf Plot({
+            color = "black",
+            forget_plot = true,
+            name_path = "Tupper"
+        }, Coordinates(impulseyears, Tupper))
+        push!(impulsefig, upperplot)
+        
+        # Fill between
+        fillopts = @pgf {fill = "gray", opacity = 0.5}
+        Tfill = @pgf Plot(fillopts, raw"fill between [of=Tlower and Tupper]")
+        push!(impulsefig, Tfill)
+        
+        # Median
+        medcurve = @pgf Plot({
+            color = "black",
+            line_width = 2.5
+        }, Coordinates(impulseyears, Tmedian))
+        push!(impulsefig, medcurve)
+        
+        # Half-life horizontal line
+        halfline = @pgf Plot({
+            color = "gray",
+            dotted,
+            line_width = 2.0,
+            forget_plot = true
+        }, Coordinates([timpulsemin, timpulsemax], [Thalf, Thalf]))
+        push!(impulsefig, halfline)
+        
+        if SAVEFIG
+            PGFPlotsX.save(joinpath(PLOTPATH, "impulse_sde.tikz"), impulsefig; include_preamble=true)
+        end
+        
+        impulsefig
+    else
+        @warn "Impulse SDE ensemble did not converge"
+    end
+end
+
 function Flinear(u, parameters, t)
     toestimate, defaults = parameters
     ϵ = toestimate[1]
