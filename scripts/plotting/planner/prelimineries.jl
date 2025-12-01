@@ -314,7 +314,7 @@ begin # Growth of carbon concentration
     gfig = @pgf GroupPlot({
         group_style = {
             group_size = "2 by 1",
-            horizontal_sep = raw"0.15\linewidth"
+            horizontal_sep = raw"0.2\textwidth"
         },
         xmin = 0.0, xmax = horizon
     })
