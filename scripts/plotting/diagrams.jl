@@ -67,7 +67,7 @@ begin
         ylabel = L"Temperature $T_t \; [\si{\degree}]$", ymin = minimum(Tspace), ymax = maximum(Tspace),
         grid = "both",
         ytick = Tticks, yticklabels = Ttickslabel,
-        width = raw"0.7\linewidth", height = raw"0.5\linewidth",
+        width = raw"0.595\linewidth", height = raw"0.425\linewidth",
         xtick = range(extrema(timesteps)...; step = 1.)
     })
 
@@ -113,8 +113,8 @@ begin # Phase diagram
         xtick = Tticks, xticklabels = Ttickslabel, 
         ymin = -1, ymax = 1.5,
         grid = "both",
-        width = raw"0.4\linewidth", 
-        height = raw"0.4\linewidth"
+        width = raw"0.34\linewidth", 
+        height = raw"0.34\linewidth"
     }
 
     gp = @pgf GroupPlot({

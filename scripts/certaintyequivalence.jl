@@ -9,7 +9,7 @@ include("arguments.jl") # Import argument parser
 
 parsedargs = ArgParse.parse_args(ceargstable)
 
-@unpack simulationdir, datapath, calibrationpath, dt = parsedargs
+@unpack simulationdir, datapath, calibrationpath, dt, withnegative = parsedargs
 @unpack threshold, datapath, discovery = parsedargs
 @unpack verbose = parsedargs
 
@@ -45,6 +45,8 @@ include("markov/certaintyequivalence.jl")
 simulationpath = joinpath(datapath, simulationdir)
 @assert ispath(simulationpath) "Simulationpath does not exist: $simulationpath"
 
+policytype = withnegative ? "negative" : "constrained"
+
 begin # Load climate claibration
     climatepath = joinpath(datapath, "calibration", "climate.jld2")
     @assert isfile(climatepath) "Climate calibration file not found at $climatepath"
@@ -54,7 +56,7 @@ begin # Load climate claibration
 end
 
 begin # Load linear model
-    linearsolpath = joinpath(simulationpath, "linear", "growth", "logseparable", "negative", "Linear_burke_RRA10,00.jld2")
+    linearsolpath = joinpath(simulationpath, "linear", "growth", "logseparable", policytype, "Linear_burke_RRA10,00.jld2")
     @assert ispath(linearsolpath) "The linear simulation path does not exist: $linearsolpath"
 
     linearsimulation = loadtotal(linearsolpath);
@@ -63,7 +65,7 @@ end
 begin # Load true threshold model
     thresholdkey = replace("T$(Printf.format(Printf.Format("%.2f"), threshold))", "." => ",")
     thresholdsolfile = "$(thresholdkey)_burke_RRA10,00.jld2"
-    thresholdsolpath = joinpath(simulationpath, "tipping", "growth", "logseparable", "negative", thresholdsolfile)
+    thresholdsolpath = joinpath(simulationpath, "tipping", "growth", "logseparable", policytype, thresholdsolfile)
 
     @assert ispath(thresholdsolpath) "The specified simulation file does not exist: $thresholdsolpath"
 
@@ -88,7 +90,7 @@ begin # Save
     H₀ = Hitp(x₀)
     ∇H₀ = ForwardDiff.gradient(Hitp, x₀)
 
-    outpath = joinpath(datapath, "ce", simulationdir)
+    outpath = joinpath(datapath, "ce", policytype, simulationdir)
     if !ispath(outpath) mkpath(outpath) end
     thresholdkey = replace("T$(Printf.format(Printf.Format("%.2f"), threshold))", "." => ",")
     discoverykey = replace("D$(Printf.format(Printf.Format("%.2f"), discovery))", "." => ",")

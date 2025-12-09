@@ -37,7 +37,7 @@ includet("../../utils/simulating.jl")
 simpath = "data/simulations/simulation-dense"; @assert isdir(simpath)
 
 SAVEFIG = true;
-PLOTPATH = "../job-market-paper/submission/plots"
+PLOTPATH = "../job-market-paper/jeem/plots"
 plotpath = joinpath(PLOTPATH, "regret")
 if !isdir(plotpath) mkpath(plotpath) end
 

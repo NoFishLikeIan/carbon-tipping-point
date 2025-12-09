@@ -120,6 +120,9 @@ ceargstable = ArgParseSettings()
     "--dt"
         arg_type = Float64
         default = 1 / 24
+
+    "--withnegative"
+        action = :store_true
 end
 
 simulateargtable = ArgParseSettings()

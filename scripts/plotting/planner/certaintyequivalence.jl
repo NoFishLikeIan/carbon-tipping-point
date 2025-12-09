@@ -38,7 +38,7 @@ CEPATH = "data/ce/simulation-dense"; @assert isdir(CEPATH)
 DATAPATH = "data/simulation-dense"; @assert isdir(DATAPATH)
 
 SAVEFIG = true;
-PLOTPATH = "../job-market-paper/submission/plots"
+PLOTPATH = "../job-market-paper/jeem/plots"
 plotpath = joinpath(PLOTPATH, "negative")
 if !isdir(plotpath) mkpath(plotpath) end
 
@@ -63,80 +63,6 @@ begin # Plot estetics
     u₀ = SVector(X₀..., 0., 0., 0.) # Introduce three 0s for costs
 end;
 
-function findthreshold(threshold, simulationfiles)
-    for filepath in simulationfiles
-        model = loadproblem(filepath) |> first
-        abatementdir = splitpath(filepath)[end - 1]
-
-        istype = (model.economy.damages isa BurkeHsiangMiguel) && (abatementdir == "negative")
-        isthreshold = model.climate isa TippingClimate && model.climate.feedback.Tᶜ ≈ threshold
-
-
-        if istype && isthreshold
-            return filepath
-        end
-    end
-
-    return nothing
-end
-
-begin # Import available simulation and CE files
-    horizon = 100.
-    simulationfiles = listfiles(DATAPATH)
-
-    thresholds = 2:0.05:4;
-    discoveries = -1:0.05:1
-
-    truevalue = fill(NaN, length(thresholds))
-    truegradient = fill(Point(NaN, NaN), size(truevalue))
-
-    discoveryvalue = fill(NaN, length(thresholds), length(discoveries))
-    discoverygradient = fill(Point(NaN, NaN), size(discoveryvalue))
-
-    models = IAM[]
-    interpolations = Dict{IAM, NTuple{2, Interpolations.Extrapolation}}()
-
-    missingpairs = Dict{String, Float64}[];
-
-    for (i, threshold) in enumerate(thresholds)
-        @printf("Loading threshold=%.2f\r", threshold)
-
-        filepath = findthreshold(threshold, simulationfiles)
-        optimalvalues, model, G = loadtotal(filepath; tspan = (0., 1.2horizon))
-        Hopt, αopt = buildinterpolations(optimalvalues, G);
-        H₀ = Hopt(x₀.T, x₀.m, 0.)
-        truevalue[i] = Hopt(x₀.T, x₀.m, 0.)
-        truegradient[i] = ForwardDiff.gradient(x ->  Hopt(x[1], x[2], 0.), x₀)
-
-        push!(models, model)
-        interpolations[model] = (Hopt, αopt);
-
-        for (j, discovery) in enumerate(discoveries)
-
-            thresholdkey = replace("T$(Printf.format(Printf.Format("%.2f"), threshold))", "." => ",")
-            discoverykey = replace("D$(Printf.format(Printf.Format("%.2f"), discovery))", "." => ",")
-            outfile = joinpath(CEPATH, "$(thresholdkey)_$(discoverykey).jld2")
-
-            if !isfile(outfile)
-                @warn "Outfile $outfile not found!"
-
-                push!(missingpairs, Dict("threshold" => threshold, "discovery" => discovery))
-
-                continue
-            end
-
-            JLD2.@load outfile H₀ ∇H₀
-            discoveryvalue[i, j] = H₀
-            discoverygradient[i, j] = ∇H₀
-        end
-    end
-
-    linearfilepath = joinpath(DATAPATH, "linear/growth/logseparable/negative/Linear_burke_RRA10,00.jld2")
-    linearvalues, linearmodel, linearG = loadtotal(linearfilepath; tspan = (0., 1.2horizon))
-
-    push!(models, linearmodel)
-    interpolations[linearmodel] = buildinterpolations(linearvalues, linearG)
-end;
 
 begin # SCC
     thresholds = Float64[]
@@ -158,105 +84,7 @@ begin # SCC
     end
 end
 
-begin
-    Tticks, Tlabels = makedeviationtickz(2, 4; step=0.5, digits=1)
-    sccfig = @pgf Axis({ xlabel = L"Critical threshold $T^c$ [\si{\degree}]", ylabel = L"Social cost of carbon in 2020 $[\si{US\mathdollar / tCe}]$", grid = "both", xmin = minimum(thresholds), xmax = maximum(thresholds), xtick = Tticks, xticklabels = Tlabels })
-
-    curve = @pgf Plot({ line_width = LINE_WIDTH }, Coordinates(thresholds, sccs))
-    push!(sccfig, curve)
-
-    if SAVEFIG
-        PGFPlotsX.save(joinpath(plotpath, "scc.tikz"), sccfig; include_preamble=true)
-    end
-
-    sccfig
-end
-
-
-begin # SCC by discovery
-    figdiscoveries = discoveries
-    discoveryticks, discoverylabels = makedeviationtickz(minimum(figdiscoveries), maximum(figdiscoveries); step=0.5, digits=1)
-    
-    sccbydiscoveryfig = @pgf GroupPlot({
-        group_style = {
-            group_size = "2 by 2",
-            horizontal_sep = "1.5cm",
-            vertical_sep = "1.5cm"
-        },
-        width = "6cm",
-        height = "5cm",
-        grid = "both",
-        xmin = minimum(figdiscoveries),
-        xmax = maximum(figdiscoveries),
-        xtick = discoveryticks,
-        xticklabels = discoverylabels
-    })
-    
-    for (plotidx, threshold) in enumerate(figthresholds)
-        idx = searchsortedfirst(thresholds, threshold)
-        
-        sccbydiscovery = Float64[]
-        for (j, discovery) in enumerate(figdiscoveries)
-            if !isnan(discoverygradient[idx, j][2]) && !isnan(truegradient[idx][2])
-                sccval = sccs[idx] * discoverygradient[idx, j][2] / truegradient[idx][2]
-                push!(sccbydiscovery, sccval)
-            else
-                push!(sccbydiscovery, NaN)
-            end
-        end
-        
-        thresholdlabel = @sprintf("%.1f", threshold)
-        
-        row = (plotidx - 1) ÷ 2 + 1
-        col = (plotidx - 1) % 2 + 1
-        
-        if row == 2 && col == 1
-            @pgf push!(sccbydiscoveryfig, {
-                title = L"$T^c = %$thresholdlabel$",
-                xlabel = L"Discovery $\Delta T^{\mathrm{d}}$ [\si{\degree}]",
-                ylabel = L"SCC $[\si{US\mathdollar / tCe}]$"
-            })
-        elseif row == 2
-            @pgf push!(sccbydiscoveryfig, {
-                title = L"$T^c = %$thresholdlabel$",
-                xlabel = L"Discovery $\Delta T^{\mathrm{d}}$ [\si{\degree}]"
-            })
-        elseif col == 1
-            @pgf push!(sccbydiscoveryfig, {
-                title = L"$T^c = %$thresholdlabel$",
-                ylabel = L"SCC $[\si{US\mathdollar / tCe}]$"
-            })
-        else
-            @pgf push!(sccbydiscoveryfig, {
-                title = L"$T^c = %$thresholdlabel$"
-            })
-        end
-        
-
-        smooth!(sccbydiscovery, 3)
-
-        curve = @pgf Plot({
-            line_width = LINE_WIDTH
-        }, Coordinates(figdiscoveries, sccbydiscovery))
-        
-        push!(sccbydiscoveryfig, curve)
-        
-        #= baseline = @pgf Plot({
-            line_width = LINE_WIDTH,
-            dashed
-        }, Coordinates(figdiscoveries, fill(sccs[idx], length(figdiscoveries)))) =#
-        
-        #push!(sccbydiscoveryfig, baseline)
-    end
-    
-    if SAVEFIG
-        PGFPlotsX.save(joinpath(plotpath, "scc_bydiscovery.tikz"), sccbydiscoveryfig; include_preamble=true)
-    end
-    
-    sccbydiscoveryfig
-end
-
-begin # SCC surface
+begin # SCC surfaces combined
     figdiscoveries = discoveries
     figthresholds = thresholds
     
@@ -264,9 +92,7 @@ begin # SCC surface
     
     for (i, threshold) in enumerate(figthresholds)
         for (j, discovery) in enumerate(figdiscoveries)
-            if !isnan(discoverygradient[i, j][2]) && !isnan(truegradient[i][2])
-                sccmatrix[i, j] = sccs[i] * discoverygradient[i, j][2] / truegradient[i][2]
-            end
+            sccmatrix[i, j] = sccs[i] * discoverygradient[i, j][2] / truegradient[i][2]
         end
     end
     
@@ -284,7 +110,7 @@ begin # SCC surface
         xlabel_style = "{sloped}",
         ylabel_style = "{sloped}",
         zlabel_style = "{sloped}",
-        view = "{45}{45}",
+        view = "{60}{50}",
         grid = "both",
         xmin = minimum(figdiscoveries),
         xmax = maximum(figdiscoveries),
@@ -294,9 +120,9 @@ begin # SCC surface
         xticklabels = discoverylabels,
         ytick = thresholdticks,
         yticklabels = thresholdlabels,
-        y_dir = "reverse",
-        width = "0.85\\textwidth",
-        height = "0.85\\textwidth",
+        y_dir = "reverse", x_dir = "reverse",
+        width = "0.7225\\textwidth",
+        height = "0.7225\\textwidth",
         ztick_distance = 10,
         legend_pos = "north east"
     })
@@ -311,9 +137,7 @@ begin # SCC surface
         color = "gray",
         shader = "flat",
         forget_plot
-    }, Table([vec(repeat(figdiscoveries', length(figthresholds), 1)),
-              vec(repeat(figthresholds, 1, length(figdiscoveries))),
-              vec(repeat(sccs, 1, length(figdiscoveries)))]))
+    }, Table(figdiscoveries, figthresholds, sccs))
     
     push!(sccsurfacefig, baselinesurface)
     
@@ -337,7 +161,7 @@ begin # SCC surface
         
         push!(sccsurfacefig, lineplot)
         if firstdiscoveryline
-            push!(sccsurfacefig, LegendEntry("Discovery"))
+            push!(sccsurfacefig, LegendEntry("Uncertainty"))
             firstdiscoveryline = false
         end
         
@@ -351,7 +175,7 @@ begin # SCC surface
         
         push!(sccsurfacefig, baseline)
         if firstbaselineline
-            push!(sccsurfacefig, LegendEntry("Optimal"))
+            push!(sccsurfacefig, LegendEntry("Complete Information"))
             firstbaselineline = false
         end
     end
@@ -391,3 +215,64 @@ begin # SCC surface
     sccsurfacefig
 end
 
+begin # SCC percent difference surface
+    # relies on sccmatrix, sccs, figdiscoveries, figthresholds already created
+    percentdiffmatrix = fill(NaN, size(sccmatrix))
+    for i in eachindex(figthresholds)
+        baselinevalue = sccs[i]
+        for j in eachindex(figdiscoveries)
+            val = sccmatrix[i, j]
+            if !isnan(val) && !isnan(baselinevalue) && baselinevalue != 0.0
+                percentdiffmatrix[i, j] = 100.0 * (val - baselinevalue) / baselinevalue
+            end
+        end
+    end
+
+    discoveryticks, discoverylabels = makedeviationtickz(minimum(figdiscoveries), maximum(figdiscoveries); step=0.5, digits=1)
+    thresholdticks, thresholdlabels = makedeviationtickz(minimum(figthresholds), maximum(figthresholds); step=0.5, digits=1)
+    thresholdticks = thresholdticks[1:end-1]
+    thresholdlabels = thresholdlabels[1:end-1]
+
+    ztick = 0:10:50
+    zticklabels = [ @sprintf("\\footnotesize %.0f\\%%", z) for z in ztick ]
+
+    percentdiffaxis = @pgf Axis({
+        xlabel = L"Discovery temperature $\Delta T^{\mathrm{d}}$ [\si{\degree}]",
+        ylabel = L"Critical threshold $T^c$ [\si{\degree}]",
+        xlabel_style = "{sloped}",
+        ylabel_style = "{sloped}",
+        view = "{60}{50}",
+        grid = "both",
+        xmin = minimum(figdiscoveries), xmax = maximum(figdiscoveries),
+        ymin = minimum(figthresholds), ymax = maximum(figthresholds),
+        zmin = 0, zmax = 50,
+        xtick = discoveryticks,
+        xticklabels = discoverylabels,
+        ztick = ztick, zticklabels = zticklabels,
+        ytick = thresholdticks,
+        yticklabels = thresholdlabels,
+        x_dir = "reverse", y_dir  = "reverse",
+        width = "0.7225\\textwidth",
+        height = "0.7225\\textwidth"
+    })
+
+    # Subsample the data for coarser mesh
+    meshstep = 1
+    meshdiscoveries = figdiscoveries[1:meshstep:end]
+    meshthresholds = figthresholds[1:meshstep:end]
+    meshpercentdiff = percentdiffmatrix[1:meshstep:end, 1:meshstep:end]
+    
+    diffsurface = @pgf Plot3({
+        mesh,
+        color = "black",
+        forget_plot
+    }, Table(meshdiscoveries, meshthresholds, meshpercentdiff'))
+
+    push!(percentdiffaxis, diffsurface)
+
+    if SAVEFIG
+        PGFPlotsX.save(joinpath(plotpath, "scc_surface_percentdiff.tikz"), percentdiffaxis; include_preamble=true)
+    end
+
+    percentdiffaxis
+end

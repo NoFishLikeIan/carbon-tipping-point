@@ -40,7 +40,7 @@ abatementtype = withnegative ? "negative" : "constrained"
 DATAPATH = "data/simulation-dense"; @assert isdir(DATAPATH)
 
 SAVEFIG = true;
-PLOTPATH = "../job-market-paper/submission/plots"
+PLOTPATH = "../job-market-paper/jeem/plots"
 plotpath = joinpath(PLOTPATH, abatementtype)
 if !isdir(plotpath) mkpath(plotpath) end
 
@@ -218,7 +218,7 @@ begin
         problem = SDEProblem(F, noise, u₀, tspan, parameters)
         ensembleprob = EnsembleProblem(problem)
 
-        simulation = solve(ensembleprob; trajectories = 1_000)
+        simulation = solve(ensembleprob; trajectories = 10_000)
         println("Done with simulation of $i / $(length(extremamodels))\n$model\n")
 
         simulations[model] = simulation
@@ -240,7 +240,7 @@ begin
     figopts = @pgf {width = raw"0.5\textwidth", height = raw"0.4\textwidth", grid = "both", xmin = 0, xmax = horizon, ymin = 0.4, ymax = 1.2}
     
     εtick = 0.4:0.2:1.4
-    εticklabels = [ @sprintf("\\footnotesize %.0f\\%%", 100y) for y in εtick ]  
+    εticklabels = [ @sprintf("\\footnotesize %.0f\\%%", 100y) for y in εtick ]
 
     qs = (0.05, 0.5, 0.95)
 
@@ -468,59 +468,4 @@ begin
     end
 
     costfig
-end
-
-begin # SCC
-    tippingmodels = filter(m -> m.climate isa TippingClimate, models)
-    thresholds = Float64[]
-    sccs = Float64[]
-    scclinear = NaN
-
-    for model in models
-        Hitp, _ = interpolations[model]
-        m₀ = log(model.climate.hogg.M₀ / model.climate.hogg.Mᵖ)
-        ∂Hₘ = ForwardDiff.derivative(m -> Hitp(model.climate.hogg.T₀, m, 0.), m₀)
-        s = scc(∂Hₘ, model.economy.Y₀, model.climate.hogg.M₀, model)
-        
-        if model.climate isa TippingClimate
-            push!(sccs, s)
-            push!(thresholds, model.climate.feedback.Tᶜ)
-        else
-            scclinear = s
-        end
-    end
-
-end
-
-begin
-    sccfig = @pgf Axis({ xlabel = L"Critical threshold $T^c$ [\si{\degree}]", ylabel = L"Social cost of carbon $[\si{US\mathdollar / tCe}]$", grid = "both", xmin = minimum(thresholds), xmax = maximum(thresholds) })
-
-    curve = @pgf Plot({ color = colors[2], line_width = LINE_WIDTH }, Coordinates(thresholds, sccs))
-    push!(sccfig, curve, LegendEntry(L"\mathrm{SCC}^{T^c}_0"))
-
-    if SAVEFIG
-        PGFPlotsX.save(joinpath(plotpath, "scc.tikz"), sccfig; include_preamble=true)
-    end
-
-    sccfig
-end
-
-begin # Optimal SCC
-    thresholds = [2.0, 2.5, 4.0]
-    sccmodels = filter(m -> m.climate isa LinearClimate || (m.climate isa TippingClimate && m.climate.feedback.Tᶜ ∈ thresholds), models)
-
-    for model in sccmodels
-        Hitp, αitp = interpolations[model]
-        m₀ = log(model.climate.hogg.M₀ / model.climate.hogg.Mᵖ)
-        ∂Hₘ = ForwardDiff.derivative(m -> Hitp(model.climate.hogg.T₀, m, 0.), m₀)
-        s = scc(∂Hₘ, model.economy.Y₀, model.climate.hogg.M₀, model)
-        
-        if model.climate isa TippingClimate
-            push!(sccs, s)
-            push!(thresholds, model.climate.feedback.Tᶜ)
-        else
-            scclinear = s
-        end
-    end
-
 end

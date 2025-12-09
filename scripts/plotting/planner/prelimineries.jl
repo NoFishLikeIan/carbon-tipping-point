@@ -27,7 +27,7 @@ includet("../../../src/extend/model.jl")
 
 begin # Global variables
     DATAPATH = "data"
-    PLOTPATH = "../job-market-paper/submission/plots"
+    PLOTPATH = "../job-market-paper/jeem/plots"
     PRESENTATIONPATH = joinpath(PLOTPATH, "presentation")
 
     SAVEFIG = true
@@ -69,7 +69,7 @@ begin # Construct models and grids
     ]
 
     models = IAM[tippingmodels..., linearmodel]
-    labels = ["Imminent", "Remote", "No Feedback"]
+    labels = [L"T^c = 2\si{\degree}", L"T^c = 4\si{\degree}", "Linear"]
     labelsbymodel = Dict(models .=> labels)
 end;
 
@@ -93,11 +93,11 @@ begin # Labels, colors and axis
 end;
 
 begin # Feedback plot
-    additionalradiation = [λ(T, model.climate.feedback) for T in Tspace, model in tippingmodels]
+    additionalradiation = [model.climate isa TippingClimate ? λ(T, model.climate.feedback) : 0. for T in Tspace, model in models]
 
     feedbackfig = @pgf Axis({
-        width = raw"0.6\textwidth",
-        height = raw"0.5\textwidth",
+        width = raw"0.51\textwidth",
+        height = raw"0.425\textwidth",
         grid = "both",
         xlabel = TLABEL,
         ylabel = raw"Positive feedback $\lambda(T_t) \; [\si{W.m^{-2}}]$",
@@ -113,9 +113,9 @@ begin # Feedback plot
         PGFPlotsX.save(joinpath(PLOTPATH, "skeleton-albedo.tikz"), feedbackfig; include_preamble=true)
     end
 
-    for mdx in axes(additionalradiation, 2)
+    for mdx in reverse(axes(additionalradiation, 2))
         rad = @view additionalradiation[:, mdx]
-        model = tippingmodels[mdx]
+        model = models[mdx]
         
         radiationcurve = @pgf Plot({ color = colorsbymodel[model], line_width = LINE_WIDTH, opacity = 0.8 }, Coordinates(Tspace, rad))
 
@@ -137,11 +137,11 @@ begin # Simulate NP problem
 
     for model in models
         npparameters = (model, calibration)
-        sol = solve(npensemble; trajectories = 10_000, p = npparameters, saveat = 1.0)
+        sol = solve(npensemble; trajectories = 15_000, p = npparameters, saveat = 1.0)
 
         @printf "Done with simulation of %s\n" labelsbymodel[model]
 
-        simpath = timestep_quantile(sol, (0.1, 0.5, 0.9), :)
+        simpath = timestep_quantile(sol, (0.05, 0.5, 0.95), :)
         sims[model] = simpath
     end
 end;
@@ -149,7 +149,7 @@ end;
 begin # NP simulation + nullclines
     nullclinevariation = Dict{IAM, Vector{Vector{NTuple{2,Float64}}}}()
 
-    for model in reverse(tippingmodels)
+    for model in reverse(models)
         nullclines = Vector{NTuple{2,Float64}}[]
         currentM = NTuple{2,Float64}[]
         currentlystable = true
@@ -171,7 +171,7 @@ begin # NP simulation + nullclines
         nullclinevariation[model] = nullclines
     end
     
-    mmedianpath = getindex.(getindex.(sims[tippingmodels[1]].u, 2), 2)
+    mmedianpath = getindex.(getindex.(sims[models[1]].u, 2), 2)
     Mmedianpath = @. hogg.Mᵖ * exp(mmedianpath)
     Mticks = Mmedianpath[1:15:end]
     Mmin, Mmax = extrema(Mticks)
@@ -202,7 +202,7 @@ begin # NP simulation + nullclines
         PGFPlotsX.save(joinpath(PLOTPATH, "skeleton-nullcline.tikz"), nullclinefig; include_preamble=true)
     end
 
-    for model in reverse(tippingmodels) # Nullclines
+    for model in reverse(models) # Nullclines
         color = colorsbymodel[model]
         
         stableleft, rest... = nullclinevariation[model]
@@ -220,7 +220,7 @@ begin # NP simulation + nullclines
         end
     end
 
-    for model in reverse(tippingmodels) # Simulation plots
+    for model in reverse(models) # Simulation plots
         color = colorsbymodel[model]
         simpath = sims[model]
 
@@ -238,7 +238,7 @@ begin # NP simulation + nullclines
         # Add shading between lower and upper curves
         lowerpath = @pgf Plot({draw = "none", name_path = "lower", forget_plot}, Coordinates(Mmedianpath, lower))
         upperpath = @pgf Plot({draw = "none", name_path = "upper", forget_plot}, Coordinates(Mmedianpath, upper))
-        shading = @pgf Plot({fill = color, opacity = 0.15, forget_plot}, raw"fill between [of=lower and upper]")
+        shading = @pgf Plot({fill = color, opacity = 0.05, forget_plot}, raw"fill between [of=lower and upper]")
 
         push!(nullclinefig, curve, legend, markers, lowerpath, upperpath, shading)
     end
@@ -254,8 +254,8 @@ end
 
 begin # Pure nullcline figure
     nullclinefig = @pgf Axis({
-        width = raw"0.9\textwidth",
-        height = raw"0.7\textwidth",
+        width = raw"0.765\textwidth",
+        height = raw"0.595\textwidth",
         grid = "both",
         ylabel = TLABEL,
         xlabel_style = {align = "center"},
@@ -268,7 +268,7 @@ begin # Pure nullcline figure
         legend_cell_align = "left"
     })
 
-    for model in reverse(tippingmodels) # Nullcline plots
+    for model in reverse(models) # Nullcline plots
         color = colorsbymodel[model]
         
         stableleft, rest... = nullclinevariation[model]
@@ -307,14 +307,14 @@ end
 
 begin # Growth of carbon concentration 
     figsize = @pgf {
-        width = raw"0.425\linewidth",
-        height = raw"0.3\linewidth",
+        width = raw"0.361\linewidth",
+        height = raw"0.255\linewidth",
     }
 
     gfig = @pgf GroupPlot({
         group_style = {
             group_size = "2 by 1",
-            horizontal_sep = raw"0.15\linewidth"
+            horizontal_sep = raw"0.2\textwidth"
         },
         xmin = 0.0, xmax = horizon
     })
@@ -380,8 +380,8 @@ begin # Carbon decay path
     yticklabels = ["$(round(δ, digits = 2)) \\%" for δ in ytick]
 
     decaypathfig = @pgf Axis({
-        width = raw"0.7\textwidth",
-        height = raw"0.5\textwidth",
+        width = raw"0.595\textwidth",
+        height = raw"0.425\textwidth",
         grid = "both",
         xlabel = raw"Carbon concentration $M$",
         ylabel = raw"Decay of CO$_2$ in the atmosphere $\delta_m$",
@@ -412,11 +412,11 @@ let # Damage fig
     xtick = Tspace[1]:1:Tspace[end]
 
     damagefig = @pgf Axis({
-        width = raw"0.5\textwidth",
-        height = raw"0.5\textwidth",
+        width = raw"0.425\textwidth",
+        height = raw"0.425\textwidth",
         grid = "both",
         xlabel = TLABEL,
-        ylabel = raw"Cumulative damages $D(T_t)$",
+        ylabel = raw"\footnotesize Damage function $d(T_t) ; [\si{1 / year}]$",
         xmin = 0, xmax = Tspace[end],
         xticklabel_style = {rotate = 45},
         yticklabels = yticklabels, ytick = ytick, ymin = 0.,
@@ -451,8 +451,8 @@ begin # Marginal abatement curve
     yticklabels = [@sprintf("%.f\\%%", 100 * y) for y in ytick]
 
     abatementfig = @pgf Axis({
-        width = raw"0.71\textwidth",
-        height = raw"0.5\textwidth",
+        width = raw"0.604\textwidth",
+        height = raw"0.425\textwidth",
         grid = "both",
         xlabel = L"Abated percentage $\varepsilon(\alpha_t)$",
         ylabel = L"Abatement costs $\beta_t\big(\varepsilon(\alpha_t)\big)$",
