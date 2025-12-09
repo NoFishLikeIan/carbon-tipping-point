@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Simple runner. Assumes current directory is the repo root.
-export JULIA_NUM_THREADS="auto"
-
 echo "-- Instantiating and precompiling project"
 julia --project -e 'using Pkg; Pkg.instantiate(); Pkg.precompile()'
 

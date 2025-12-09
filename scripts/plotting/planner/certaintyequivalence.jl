@@ -38,7 +38,7 @@ CEPATH = "data/ce/simulation-dense"; @assert isdir(CEPATH)
 DATAPATH = "data/simulation-dense"; @assert isdir(DATAPATH)
 
 SAVEFIG = true;
-PLOTPATH = "../job-market-paper/submission/plots"
+PLOTPATH = "../job-market-paper/jeem/plots"
 plotpath = joinpath(PLOTPATH, "negative")
 if !isdir(plotpath) mkpath(plotpath) end
 
@@ -161,7 +161,7 @@ begin # SCC surfaces combined
         
         push!(sccsurfacefig, lineplot)
         if firstdiscoveryline
-            push!(sccsurfacefig, LegendEntry("Discovery"))
+            push!(sccsurfacefig, LegendEntry("Uncertainty"))
             firstdiscoveryline = false
         end
         
@@ -175,7 +175,7 @@ begin # SCC surfaces combined
         
         push!(sccsurfacefig, baseline)
         if firstbaselineline
-            push!(sccsurfacefig, LegendEntry("Optimal"))
+            push!(sccsurfacefig, LegendEntry("Complete Information"))
             firstbaselineline = false
         end
     end

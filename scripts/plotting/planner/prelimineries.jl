@@ -27,7 +27,7 @@ includet("../../../src/extend/model.jl")
 
 begin # Global variables
     DATAPATH = "data"
-    PLOTPATH = "../job-market-paper/submission/plots"
+    PLOTPATH = "../job-market-paper/jeem/plots"
     PRESENTATIONPATH = joinpath(PLOTPATH, "presentation")
 
     SAVEFIG = true

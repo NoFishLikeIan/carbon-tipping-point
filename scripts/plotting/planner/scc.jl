@@ -38,10 +38,10 @@ damagetype = BurkeHsiangMiguel;
 withnegative = true
 abatementtype = withnegative ? "negative" : "constrained"
 DATAPATH = "data/simulation-dense"; @assert isdir(DATAPATH)
-CEPATH = "data/ce/simulation-dense/negative"; @assert isdir(CEPATH)
+CEPATH = "data/ce/simulation-dense"; @assert isdir(CEPATH)
 
-SAVEFIG = false;
-PLOTPATH = "../job-market-paper/submission/plots"
+SAVEFIG = true;
+PLOTPATH = "../job-market-paper/jeem/plots"
 plotpath = joinpath(PLOTPATH, abatementtype)
 if !isdir(plotpath) mkpath(plotpath) end
 
@@ -428,7 +428,7 @@ begin # Plot SCC surfaces combined
         
         push!(sccsurfacefig, lineplot)
         if firstdiscoveryline
-            push!(sccsurfacefig, LegendEntry("Discovery"))
+            push!(sccsurfacefig, LegendEntry(raw"\footnotesize Uncertainty"))
             global firstdiscoveryline = false
         end
         
@@ -442,7 +442,7 @@ begin # Plot SCC surfaces combined
         
         push!(sccsurfacefig, baseline)
         if firstbaselineline
-            push!(sccsurfacefig, LegendEntry("Optimal"))
+            push!(sccsurfacefig, LegendEntry(raw"\footnotesize Complete Info."))
             global firstbaselineline = false
         end
     end

@@ -30,7 +30,7 @@ includet("../utils/saving.jl")
 includet("../utils/simulating.jl")
 includet("constants.jl")
 
-PLOTPATH = "../job-market-paper/submission/plots"; @assert isdir(PLOTPATH)
+PLOTPATH = "../job-market-paper/jeem/plots"; @assert isdir(PLOTPATH)
 DATAPATH = "data"
 SAVEFIG = true
 PALETTE = colorschemes[:grays];

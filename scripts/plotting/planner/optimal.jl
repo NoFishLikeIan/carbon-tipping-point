@@ -40,7 +40,7 @@ abatementtype = withnegative ? "negative" : "constrained"
 DATAPATH = "data/simulation-dense"; @assert isdir(DATAPATH)
 
 SAVEFIG = true;
-PLOTPATH = "../job-market-paper/submission/plots"
+PLOTPATH = "../job-market-paper/jeem/plots"
 plotpath = joinpath(PLOTPATH, abatementtype)
 if !isdir(plotpath) mkpath(plotpath) end
 
