@@ -31,3 +31,7 @@ function l(t, Xᵢ, αᵢ, model::M, calibration::Calibration) where {S, M <: Un
 
     return (preferences.θ - 1) * (damages + abatement)
 end
+
+function Model.γ(t::Time, calibration)
+    Model.γ(t.t, calibration)
+end

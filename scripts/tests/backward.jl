@@ -62,7 +62,7 @@ begin # Construct the model
 end
 
 begin
-    N₁ = 100; N₂ = 101;
+    N₁ = 30; N₂ = 31;
     N = (N₁, N₂)
     Tmin = 0.; Tmax = 8.;
     mmin = mstable(Tmin + 0.1, model.climate)
@@ -80,12 +80,11 @@ begin
     τ = 500.
 end;
 
-valuefunction = ValueFunction(τ, climate, G, calibration)
+terminalvaluefunction = ValueFunction(τ, climate, G, calibration)
 
-equilibriumsteadystate!(valuefunction, Δt, linearIAM(model), G, calibration; verbose = 1, timeiterations = 100_000, printstep = 10_000, tolerance = Error(1e-8, 1e-8))
-eqvaluefunction = deepcopy(valuefunction)
+equilibriumsteadystate!(terminalvaluefunction, Δt, linearIAM(model), G, calibration; verbose = 1, timeiterations = 100_000, printstep = 10_000, tolerance = Error(1e-8, 1e-8))
 
-steadystate!(valuefunction, Δt, model, G, calibration; timeiterations = 10_000, printstep = 1_000, verbose = 1, tolerance = Error(1e-7, 1e-8))
+steadystate!(terminalvaluefunction, Δt, model, G, calibration; timeiterations = 10_000, printstep = 1_000, verbose = 1, tolerance = Error(1e-7, 1e-8))
 
 let # HJB error
     n = prod(size(G))
@@ -127,6 +126,7 @@ if isinteractive()
 end
 
 # Simulate backwards
+valuefunction = deepcopy(terminalvaluefunction)
 valuefunctiontraj = backwardsimulation!(valuefunction, Δt, model, G, calibration; t₀ = 0., withnegative, withsave = false, verbose = 1, storetrajectory = true)
 
 if isinteractive()
@@ -144,7 +144,6 @@ if isinteractive()
 
     gif(anim, fps = 30)
 end
-
 
 # Test simulation
 using DifferentialEquations

@@ -5,7 +5,7 @@ Base.@kwdef struct ConstantCalibration{S} <: Calibration{S}
 end
 
 "Growth rate of carbon concentration in the no-policy scenario `γₜ : [0, τ] -> [0, ∞)`."
-function γ(_, calibration::ConstantCalibration)
+function γ(_::T, calibration::ConstantCalibration) where T <: Number 
     calibration.γ₀
 end
 
@@ -15,7 +15,7 @@ struct DynamicCalibration{S} <: Calibration{S}
     γ̂::Vector{S} # Observed growth rates γ̂
 end
 
-function γ(t, calibration::DynamicCalibration)
+function γ(t::T, calibration::DynamicCalibration) where T <: Number 
     year = t + calibration.calibrationspan[1]
     return timeinterpolation(year, calibration.calibrationspan, calibration.γ̂)
 end
@@ -31,7 +31,7 @@ struct DoubleExponentialCalibration{S} <: Calibration{S}
     γ̲::S
 end
 
-function γ(t, calibration::DoubleExponentialCalibration)
+function γ(t::T, calibration::DoubleExponentialCalibration) where T <: Number 
     @unpack γ₀, α, γ₁, β, γ̄, γ̲, calibrationspan = calibration
     t̄ = calibrationspan[2] - calibrationspan[1]
     τ = min(t, t̄)

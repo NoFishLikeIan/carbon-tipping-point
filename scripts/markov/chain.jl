@@ -107,7 +107,8 @@ function constructDᵀ!(stencil::StencilData{S}, model::M, G::RegularGrid{N₁, 
         counter += 1
     end
 end
-"Constructs upwind-downwind scheme discretiser `Dᵐ` for CO2e log-concentration `m` and updates policy `α`."
+
+"Constructs upwind-downwind scheme discretiser `Dᵐ` for CO₂e log-concentration `m` and updates policy `α`."
 function constructDᵐ!(stencil::StencilData{S}, valuefunction::ValueFunction{S, N₁, N₂}, model::M, G::RegularGrid{N₁, N₂, S}, calibration::Calibration, withnegative::Bool) where {N₁, N₂, S, M <: UnitIAM{S}}
     @unpack t, H, α = valuefunction
     γₜ = γ(t.t, calibration)
@@ -182,7 +183,7 @@ function constructDᵐ!(stencil::StencilData{S}, valuefunction::ValueFunction{S,
         data[counter] = -(x + z); counter += 1
     end
 end
-"Constructs the one-dimensional discretiser `Dᵐ` for CO2e log-concentration `m` and updates policy `α`, under `ϵ → 0`. Requires climate model to be linear."
+"Constructs the one-dimensional discretiser `Dᵐ` for CO₂e log-concentration `m` and updates policy `α`, under `ϵ → 0`. Assumes climate model to be linear."
 function constructequilibriumDᵐ!(equilibriumstencil::StencilData{S}, (t, H, α), model::M, G::RegularGrid{N₁, N₂, S}, calibration::Calibration, withnegative::Bool) where {N₁, N₂, S, D, P, C <: LinearClimate, M <: UnitIAM{S, D, P, C}}
     _, mspace = G.ranges
 	Δm = step(mspace)
@@ -255,6 +256,54 @@ function constructequilibriumDᵐ!(equilibriumstencil::StencilData{S}, (t, H, α
         data[counter] = -(x + z); counter += 1
 	end
 end
+"Constructs upwind-downwind scheme discretiser `Dᵐ` for CO₂e log-concentration `m`, conditional a policy function `α`, which is not updated."
+function constructexogenousDᵐ!(stencil::StencilData{S}, valuefunction::ValueFunction{S, N₁, N₂}, G::RegularGrid{N₁, N₂, S}, calibration::Calibration) where {N₁, N₂, S}
+    @unpack t, H, α = valuefunction
+    γₜ = γ(t, calibration)
+    
+    Δm = step(G, 2)
+    Tspace, mspace = G.ranges
+    rows, columns, data = stencil
+    counter = 1
+    @inbounds for j in axes(G, 2), i in axes(G, 1)
+        k = LinearIndex((i, j), G)
+        x = Point(Tspace[i], mspace[j])
+
+        y = zero(S) # Diagonal values
+
+        αₖ = α[k]
+        bᵐ = (γₜ - αₖ) / Δm
+
+        if 1 < j < N₂
+            z = max(bᵐ, 0)
+            rows[counter] = k; columns[counter] = LinearIndex((i + 1, j), G)
+            data[counter] = z; counter += 1
+
+            x = max(bᵐ, 0)
+            rows[counter] = k; columns[counter] = LinearIndex((i - 1, j), G)
+            data[counter] = x; counter += 1
+
+            y -= (x + z)
+        elseif j == 1 # Lower boundary
+            z = max(bᵐ, 0)
+            rows[counter] = k; columns[counter] = LinearIndex((2, j), G)
+            data[counter] = z; counter += 1
+
+            y -= z
+        else # Upper boundary
+            x = max(bᵐ, 0)
+            rows[counter] = k; columns[counter] = LinearIndex((N₁ - 1, j), G)
+            data[counter] = x; counter += 1
+
+            y -= x
+        end
+
+        rows[counter] = k; columns[counter] = k;
+        data[counter] = y;
+
+        counter += 1
+    end
+end
 
 "Constructs source vector `Δt⁻¹ Hⁿ + b`."
 function constructsource(valuefunction::ValueFunction, Δt⁻¹, model::M, G::GR, calibration) where {N₁, N₂, S, M <: UnitIAM, GR <: AbstractGrid{N₁, N₂, S}}
@@ -283,11 +332,12 @@ function constructsource!(source, valuefunction::ValueFunction, Δt⁻¹, model:
     return source
 end
 
-function constructequilibriumsource((t, H, α), Δt⁻¹, model::M, G::GR, calibration) where {N₁, N₂, S, D, P, C <: LinearClimate, M <: UnitIAM{S, D, P, C}, GR <: AbstractGrid{N₁, N₂, S}}
-    constructequilibriumsource!(Vector{S}(undef, N₂), (t, H, α), Δt⁻¹, model, G, calibration)
+function constructequilibriumsource(v, Δt⁻¹, model::M, G::GR, calibration) where {N₁, N₂, S, D, P, C <: LinearClimate, M <: UnitIAM{S, D, P, C}, GR <: AbstractGrid{N₁, N₂, S}}
+    constructequilibriumsource!(Vector{S}(undef, N₂), v, Δt⁻¹, model, G, calibration)
 end
 "Updates source vector `Δt⁻¹ Hⁿ + b`."
 function constructequilibriumsource!(equilibriumsource, (t, H, α), Δt⁻¹, model::M, G::GR, calibration) where {N₁, N₂, S, D, P, C <: LinearClimate, M <: UnitIAM{S, D, P, C}, GR <: AbstractGrid{N₁, N₂, S}}
+    @unpack t, H, α = valuefunction
     mspace = G.ranges[2]
 
     @inbounds for j in axes(G, 2)
@@ -298,7 +348,7 @@ function constructequilibriumsource!(equilibriumsource, (t, H, α), Δt⁻¹, mo
         αᵢ = α[j]
         Hᵢ = H[j]
 
-        equilibriumsource[j] = l(t, x, αᵢ, model, calibration) + Δt⁻¹ * Hᵢ
+        equilibriumsource[j] = l(t.t, x, αᵢ, model, calibration) + Δt⁻¹ * Hᵢ
     end
 
     return equilibriumsource
