@@ -1,4 +1,4 @@
-"Optimal abatement policy"
+"Abatement policy `αₜ` satisfying first order condition."
 function φ(t, x::Point, ∂ₘH, model::M, calibration::Calibration) where {S, M <: UnitIAM{S}}
     @unpack economy, preferences = model
 
@@ -12,6 +12,8 @@ function φ(t, x::Point, ∂ₘH, model::M, calibration::Calibration) where {S, 
 
     return (num / den)^inv(b - 1)
 end
+
+"Inverse abatement policy `αₜ` satisfying first order condition."
 function φ⁻¹(t, x::Point, αᵢ, model::M, calibration::Calibration) where {S, M <: UnitIAM{S}}
     @unpack economy, preferences = model
 
@@ -23,15 +25,19 @@ function φ⁻¹(t, x::Point, αᵢ, model::M, calibration::Calibration) where {
     return αᵢ^(b - 1) * b * A(t, investments) * ω(t, abatement) * (preferences.θ - 1) / ᾱ(t, x, model, calibration)^b
 end
 
+"Upper bound on abatement policy `αₜ`"
 function upperbound(t, x, model::M, calibration::Calibration, withnegative) where {S, M <: UnitIAM{S}}
     ifelse(withnegative, Inf, 1) * ᾱ(t, x, model, calibration)
 end
+
+"Precomputes finite-difference stencil size based on grid `G <: GR`."
 function stencilsizes(::GR) where {N₁, N₂, GR <: AbstractGrid{N₁, N₂}}
     nᵀ = N₂ * (3N₁ - 2)
     nᵐ = N₁ * (3N₂ - 2)
 
     return (nᵀ, nᵐ)
 end
+"Initialises finite-difference stencil."
 function makestencil(G::GR) where {N₁, N₂, S, GR <: AbstractGrid{N₁, N₂, S}}
     n = stencilsizes(G)
     stencils = ntuple(j -> begin
@@ -44,6 +50,7 @@ function makestencil(G::GR) where {N₁, N₂, S, GR <: AbstractGrid{N₁, N₂,
 
     return stencils
 end
+"Construct steady state for equilibrium stencil for `m`, that is, assuming `T` is in equilibrium. Valid only under linear climate."
 function makeequilibriumstencil(::GR) where {N₁, N₂, S, GR <: AbstractGrid{N₁, N₂, S}}
     n = 3N₂ - 2 
     rows = Vector{Int}(undef, n)
