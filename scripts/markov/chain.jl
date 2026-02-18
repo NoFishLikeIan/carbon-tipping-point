@@ -1,9 +1,8 @@
 "Abatement policy `αₜ` satisfying first order condition."
 function φ(t, x::Point, ∂ₘH, model::M, calibration::Calibration) where {S, M <: UnitIAM{S}}
-    @unpack economy, preferences = model
-
     if ∂ₘH ≤ 0 return zero(S) end
-
+    
+    @unpack economy, preferences = model
     @unpack abatement, investments = economy
     @unpack b = abatement
 
@@ -13,7 +12,7 @@ function φ(t, x::Point, ∂ₘH, model::M, calibration::Calibration) where {S, 
     return (num / den)^inv(b - 1)
 end
 
-"Inverse abatement policy `αₜ` satisfying first order condition."
+"Derivative `∂ₘH` for which `αᵢ` satisfies first order condition."
 function φ⁻¹(t, x::Point, αᵢ, model::M, calibration::Calibration) where {S, M <: UnitIAM{S}}
     @unpack economy, preferences = model
 
