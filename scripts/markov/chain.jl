@@ -278,7 +278,7 @@ function constructexogenousDᵐ!(stencil::StencilData{S}, valuefunction::ValueFu
             rows[counter] = k; columns[counter] = LinearIndex((i + 1, j), G)
             data[counter] = z; counter += 1
 
-            x = max(bᵐ, 0)
+            x = max(-bᵐ, 0)
             rows[counter] = k; columns[counter] = LinearIndex((i - 1, j), G)
             data[counter] = x; counter += 1
 
@@ -290,7 +290,7 @@ function constructexogenousDᵐ!(stencil::StencilData{S}, valuefunction::ValueFu
 
             y -= z
         else # Upper boundary
-            x = max(bᵐ, 0)
+            x = max(-bᵐ, 0)
             rows[counter] = k; columns[counter] = LinearIndex((N₁ - 1, j), G)
             data[counter] = x; counter += 1
 

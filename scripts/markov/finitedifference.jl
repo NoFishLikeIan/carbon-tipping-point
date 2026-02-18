@@ -23,8 +23,6 @@ function backwardstep!(problem, R, stencilm, valuefunction::ValueFunction, Δt�
     constructsource!(problem.b, valuefunction, Δt⁻¹, model, G, calibration)
     sol = solve!(problem)
 
-    valuefunction.H .= reshape(sol.u, size(G, 1), size(G, 2))
-
     if !SciMLBase.successful_retcode(sol)
         throw("Time step solver failed at time $(valuefunction.t.t)!")
     end
@@ -42,15 +40,12 @@ function exogenousbackwardstep!(problem, R, stencilm, valuefunction::ValueFuncti
     constructsource!(problem.b, valuefunction, Δt⁻¹, model, G, calibration)
     sol = solve!(problem)
 
-    valuefunction.H .= reshape(sol.u, size(G, 1), size(G, 2))
-
     if !SciMLBase.successful_retcode(sol)
         throw("Time step solver failed at time $(valuefunction.t.t)!")
     end
 
     return sol
 end
-
 
 function equilibriumsteadystate!(valuefunction::ValueFunction{S, N₁, N₂}, Δt::S, model::M, G::RegularGrid{N₁, N₂, S}, calibration; timeiterations = 10_000, printstep = 100, tolerance::Error{S} = Error{S}(1e-6, 1e-4), verbose = 0, withnegative = true, alg = KLUFactorization()) where {N₁, N₂, S, D, P, C <: LinearClimate, M <: UnitIAM{S, D, P, C}}
     Δt⁻¹ = 1 / Δt
@@ -222,6 +217,10 @@ function backwardsimulation!(valuefunction::ValueFunction{S, N₁, N₂}, Δt::S
         valuefunction.t.t -= Δt
         backwardstep!(problem, R, stencilm, valuefunction, Δt⁻¹, model, G, calibration; withnegative)
 
+        @inbounds for (k, uₖ) in enumerate(problem.u)
+            valuefunction.H[k] = uₖ
+        end
+
         if (verbose > 1) || (verbose > 0 && valuefunction.t.t < tverbose)
             if verbose > 0 
                 tverbose = tverbose - printstep 
@@ -267,8 +266,6 @@ function setpolicy!(valuefunction::V, abatement::P, G::GR) where {V <: ValueFunc
 end
 "Backward simulation of `valuefunction` from `valuefunction.t` to `t₀`, assuming an exogenous `abatement` policy stored as a matrix with `(T, m, t)`. Returns a `OrderedDict` with either starting and terminal `valuefunction`, if `storetrajectory` is `false`, or the whole trajectory, otherwise."
 function exogenousbackwardsimulation!(valuefunction::ValueFunction{S, N₁, N₂}, abatement::P, Δt::S, model::M, G::GR, calibration::Calibration; t₀ = zero(S), verbose = 0, printstep = 10, withsave = true, outdir = "data", overwrite = false, startcache = valuefunction.t.t, cachestep = one(S), alg = KLUFactorization(), storetrajectory = false) where {S, N₁, N₂, M <: UnitIAM{S}, GR <: AbstractGrid{N₁, N₂, S}, P <: Interpolations.AbstractInterpolation}
-    setpolicy!(valuefunction, abatement, G)
-
     tcache = copy(startcache)
     valuefunctiontraj = OrderedDict(valuefunction.t.t => copy(valuefunction))
 
@@ -283,6 +280,7 @@ function exogenousbackwardsimulation!(valuefunction::ValueFunction{S, N₁, N₂
     end
 
     # Initialise problem
+    setpolicy!(valuefunction, abatement, G)
     Δt⁻¹ = 1 / Δt
     n = length(G)
     stencilT, stencilm = makestencil(G)
@@ -302,6 +300,9 @@ function exogenousbackwardsimulation!(valuefunction::ValueFunction{S, N₁, N₂
         setpolicy!(valuefunction, abatement, G)
         exogenousbackwardstep!(problem, R, stencilm, valuefunction, Δt⁻¹, model, G, calibration)
 
+        @inbounds for (k, uₖ) in enumerate(problem.u)
+            valuefunction.H[k] = uₖ
+        end
 
         if (verbose > 1) || (verbose > 0 && valuefunction.t.t < tverbose)
             if verbose > 0 

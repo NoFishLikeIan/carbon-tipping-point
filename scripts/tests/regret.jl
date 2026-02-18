@@ -62,7 +62,7 @@ begin # Construct the model
 end;
 
 begin # Initialise the grid
-    N₁ = 30; N₂ = 31;
+    N₁ = 50; N₂ = 51;
     N = (N₁, N₂)
     Tmin = 0.; Tmax = 8.;
     mmin = mstable(Tmin + 0.1, model.climate)
@@ -75,7 +75,7 @@ begin # Initialise the grid
     withnegative = true
 
     G = RegularGrid(N, domains)
-    Δt⁻¹ = 24.
+    Δt⁻¹ = 12.
     Δt = 1 / Δt⁻¹
     τ = 500.
 end;
@@ -83,26 +83,37 @@ end;
 valuefunction = ValueFunction(τ, climate, G, calibration)
 
 begin
-    tspace = 0:0.1:τ
-    Amat =  [max(m - 0.5, 0.) * γ(t, calibration) for T in G.ranges[1], m in G.ranges[2], t in tspace]
-    abatement =  linear_interpolation((G.ranges[1], G.ranges[2], tspace), Amat; extrapolation_bc = Interpolations.Flat())
-    
-    exogenousvaluefunction = copy(valuefunction)
-    exogenoussteadystate!(exogenousvaluefunction, Δt, model, G, calibration; verbose = true)
+    imminentvaluefunction = copy(valuefunction)
 
-    exogenousvaluefunctiontraj = exogenousbackwardsimulation!(exogenousvaluefunction, abatement, Δt, model, G, calibration; t₀ = 0., verbose = 1, printstep = 10, withsave = false, cachestep = 1., storetrajectory = false)
+    steadystate!(imminentvaluefunction, Δt, model, G, calibration; verbose = true)
+
+    endvaluefunctiontraj = backwardsimulation!(endvaluefunction, Δt, model, G, calibration; t₀ = 0., verbose = 1, printstep = 10, withsave = false, cachestep = 1., storetrajectory = false, withnegative = true)
 end
 
 begin
-    endogenousvaluefunction = copy(valuefunction)
+    tspace = 0:τ
+    Amat =  [rand() * γ(t, calibration) for T in G.ranges[1], m in G.ranges[2], t in tspace]
+    abatement =  linear_interpolation((G.ranges[1], G.ranges[2], tspace), Amat; extrapolation_bc = Interpolations.Flat())
+    
+    exvaluefunction = copy(valuefunction)
+    setpolicy!(exvaluefunction, abatement, G)
+    exogenoussteadystate!(exvaluefunction, Δt, model, G, calibration; verbose = true)
 
-    exogenoussteadystate!(endogenousvaluefunction, Δt, model, G, calibration; verbose = true)
-
-    endogenousvaluefunctiontraj = backwardsimulation!(endogenousvaluefunction, Δt, model, G, calibration; t₀ = 0., verbose = 1, printstep = 10, withsave = false, cachestep = 1., storetrajectory = false, withnegative = true)
+    exvaluefunctiontraj = exogenousbackwardsimulation!(exvaluefunction, abatement, Δt, model, G, calibration; t₀ = 0., verbose = 1, printstep = 10, withsave = false, cachestep = 1., storetrajectory = false)
 end
 
-k = minimum(keys(exogenousvaluefunctiontraj))
-R =  exogenousvaluefunctiontraj[k].H .- endogenousvaluefunctiontraj[k].H
+firstidx, lastidx = extrema(keys(exvaluefunctiontraj))
 
+begin
+    R̄ = exvaluefunctiontraj[lastidx].H - 
+        endvaluefunctiontraj[lastidx].H;
+        
+    lastfig = contourf(G.ranges[2], G.ranges[1], R̄; c = :Reds, ylabel = L"Temperature $T\degree$", xlabel = L"Log-$\textrm{CO}_2\textrm{e}$ concentration $m$", clims = (0, Inf), linewidth = 0, title = L"Terminal regret $\overline{R}$")
 
-Δα = endogenousvaluefunctiontraj[k].α .- exogenousvaluefunctiontraj[k].α
+    R₀ = exvaluefunctiontraj[firstidx].H - 
+        endvaluefunctiontraj[firstidx].H;
+
+    firstfig = contourf(G.ranges[2], G.ranges[1], R₀; c = :Reds, ylabel = L"Temperature $T\degree$", xlabel = L"Log-$\textrm{CO}_2\textrm{e}$ concentration $m$", clims = (0, Inf), linewidth = 0, title = L"Initial regret $R_0$")
+
+    plot(firstfig, lastfig; size = 400 .* (2√2, 1), margins = 5Plots.mm)
+end
