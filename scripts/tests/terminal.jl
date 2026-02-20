@@ -17,7 +17,7 @@ includet("../../src/extend/grid.jl")
 includet("../../src/extend/valuefunction.jl")
 includet("../utils/saving.jl")
 includet("../plotting/utils.jl")
-includet("../markov/utils.jl")
+includet("../utils.jl")
 includet("../markov/chain.jl")
 includet("../markov/finitedifference.jl")
 

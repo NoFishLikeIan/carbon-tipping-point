@@ -38,7 +38,7 @@ include("../src/extend/valuefunction.jl")
 
 include("utils/saving.jl")
 include("utils/simulating.jl")
-include("markov/utils.jl")
+include("utils.jl")
 include("markov/chain.jl")
 include("markov/certaintyequivalence.jl")
 
