@@ -83,16 +83,16 @@ end;
 valuefunction = ValueFunction(τ, climate, G, calibration)
 
 begin
-    imminentvaluefunction = copy(valuefunction)
+    endvaluefunction = copy(valuefunction)
 
-    steadystate!(imminentvaluefunction, Δt, model, G, calibration; verbose = true)
+    steadystate!(endvaluefunction, Δt, model, G, calibration; verbose = true)
 
     endvaluefunctiontraj = backwardsimulation!(endvaluefunction, Δt, model, G, calibration; t₀ = 0., verbose = 1, printstep = 10, withsave = false, cachestep = 1., storetrajectory = false, withnegative = true)
 end
 
 begin
     tspace = 0:τ
-    Amat =  [rand() * γ(t, calibration) for T in G.ranges[1], m in G.ranges[2], t in tspace]
+    Amat =  [max(m - 0.5, 0.) * γ(t, calibration) for T in G.ranges[1], m in G.ranges[2], t in tspace]
     abatement =  linear_interpolation((G.ranges[1], G.ranges[2], tspace), Amat; extrapolation_bc = Interpolations.Flat())
     
     exvaluefunction = copy(valuefunction)
