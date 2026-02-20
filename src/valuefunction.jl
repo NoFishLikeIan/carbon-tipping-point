@@ -12,7 +12,7 @@ struct ValueFunction{S <: Real, N₁, N₂}
     α::Matrix{S} # Matrix represeting abatement
     t::Time{S}
 
-    function ValueFunction(climate::C, G::GR, calibration::Calibration) where {N₁, N₂, S, GR <: AbstractGrid{N₁, N₂, S}, C <: Climate{S}}
+    function ValueFunction(climate::C, G, calibration::Calibration) where {S, C <: Climate{S}}
         ValueFunction(calibration.τ, climate, G, calibration)
     end
     function ValueFunction(τ, climate::C, G::GR, calibration::Calibration) where {N₁, N₂, S, GR <: AbstractGrid{N₁, N₂, S}, C <: Climate{S}}
@@ -20,6 +20,14 @@ struct ValueFunction{S <: Real, N₁, N₂}
         t = Time(τ)
         H = ones(S, size(G))
         α = [ γ(τ, calibration) + δₘ(exp(m) * climate.hogg.Mᵖ, climate.decay) for _ in Tspace, m in mspace ]
+        
+        return new{S, N₁, N₂}(H, α, t)
+    end
+    function ValueFunction(τ, G::GR, calibration::Calibration) where {N₁, N₂, N₃, S, SG <: AbstractGrid{N₁, N₂, S}, PG <: ParameterGrid{N₃, S}, GR <: RegretGrid{SG, PG}}
+        Tspace, mspace = G.state.ranges
+        t = Time(τ)
+        H = ones(S, size(G.state))
+        α = [ γ(τ, calibration) for _ in Tspace, m in mspace ]
         
         return new{S, N₁, N₂}(H, α, t)
     end

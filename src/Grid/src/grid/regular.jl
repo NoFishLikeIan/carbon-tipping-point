@@ -28,3 +28,18 @@ function steps(grid::RegularGrid{N₁, N₂, S}, i, j) where {N₁, N₂, S}
     ΔT, Δm = step(grid)
     return (ΔT, ΔT), (Δm, Δm)
 end
+
+struct ParameterGrid{N, S <: Real, R <: AbstractVector{S}}
+    domain::Domain{S}
+    range::R
+    
+    function ParameterGrid(N::Int, domain::Domain{S}) where S <: Real
+        r = range(domain[1], domain[2], N)
+        return new{N, S, typeof(r)}(domain, r)
+    end
+end
+
+struct RegretGrid{SG <: RegularGrid, PG <: ParameterGrid}
+    state::SG
+    parameter::PG
+end

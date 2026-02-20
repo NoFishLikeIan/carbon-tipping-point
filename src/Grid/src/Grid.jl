@@ -24,6 +24,7 @@ export bisection, gss, gssmin
 
 export Point, Policy
 export Domain, AbstractGrid, RegularGrid, ElasticGrid
+export ParameterGrid, RegretGrid
 export LinearIndex
 export interpolateovergrid, shrink, halfgrid
 export steps, inversestep
