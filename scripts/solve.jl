@@ -48,7 +48,7 @@ include("../src/extend/grid.jl")
 include("../src/extend/valuefunction.jl")
 
 include("utils/saving.jl")
-include("utils.jl")
+include("utils/simulating.jl")
 include("markov/chain.jl")
 include("markov/finitedifference.jl")
 

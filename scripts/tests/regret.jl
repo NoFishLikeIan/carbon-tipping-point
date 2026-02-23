@@ -20,10 +20,11 @@ includet("../../src/extend/grid.jl")
 includet("../../src/extend/valuefunction.jl")
 includet("../utils/saving.jl")
 includet("../utils/simulating.jl")
-includet("../plotting/utils.jl")
-includet("../utils.jl")
-
-# TODO: Update these
+includet("../utils/loading.jl")
+includet("../plotting/utils/simulating.jl")
+includet("../utils/simulating.jl")
+includet("../markov/chain.jl")
+includet("../markov/finitedifference.jl")
 includet("../regret/chain.jl")
 includet("../regret/finitedifference.jl")
 
