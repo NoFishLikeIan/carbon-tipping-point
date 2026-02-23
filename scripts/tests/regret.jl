@@ -53,7 +53,7 @@ end;
 
 begin # Initialise the grid
     # State
-    N₁ = 20; N₂ = 11;
+    N₁ = 200; N₂ = 250;
     N = (N₁, N₂)
     Tmin = 0.; Tmax = 8.;
     decay = ConstantDecay(0.)
@@ -84,5 +84,8 @@ begin
     model = IAM(climate, economy, preferences)
 end
 
-regretfunction = ValueFunction(τ, climate, G, calibration)
+simpath = "data/simulation-dense";
+paths = loadregretpolicypaths(simpath; exclude = ["terminal"])
+filteredpath = filterpolicies(paths, 10; tspan = (0., 2.)) # Indices of the basis
 
+policybasis = SimplexPolicies(paths)
