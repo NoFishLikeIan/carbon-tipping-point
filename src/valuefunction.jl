@@ -12,9 +12,6 @@ struct ValueFunction{S <: Real, N₁, N₂}
     α::Matrix{S} # Matrix represeting abatement
     t::Time{S}
 
-    function ValueFunction(climate::C, G, calibration::Calibration) where {S, C <: Climate{S}}
-        ValueFunction(calibration.τ, climate, G, calibration)
-    end
     function ValueFunction(τ, climate::C, G::GR, calibration::Calibration) where {N₁, N₂, S, GR <: AbstractGrid{N₁, N₂, S}, C <: Climate{S}}
         Tspace, mspace = G.ranges
         t = Time(τ)

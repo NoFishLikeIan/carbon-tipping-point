@@ -22,6 +22,8 @@ includet("../utils/saving.jl")
 includet("../utils/simulating.jl")
 includet("../plotting/utils.jl")
 includet("../utils.jl")
+
+# TODO: Update these
 includet("../regret/chain.jl")
 includet("../regret/finitedifference.jl")
 
@@ -64,12 +66,7 @@ begin # Initialise the grid
     domains = (Tdomain, mdomain)
     withnegative = true
 
-    stategrid = RegularGrid(N, domains)
-    
-    # Threshold
-    thresholdgrid = ParameterGrid(10, (2., 4.))
-    
-    G = RegretGrid(stategrid, thresholdgrid)
+    G = RegularGrid(N, domains)
 
     # Time
     Δt⁻¹ = 12.
@@ -79,15 +76,12 @@ end;
 
 begin
     preferences = LogSeparable()
+    decay = ConstantDecay(0.)
+    climate = LinearClimate(hogg, decay)
 
-    models = IAM[]
-    for Tᶜ in G.parameter.range
-        thresholdfeedback = Model.updateTᶜ(Tᶜ, feedback)
-        climate = TippingClimate(hogg, decay, thresholdfeedback)
-        model = IAM(climate, economy, preferences)
-
-        push!(models, model)
-    end
+    preferences = LogSeparable()
+    model = IAM(climate, economy, preferences)
 end
 
-regretfunction = ValueFunction(τ, G, calibration)
+regretfunction = ValueFunction(τ, climate, G, calibration)
+
