@@ -26,7 +26,7 @@ function l(t, Xᵢ, αᵢ, model::M, calibration::Calibration) where {S, M <: Un
 
     e = ε(t, Xᵢ, αᵢ, model, calibration)
 
-    abatement = A(t, economy.investments) * β(t, e, economy.abatement)
+    abatement = Model.A(t, economy.investments) * β(t, e, economy.abatement)
     damages = d(Xᵢ.T, Xᵢ.m, economy.damages, climate)
 
     return (preferences.θ - 1) * (damages + abatement)

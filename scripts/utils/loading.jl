@@ -49,20 +49,29 @@ function loadregretpolicypaths(simpath::String; exclude = ["terminal"])
 end
 
 "Construct policy matrix `A` from `paths`, applies a permutation QR-factorisation and returns the permutation indices `k`"
-function filterpolicies(paths::OrderedDict{Float64, String}, K; tspan = (0, Inf))
-    firstpath = first(values(paths))
-    # Assumes `G` and `ts` are common to all files in `paths`
-    vs, _, G = loadtotal(firstpath; tspan)
-    ts = keys(vs)
+function basispolicypaths(paths::OrderedDict{Float64, String}, K::Int; kwargs...)
+    firstpath = paths.vals[1]
+    _, G = loadproblem(firstpath; tspan)
 
-    thresholds = collect(keys(paths))
+    return basispolicypaths(paths, K, G; kwargs...)
+end
+function basispolicypaths(paths::OrderedDict{Float64, String}, K::Int, G::RegularGrid; tspan = (0, Inf))
+    thresholds = paths.keys
+    firstpath = first(paths.vals)
+    v = first(loadtotal(firstpath; tspan))
+    ts = v.keys
+
     n = length(thresholds)
     m = length(G) * length(ts)
     S = eltype(G)
     A = Matrix{S}(undef, m, n)
 
-    for (k, path) in enumerate(values(paths))
-        αitp = loadpolicy(path; tspan)
+    for (k, path) in enumerate(paths.vals)
+        vₖ, _, Gₖ = loadtotal(path; tspan)
+        projvₖ = OrderedDict(t => interpolateovergrid(vₖₜ, Gₖ, G) for (t, vₖₜ) in vₖ)
+
+        _, αitp = buildinterpolations(projvₖ, G)
+
         A[:, k] = vec(αitp.itp.coefs)
     end
 
@@ -74,14 +83,3 @@ function filterpolicies(paths::OrderedDict{Float64, String}, K; tspan = (0, Inf)
     
     return kpaths
 end
-
-struct SimplexPolicies{S, I <: Interpolations.Extrapolation{S}, PS <: OrderedDict{S, I}}
-    policies::PS
-end
-
-function SimplexPolicies(paths; tspan = (0, Inf))
-    policies = OrderedDict(Tᶜ => loadpolicy(path; tspan) for (Tᶜ, path) in paths)
-
-    return SimplexPolicies(policies)
-end
-

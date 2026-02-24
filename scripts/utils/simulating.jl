@@ -87,7 +87,7 @@ end
 "Constructs linear interpolation of results"
 function buildinterpolations(values::VS, G::GR) where { N₁, N₂, S, GR <: AbstractGrid{N₁, N₂, S}, VS <: AbstractDict{S, ValueFunction{S, N₁, N₂}} }
     Tspace, mspace = G.ranges
-    tspace = collect(keys(values))
+    tspace = values.keys
 
     H = Array{S, 3}(undef, N₁, N₂, length(tspace))
     α = similar(H)

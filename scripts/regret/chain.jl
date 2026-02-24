@@ -1,6 +1,5 @@
-"Constructs upwind-downwind scheme discretiser `Dᵐ` for CO₂e log-concentration `m`, conditional a policy function `α`, which is not updated."
-function constructexogenousDᵐ!(stencil::StencilData{S}, valuefunction::ValueFunction{S, N₁, N₂}, G::RegularGrid{N₁, N₂, S}, calibration::Calibration) where {N₁, N₂, S}
-	@unpack t, H, α = valuefunction
+function constructDᵐ!(stencil::StencilData{S}, weights, regretfunction::ValueFunction{S, N₁, N₂}, G::RegularGrid{N₁, N₂, S}, calibration::Calibration, policybasis::SimplexPolicies) where {N₁, N₂, S}
+	@unpack t, H, α = regretfunction
 	γₜ = γ(t, calibration)
     
 	Δm = step(G, 2)
@@ -13,7 +12,7 @@ function constructexogenousDᵐ!(stencil::StencilData{S}, valuefunction::ValueFu
 
 		y = zero(S) # Diagonal values
 
-		αₖ = α[k]
+		αₖ = weightedpolicy(x, t.t, weights, policybasis)
 		bᵐ = (γₜ - αₖ) / Δm
 
 		if 1 < j < N₂
@@ -45,4 +44,31 @@ function constructexogenousDᵐ!(stencil::StencilData{S}, valuefunction::ValueFu
 
 		counter += 1
 	end
+end
+
+"Constructs source vector `Δt⁻¹ Hⁿ + b`."
+function constructsource(weights, regretfunction::ValueFunction, Δt⁻¹, model::M, G::GR, calibration, policybasis::SimplexPolicies) where {N₁, N₂, S, M <: UnitIAM, GR <: AbstractGrid{N₁, N₂, S}}
+    constructsource!(Vector{S}(undef, N₁ * N₂), weights, regretfunction, Δt⁻¹, model, G, calibration, policybasis)
+end
+"Updates source vector `Δt⁻¹ Hⁿ + b`."
+function constructsource!(source, weights, regretfunction::ValueFunction, Δt⁻¹, model::M, G::GR, calibration, policybasis::SimplexPolicies) where {N₁, N₂, S, M <: UnitIAM, GR <: AbstractGrid{N₁, N₂, S}}
+    @unpack t, H, α = regretfunction
+    Tspace, mspace = G.ranges
+    @inbounds for j in axes(G, 2), i in axes(G, 1)
+        x = Point(Tspace[i], mspace[j])
+        αₖ = weightedpolicy(x, t.t, weights, policybasis)
+        Hₖ = H[i, j]
+
+        ΔT = step(G, 1)
+        bᵀ = μ(x.T, x.m, model.climate)
+        useforward = (bᵀ ≥ 0 && i < N₁) || (bᵀ < 0 && i == 1) 
+
+        ∂ᵀH = ((useforward ? H[i + 1, j] : H[i - 1, j]) - Hₖ) / ΔT
+        advection = ∂ᵀH^2 * variance(x.T, model.climate.hogg) / 2
+
+        k = LinearIndex((i, j), G)
+        source[k] = advection + l(t.t, x, αₖ, model, calibration) + Δt⁻¹ * Hₖ
+    end
+
+    return source
 end

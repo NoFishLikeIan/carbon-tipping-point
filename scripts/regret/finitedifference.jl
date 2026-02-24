@@ -1,50 +1,50 @@
 "Updates stencils and source, assuming constant policy, and takes a step from `H(t)` to `H(t - Δt)`."
-function exogenousbackwardstep!(problem, R, stencilm, valuefunction::ValueFunction, Δt⁻¹, model::M, G::GR, calibration::Calibration) where {N₁, N₂, S, M <: UnitIAM{S}, GR <: AbstractGrid{N₁,N₂,S}}
+function backwardstep!(problem, weights, R, stencilm, regretfunction::ValueFunction, Δt⁻¹, model::M, G::GR, calibration::Calibration, policybasis::SimplexPolicies) where {N₁, N₂, S, M <: UnitIAM{S}, GR <: AbstractGrid{N₁,N₂,S}}
 	# Construct the sparse LHS matrix
 	n = length(G)
-	constructexogenousDᵐ!(stencilm, valuefunction, G, calibration)
+	constructDᵐ!(stencilm, weights, regretfunction, G, calibration, policybasis)
 	problem.A = R - sparse(stencilm[1], stencilm[2], stencilm[3], n, n)
     
 	# Consutruct the RHS
-	constructsource!(problem.b, valuefunction, Δt⁻¹, model, G, calibration)
+	constructsource!(problem.b, regretfunction, Δt⁻¹, model, G, calibration) # TODO: Modify this.
 	sol = solve!(problem)
 
 	if !SciMLBase.successful_retcode(sol)
-		throw("Time step solver failed at time $(valuefunction.t.t)!")
+		throw("Time step solver failed at time $(regretfunction.t.t)!")
 	end
 
 	return sol
 end
 
 "Iterate linear solver until convergence, assuming constant policies."
-function exogenoussteadystate!(valuefunction::ValueFunction{S, N₁, N₂}, Δt::S, model::M, G::RegularGrid{N₁, N₂, S}, calibration; timeiterations = 10_000, printstep = 100, tolerance::Error{S} = Error{S}(1e-6, 1e-4), verbose = 0, alg = KLUFactorization()) where {S, N₁, N₂, M <: UnitIAM{S}}    
+function steadystate!(weights, regretfunction::ValueFunction{S, N₁, N₂}, Δt::S, model::M, G::RegularGrid{N₁, N₂, S}, calibration, policybasis::SimplexPolicies; timeiterations = 10_000, printstep = 100, tolerance::Error{S} = Error{S}(1e-6, 1e-4), verbose = 0, alg = KLUFactorization()) where {S, N₁, N₂, M <: UnitIAM{S}}    
 	# Initialise problem
 	Δt⁻¹ = 1 / Δt
 	n = length(G)
 	stencilT, stencilm = makestencil(G)
 	constructDᵀ!(stencilT, model, G)
-	constructexogenousDᵐ!(stencilm, valuefunction, G, calibration)
-	b₀ = constructsource(valuefunction, Δt⁻¹, model, G, calibration)
+	constructDᵐ!(stencilm, weights, regretfunction, G, calibration, policybasis)
+	b₀ = constructsource(weights, regretfunction, Δt⁻¹, model, G, calibration, policybasis)
 	Sᵨ = (preferences.ρ + Δt⁻¹) * I
 	R = Sᵨ - sparse(stencilT[1], stencilT[2], stencilT[3], n, n)
 	A₀ = R - sparse(stencilm[1], stencilm[2], stencilm[3], n, n)
 	problem = LinearSolve.init(LinearProblem(A₀, b₀), alg)
     
 	# First iteration
-	exogenousbackwardstep!(problem, R, stencilm, valuefunction, Δt⁻¹, model, G, calibration)
-	itererror = abserror(problem.u, valuefunction.H)
-	if itererror < tolerance return valuefunction, (1, itererror) end
+	backwardstep!(problem, R, stencilm, regretfunction, Δt⁻¹, model, G, calibration)
+	itererror = abserror(problem.u, regretfunction.H)
+	if itererror < tolerance return regretfunction, (1, itererror) end
     
 	for iter in 2:timeiterations  
-		exogenousbackwardstep!(problem, R, stencilm, valuefunction, Δt⁻¹, model, G, calibration)
-		itererror = abserror(problem.u, valuefunction.H)
+		backwardstep!(problem, R, stencilm, regretfunction, Δt⁻¹, model, G, calibration)
+		itererror = abserror(problem.u, regretfunction.H)
 
 		@inbounds for (k, uₖ) in enumerate(problem.u)
-			valuefunction.H[k] = uₖ
+			regretfunction.H[k] = uₖ
 		end
 
 		if itererror < tolerance
-			return valuefunction, (iter, itererror)
+			return regretfunction, (iter, itererror)
 		end
 
 		if (verbose > 1) || (verbose > 0 && iter % printstep == 0)
@@ -54,7 +54,7 @@ function exogenoussteadystate!(valuefunction::ValueFunction{S, N₁, N₂}, Δt:
 
 	@warn @sprintf "\nFailed convergence in %d iterations.\n" timeiterations
 
-	return valuefunction, (timeiterations, itererror)
+	return regretfunction, (timeiterations, itererror)
 end
 
 function setpolicy!(valuefunction::V, abatement::P, G::GR) where {V <: ValueFunction, P <: Interpolations.AbstractInterpolation, GR <: RegularGrid}
@@ -79,7 +79,6 @@ function exogenousbackwardsimulation!(valuefunction::ValueFunction{S, N₁, N₂
 	end
 
 	# Initialise problem
-	setpolicy!(valuefunction, abatement, G)
 	Δt⁻¹ = 1 / Δt
 	n = length(G)
 	stencilT, stencilm = makestencil(G)

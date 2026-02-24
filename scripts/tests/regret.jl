@@ -18,6 +18,7 @@ includet("../../src/valuefunction.jl")
 includet("../../src/extend/model.jl")
 includet("../../src/extend/grid.jl")
 includet("../../src/extend/valuefunction.jl")
+includet("../../src/regret.jl")
 includet("../utils/saving.jl")
 includet("../utils/simulating.jl")
 includet("../utils/loading.jl")
@@ -53,7 +54,7 @@ end;
 
 begin # Initialise the grid
     # State
-    N₁ = 200; N₂ = 250;
+    N₁ = 10; N₂ = 11;
     N = (N₁, N₂)
     Tmin = 0.; Tmax = 8.;
     decay = ConstantDecay(0.)
@@ -85,7 +86,11 @@ begin
 end
 
 simpath = "data/simulation-dense";
+K = 10;
 paths = loadregretpolicypaths(simpath; exclude = ["terminal"])
-filteredpath = filterpolicies(paths, 10; tspan = (0., 2.)) # Indices of the basis
+filteredpath = basispolicypaths(paths, K, G) # Indices of the basis
+policybasis = SimplexPolicies(filteredpath);
+weights = OrderedDict(Tᶜ => 1 / K for Tᶜ in keys(filteredpath))
+policies = ConvexPolicies(policybasis, weights);
+regretfunction = ValueFunction(τ, climate, G, calibration)
 
-policybasis = SimplexPolicies(paths)
