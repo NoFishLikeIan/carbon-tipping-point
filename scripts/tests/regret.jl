@@ -92,5 +92,8 @@ filteredpath = basispolicypaths(paths, K, G) # Indices of the basis
 policybasis = SimplexPolicies(filteredpath);
 weights = OrderedDict(Tᶜ => 1 / K for Tᶜ in keys(filteredpath))
 policies = ConvexPolicies(policybasis, weights);
+
 regretfunction = ValueFunction(τ, climate, G, calibration)
+steadystate!(weights, regretfunction, Δt, model, G, calibration, policybasis)
+backwardsimulation!(weights, regretfunction, Δt, model, G, calibration, policybasis)
 
