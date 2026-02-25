@@ -34,7 +34,7 @@ function parsethreshold(filepath::String)
 end
 
 "Return `OrderedDict` with `threshold => filepath` mapping for solved threshold policies in `simpath`."
-function loadregretpolicypaths(simpath::String; exclude = ["terminal"])
+function loadsimulationpaths(simpath::String; exclude = ["terminal"])
     files = listfiles(simpath; exclude)
     
     indexed = OrderedDict{Float64, String}()

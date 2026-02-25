@@ -87,7 +87,7 @@ end
 
 simpath = "data/simulation-dense";
 K = 10;
-paths = loadregretpolicypaths(simpath; exclude = ["terminal"])
+paths = loadsimulationpaths(simpath; exclude = ["terminal"])
 filteredpath = basispolicypaths(paths, K, G) # Indices of the basis
 policybasis = SimplexPolicies(filteredpath);
 weights = OrderedDict(Tᶜ => 1 / K for Tᶜ in keys(filteredpath))
