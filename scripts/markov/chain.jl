@@ -287,7 +287,6 @@ function constructequilibriumsource(v, Δt⁻¹, model::M, G::GR, calibration) w
 end
 "Updates source vector `Δt⁻¹ Hⁿ + b`."
 function constructequilibriumsource!(equilibriumsource, (t, H, α), Δt⁻¹, model::M, G::GR, calibration) where {N₁, N₂, S, D, P, C <: LinearClimate, M <: UnitIAM{S, D, P, C}, GR <: AbstractGrid{N₁, N₂, S}}
-    @unpack t, H, α = valuefunction
     mspace = G.ranges[2]
 
     @inbounds for j in axes(G, 2)
@@ -298,7 +297,7 @@ function constructequilibriumsource!(equilibriumsource, (t, H, α), Δt⁻¹, mo
         αᵢ = α[j]
         Hᵢ = H[j]
 
-        equilibriumsource[j] = l(t.t, x, αᵢ, model, calibration) + Δt⁻¹ * Hᵢ
+        equilibriumsource[j] = l(t, x, αᵢ, model, calibration) + Δt⁻¹ * Hᵢ
     end
 
     return equilibriumsource

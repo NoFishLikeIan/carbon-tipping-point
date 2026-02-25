@@ -9,7 +9,7 @@ function backwardequilibriumstep!(problem, Sᵨ, equilibriumstencil, (t, H, α),
     sol = solve!(problem)
 
     if !SciMLBase.successful_retcode(sol)
-        throw("Time step solver failed at time $(valuefunction.t.t)!")
+        throw("Time step solver failed at time $t!")
     end
 end
 "Updates stencils, source and policy and takes a step from `H(t)` to `H(t - Δt)`."
@@ -32,7 +32,7 @@ end
 function equilibriumsteadystate!(valuefunction::ValueFunction{S, N₁, N₂}, Δt::S, model::M, G::RegularGrid{N₁, N₂, S}, calibration; timeiterations = 10_000, printstep = 100, tolerance::Error{S} = Error{S}(1e-6, 1e-4), verbose = 0, withnegative = true, alg = KLUFactorization()) where {N₁, N₂, S, D, P, C <: LinearClimate, M <: UnitIAM{S, D, P, C}}
     Δt⁻¹ = 1 / Δt
 
-    Sᵨ = (preferences.ρ + Δt⁻¹) * I
+    Sᵨ = (model.preferences.ρ + Δt⁻¹) * I
 
     linearmodel = linearIAM(model)
     t = valuefunction.t.t
@@ -92,7 +92,7 @@ function steadystate!(valuefunction::ValueFunction{S, N₁, N₂}, Δt::S, model
     constructDᵀ!(stencilT, model, G)
     constructDᵐ!(stencilm, valuefunction, model, G, calibration, withnegative)
     b₀ = constructsource(valuefunction, Δt⁻¹, model, G, calibration)
-    Sᵨ = (preferences.ρ + Δt⁻¹) * I
+    Sᵨ = (model.preferences.ρ + Δt⁻¹) * I
     R = Sᵨ - sparse(stencilT[1], stencilT[2], stencilT[3], n, n)
     A₀ = R - sparse(stencilm[1], stencilm[2], stencilm[3], n, n)
     problem = LinearSolve.init(LinearProblem(A₀, b₀), alg)
@@ -146,7 +146,7 @@ function backwardsimulation!(valuefunction::ValueFunction{S, N₁, N₂}, Δt::S
     constructDᵀ!(stencilT, model, G)
     constructDᵐ!(stencilm, valuefunction, model, G, calibration, withnegative)
     b₀ = constructsource(valuefunction, Δt⁻¹, model, G, calibration)
-    Sᵨ = (preferences.ρ + Δt⁻¹) * I
+    Sᵨ = (model.preferences.ρ + Δt⁻¹) * I
     R = Sᵨ - sparse(stencilT[1], stencilT[2], stencilT[3], n, n)
     A₀ = R - sparse(stencilm[1], stencilm[2], stencilm[3], n, n)
     problem = LinearSolve.init(LinearProblem(A₀, b₀), alg)
