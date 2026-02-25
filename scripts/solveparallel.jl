@@ -58,7 +58,6 @@ end
 
 if verbose ≥ 1
 	println("$(now()): Running $(length(kwargslist)) parameter sets across $(nprocs()) processes...")
-	flush(stdout)
 end
 
 const results = pmap(kwargslist) do kwargs
@@ -76,8 +75,6 @@ if !isempty(failures)
 	for failure in failures
 		println("  threshold=$(failure.threshold), damages=$(failure.damages), withnegative=$(failure.withnegative): $(failure.error)")
 	end
-	flush(stdout)
 elseif verbose ≥ 1
 	println("$(now()): All runs completed successfully.")
-	flush(stdout)
 end
