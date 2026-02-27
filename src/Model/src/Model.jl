@@ -20,6 +20,7 @@ export Hogg, Feedback, Jump
 export ExponentialDecay, ConstantDecay, SaturationRecoveryDecay
 export δₘ, L, λ, μ, ∂μ∂T, ∂μ∂m
 export mstable, Tstable
+export updatethreshold
 
 export Economy, Abatement, Investment, PiecewiseAbatement
 export Damages
