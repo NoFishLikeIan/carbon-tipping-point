@@ -55,7 +55,7 @@ function steadystate!(weights, valuefunction::ValueFunction{S, N₁, N₂}, Δt:
 	return valuefunction, (timeiterations, itererror)
 end
 
-function backwardsimulation!(weights, valuefunction::ValueFunction{S, N₁, N₂}, Δt::S, model::M, G::GR, calibration::Calibration, policybasis::SimplexPolicies; t₀ = zero(S), verbose = 0, printstep = 10, alg = KLUFactorization(), storetrajectory = false) where {S, N₁, N₂, M <: UnitIAM{S}, GR <: AbstractGrid{N₁, N₂, S}}
+function backwardsimulation!(weights, valuefunction::ValueFunction{S, N₁, N₂}, Δt::S, model::M, G::GR, calibration::Calibration, policybasis::SimplexPolicies; t₀ = zero(S), verbose = 0, printstep = 10, alg = KLUFactorization(), storetrajectory = false, startcache = valuefunction.t.t, cachestep = one(S)) where {S, N₁, N₂, M <: UnitIAM{S}, GR <: AbstractGrid{N₁, N₂, S}}
 	tcache = copy(startcache)
 	valuefunctiontraj = OrderedDict(valuefunction.t.t => copy(valuefunction))
 
