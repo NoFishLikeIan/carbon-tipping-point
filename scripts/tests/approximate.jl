@@ -1,8 +1,8 @@
-using Revise
+using Revise, BenchmarkTools
 using Model, Grid
 using FastChebInterp, Interpolations
 using StaticArrays
-using UnPack
+using UnPack, DataStructures
 
 using DataStructures, JLD2
 
@@ -19,8 +19,9 @@ includet("../utils/approximate.jl")
 
 
 ## Load data
-simpath = "data/simulation-dense";
-paths = loadsimulationpaths(simpath);
+simpath = "data/simulation";
+paths = rand(loadsimulationpaths(simpath; exclude = ["terminal", "linear"]), 10) |> sort
+values = OrderedDict(k => loadtotal(p) for (k, p) in paths)
 
-values, model, G = loadtotal(paths[2.0]);
-H = chebyshevrepresentation(values, G; order = (100, 100, 20));
+order = (20, 20, 10, 5)
+H = chebyshevrepresentation(values, order);
