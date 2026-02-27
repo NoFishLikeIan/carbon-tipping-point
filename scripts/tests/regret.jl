@@ -7,7 +7,7 @@ using Base.Threads
 using SciMLBase
 using Statistics
 using StaticArrays, SparseArrays
-using Interpolations, DataStructures
+using Interpolations, FastChebInterp, DataStructures
 
 using LinearSolve, LinearAlgebra
 
@@ -24,76 +24,68 @@ includet("../utils/simulating.jl")
 includet("../utils/loading.jl")
 includet("../plotting/utils.jl")
 includet("../utils/simulating.jl")
+includet("../utils/approximate.jl")
 includet("../markov/chain.jl")
 includet("../markov/finitedifference.jl")
 includet("../regret/chain.jl")
 includet("../regret/finitedifference.jl")
 
-begin # Construct the model
-    DATAPATH = "data"
-    calibrationpath = joinpath(DATAPATH, "calibration")
+## Construct the model
+DATAPATH = "data"
+calibrationpath = joinpath(DATAPATH, "calibration")
 
-    # Load economic calibration
-    abatementpath = joinpath(calibrationpath, "abatement.jld2")
-    @assert isfile(abatementpath) "Abatement calibration file not found at $abatementpath"
-    abatementfile = jldopen(abatementpath, "r+")
-    @unpack abatement = abatementfile
-    close(abatementfile)
+# Load economic calibration
+abatementpath = joinpath(calibrationpath, "abatement.jld2")
+@assert isfile(abatementpath) "Abatement calibration file not found at $abatementpath"
+abatementfile = jldopen(abatementpath, "r+")
+@unpack abatement = abatementfile
+close(abatementfile)
 
-    investments = Investment()
-    damages = BurkeHsiangMiguel() # WeitzmanGrowth()
-    economy = Economy(investments = investments, damages = damages, abatement = abatement)
+investments = Investment()
+damages = BurkeHsiangMiguel() # WeitzmanGrowth()
+economy = Economy(investments = investments, damages = damages, abatement = abatement)
 
-    # Load climate claibration
-    climatepath = joinpath(calibrationpath, "climate.jld2")
-    @assert isfile(climatepath) "Climate calibration file not found at $climatepath"
-    climatefile = jldopen(climatepath, "r+")
-    @unpack calibration, hogg, feedbacklower, feedback, feedbackhigher = climatefile
-    close(climatefile)
-end;
+# Load climate claibration
+climatepath = joinpath(calibrationpath, "climate.jld2")
+@assert isfile(climatepath) "Climate calibration file not found at $climatepath"
+climatefile = jldopen(climatepath, "r+")
+@unpack calibration, hogg, feedbacklower, feedback, feedbackhigher = climatefile
+close(climatefile)
 
-begin # Initialise the grid
-    # State
-    N₁ = 10; N₂ = 11;
-    N = (N₁, N₂)
-    Tmin = 0.; Tmax = 8.;
-    decay = ConstantDecay(0.)
-    linearclimate = LinearClimate(hogg, decay)
-    mmin = mstable(Tmin + 0.1, linearclimate)
-    mmax = mstable(Tmax - 0.1, linearclimate)
-    
-    Tdomain = (Tmin, Tmax)
-    mdomain = (mmin, mmax)
-    
-    domains = (Tdomain, mdomain)
-    withnegative = true
+## Initialise model
+# Time
+Δt⁻¹ = 12.
+Δt = 1 / Δt⁻¹
+τ = 500.
 
-    G = RegularGrid(N, domains)
+preferences = LogSeparable()
+decay = ConstantDecay(0.)
+climate = LinearClimate(hogg, decay)
 
-    # Time
-    Δt⁻¹ = 12.
-    Δt = 1 / Δt⁻¹
-    τ = 500.
-end;
+preferences = LogSeparable()
+model = IAM(climate, economy, preferences)
 
-begin
-    preferences = LogSeparable()
-    decay = ConstantDecay(0.)
-    climate = LinearClimate(hogg, decay)
-
-    preferences = LogSeparable()
-    model = IAM(climate, economy, preferences)
-end
-
-simpath = "data/simulation-dense";
+## Construct policy simplex
+simpath = "data/simulation";
+paths = loadsimulationpaths(simpath; exclude = ["terminal", "linear"])
 K = 10;
-paths = loadsimulationpaths(simpath; exclude = ["terminal"])
+_, G = loadproblem(paths[2.0])
+
 filteredpath = basispolicypaths(paths, K, G) # Indices of the basis
 policybasis = SimplexPolicies(filteredpath);
-weights = OrderedDict(Tᶜ => 1 / K for Tᶜ in keys(filteredpath))
-policies = ConvexPolicies(policybasis, weights);
 
-regretfunction = ValueFunction(τ, climate, G, calibration)
-steadystate!(weights, regretfunction, Δt, model, G, calibration, policybasis)
-backwardsimulation!(weights, regretfunction, Δt, model, G, calibration, policybasis)
+## Construct Chebyshev reresentation of full information
+values = OrderedDict(k => loadtotal(p) for (k, p) in paths)
 
+order = (20, 20, 10, 5)
+H = chebyshevrepresentation(values, order);
+
+## Compute regret
+densities = rand(K)
+weights = attachweights(densities ./ sum(densities), policybasis)
+valuefunction = ValueFunction(τ, climate, G, calibration)
+steadystate!(weights, valuefunction, Δt, model, G, calibration, policybasis)
+backwardsimulation!(weights, valuefunction, Δt, model, G, calibration, policybasis)
+
+R = Matrix{Float64}(undef, size(G))
+gridevaluate!(R, H, G, 0., 2.)

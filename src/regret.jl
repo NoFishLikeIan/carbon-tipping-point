@@ -12,9 +12,13 @@ function Base.show(io::IO, sp::SimplexPolicies{S, I, PS}) where {S, I, PS}
     
     Tmin = minimum(thresholds)
     Tmax = maximum(thresholds)
-    print(io, "SimplexPolicies{K = $npolicies, Tᶜ ∈ [$(round(Tmin, digits=2)), $(round(Tmax, digits=2))] °C}")
+    print(io, "SimplexPolicies{K = $npolicies | Tᶜ ∈ {$(join(thresholds, ", "))} °C}")
 end
 Base.show(io::IO, ::MIME"text/plain", sp::SimplexPolicies) = show(io, sp)
+
+function attachweights(w::W, policybasis::SimplexPolicies) where W <: AbstractVector
+    OrderedDict(policybasis.policies.keys .=> w)
+end
 
 struct ConvexPolicies{S, P <: SimplexPolicies{S}, W <: OrderedDict{S, S}}
     policybasis::P
