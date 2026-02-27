@@ -45,7 +45,7 @@ begin # Construct the model
 
     threshold = 2.
     climate = if 0 < threshold < Inf
-        feedback = Model.updateTᶜ(threshold, feedback)
+        feedback = Model.updatethreshold(threshold, feedback)
         TippingClimate(hogg, decay, feedback)
     else
         LinearClimate(hogg, decay)

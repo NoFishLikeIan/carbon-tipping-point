@@ -23,7 +23,7 @@ function λ′(T, feedback::Feedback)
 end
 
 "Creates new Feedback object with updated critical temperature Tᶜ."
-function updateTᶜ(Tᶜ, feedback::Feedback)
+function updatethreshold(Tᶜ, feedback::Feedback)
     Feedback(Tᶜ = Tᶜ, ΔS = feedback.ΔS, L = feedback.L)
 end
 

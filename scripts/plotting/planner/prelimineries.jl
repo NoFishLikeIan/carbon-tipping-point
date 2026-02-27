@@ -64,8 +64,8 @@ begin # Construct models and grids
     linearmodel = IAM(LinearClimate(hogg, decay), economy, preferences)
     
     tippingmodels = [
-        IAM(TippingClimate(hogg, decay, Model.updateTᶜ(2., feedback)), economy, preferences),
-        IAM(TippingClimate(hogg, decay, Model.updateTᶜ(4., feedback)), economy, preferences)
+        IAM(TippingClimate(hogg, decay, Model.updatethreshold(2., feedback)), economy, preferences),
+        IAM(TippingClimate(hogg, decay, Model.updatethreshold(4., feedback)), economy, preferences)
     ]
 
     models = IAM[tippingmodels..., linearmodel]
