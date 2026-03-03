@@ -74,10 +74,12 @@ function chebyshevrepresentation(values::OrderedDict{S, T}, order) where {S, T <
     return approximatingfunction
 end
 
-function gridevaluate!(R::RT, H::FastChebInterp.ChebPoly, G::RegularGrid{N₁, N₂, S}, t, Tᶜ) where {N₁, N₂, S, RT <: AbstractMatrix{S}}
+ChebValue{S} = FastChebInterp.ChebPoly{4, S, S}
+
+function gridevaluate!(R::RT, H::ChebValue, G::RegularGrid{N₁, N₂, S}, t, Tᶜ) where {N₁, N₂, S, RT <: AbstractMatrix{S}}
     Tspace, mspace = G.ranges
 
-    @inbounds for j in axes(G, 2), i in axes(G, 1)
+    @inbounds for i in axes(G, 1), j in axes(G, 2)
         T = Tspace[i]
         m = mspace[j]
 
@@ -86,3 +88,4 @@ function gridevaluate!(R::RT, H::FastChebInterp.ChebPoly, G::RegularGrid{N₁, N
         R[i, j] = H(x)
     end
 end
+

@@ -17,7 +17,7 @@ function constructstaticDᵐ!(stencil, αitp, t, G::RegularGrid{N₁, N₂, S}, 
     Tspace, mspace = G.ranges
     rows, columns, data = stencil
     counter = 1
-    @inbounds for j in axes(G, 2), i in axes(G, 1)
+    @inbounds for i in axes(G, 1), j in axes(G, 2)
         k = LinearIndex((i, j), G)
         x = Point(Tspace[i], mspace[j])
         
@@ -52,7 +52,7 @@ end
 
 function constructstaticsource!(source, αitp, t, H, Δt⁻¹, model, G::RegularGrid{N₁, N₂, S}, calibration) where {N₁, N₂, S}
     Tspace, mspace = G.ranges
-    @inbounds for j in axes(G, 2), i in axes(G, 1)
+    @inbounds for i in axes(G, 1), j in axes(G, 2)
         x = Point(Tspace[i], mspace[j])
         α = αitp(x.T, x.m, t)
         Hᵢ = H[i, j]

@@ -106,9 +106,7 @@ function steadystate!(valuefunction::ValueFunction{S, N₁, N₂}, Δt::S, model
         backwardstep!(problem, R, stencilm, valuefunction, Δt⁻¹, model, G, calibration; withnegative)
         itererror = abserror(problem.u, valuefunction.H)
 
-        @inbounds for (k, uₖ) in enumerate(problem.u)
-            valuefunction.H[k] = uₖ
-        end
+        copyto!(valuefunction.H[k], uₖ)
 
         if itererror < tolerance
             return valuefunction, (iter, itererror)
@@ -158,9 +156,7 @@ function backwardsimulation!(valuefunction::ValueFunction{S, N₁, N₂}, Δt::S
         valuefunction.t.t -= Δt
         backwardstep!(problem, R, stencilm, valuefunction, Δt⁻¹, model, G, calibration; withnegative)
 
-        @inbounds for (k, uₖ) in enumerate(problem.u)
-            valuefunction.H[k] = uₖ
-        end
+        copyto!(valuefunction.H[k], uₖ)
 
         if (verbose > 1) || (verbose > 0 && valuefunction.t.t < tverbose)
             if verbose > 0 

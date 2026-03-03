@@ -67,7 +67,7 @@ function constructDᵀ!(stencil::StencilData{S}, model::M, G::RegularGrid{N₁, 
 
     rows, columns, data = stencil
     counter = 1
-    @inbounds for j in axes(G, 2), i in axes(G, 1)
+    @inbounds for i in axes(G, 1), j in axes(G, 2)
         k = LinearIndex((i, j), G)
         x = Point(Tspace[i], mspace[j])
         
@@ -116,7 +116,7 @@ function constructDᵐ!(stencil::StencilData{S}, valuefunction::ValueFunction{S,
     Tspace, mspace = G.ranges
     rows, columns, data = stencil
     counter = 1
-    @inbounds for j in axes(G, 2), i in axes(G, 1)
+    @inbounds for i in axes(G, 1), j in axes(G, 2)
         k = LinearIndex((i, j), G)
         x = Point(Tspace[i], mspace[j])
         αmax = upperbound(t.t, x, model, calibration, withnegative)
@@ -263,7 +263,7 @@ end
 function constructsource!(source, valuefunction::ValueFunction, Δt⁻¹, model::M, G::GR, calibration) where {N₁, N₂, S, M <: UnitIAM, GR <: AbstractGrid{N₁, N₂, S}}
     @unpack t, H, α = valuefunction
     Tspace, mspace = G.ranges
-    @inbounds for j in axes(G, 2), i in axes(G, 1)
+    @inbounds for i in axes(G, 1), j in axes(G, 2)
         x = Point(Tspace[i], mspace[j])
         αᵢ = α[i, j]
         Hᵢ = H[i, j]
