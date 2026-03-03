@@ -78,14 +78,30 @@ policybasis = SimplexPolicies(filteredpath);
 values = OrderedDict(k => loadtotal(p) for (k, p) in paths)
 
 order = (20, 20, 10, 5)
-H = chebyshevrepresentation(values, order);
+H̃ = chebyshevrepresentation(values, order);
 
 ## Compute regret
-densities = rand(K)
-weights = attachweights(densities ./ sum(densities), policybasis)
+G = coarse(G, (4, 4))
 valuefunction = ValueFunction(τ, climate, G, calibration)
-steadystate!(weights, valuefunction, Δt, model, G, calibration, policybasis)
-backwardsimulation!(weights, valuefunction, Δt, model, G, calibration, policybasis)
 
-R = Matrix{Float64}(undef, size(G))
-gridevaluate!(R, H, G, 0., 2.)
+weights = OrderedDict(Tᶜ => 1 / size(policybasis) for Tᶜ in keys(policybasis.policies))
+
+steadystate!(valuefunction, weights, Δt, model, G, calibration, policybasis; verbose = 1)
+backwardsimulation!(valuefunction, weights, Δt, model, G, calibration, policybasis; verbose = 1)
+
+function regret(weights, threshold, H̃, valuefunction, τ, Δt, (linearmodel, feedback), G, calibration, policybasis)
+
+    valuefunction.t.t = τ
+    
+    climate = TippingClimate(linearmodel.climate.hogg, linearmodel.climate.decay, updatethreshold(threshold, feedback))
+    model = IAM(climate, linearmodel.economy, linearmodel.preferences)
+
+    steadystate!(valuefunction, weights, Δt, model, G, calibration, policybasis)
+    backwardsimulation!(valuefunction, weights, Δt, model, G, calibration, policybasis)
+
+    x₀ = Point(climate.hogg.T₀, log(climate.hogg.M₀ / climate.hogg.Mᵖ))
+    Gⱼ = interpolateovergrid(valuefunction.H, G, x₀)
+    Hⱼ = H̃(SVector(x₀.T, x₀.m, zero(eltype(G)), threshold))
+
+    return Gⱼ - Hⱼ
+end

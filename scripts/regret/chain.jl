@@ -6,7 +6,7 @@ function constructDᵐ!(stencil::StencilData{S}, weights, valuefunction::ValueFu
 	Tspace, mspace = G.ranges
 	rows, columns, data = stencil
 	counter = 1
-	@inbounds for j in axes(G, 2), i in axes(G, 1)
+	@inbounds for i in axes(G, 1), j in axes(G, 2)
 		k = LinearIndex((i, j), G)
 		x = Point(Tspace[i], mspace[j])
 
@@ -54,7 +54,7 @@ end
 function constructsource!(source, weights, valuefunction::ValueFunction, Δt⁻¹, model::M, G::GR, calibration, policybasis::SimplexPolicies) where {N₁, N₂, S, M <: UnitIAM, GR <: AbstractGrid{N₁, N₂, S}}
     @unpack t, H, α = valuefunction
     Tspace, mspace = G.ranges
-    @inbounds for j in axes(G, 2), i in axes(G, 1)
+    @inbounds for i in axes(G, 1), j in axes(G, 2)
         x = Point(Tspace[i], mspace[j])
         αₖ = weightedpolicy(x, t.t, weights, policybasis)
         Hₖ = H[i, j]
