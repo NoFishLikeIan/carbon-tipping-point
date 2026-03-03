@@ -23,6 +23,11 @@ end
 function shrink(G::RegularGrid{N₁, N₂}, factor) where {N₁, N₂}
     RegularGrid((N₁, N₂), shrink.(G.domains, Ref(factor)))
 end
+
+function coarse(G::RegularGrid{N₁, N₂}, factors::NTuple{2, Int64}) where {N₁, N₂}
+    a, b = factors
+    return RegularGrid((N₁ ÷ a, N₂ ÷ b), G.domains)
+end
 function halfgrid(G::RegularGrid{N₁, N₂}) where {N₁, N₂}
-    RegularGrid((N₁ ÷ 2, N₂ ÷ 2), G.domains)
+    coarse(G, (2, 2))
 end

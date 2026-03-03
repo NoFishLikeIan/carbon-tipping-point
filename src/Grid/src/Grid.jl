@@ -26,7 +26,7 @@ export Point, Policy
 export Domain, AbstractGrid, RegularGrid, ElasticGrid
 export ParameterGrid, RegretGrid
 export LinearIndex
-export interpolateovergrid, shrink, halfgrid
+export interpolateovergrid, shrink, halfgrid, coarse
 export steps, inversestep
 
 end

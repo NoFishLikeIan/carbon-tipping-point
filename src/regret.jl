@@ -6,9 +6,13 @@ function SimplexPolicies(paths; tspan = (0, Inf))
 
     return SimplexPolicies(policies)
 end
+function Base.size(sp::SimplexPolicies)
+    length(sp.policies)
+end
+
 function Base.show(io::IO, sp::SimplexPolicies{S, I, PS}) where {S, I, PS}
-    npolicies = length(sp.policies)
-    thresholds = collect(keys(sp.policies))
+    npolicies = size(sp)
+    thresholds = keys(sp.policies)
     
     Tmin = minimum(thresholds)
     Tmax = maximum(thresholds)
@@ -16,19 +20,9 @@ function Base.show(io::IO, sp::SimplexPolicies{S, I, PS}) where {S, I, PS}
 end
 Base.show(io::IO, ::MIME"text/plain", sp::SimplexPolicies) = show(io, sp)
 
-function attachweights(w::W, policybasis::SimplexPolicies) where W <: AbstractVector
-    OrderedDict(policybasis.policies.keys .=> w)
-end
+Weight{S} = OrderedDict{S, S}
 
-struct ConvexPolicies{S, P <: SimplexPolicies{S}, W <: OrderedDict{S, S}}
-    policybasis::P
-    weights::W
-end
-
-function weightedpolicy(x, t, policybasis::ConvexPolicies)
-    weightedpolicy(x, t, policybasis.weights, policybasis.policies)
-end
-function weightedpolicy(x::Point{S}, t::S, weights, policybasis::P) where {S, P <: SimplexPolicies{S}}
+function weightedpolicy(x::Point{S}, t::S, weights::Weight{S}, policybasis::P) where {S, P <: SimplexPolicies{S}}
     αʷ = zero(S)
 
     for (Tᶜ, αfn) in policybasis.policies
