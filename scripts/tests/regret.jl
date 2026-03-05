@@ -1,4 +1,4 @@
-using Test, BenchmarkTools, Revise, UnPack
+using BenchmarkTools, Revise, UnPack
 using Plots, LaTeXStrings
 default(c=:viridis, label=false, dpi=180)
 
@@ -8,6 +8,10 @@ using SciMLBase
 using Statistics
 using StaticArrays, SparseArrays
 using Interpolations, FastChebInterp, DataStructures
+using FastClosures
+
+using Optimization, OptimizationOptimJL, OptimizationBase, Ipopt
+using DifferentiationInterface, ADTypes, ForwardDiff
 
 using LinearSolve, LinearAlgebra
 
@@ -63,7 +67,7 @@ decay = ConstantDecay(0.)
 climate = LinearClimate(hogg, decay)
 
 preferences = LogSeparable()
-model = IAM(climate, economy, preferences)
+linearmodel = IAM(climate, economy, preferences)
 
 ## Construct policy simplex
 simpath = "data/simulation";
@@ -71,8 +75,8 @@ paths = loadsimulationpaths(simpath; exclude = ["terminal", "linear"])
 K = 10;
 _, G = loadproblem(paths[2.0])
 
-filteredpath = basispolicypaths(paths, K, G) # Indices of the basis
-policybasis = SimplexPolicies(filteredpath);
+filteredpaths = basispolicypaths(paths, K, G; tspan = (0, 10)) # Indices of the basis
+policybasis = SimplexPolicies(filteredpaths);
 
 ## Construct Chebyshev reresentation of full information
 values = OrderedDict(k => loadtotal(p) for (k, p) in paths)
@@ -84,24 +88,44 @@ H̃ = chebyshevrepresentation(values, order);
 G = coarse(G, (4, 4))
 valuefunction = ValueFunction(τ, climate, G, calibration)
 
-weights = OrderedDict(Tᶜ => 1 / size(policybasis) for Tᶜ in keys(policybasis.policies))
+weights = MVector{K}(rand(K)); 
+weights ./= sum(weights)
 
-steadystate!(valuefunction, weights, Δt, model, G, calibration, policybasis; verbose = 1)
-backwardsimulation!(valuefunction, weights, Δt, model, G, calibration, policybasis; verbose = 1)
-
-function regret(weights, threshold, H̃, valuefunction, τ, Δt, (linearmodel, feedback), G, calibration, policybasis)
-
+function regret(weights, threshold, H̃, valuefunction, τ, Δt, (linearmodel, feedback), G, calibration, policybasis; steadystatetolerance = Error{eltype(G)}(1e-3, 1e-3), verbose = 0, problem = nothing)
     valuefunction.t.t = τ
     
     climate = TippingClimate(linearmodel.climate.hogg, linearmodel.climate.decay, updatethreshold(threshold, feedback))
     model = IAM(climate, linearmodel.economy, linearmodel.preferences)
 
-    steadystate!(valuefunction, weights, Δt, model, G, calibration, policybasis)
-    backwardsimulation!(valuefunction, weights, Δt, model, G, calibration, policybasis)
+    steadystate!(valuefunction, weights, Δt, model, G, calibration, policybasis; tolerance = steadystatetolerance, verbose = verbose)
+    backwardsimulation!(valuefunction, weights, Δt, model, G, calibration, policybasis; verbose = verbose)
 
     x₀ = Point(climate.hogg.T₀, log(climate.hogg.M₀ / climate.hogg.Mᵖ))
     Gⱼ = interpolateovergrid(valuefunction.H, G, x₀)
-    Hⱼ = H̃(SVector(x₀.T, x₀.m, zero(eltype(G)), threshold))
+    Hⱼ = H̃(SVector(x₀.T, x₀.m, zero(τ), threshold))
 
     return Gⱼ - Hⱼ
 end
+
+function maxregret(weights, optparameters)
+    H̃, valuefunction, τ, Δt, (linearmodel, feedback), G, calibration, policybasis = optparameters
+
+    # Initialize problem once (factor the operator)
+    problem = initsteadystateproblem(valuefunction, weights, Δt, linearmodel, G, calibration, policybasis)
+    
+    maxregretobj = @closure threshold -> regret(weights, threshold, H̃, valuefunction, τ, Δt, (linearmodel, feedback), G, calibration, policybasis; problem = problem)
+    
+    r, _ = gss(maxregretobj, H̃.lb[4], H̃.ub[4]; tol=1e-2)
+    
+    return r
+end
+
+
+## Solve min max regret
+minmaxregretobj = OptimizationFunction(maxregret);
+
+optparameters = H̃, valuefunction, τ, Δt, (linearmodel, feedback), G, calibration, policybasis;
+
+minmaxregretprob = OptimizationProblem(minmaxregretobj, weights, optparameters);
+
+sol = solve(minmaxregretprob, COBYLA(; rhoend=1e-4));

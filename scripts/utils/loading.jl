@@ -1,5 +1,5 @@
 "Load a single solved policy file and build its abatement interpolation."
-function loadpolicy(filepath::String; tspan = (0, Inf))
+function loadpolicy(filepath::String; tspan = (0., Inf))
 	values, _, G = loadtotal(filepath; tspan)
 	_, αitp = buildinterpolations(values, G)
 
@@ -7,7 +7,7 @@ function loadpolicy(filepath::String; tspan = (0, Inf))
 end
 
 "Load all solved policy files found under `simpath` and return their interpolations and metadata."
-function loadallpolicies(simpath::String; tspan = (0, Inf), exclude = ["terminal"])
+function loadallpolicies(simpath::String; tspan = (0., Inf), exclude = ["terminal"])
 	files = listfiles(simpath; exclude)
 
 	policies = OrderedDict{String, Interpolations.Extrapolation}()
@@ -16,6 +16,20 @@ function loadallpolicies(simpath::String; tspan = (0, Inf), exclude = ["terminal
 	end
 
 	return policies
+end
+
+"Load policies in `paths` into an array"
+function loadallpoliciesarrays(paths::PS; tspan = (0., Inf)) where {S, PS <: OrderedDict{S, String}}
+    firstpath = paths.vals[1]
+    _, G = loadproblem(firstpath)
+
+    return loadallpoliciesarrays(paths, G; tspan)
+end
+function loadallpoliciesarrays(paths::PS, G::GR; tspan = (0., Inf)) where {S, N₁, N₂, PS <: OrderedDict{S, String}, GR <: RegularGrid{N₁, N₂, S}}
+    thresholds = paths.keys
+    
+    
+
 end
 
 "Parse critical threshold `Tᶜ` from a policy filename, such that, `T2,00_burke_RRA10,00.jld2 → 2.0`"
@@ -49,11 +63,11 @@ function loadsimulationpaths(simpath::String; exclude = ["terminal"])
 end
 
 "Construct policy matrix `A` from `paths`, applies a permutation QR-factorisation and returns the permutation indices `k`"
-function basispolicypaths(paths::OrderedDict{Float64, String}, K::Int; kwargs...)
-    firstpath = paths.vals[1]
+function basispolicypaths(paths::OrderedDict{Float64, String}, K::Int; tspan = (0, Inf), kwargs...)
+    firstpath = values(paths)[1]
     _, G = loadproblem(firstpath; tspan)
 
-    return basispolicypaths(paths, K, G; kwargs...)
+    return basispolicypaths(paths, K, G; tspan, kwargs...)
 end
 function basispolicypaths(paths::OrderedDict{Float64, String}, K::Int, G::RegularGrid; tspan = (0, Inf))
     thresholds = paths.keys

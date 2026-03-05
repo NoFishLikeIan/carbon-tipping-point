@@ -1,32 +1,25 @@
-struct SimplexPolicies{S, I <: Interpolations.Extrapolation{S}, PS <: OrderedDict{S, I}}
+struct SimplexPolicies{K, S, I <: Interpolations.Extrapolation{S}, PS <: NTuple{K, I}, TS <: StaticVector{K, S}}
+    thresholds::TS
     policies::PS
 end
-function SimplexPolicies(paths; tspan = (0, Inf))
-    policies = OrderedDict(Tᶜ => loadpolicy(path; tspan) for (Tᶜ, path) in paths)
+function SimplexPolicies(pathdict::OrderedDict; tspan = (0, Inf))
+    K = length(pathdict)
+    thresholds = SVector{K}(collect(keys(pathdict)))
 
-    return SimplexPolicies(policies)
-end
-function Base.size(sp::SimplexPolicies)
-    length(sp.policies)
+    paths = collect(pathdict.vals)
+    policies = ntuple(i -> loadpolicy(paths[i]; tspan), K);
+
+    return SimplexPolicies(thresholds, policies)
 end
 
-function Base.show(io::IO, sp::SimplexPolicies{S, I, PS}) where {S, I, PS}
-    npolicies = size(sp)
-    thresholds = keys(sp.policies)
-    
-    Tmin = minimum(thresholds)
-    Tmax = maximum(thresholds)
-    print(io, "SimplexPolicies{K = $npolicies | Tᶜ ∈ {$(join(thresholds, ", "))} °C}")
-end
+Base.show(io::IO, sp::SimplexPolicies{K, S}) where {K, S} = print(io, "SimplexPolicies{K = $K | Tᶜ ∈ {$(join(sp.thresholds, ", "))} °C}")
 Base.show(io::IO, ::MIME"text/plain", sp::SimplexPolicies) = show(io, sp)
 
-Weight{S} = OrderedDict{S, S}
-
-function weightedpolicy(x::Point{S}, t::S, weights::Weight{S}, policybasis::P) where {S, P <: SimplexPolicies{S}}
+function weightedpolicy(x::Point{S}, t::S, weights::W, policybasis::P) where {K, S, W <: StaticVector{K}, P <: SimplexPolicies{K, S}}
     αʷ = zero(S)
 
-    for (Tᶜ, αfn) in policybasis.policies
-        αʷ += weights[Tᶜ] * αfn(x.T, x.m, t)
+    @inbounds for i in 1:K
+        αʷ += weights[i] * policybasis.policies[i](x.T, x.m, t)
     end
 
     return αʷ

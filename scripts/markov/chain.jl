@@ -38,11 +38,14 @@ function stencilsizes(::GR) where {N₁, N₂, GR <: AbstractGrid{N₁, N₂}}
 end
 "Initialises finite-difference stencil."
 function makestencil(G::GR) where {N₁, N₂, S, GR <: AbstractGrid{N₁, N₂, S}}
+    makestencil(S, G)
+end
+function makestencil(T, G::GR) where {N₁, N₂, GR <: AbstractGrid{N₁, N₂}}
     n = stencilsizes(G)
     stencils = ntuple(j -> begin
             rows = Vector{Int}(undef, n[j])
             columns = Vector{Int}(undef, n[j])
-            data = Vector{S}(undef, n[j])
+            data = Vector{T}(undef, n[j])
 
             (rows, columns, data)
         end, 2)
@@ -61,7 +64,7 @@ end
 
 StencilData{S} = Tuple{Vector{Int}, Vector{Int}, Vector{S}}
 "Constructs upwind-downwind scheme discretiser `Dᵀ` for temperature `T`."
-function constructDᵀ!(stencil::StencilData{S}, model::M, G::RegularGrid{N₁, N₂, S}) where {N₁, N₂, S, M <: UnitIAM{S}}
+function constructDᵀ!(stencil::StencilData, model::M, G::RegularGrid{N₁, N₂, S}) where {N₁, N₂, S, M <: UnitIAM{S}}
     ΔT = step(G, 1)
     Tspace, mspace = G.ranges
 
@@ -108,7 +111,7 @@ function constructDᵀ!(stencil::StencilData{S}, model::M, G::RegularGrid{N₁, 
 end
 
 "Constructs upwind-downwind scheme discretiser `Dᵐ` for CO₂e log-concentration `m` and updates policy `α`."
-function constructDᵐ!(stencil::StencilData{S}, valuefunction::ValueFunction{S, N₁, N₂}, model::M, G::RegularGrid{N₁, N₂, S}, calibration::Calibration, withnegative::Bool) where {N₁, N₂, S, M <: UnitIAM{S}}
+function constructDᵐ!(stencil::StencilData, valuefunction::ValueFunction{S, N₁, N₂}, model::M, G::RegularGrid{N₁, N₂, S}, calibration::Calibration, withnegative::Bool) where {N₁, N₂, S, M <: UnitIAM{S}}
     @unpack t, H, α = valuefunction
     γₜ = γ(t.t, calibration)
     

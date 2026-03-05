@@ -1,5 +1,4 @@
-function constructDᵐ!(stencil::StencilData{S}, weights, valuefunction::ValueFunction{S, N₁, N₂}, G::RegularGrid{N₁, N₂, S}, calibration::Calibration, policybasis::SimplexPolicies) where {N₁, N₂, S}
-	@unpack t, H, α = valuefunction
+function constructDᵐ!(stencil::StencilData, weights, t::Time, G::RegularGrid{N₁, N₂, S}, calibration::Calibration, policybasis::SimplexPolicies) where {N₁, N₂, S}
 	γₜ = γ(t, calibration)
     
 	Δm = step(G, 2)
@@ -47,8 +46,8 @@ function constructDᵐ!(stencil::StencilData{S}, weights, valuefunction::ValueFu
 end
 
 "Constructs source vector `Δt⁻¹ Hⁿ + b`."
-function constructsource(weights, valuefunction::ValueFunction, Δt⁻¹, model::M, G::GR, calibration, policybasis::SimplexPolicies) where {N₁, N₂, S, M <: UnitIAM, GR <: AbstractGrid{N₁, N₂, S}}
-    constructsource!(Vector{S}(undef, N₁ * N₂), weights, valuefunction, Δt⁻¹, model, G, calibration, policybasis)
+function constructsource(weights::W, valuefunction::ValueFunction, Δt⁻¹, model::M, G::GR, calibration, policybasis::SimplexPolicies) where {N₁, N₂, S, M <: UnitIAM, GR <: AbstractGrid{N₁, N₂, S}, TW, W <: AbstractVector{TW}}
+    constructsource!(Vector{TW}(undef, N₁ * N₂), weights, valuefunction, Δt⁻¹, model, G, calibration, policybasis)
 end
 "Updates source vector `Δt⁻¹ Hⁿ + b`."
 function constructsource!(source, weights, valuefunction::ValueFunction, Δt⁻¹, model::M, G::GR, calibration, policybasis::SimplexPolicies) where {N₁, N₂, S, M <: UnitIAM, GR <: AbstractGrid{N₁, N₂, S}}
