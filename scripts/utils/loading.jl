@@ -18,20 +18,6 @@ function loadallpolicies(simpath::String; tspan = (0., Inf), exclude = ["termina
 	return policies
 end
 
-"Load policies in `paths` into an array"
-function loadallpoliciesarrays(paths::PS; tspan = (0., Inf)) where {S, PS <: OrderedDict{S, String}}
-    firstpath = paths.vals[1]
-    _, G = loadproblem(firstpath)
-
-    return loadallpoliciesarrays(paths, G; tspan)
-end
-function loadallpoliciesarrays(paths::PS, G::GR; tspan = (0., Inf)) where {S, N₁, N₂, PS <: OrderedDict{S, String}, GR <: RegularGrid{N₁, N₂, S}}
-    thresholds = paths.keys
-    
-    
-
-end
-
 "Parse critical threshold `Tᶜ` from a policy filename, such that, `T2,00_burke_RRA10,00.jld2 → 2.0`"
 function parsethreshold(filepath::String)
     filename, _ = splitext(basename(filepath))
