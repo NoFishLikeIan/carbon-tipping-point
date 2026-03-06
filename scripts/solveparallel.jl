@@ -2,14 +2,14 @@ using Distributed
 using Dates: now
 
 ## Inputs
-const workers = 2
+const workers = 8
 const datapath = "./data"
 const simulationpath = "simulation-test"
 
 addprocs(workers - 1, exeflags = "--project=$(Base.active_project())")
 
 ## Definition of parameters
-const thresholds = [2., -1.]# [2:0.05:4...,-1.0]
+const thresholds = [2:0.05:4...,-1.0]
 const damages = ["burke"]
 const withnegatives = [true]
 
@@ -17,8 +17,8 @@ const overwrite = true
 const cachestep = 0.5
 const verbose = 0
 const stopat = 0.0
-const nt = 20 # 200
-const nm = 20 # 250
+const nt = 200
+const nm = 250
 const tol = 1e-3
 const dt = 0.005
 const tau = 500.0
