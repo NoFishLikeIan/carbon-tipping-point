@@ -17,7 +17,7 @@ using SciMLBase, DifferentialEquations, DiffEqBase
 using Interpolations: Extrapolation
 using Dierckx, ImageFiltering
 
-includet("../utils/simulating.jl")
+includet("../../utils/simulating.jl")
 includet("../../utils/saving.jl")
 includet("../../utils/simulating.jl")
 

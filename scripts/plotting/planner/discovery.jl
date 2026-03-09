@@ -31,7 +31,7 @@ includet("../../../src/extend/model.jl")
 includet("../../../src/extend/grid.jl")
 includet("../../../src/extend/valuefunction.jl")
 includet("../../../scripts/markov/certaintyequivalence.jl")
-includet("../utils/simulating.jl")
+includet("../../utils/simulating.jl")
 includet("../../utils/saving.jl")
 includet("../../utils/simulating.jl")
 

@@ -19,21 +19,21 @@ using LinearSolve, LinearAlgebra
 using JLD2, UnPack
 using Dates, Printf
 
-includet("../../src/valuefunction.jl")
-includet("../../src/extend/model.jl")
-includet("../../src/extend/grid.jl")
-includet("../../src/extend/valuefunction.jl")
-includet("../../src/regret.jl")
-includet("../utils/saving.jl")
-includet("../utils/simulating.jl")
-includet("../utils/loading.jl")
-includet("../plotting/utils.jl")
-includet("../utils/simulating.jl")
-includet("../utils/approximate.jl")
-includet("../markov/chain.jl")
-includet("../markov/finitedifference.jl")
-includet("../regret/chain.jl")
-includet("../regret/finitedifference.jl")
+includet("../src/valuefunction.jl")
+includet("../src/extend/model.jl")
+includet("../src/extend/grid.jl")
+includet("../src/extend/valuefunction.jl")
+includet("../src/regret.jl")
+includet("utils/saving.jl")
+includet("utils/simulating.jl")
+includet("utils/loading.jl")
+includet("plotting/utils.jl")
+includet("utils/simulating.jl")
+includet("utils/approximate.jl")
+includet("markov/chain.jl")
+includet("markov/finitedifference.jl")
+includet("regret/chain.jl")
+includet("regret/finitedifference.jl")
 
 ## Construct the model
 DATAPATH = "data"
