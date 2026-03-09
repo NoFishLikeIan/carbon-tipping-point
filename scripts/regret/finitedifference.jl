@@ -1,7 +1,7 @@
 function backwardstep!(problem, weights, R, stencilm, valuefunction::ValueFunction, Δt⁻¹, model::M, G::GR, calibration::Calibration, policybasis::SimplexPolicies) where {N₁, N₂, S, M <: UnitIAM{S}, GR <: AbstractGrid{N₁,N₂,S}}
 	# Construct the sparse LHS matrix
 	n = length(G)
-	constructDᵐ!(stencilm, weights, valuefunction, G, calibration, policybasis)
+	constructDᵐ!(stencilm, weights, valuefunction.t, G, calibration, policybasis)
 	problem.A = R - sparse(stencilm[1], stencilm[2], stencilm[3], n, n)
     
 	# Consutruct the RHS
@@ -16,7 +16,6 @@ function backwardstep!(problem, weights, R, stencilm, valuefunction::ValueFuncti
 end
 
 function steadystate!(valuefunction::ValueFunction{S, N₁, N₂}, weights::W, Δt::S, model::M, G::RegularGrid{N₁, N₂, S}, calibration, policybasis::SimplexPolicies; timeiterations = 10_000, printstep = 100, tolerance::Error{S} = Error{S}(1e-6, 1e-4), verbose = 0, alg = KLUFactorization()) where {S, K, TW, N₁, N₂, M <: UnitIAM{S}, W <: StaticArray{K, TW}}
-	
 	Δt⁻¹ = 1 / Δt
 	n = length(G)
 
@@ -65,7 +64,9 @@ function steadystate!(valuefunction::ValueFunction{S, N₁, N₂}, weights::W, �
 		end
 	end
 
-	@warn @sprintf "\nFailed convergence in %d iterations.\n" timeiterations
+	if verbose > 1
+		@warn @sprintf "\nFailed convergence in %d iterations.\n" timeiterations
+	end
 
 	return valuefunction, (timeiterations, itererror)
 end
@@ -74,16 +75,14 @@ function backwardsimulation!(valuefunction::ValueFunction{S, N₁, N₂}, weight
 	tcache = copy(startcache)
 	valuefunctiontraj = OrderedDict(valuefunction.t.t => copy(valuefunction))
 
-	if verbose > 0
-		tverbose = copy(valuefunction.t.t)
-	end
+	if verbose > 0 tverbose = copy(valuefunction.t.t) end
 
 	# Initialise problem
 	Δt⁻¹ = 1 / Δt
 	n = length(G)
 	stencilT, stencilm = makestencil(TW, G)
 	constructDᵀ!(stencilT, model, G)
-	constructDᵐ!(stencilm, weights, valuefunction, G, calibration, policybasis)
+	constructDᵐ!(stencilm, weights, valuefunction.t, G, calibration, policybasis)
 	b₀ = constructsource(weights, valuefunction, Δt⁻¹, model, G, calibration, policybasis)
 	Sᵨ = (preferences.ρ + Δt⁻¹) * I
 	R = Sᵨ - sparse(stencilT[1], stencilT[2], stencilT[3], n, n)

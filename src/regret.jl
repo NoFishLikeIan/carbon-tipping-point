@@ -40,6 +40,10 @@ function Base.show(io::IO, ::MIME"text/plain", sp::SimplexPolicies)
     show(io, sp)
 end
 
+function Base.size(::SimplexPolicies{K}) where K
+    K
+end
+
 function weightedpolicy(x::Point{S}, t::S, weights::W, policybasis::P) where {K, S, W <: StaticVector{K}, P <: SimplexPolicies{K, S}}
     @unpack policiesarray, G, ts = policybasis
     Tspace, mspace = G.ranges
@@ -55,10 +59,10 @@ function weightedpolicy(x::Point{S}, t::S, weights::W, policybasis::P) where {K,
     dm⁻¹ = inv(m₁ - m₀)
     dt⁻¹ = inv(t₁ - t₀)
 
-    # Normalize in unit space (allow values outside [0, 1] for linear extrapolation)
-    Tₙ = (x.T - T₀) * dT⁻¹
-    mₙ = (x.m - m₀) * dm⁻¹
-    tₙ = (t - t₀) * dt⁻¹
+    # Normalize in unit space with constant boundary behavior
+    Tₙ = clamp((x.T - T₀) * dT⁻¹, zero(S), one(S))
+    mₙ = clamp((x.m - m₀) * dm⁻¹, zero(S), one(S))
+    tₙ = clamp((t - t₀) * dt⁻¹, zero(S), one(S))
 
     # Convert unit coordinates to cell coordinates
     Tₛ = Tₙ * (N₁ - 1)

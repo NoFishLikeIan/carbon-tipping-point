@@ -12,6 +12,7 @@ using FastClosures
 
 using Optimization, OptimizationOptimJL, OptimizationBase, Ipopt
 using DifferentiationInterface, ADTypes, ForwardDiff
+using NLopt
 
 using LinearSolve, LinearAlgebra
 
@@ -58,9 +59,9 @@ close(climatefile)
 
 ## Initialise model
 # Time
-Δt⁻¹ = 12.
+Δt⁻¹ = 8.
 Δt = 1 / Δt⁻¹
-τ = 500.
+τ = 100.
 
 preferences = LogSeparable()
 decay = ConstantDecay(0.)
@@ -72,33 +73,33 @@ linearmodel = IAM(climate, economy, preferences)
 ## Construct policy simplex
 simpath = "data/simulation";
 paths = loadsimulationpaths(simpath; exclude = ["terminal", "linear"])
-K = 10;
+K = 5;
 _, G = loadproblem(paths[2.0])
 
-filteredpaths = basispolicypaths(paths, K, G; tspan = (0, 10)) # Indices of the basis
+filteredpaths = basispolicypaths(paths, K, G) # Indices of the basis
 policybasis = SimplexPolicies(filteredpaths);
 
 ## Construct Chebyshev reresentation of full information
+G = coarse(G, (2, 2))
 values = OrderedDict(k => loadtotal(p) for (k, p) in paths)
 
 order = (20, 20, 10, 5)
 H̃ = chebyshevrepresentation(values, order);
 
 ## Compute regret
-G = coarse(G, (4, 4))
 valuefunction = ValueFunction(τ, climate, G, calibration)
 
-weights = MVector{K}(rand(K)); 
+weights = MVector{K}(rand(K));
 weights ./= sum(weights)
 
-function regret(weights, threshold, H̃, valuefunction, τ, Δt, (linearmodel, feedback), G, calibration, policybasis; steadystatetolerance = Error{eltype(G)}(1e-3, 1e-3), verbose = 0, problem = nothing)
+function regret(weights, threshold, H̃, valuefunction, τ, Δt, (linearmodel, feedback), G, calibration, policybasis)    
     valuefunction.t.t = τ
     
     climate = TippingClimate(linearmodel.climate.hogg, linearmodel.climate.decay, updatethreshold(threshold, feedback))
     model = IAM(climate, linearmodel.economy, linearmodel.preferences)
 
-    steadystate!(valuefunction, weights, Δt, model, G, calibration, policybasis; tolerance = steadystatetolerance, verbose = verbose)
-    backwardsimulation!(valuefunction, weights, Δt, model, G, calibration, policybasis; verbose = verbose)
+    steadystate!(valuefunction, weights, Δt, model, G, calibration, policybasis; tolerance = Error{eltype(G)}(1e-3, 1e-3), verbose = 0, timeiterations = 1_000)
+    backwardsimulation!(valuefunction, weights, Δt, model, G, calibration, policybasis; verbose = 0)
 
     x₀ = Point(climate.hogg.T₀, log(climate.hogg.M₀ / climate.hogg.Mᵖ))
     Gⱼ = interpolateovergrid(valuefunction.H, G, x₀)
@@ -106,26 +107,47 @@ function regret(weights, threshold, H̃, valuefunction, τ, Δt, (linearmodel, f
 
     return Gⱼ - Hⱼ
 end
-
-function maxregret(weights, optparameters)
+function regret(weights, threshold, optparameters)
     H̃, valuefunction, τ, Δt, (linearmodel, feedback), G, calibration, policybasis = optparameters
 
-    # Initialize problem once (factor the operator)
-    problem = initsteadystateproblem(valuefunction, weights, Δt, linearmodel, G, calibration, policybasis)
-    
-    maxregretobj = @closure threshold -> regret(weights, threshold, H̃, valuefunction, τ, Δt, (linearmodel, feedback), G, calibration, policybasis; problem = problem)
-    
-    r, _ = gss(maxregretobj, H̃.lb[4], H̃.ub[4]; tol=1e-2)
-    
-    return r
+    regret(weights, threshold, H̃, valuefunction, τ, Δt, (linearmodel, feedback), G, calibration, policybasis)
 end
-
-
-## Solve min max regret
-minmaxregretobj = OptimizationFunction(maxregret);
-
 optparameters = H̃, valuefunction, τ, Δt, (linearmodel, feedback), G, calibration, policybasis;
 
-minmaxregretprob = OptimizationProblem(minmaxregretobj, weights, optparameters);
+regret(weights, 2., optparameters)
 
-sol = solve(minmaxregretprob, COBYLA(; rhoend=1e-4));
+## Setup epigraph method # min{t | t, w ≥ 0} s.t. t ≥ r(w, Tᶜ) ∀ Tᶜ ∈ thresholds
+function objective(u, _, optparameters)
+    u[1]
+end
+function feasibility(u, _, threshold, optparameters)
+    policybasis = last(optparameters)
+    
+    K = size(policybasis)
+    w = @view u[2:(K + 1)]
+    weights = SVector{K}(w ./ sum(w))
+    return regret(weights, threshold, optparameters) - u[1]
+end
+
+## Solve 
+opt = NLopt.Opt(:LN_COBYLA, K + 1)
+NLopt.min_objective!(opt, Base.Fix{3}(objective, optparameters))
+NLopt.xtol_rel!(opt, 1e-3)
+NLopt.lower_bounds!(opt, zeros(K + 1))
+NLopt.upper_bounds!(opt, [Inf, ones(K)...])
+
+optfeasibility = Base.Fix{4}(feasibility, optparameters)
+for threshold in policybasis.thresholds
+    NLopt.inequality_constraint!(opt, Base.Fix{3}(optfeasibility, threshold), 1e-6)
+end
+
+u₀ = [1., weights...]
+y, u, reason = NLopt.optimize(opt, u₀)
+weights = SVector{K}(u[2:end] ./ sum(u[2:end]))
+
+r, Tᶜ = gss(threshold -> regret(weights, threshold, optparameters), 2., 4., tol = 1e-3)
+
+## Save result
+using JLD2
+
+JLD2.@save "data/regret/policy.jld2" weights policybasis
