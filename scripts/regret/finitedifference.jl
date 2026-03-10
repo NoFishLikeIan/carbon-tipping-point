@@ -120,3 +120,19 @@ function backwardsimulation!(valuefunction::ValueFunction{S, N₁, N₂}, weight
     
 	return valuefunctiontraj
 end
+
+function regret(weights, threshold, H̃, valuefunction, τ, Δt, (linearmodel, feedback), G, calibration, policybasis)    
+    valuefunction.t.t = τ
+    
+    climate = TippingClimate(linearmodel.climate.hogg, linearmodel.climate.decay, updatethreshold(threshold, feedback))
+    model = IAM(climate, linearmodel.economy, linearmodel.preferences)
+
+    steadystate!(valuefunction, weights, Δt, model, G, calibration, policybasis; tolerance = Error{eltype(G)}(1e-3, 1e-3), verbose = 0, timeiterations = 1_000)
+    backwardsimulation!(valuefunction, weights, Δt, model, G, calibration, policybasis; verbose = 0)
+
+    x₀ = Point(climate.hogg.T₀, log(climate.hogg.M₀ / climate.hogg.Mᵖ))
+    Gⱼ = interpolateovergrid(valuefunction.H, G, x₀)
+    Hⱼ = H̃(SVector(x₀.T, x₀.m, zero(τ), threshold))
+
+    return Gⱼ - Hⱼ
+end
