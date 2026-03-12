@@ -5,7 +5,7 @@ using Base.Threads
 using SciMLBase
 using Statistics
 using SciMLBase, DifferentialEquations, DiffEqBase
-using Interpolations, ForwardDiff
+using Interpolations, ForwardDiff, FastChebInterp
 using StaticArrays
 
 using Model, Grid
@@ -26,18 +26,27 @@ push!(PGFPlotsX.CUSTOM_PREAMBLE,
     raw"\DeclareSIUnit{\shortoutput}{tr US\mathdollar / y}",
 )
 
+includet("../utils.jl")
 includet("../../../src/valuefunction.jl")
 includet("../../../src/extend/model.jl")
 includet("../../../src/extend/grid.jl")
 includet("../../../src/extend/valuefunction.jl")
-includet("../../utils/simulating.jl")
+includet("../../../src/regret.jl")
+
 includet("../../utils/saving.jl")
 includet("../../utils/simulating.jl")
+includet("../../utils/loading.jl")
+includet("../../utils/approximate.jl")
+
+includet("../../markov/chain.jl")
+includet("../../markov/finitedifference.jl")
+includet("../../regret/chain.jl")
+includet("../../regret/finitedifference.jl")
 
 damagetype = BurkeHsiangMiguel;
 withnegative = true
 abatementtype = withnegative ? "negative" : "constrained"
-DATAPATH = "data/simulation-dense"; @assert isdir(DATAPATH)
+DATAPATH = "data/simulation"; @assert isdir(DATAPATH)
 
 SAVEFIG = true;
 PLOTPATH = "../job-market-paper/jeem/plots"
@@ -47,7 +56,8 @@ if !isdir(plotpath) mkpath(plotpath) end
 horizon = 100.
 tspan = (0., horizon)
 
-begin # Read available files
+## Read available files
+begin
     simulationfiles = listfiles(DATAPATH)
     nfiles = length(simulationfiles)
     G = simulationfiles |> first |> loadproblem |> last
@@ -72,7 +82,8 @@ begin # Read available files
     println("$(length(modelfiles)) models detected.")
 end;
 
-begin # Import available files
+## Import available simulations
+begin
     models = IAM[]
     valuefunctions = Dict{IAM, OrderedDict{Float64, ValueFunction}}()
     interpolations = Dict{IAM, NTuple{2, Interpolations.Extrapolation}}()
@@ -88,7 +99,8 @@ begin # Import available files
     sort!(by = m -> m.climate, models, rev = true)
 end
 
-begin # Load calibration
+## Load calibration
+begin
     calibrationpath = "data/calibration"
 
     # Load economic calibration
@@ -110,7 +122,9 @@ begin # Load calibration
     close(climatefile)
 end
 
-begin # Plot estetics
+
+## Plot estetics
+begin
     extremamodels = (models[1], models[end])
     extremalabels = ("Linear", "Tipping")
     PALETTE = colorschemes[:grays]
@@ -132,7 +146,7 @@ begin # Plot estetics
     u₀ = SVector(X₀..., 0., 0., 0.) # Introduce three 0s for costs
 end;
 
-# Initial policies
+## Initial policies
 begin
     mnpprob = ODEProblem((_, calibration, t) -> γ(t, calibration), m₀, (0, horizon), calibration)
     mnp = solve(mnpprob, Tsit5())
@@ -158,15 +172,16 @@ begin
         ylabel = L"\footnotesize Fraction of abated emissions $\varepsilon_t$", 
         xtick = mmedianpath, xticklabels = Mtickslabels,
         xmin = mmin, xmax = mmax,
-        width = raw"0.8\textwidth", xticklabel_style = {align = "center"},
-        grid = "both"
+        width = raw"0.8\linewidth", xticklabel_style = {align = "center"},
+        grid = "both",
+        legend_pos = "north west"
     });
 
     # Add gray band for ε > 1 (negative emissions)
     bandx = [mmin, mmax]
     bandy = [1.0, 1.45]
     bandcoords = vcat([(x, bandy[1]) for x in bandx], [(x, bandy[2]) for x in reverse(bandx)])
-    bandpoly = @pgf Plot({fill = "gray", opacity = 0.25, draw = "none", forget_plot}, Coordinates(bandcoords))
+    bandpoly = @pgf Plot({fill = "gray", opacity = 0.2, draw = "none", forget_plot}, Coordinates(bandcoords))
     push!(policyfig, bandpoly)
     
     timepoints = 0:0.1:horizon
@@ -183,21 +198,27 @@ begin
         
         firsthighdx = findfirst(Tₜ -> length(Tₜ) > 1, T̄)
         T̄high, thigh = if !isnothing(firsthighdx)
-            first.(T̄[firsthighdx:end]), timepoints[firsthighdx:end]
+            last.(T̄[firsthighdx:end]), timepoints[firsthighdx:end]
         else
-            first.(T̄[end:end]), timepoints[end:end]
+            Float64[], Float64[]
         end
  
         mlow = [mnp(t) for t in tlow]
         mhigh = [mnp(t) for t in thigh]
 
         εₜlow = [ ε(t, Point(T, m), α(T, m, t), model, calibration) for (T, m, t) in zip(T̄low, mlow, tlow)]
-        εₜhigh = [ ε(t, Point(T, m), α(T, m, t), model, calibration) for (T, m, t) in zip(T̄high, mhigh, thigh)]
         
         lowcurve = @pgf Plot({ line_width = LINE_WIDTH, color = colors[i], solid }, Coordinates(mlow, εₜlow))
-        highcurve = @pgf Plot({ line_width = LINE_WIDTH, color = colors[i], dashed, forget_plot }, Coordinates(mhigh, εₜhigh))
+        @pgf push!(policyfig, lowcurve, LegendEntry("\\footnotesize $(extremalabels[i]) optimal"))
 
-        @pgf push!(policyfig, lowcurve, LegendEntry(extremalabels[i]), highcurve)
+        if !isempty(T̄high)
+            εₜhigh = [ ε(t, Point(T, m), α(T, m, t), model, calibration) for (T, m, t) in zip(T̄high, mhigh, thigh)]
+            highcurve = @pgf Plot({ line_width = LINE_WIDTH, color = colors[i], solid, forget_plot }, Coordinates(mhigh, εₜhigh))
+            tippingmarker = @pgf Plot({
+                mark_options = {fill = colors[i]}, only_marks, forget_plot
+            }, Coordinates(mhigh[[1]], εₜhigh[[1]]))
+            push!(policyfig, highcurve, tippingmarker)
+        end
     end
 
     if SAVEFIG
@@ -207,7 +228,7 @@ begin
     policyfig
 end
 
-# -- Make simulation of optimal trajectories
+## Make simulation of optimal trajectories
 begin
     simulations = Dict{IAM,EnsembleSolution}()
 
@@ -225,6 +246,7 @@ begin
     end
 end
 
+## Optimal abatement figure
 begin
     optabatementfig = @pgf GroupPlot({
         group_style = {
@@ -307,6 +329,7 @@ begin
     optabatementfig
 end
 
+## Optimal variable path figure
 begin 
     simfig = @pgf GroupPlot({
         group_style = {
@@ -317,8 +340,8 @@ begin
     yearticks = 0:20:horizon
 
     medianopts = @pgf {line_width = LINE_WIDTH}
-    confidenceopts = @pgf {draw = "none", forget_plot}
-    fillopts = @pgf {fill = "gray", opacity = 0.5}
+    confidenceopts = @pgf {forget_plot, line_width = 0.6}
+    fillopts = @pgf { opacity = 0.15 }
     figopts = @pgf {width = raw"0.5\textwidth", height = raw"0.35\textwidth", grid = "both", xmin = 0, xmax = horizon}
 
     qs = (0.1, 0.5, 0.9)
@@ -333,15 +356,15 @@ begin
         mpaths = getindex.(paths.u, 2)
         Mpaths = [@. hogg.Mᵖ * exp(m) for m in mpaths]
 
-        Mmedianplot = @pgf Plot(medianopts, Coordinates(0:horizon, getindex.(Mpaths, 2)))
-        Mlowerplot = @pgf Plot({confidenceopts..., name_path = "Mlower"}, Coordinates(0:horizon, getindex.(Mpaths, 1)))
-        Mupperplot = @pgf Plot({confidenceopts..., name_path = "Mupper"}, Coordinates(0:horizon, getindex.(Mpaths, 3)))
+        Mmedianplot = @pgf Plot({medianopts..., color = colors[k]}, Coordinates(0:horizon, getindex.(Mpaths, 2)))
+        Mlowerplot = @pgf Plot({confidenceopts..., color = colors[k], name_path = "Mlower"}, Coordinates(0:horizon, getindex.(Mpaths, 1)))
+        Mupperplot = @pgf Plot({confidenceopts..., color = colors[k], name_path = "Mupper"}, Coordinates(0:horizon, getindex.(Mpaths, 3)))
 
         Mfill = @pgf Plot(fillopts, raw"fill between [of=Mlower and Mupper]")
 
         labeloption = @pgf k > 1 ? { yticklabel = raw"\empty" } : { ylabel = L"`Conecntration $M_t \; [\si{ppm}]$" }
 
-        nppath = @pgf Plot({ dashed, color = "gray", line_width = LINE_WIDTH }, Coordinates(0:horizon, Mnppath.u))
+        nppath = @pgf Plot({ dashed, color = colors[k], line_width = LINE_WIDTH }, Coordinates(0:horizon, Mnppath.u))
 
         @pgf push!(simfig, {figopts...,
             xticklabel = raw"\empty", ymin = hogg.M₀, ymax = 600.,
@@ -356,9 +379,9 @@ begin
         paths = EnsembleAnalysis.timeseries_point_quantile(ensemble, qs, 0:horizon)
         Tpaths = first.(paths.u)
 
-        Tmedianplot = @pgf Plot(medianopts, Coordinates(0:horizon, getindex.(Tpaths, 2)))
-        Tlowerplot = @pgf Plot({confidenceopts..., name_path = "Tlower"}, Coordinates(0:horizon, getindex.(Tpaths, 1)))
-        Tupperplot = @pgf Plot({confidenceopts..., name_path = "Tupper"}, Coordinates(0:horizon, getindex.(Tpaths, 3)))
+        Tmedianplot = @pgf Plot({medianopts..., color = colors[k]}, Coordinates(0:horizon, getindex.(Tpaths, 2)))
+        Tlowerplot = @pgf Plot({confidenceopts..., color = colors[k], name_path = "Tlower"}, Coordinates(0:horizon, getindex.(Tpaths, 1)))
+        Tupperplot = @pgf Plot({confidenceopts..., color = colors[k], name_path = "Tupper"}, Coordinates(0:horizon, getindex.(Tpaths, 3)))
 
         Tfill = @pgf Plot(fillopts, raw"fill between [of=Tlower and Tupper]")
 
@@ -393,7 +416,9 @@ begin
     simfig
 end
 
-begin
+
+## Cost figure
+if false
     costfig = @pgf GroupPlot({
         group_style = {
             group_size = "$(length(simulations)) by 1",

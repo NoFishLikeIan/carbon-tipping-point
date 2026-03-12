@@ -9,10 +9,10 @@ function Fnp(u::V, parameters::NpParamaters, t) where {R<:Real, V <: StaticVecto
 
     return SVector(dT, dm)
 end
-function noise(u, parameters::NpParamaters, t)
+function noise(u::V, parameters, t) where {R<:Real, V <: StaticVector{2, R}}
     model = first(parameters)
     T = u[1]
-    return SVector(Model.std(T, model.climate.hogg), 0.)
+    return V(Model.std(T, model.climate.hogg), 0.)
 end
 
 
@@ -36,10 +36,10 @@ function F(u::V, parameters::SimulationParameters, t) where {R<:Real, V <: Stati
 
     return SVector(dT, dm, dy)
 end
-function noise(u::V, parameters::SimulationParameters, t) where {R<:Real, V <: StaticVector{3, R}}
+function noise(u::V, parameters, t) where {R<:Real, V <: StaticVector{3, R}}
     model = first(parameters)
     T = u[1]
-    return SVector(Model.std(T, model.climate.hogg), 0., model.economy.investments.σₖ)
+    return V(Model.std(T, model.climate.hogg), 0., model.economy.investments.σₖ)
 end
 "Drift of system which cumulates abatement, adjustments, and damages."
 function F(u::V, parameters::SimulationParameters, t) where {R<:Real, V <: StaticVector{6, R}}
@@ -62,26 +62,57 @@ function F(u::V, parameters::SimulationParameters, t) where {R<:Real, V <: Stati
 
     return SVector(dT, dm, dy, abatement, adjustment, damage)
 end
-function noise(u::V, parameters::SimulationParameters, t) where {R<:Real, V <: StaticVector{6, R}}
+function noise(u::V, parameters, t) where {R<:Real, V <: StaticVector{6, R}}
     model = first(parameters)
     T = u[1]
-    return SVector(Model.std(T, model.climate.hogg), 0., model.economy.investments.σₖ, 0.0, 0.0, 0.0)
+    return V(Model.std(T, model.climate.hogg), 0., model.economy.investments.σₖ, 0.0, 0.0, 0.0)
 end
 
-function F!(du, u, parameters::SimulationParameters, t)
+RegretParameters = Tuple{IAM, Calibration, SimplexPolicies, AbstractVector}
+function F(u::V, parameters::RegretParameters, t) where {R<:Real, V <: StaticVector{3, R}}
+    model, calibration, policybasis, weights = parameters
+    T, m = @view u[1:2]
+    state = Point(T, m)
+    α = weightedpolicy(state, t, weights, policybasis)
+    χ = χopt(t, model.economy, model.preferences)
+    policy = Policy(χ, α)
+
+    dT = μ(T, m, model.climate) / model.climate.hogg.ϵ
+    dm = γ(t, calibration) - α
+    
+    growth = model.economy.investments.ϱ + ϕ(t, policy.χ, model.economy.investments)
+    damage = d(state.T, state.m, model.economy.damages, model.climate)
+    abatement = A(t, model.economy.investments) * β(t, ε(t, state, α, model, calibration), model.economy.abatement)
+    dy = growth - damage - abatement
+
+    return SVector(dT, dm, dy)
+end
+function F(u::V, parameters::RegretParameters, t) where {R<:Real, V <: StaticVector{6, R}}
+    model, calibration, policybasis, weights = parameters
+    T, m = @view u[1:2]
+    state = Point(T, m)
+    α = weightedpolicy(state, t, weights, policybasis)
+    χ = χopt(t, model.economy, model.preferences)
+    policy = Policy(χ, α)
+
+    dT = μ(T, m, model.climate) / model.climate.hogg.ϵ
+    dm = γ(t, calibration) - α
+    
+    growth = model.economy.investments.ϱ + ϕ(t, policy.χ, model.economy.investments)
+    damage = d(state.T, state.m, model.economy.damages, model.climate)
+    abatement = A(t, model.economy.investments) * β(t, ε(t, state, α, model, calibration), model.economy.abatement)
+    dy = growth - damage - abatement
+
+    adjustment = (model.economy.investments.κ / 2) * abatement^2
+
+    return SVector(dT, dm, dy, abatement, adjustment, damage)
+end
+
+function F!(du, u, parameters, t)
     du .= F(u, parameters, t)
 end
-function noise!(Σ, u, parameters::SimulationParameters, t)
+function noise!(Σ, u, parameters, t)
     Σ .= noise(u, parameters, t)
-end
-
-# Holds the running simulation, the true model and interpolations, the discovery time, and whether discovery has happened
-DiscoveryParameters{S <: SimulationParameters, M <: IAM, α <: Interpolations.Extrapolation, R <: Real} = Tuple{S, M, α, R, Bool}
-function F!(du, u, parameters::DiscoveryParameters, t)
-    du .= F(u, first(parameters), t)
-end
-function noise!(Σ, u, parameters::DiscoveryParameters, t)
-    Σ .= noise(u, first(parameters), t)
 end
 
 "Constructs linear interpolation of results"
