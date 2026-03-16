@@ -10,7 +10,7 @@ function interpolatevalue(x, values::OrderedDict{S, V}, G::GR) where {S, N₁, N
     
     knots = (Tspace, mspace, tspace)
 
-    Hitp = interpolate(knots, H, Gridded(Linear()))
+    Hitp = extrapolate(interpolate(knots, H, Gridded(Linear())), Line())
 
     return [Hitp(xᵢ[1], xᵢ[2], xᵢ[3]) for xᵢ in x]
 end

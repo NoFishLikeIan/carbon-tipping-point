@@ -6,7 +6,8 @@ using SciMLBase
 using Statistics
 using SciMLBase, DifferentialEquations, DiffEqBase, StochasticDiffEq
 using Interpolations, Dierckx, FastChebInterp
-using StaticArrays
+using StaticArrays, SparseArrays
+using LinearAlgebra, LinearSolve
 
 using Model, Grid
 using Random; Random.seed!(11148705);
@@ -142,11 +143,16 @@ abatementfile = jldopen(abatementpath, "r+")
 @unpack abatement = abatementfile
 close(abatementfile)
 
+investments = Investment()
+damages = BurkeHsiangMiguel() # WeitzmanGrowth()
+economy = Economy(investments = investments, damages = damages, abatement = abatement)
+
+preferences = LogSeparable()
+
 climatepath = joinpath(calibrationpath, "climate.jld2")
 @assert isfile(climatepath) "Climate calibration file not found at $climatepath"
 climatefile = jldopen(climatepath, "r+")
-calibration = climatefile["calibration"]
-hogg = climatefile["hogg"]
+@unpack calibration, hogg, feedback, decay = climatefile
 close(climatefile)
 
 ## Shared plotting/simulation constants
@@ -491,37 +497,60 @@ let
     abatementfig
 end
 
-## Net zero distribution
-function netzero(u, t, integrator::StochasticDiffEq.SDEIntegrator)
-    netzero(u, t, integrator.p)
+# Uncertainty premium
+## Extract full information value function & compute SCCₜ
+simpath = "data/simulation"
+paths = loadsimulationpaths(simpath; exclude = ["terminal", "linear"])
+threshold = round(Tᶜ, digits = 1)
+path = paths[threshold]
+values, model, G = loadtotal(path)
+Hitp, αitp = buildinterpolations(values, G);
+
+
+## Extract welfare of φʳ
+G = coarse(G, (2, 2))
+τ = 150.; Δt = 1 / 8
+climate = TippingClimate(hogg, ConstantDecay(0.), updatethreshold(threshold, feedback))
+
+valuefunction = ValueFunction(τ, climate, G, calibration)
+valuefunctiontraj = backwardsimulation!(valuefunction, weights, Δt, model, G, calibration, policybasis; verbose = 1, storetrajectory = true)
+
+Hʳitp, _ = buildinterpolations(valuefunctiontraj, G)
+
+## Simulate state variables under the two policies
+noiseprocess = WienerProcess(0., SVector{3}(zeros(3)))
+jointx₀ = SVector{6}(X₀..., X₀...)
+
+counterfactualregretparams = ((model, calibration, αitp), (model, calibration, policybasis, weights));
+
+function Fjoint(jointx::V, p, t) where V
+    x⁺ = @view jointx[1:3]
+    xʳ = @view jointx[4:6]
+
+    dx⁺ = F(SVector{3}(x⁺), p[1], t)
+    dxʳ = F(SVector{3}(xʳ), p[2], t)
+
+    return V(dx⁺..., dxʳ...)
 end
-function netzero(u, t, parameters::RegretParameters)
-    model, calibration, policybasis, weights = parameters
-    T, m = @view u[1:2]
-    state = Point(T, m)
+function noisejoint(jointx::V, p, t) where V
+    x⁺ = @view jointx[1:3]
+    xʳ = @view jointx[4:6]
 
-    α = weightedpolicy(state, t, weights, policybasis)
+    Σ⁺ = F(SVector{3}(x⁺), p[1], t)
+    Σʳ = F(SVector{3}(xʳ), p[2], t)
 
-    return 1 - ε(t, state, α, model, calibration)
-end
-function netzero(u, t, parameters::SimulationParameters)
-    model, calibration, αitp = parameters
-    T, m = @view u[1:2]
-    state = Point(T, m)
-
-    α = αitp(T, m, t)
-
-    return 1 - ε(t, state, α, model, calibration)
+    SMatrix{6, 3}(
+        Σ⁺[1], 0, 0, Σʳ[1], 0, 0,
+        0, Σ⁺[2], 0, 0, Σʳ[2], 0,
+        0, 0, Σ⁺[3], 0, 0, Σʳ[3]
+    )
 end
 
-netzerocallback = ContinuousCallback(netzero, terminate!);
+counterfactualsdefn = SDEFunction(Fjoint, noisejoint)
+counterfactualprob = SDEProblem(counterfactualsdefn, jointx₀, (0., 100.), counterfactualregretparams; noise_rate_prototype = SMatrix{6, 3}(zeros(6*3))) |> EnsembleProblem
 
-let model = first(extremamodels)
-    _, αitp = interpolations[model]
+counterfactual = solve(counterfactualprob; trajectories = 30)
 
-    optimalparameters = (model, calibration, αitp)
-    regretparameters = (model, calibration, policybasis, weights)
-
-    optimalproblem = SDEProblem(F, noise, u₀, tspan, optimalparameters)
-
+function premium(counterfactual)
+    
 end

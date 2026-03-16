@@ -66,8 +66,6 @@ close(climatefile)
 preferences = LogSeparable()
 decay = ConstantDecay(0.)
 climate = LinearClimate(hogg, decay)
-
-preferences = LogSeparable()
 linearmodel = IAM(climate, economy, preferences)
 
 ## Construct policy simplex
