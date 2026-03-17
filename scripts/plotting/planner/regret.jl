@@ -8,6 +8,7 @@ using SciMLBase, DifferentialEquations, DiffEqBase, StochasticDiffEq
 using Interpolations, Dierckx, FastChebInterp
 using StaticArrays, SparseArrays
 using LinearAlgebra, LinearSolve
+using ForwardDiff
 
 using Model, Grid
 using Random; Random.seed!(11148705);
@@ -547,10 +548,82 @@ function noisejoint(jointx::V, p, t) where V
 end
 
 counterfactualsdefn = SDEFunction(Fjoint, noisejoint)
-counterfactualprob = SDEProblem(counterfactualsdefn, jointx₀, (0., 100.), counterfactualregretparams; noise_rate_prototype = SMatrix{6, 3}(zeros(6*3))) |> EnsembleProblem
+counterfactualprob = SDEProblem(counterfactualsdefn, jointx₀, (0., 100.), counterfactualregretparams; noise_rate_prototype = SMatrix{6, 3}(zeros(6*3)))
 
-counterfactual = solve(counterfactualprob; trajectories = 30)
+counterfactual = solve(counterfactualprob)
 
-function premium(counterfactual)
+function premium(counterfactual, (Hitp, Hʳitp), model)
+    P = Vector{Float64}(undef, length(counterfactual))
+
+    for (i, t) in enumerate(counterfactual.t)
+        T, m, y, Tʳ, mʳ, yʳ = counterfactual(t)
     
+        ∂ₘH = ForwardDiff.derivative(m -> Hitp(T, m, t), m)
+        Y = exp(y) * model.economy.Y₀
+        M = exp(m) * model.climate.hogg.Mᵖ
+        s = scc(∂ₘH, Y, M, model)
+    
+        ∂ₘHʳ = ForwardDiff.derivative(m -> Hʳitp(Tʳ, m, t), mʳ)
+        Yʳ = exp(yʳ) * model.economy.Y₀
+        Mʳ = exp(mʳ) * model.climate.hogg.Mᵖ
+        sʳ = scc(∂ₘHʳ, Yʳ, Mʳ, model)
+
+        P[i] = (s - sʳ) / s
+    end
+
+    return P
 end
+
+counterfactualensemble = solve(EnsembleProblem(counterfactualprob); trajectories = 1_000)
+P = [premium(sim, (Hitp, Hʳitp), model) for sim in counterfactualensemble];
+
+## Premium trajectories
+let
+    yearlytime = 0:Int(horizon)
+
+    # Interpolate each premium trajectory onto a regular yearly grid
+    Pgrid = Matrix{Float64}(undef, length(yearlytime), length(P))
+    for (j, (Pj, sim)) in enumerate(zip(P, counterfactualensemble))
+        pitp = linear_interpolation(sim.t, Pj; extrapolation_bc = Flat())
+        Pgrid[:, j] = pitp.(yearlytime)
+    end
+
+    Pquantiles = [quantile(Pgrid[i, :], (0.05, 0.5, 0.95)) for i in 1:size(Pgrid, 1)]
+
+    medianopts = @pgf {line_width = LINE_WIDTH}
+    confidenceopts = @pgf {draw = "none", forget_plot}
+    fillopts = @pgf {fill = "black", opacity = 0.15, forget_plot}
+
+    Pmedian = @pgf Plot({medianopts..., color = "black"},
+                        Coordinates(yearlytime, getindex.(Pquantiles, 2)))
+    Plower  = @pgf Plot({confidenceopts..., name_path = "Plow"},
+                        Coordinates(yearlytime, getindex.(Pquantiles, 1)))
+    Pupper  = @pgf Plot({confidenceopts..., name_path = "Phigh"},
+                        Coordinates(yearlytime, getindex.(Pquantiles, 3)))
+    Pfill   = @pgf Plot(fillopts, raw"fill between [of=Plow and Phigh]")
+
+    ytick = 0:0.2:1.
+    yticklabels = [@sprintf("\\footnotesize %.0f\\%%", 100y) for y in ytick]
+    yearticks = 0:20:horizon
+
+    premiumfig = @pgf Axis({
+            width = raw"0.98\linewidth", height = raw"0.35\linewidth",
+            grid = "both",
+            xmin = 0, xmax = horizon,
+            ymin = 0., ymax = 1.,
+            xtick = yearticks,
+            xticklabels = 2020 .+ Int.(yearticks),
+            xticklabel_style = {rotate = 45},
+            xlabel = "Year",
+            ytick = ytick,
+            yticklabels = yticklabels,
+            ylabel = L"Premium $P_t$",
+        }, Pmedian, Plower, Pupper, Pfill)
+
+    if SAVEFIG
+        PGFPlotsX.save(joinpath(plotpath, "regret-simfig-premium.tikz"), premiumfig; include_preamble = true)
+    end
+
+    premiumfig
+end
+
