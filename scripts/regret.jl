@@ -73,7 +73,7 @@ linearmodel = IAM(climate, economy, preferences)
 ## Construct policy simplex
 simpath = "data/simulation";
 paths = loadsimulationpaths(simpath; exclude = ["terminal", "linear"])
-K = 5;
+K = 10;
 _, G = loadproblem(paths[2.0])
 
 filteredpaths = basispolicypaths(paths, K, G) # Indices of the basis
