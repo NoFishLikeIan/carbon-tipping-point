@@ -571,7 +571,7 @@ function premium(counterfactual, (Hitp, Hʳitp), model)
         P[i] = (s - sʳ) / s
     end
 
-    return P
+    return smooth!(P, 5)
 end
 
 counterfactualensemble = solve(EnsembleProblem(counterfactualprob); trajectories = 1_000)
@@ -579,7 +579,7 @@ P = [premium(sim, (Hitp, Hʳitp), model) for sim in counterfactualensemble];
 
 ## Premium trajectories
 let
-    yearlytime = 0:Int(horizon)
+    yearlytime = 1:Int(horizon)
 
     # Interpolate each premium trajectory onto a regular yearly grid
     Pgrid = Matrix{Float64}(undef, length(yearlytime), length(P))
@@ -602,7 +602,7 @@ let
                         Coordinates(yearlytime, getindex.(Pquantiles, 3)))
     Pfill   = @pgf Plot(fillopts, raw"fill between [of=Plow and Phigh]")
 
-    ytick = 0:0.2:1.
+    ytick = 0:0.1:0.4
     yticklabels = [@sprintf("\\footnotesize %.0f\\%%", 100y) for y in ytick]
     yearticks = 0:20:horizon
 
@@ -610,7 +610,7 @@ let
             width = raw"0.98\linewidth", height = raw"0.35\linewidth",
             grid = "both",
             xmin = 0, xmax = horizon,
-            ymin = 0., ymax = 1.,
+            ymin = 0., ymax = ytick[end],
             xtick = yearticks,
             xticklabels = 2020 .+ Int.(yearticks),
             xticklabel_style = {rotate = 45},
