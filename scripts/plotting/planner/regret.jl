@@ -8,6 +8,7 @@ using SciMLBase, DifferentialEquations, DiffEqBase, StochasticDiffEq
 using Interpolations, Dierckx, FastChebInterp
 using StaticArrays, SparseArrays
 using LinearAlgebra, LinearSolve
+using ForwardDiff
 
 using Model, Grid
 using Random; Random.seed!(11148705);
@@ -244,7 +245,7 @@ let
 
         optlow = @pgf Plot({line_width = LINE_WIDTH, color = colors[k], solid}, Coordinates(mlow, εoptlow))
         push!(policyfig, optlow)
-        push!(policyfig, LegendEntry("\\footnotesize $(extremalabels[k]) optimal"))
+        push!(policyfig, LegendEntry("\\footnotesize $(extremalabels[k])"))
 
         if !isempty(T̄high)
             εopthigh = [ε(t, Point(T, m), αitp(T, m, t), model, calibration) for (T, m, t) in zip(T̄high, mhigh, thigh)]
@@ -288,7 +289,7 @@ let
 end
 
 ## Dynamics comparison: state trajectories (M_t, T_t) for optimal vs regret
-controlledtemperatureticks = makedeviationtickz(1., 3.; step=1, digits=2)
+controlledtemperatureticks = makedeviationtickz(1., 3.; step=1, digits=0)
 
 let
     statefig = @pgf GroupPlot({
@@ -547,10 +548,88 @@ function noisejoint(jointx::V, p, t) where V
 end
 
 counterfactualsdefn = SDEFunction(Fjoint, noisejoint)
-counterfactualprob = SDEProblem(counterfactualsdefn, jointx₀, (0., 100.), counterfactualregretparams; noise_rate_prototype = SMatrix{6, 3}(zeros(6*3))) |> EnsembleProblem
+counterfactualprob = SDEProblem(counterfactualsdefn, jointx₀, (0., 100.), counterfactualregretparams; noise_rate_prototype = SMatrix{6, 3}(zeros(6*3)))
 
-counterfactual = solve(counterfactualprob; trajectories = 30)
+counterfactual = solve(counterfactualprob)
 
-function premium(counterfactual)
-    
+function premium(counterfactual, (Hitp, Hʳitp), model)
+    P = Vector{Float64}(undef, length(counterfactual.t))
+
+    for (i, t) in enumerate(counterfactual.t)
+        T, m, y, Tʳ, mʳ, yʳ = counterfactual(t)
+        
+        Y = exp(y) * model.economy.Y₀
+        M = exp(m) * model.climate.hogg.Mᵖ
+        ∂ₘH = ForwardDiff.derivative(m -> Hitp(T, m, t), m)
+        carbon = scc(∂ₘH, Y, M, model)
+
+        Yʳ = exp(yʳ) * model.economy.Y₀
+        Mʳ = exp(mʳ) * model.climate.hogg.Mᵖ
+        ∂ₘH = ForwardDiff.derivative(m -> Hʳitp(Tʳ, m, t), mʳ)
+        carbonʳ = scc(∂ₘH, Yʳ, Mʳ, model)
+
+        Pₜ = (carbon - carbonʳ) / carbon
+
+        P[i] = Pₜ
+    end
+
+    return P
 end
+
+counterfactualensemble = solve(EnsembleProblem(counterfactualprob); trajectories = 1_000)
+
+P = [premium(counterfactual, (Hitp, Hʳitp), model) for counterfactual in counterfactualensemble];
+
+## Plot insurance premium
+let
+    yearlytime = 0:horizon
+
+    Pmatrix = Matrix{Float64}(undef, length(yearlytime), length(counterfactualensemble))
+    for (i, (sol, Pᵢ)) in enumerate(zip(counterfactualensemble, P))
+        Pitp = linear_interpolation(sol.t, Pᵢ; extrapolation_bc = Interpolations.Flat())
+        Pmatrix[:, i] .= Pitp.(yearlytime)
+    end
+
+    Pqs = timequantiles(Pmatrix, collect(QS))
+
+    Pmin = floor(minimum(Pqs[:, 1]); digits = 1)
+    Pmax = ceil(maximum(Pqs[:, 3]); digits = 1)
+    ytick = Pmin:0.1:Pmax
+    yticklabels = [@sprintf("\\footnotesize %.0f\\%%", 100y) for y in ytick]
+
+    color = first(colors)
+    lowname = "Plow"
+    highname = "Phigh"
+
+    Pmedian = @pgf Plot({line_width = LINE_WIDTH, color = color, solid},
+        Coordinates(yearlytime, Pqs[:, 2]))
+    Plower = @pgf Plot({draw = "none", forget_plot, name_path = lowname},
+        Coordinates(yearlytime, Pqs[:, 1]))
+    Pupper = @pgf Plot({draw = "none", forget_plot, name_path = highname},
+        Coordinates(yearlytime, Pqs[:, 3]))
+    Pfill = @pgf Plot({fill = color, opacity = 0.15, draw = "none", forget_plot},
+        "fill between [of=$lowname and $highname]")
+
+    premiumfig = @pgf Axis({
+        width = raw"0.8\linewidth",
+        height = raw"0.4\linewidth",
+        grid = "both",
+        xmin = 0, xmax = horizon,
+        xtick = yearticks,
+        xticklabels = 2020 .+ Int.(yearticks),
+        xticklabel_style = {rotate = 45},
+        xlabel = "Year",
+        ylabel = raw"Insurance premium $\mathcal{P}_t$",
+        ytick = ytick,
+        yticklabels = yticklabels,
+        legend_pos = "north west",
+        ymin = 0.
+    }, Pmedian, LegendEntry(raw"\footnotesize Median"), Plower, Pupper, Pfill)
+
+    if SAVEFIG
+        PGFPlotsX.save(joinpath(plotpath, "regret-premium.tikz"), premiumfig; include_preamble = true)
+    end
+
+    premiumfig
+end
+
