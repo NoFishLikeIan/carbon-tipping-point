@@ -1,0 +1,29 @@
+\paragraph{Calibration of the atmospheric decay function.}
+We calibrate the concentration-dependent decay term using the no-policy concentration path and emissions data. Let $M_t$ denote calibrated no-policy $\mathrm{CO_2e}$ concentration, $E_t$ observed no-policy emissions, and $\gamma(t)$ the previously calibrated concentration growth component. We first construct an implied decay series as
+\begin{equation}
+\hat{\delta}_t = \frac{E_t}{M_t} - \gamma(t).
+\end{equation}
+The decay function is then parameterized as a scaled Gaussian in concentration:
+\begin{equation}
+\delta_m(M;\,\theta) = a_\delta \exp\!\left[-\left(\frac{d_\delta M - b_\delta}{c_\delta}\right)^2\right],
+\qquad
+\theta = (a_\delta,b_\delta,c_\delta,d_\delta).
+\end{equation}
+Intuitively, $a_\delta$ controls the amplitude, $b_\delta$ the location of the peak in transformed concentration units, $c_\delta$ the width, and $d_\delta$ the concentration scaling.
+
+Parameters are chosen to match the implied decay profile by minimizing the squared discrepancy across the calibration sample:
+\begin{equation}
+\mathcal{L}(\theta) = \sum_t \left(\hat{\delta}_t - \delta_m(M_t;\,\theta)\right)^2,
+\end{equation}
+subject to economically and numerically meaningful bounds used in the implementation:
+\begin{equation}
+0 \le a_\delta \le 1,\quad 0 \le b_\delta \le 3000,\quad c_\delta \in \mathbb{R},\quad 0.3 \le d_\delta \le 0.5.
+\end{equation}
+
+After calibration, the fitted object is stored as \texttt{ExponentialDecay(a\_delta, b\_delta, c\_delta, d\_delta)} and is validated with a feasibility check over a wide concentration interval:
+\begin{equation}
+\underline{\delta} + \underline{\gamma} > 0,
+\qquad
+\underline{\delta} = \min_{M \in [400,3000]} \delta_m(M),
+\end{equation}
+ensuring net atmospheric dynamics remain well-posed in the model domain.

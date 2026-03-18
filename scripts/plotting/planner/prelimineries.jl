@@ -76,8 +76,10 @@ end;
 begin # Labels, colors and axis
     PALETTE = colorschemes[:grays]
     colors = get(PALETTE, range(0., 1.; length = length(models)), (0., 1.25))
+    trajectorymarkers = ["square*", "diamond*", "*"]
 
     colorsbymodel = Dict(models .=> colors)
+    markerbymodel = Dict(models .=> trajectorymarkers)
     Tmin = 0.0; Tmax = 6.0
     Tspace = range(Tmin, Tmax; length = 101)
 
@@ -137,7 +139,7 @@ begin # Simulate NP problem
 
     for model in models
         npparameters = (model, calibration)
-        sol = solve(npensemble; trajectories = 15_000, p = npparameters, saveat = 1.0)
+        sol = solve(npensemble; reltol = 1e-8, trajectories = 15_000, p = npparameters, saveat = 1.0)
 
         @printf "Done with simulation of %s\n" labelsbymodel[model]
 
@@ -222,15 +224,16 @@ begin # NP simulation + nullclines
 
     for model in reverse(models) # Simulation plots
         color = colorsbymodel[model]
+        marker = markerbymodel[model]
         simpath = sims[model]
 
         Tpath = getindex.(simpath.u, 1)
         lower, median, upper = (getindex.(Tpath, i) for i in 1:3)
 
         mediancoords = Coordinates(Mmedianpath, median)
-        curve = @pgf Plot({color = color, line_width = LINE_WIDTH}, mediancoords)
+        curve = @pgf Plot({color = color, line_width = LINE_WIDTH, forget_plot}, mediancoords)
 
-        markers = @pgf Plot({only_marks, mark_options = {fill = "black", scale = 1.5, draw_opacity = 0, color = color}, mark_repeat = 10, forget_plot}, mediancoords)
+        markers = @pgf Plot({only_marks, mark_options = {fill = "black", scale = 1.5, draw_opacity = 0, color = color, mark = marker}, mark_repeat = 10}, mediancoords)
 
         label = labelsbymodel[model]
         legend = LegendEntry(label)
@@ -240,7 +243,7 @@ begin # NP simulation + nullclines
         upperpath = @pgf Plot({draw = "none", name_path = "upper", forget_plot}, Coordinates(Mmedianpath, upper))
         shading = @pgf Plot({fill = color, opacity = 0.05, forget_plot}, raw"fill between [of=lower and upper]")
 
-        push!(nullclinefig, curve, legend, markers, lowerpath, upperpath, shading)
+        push!(nullclinefig, curve, markers, legend, lowerpath, upperpath, shading)
     end
 
     @pgf nullclinefig["legend style"] = raw"at = {(0.95, 0.3)}"
@@ -270,10 +273,17 @@ begin # Pure nullcline figure
 
     for model in reverse(models) # Nullcline plots
         color = colorsbymodel[model]
+        marker = markerbymodel[model]
         
         stableleft, rest... = nullclinevariation[model]
 
-        leftcurve = @pgf Plot({color = color, line_width = LINE_WIDTH}, Coordinates(stableleft))
+        leftcurve = @pgf Plot({
+            color = color,
+            line_width = LINE_WIDTH,
+            mark = marker,
+            mark_repeat = 10,
+            mark_options = {fill = color, scale = 1.2}
+        }, Coordinates(stableleft))
 
         label = LegendEntry(labelsbymodel[model])
 

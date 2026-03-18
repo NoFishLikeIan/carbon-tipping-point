@@ -209,7 +209,7 @@ begin
         εₜlow = [ ε(t, Point(T, m), α(T, m, t), model, calibration) for (T, m, t) in zip(T̄low, mlow, tlow)]
         
         lowcurve = @pgf Plot({ line_width = LINE_WIDTH, color = colors[i], solid }, Coordinates(mlow, εₜlow))
-        @pgf push!(policyfig, lowcurve, LegendEntry("\\footnotesize $(extremalabels[i]) optimal"))
+        @pgf push!(policyfig, lowcurve, LegendEntry("\\footnotesize $(extremalabels[i])"))
 
         if !isempty(T̄high)
             εₜhigh = [ ε(t, Point(T, m), α(T, m, t), model, calibration) for (T, m, t) in zip(T̄high, mhigh, thigh)]
@@ -248,31 +248,44 @@ end
 
 ## Optimal abatement figure
 begin
-    optabatementfig = @pgf GroupPlot({
-        group_style = {
-            group_size = "$(length(extremamodels)) by 1",
-            horizontal_sep = raw"1em"
-    }})
-
     yearticks = 0:20:horizon
 
     medianopts = @pgf {line_width = LINE_WIDTH}
     confidenceopts = @pgf {draw = "none", forget_plot}
-    fillopts = @pgf {fill = "gray", opacity = 0.5}
-    figopts = @pgf {width = raw"0.5\textwidth", height = raw"0.4\textwidth", grid = "both", xmin = 0, xmax = horizon, ymin = 0.4, ymax = 1.2}
+    fillopts = @pgf {fill = "gray", opacity = 0.5, forget_plot}
     
-    εtick = 0.4:0.2:1.4
+    εtick = 0.4:0.2:1.2
     εticklabels = [ @sprintf("\\footnotesize %.0f\\%%", 100y) for y in εtick ]
+
+    optabatementfig = @pgf Axis({
+        width = raw"0.8\textwidth",
+        height = raw"0.45\textwidth",
+        grid = "both",
+        xmin = 0,
+        xmax = horizon,
+        ymin = 0.35,
+        ymax = maximum(εtick),
+        xtick = yearticks,
+        xticklabels = 2020 .+ Int.(yearticks),
+        xticklabel_style = {rotate = 45},
+        xlabel = "Year",
+        ylabel = raw"\footnotesize Optimal fraction of abated emissions $\varepsilon_t$",
+        ytick = εtick,
+        yticklabels = εticklabels,
+        legend_pos = "north west"
+    })
 
     qs = (0.05, 0.5, 0.95)
 
     # Add gray band for ε > 1 (negative emissions)
     bandx = (0, horizon)
-    bandy = [1.0, 1.45]
+    bandy = [1.0, maximum(εtick)]
     bandcoords = vcat([(x, bandy[1]) for x in bandx], [(x, bandy[2]) for x in reverse(bandx)])
     bandpoly = @pgf Plot({fill = "gray", opacity = 0.25, draw = "none", forget_plot}, Coordinates(bandcoords))
 
-    # Temperature in second row
+    push!(optabatementfig, bandpoly)
+
+    # Overlay both models in a single axis
     for (k, model) in enumerate(extremamodels)
         ensemble = simulations[model]
         _, αitp = interpolations[model]
@@ -292,34 +305,28 @@ begin
         fullabatementdx = searchsortedfirst(medianpath, 1.)
         fullabatementyear = (0:horizon)[fullabatementdx]
 
+        lowerpath = "elower$(k)"
+        upperpath = "eupper$(k)"
+
         emedianplot = @pgf Plot({medianopts..., color = colors[k],}, Coordinates(0:horizon, medianpath))
-        elowerplot = @pgf Plot({confidenceopts..., color = colors[k], name_path = "elower"}, Coordinates(0:horizon, getindex.(epaths, 1)))
-        eupperplot = @pgf Plot({confidenceopts...,  color = colors[k], name_path = "eupper"}, Coordinates(0:horizon, getindex.(epaths, 3)))
+        elowerplot = @pgf Plot({confidenceopts..., color = colors[k], name_path = lowerpath}, Coordinates(0:horizon, getindex.(epaths, 1)))
+        eupperplot = @pgf Plot({confidenceopts...,  color = colors[k], name_path = upperpath}, Coordinates(0:horizon, getindex.(epaths, 3)))
 
-        efill = @pgf Plot(fillopts, raw"fill between [of=elower and eupper]")
+        efill = @pgf Plot(fillopts, "fill between [of=$lowerpath and $upperpath]")
 
-        figticks = sort([yearticks[1:(k > 1 ? end : end - 1)]..., fullabatementyear])
+        fullabatementline = @pgf Plot({ line_width = 1.5, dashed, color = colors[k], forget_plot }, Coordinates([fullabatementyear, fullabatementyear], [0., 1.]))
 
-        eoptionfirst = @pgf k > 1 ? {
-            yticklabel = raw"\empty"
-        } : {
-            ylabel = raw"\footnotesize Optimal fraction of abated emissions $\varepsilon_t$",
-            ytick = εtick,
-            yticklabels = εticklabels
-        }
+        fullabatementscatter = @pgf Plot({ only_marks, color = colors[k], forget_plot }, Coordinates([fullabatementyear], [1.]))
 
-        fullabatementline = @pgf Plot({ line_width = 1.5, dashed, color = colors[k] }, Coordinates([fullabatementyear, fullabatementyear], [0., 1.]))
-
-        fullabatementscatter = @pgf Plot({ only_marks, color = colors[k] }, Coordinates([fullabatementyear], [1.]))
-
-        yearticklabels = [L"\footnotesize $%$y$" for y in 2020 .+ Int.(figticks)]
-
-        @pgf push!(optabatementfig, {figopts...,
-                xtick = figticks, xticklabels = yearticklabels,
-                xticklabel_style = {rotate = 45},
-                xlabel = "Year", title = extremalabels[k],
-                eoptionfirst...
-            }, emedianplot, elowerplot, eupperplot, efill, bandpoly, fullabatementline, fullabatementscatter)
+        @pgf push!(optabatementfig,
+            emedianplot,
+            LegendEntry("\\footnotesize $(extremalabels[k])"),
+            elowerplot,
+            eupperplot,
+            efill,
+            fullabatementline,
+            fullabatementscatter
+        )
     end
 
     if SAVEFIG

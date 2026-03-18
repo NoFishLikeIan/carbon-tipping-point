@@ -37,8 +37,8 @@ includet("../../utils/simulating.jl")
 damagetype = BurkeHsiangMiguel;
 withnegative = true
 abatementtype = withnegative ? "negative" : "constrained"
-DATAPATH = "data/simulation-dense"; @assert isdir(DATAPATH)
-CEPATH = "data/ce/simulation-dense"; @assert isdir(CEPATH)
+DATAPATH = "data/simulation"; @assert isdir(DATAPATH)
+CEPATH = "data/ce/simulation"; @assert isdir(CEPATH)
 
 SAVEFIG = true;
 PLOTPATH = "../job-market-paper/jeem/plots"
@@ -154,7 +154,7 @@ end
 begin # Plot SCC as a function of Tᶜ
     sccfig = @pgf Axis({
             xlabel = L"Critical threshold $T^c$ [\si{\degree}]",
-            ylabel = L"Social cost of carbon $[\si{US\mathdollar / tCe}]$",
+            ylabel = L"Social cost of carbon $[\si{US\mathdollar / tCO_2e}]$",
         grid = "both",
         xmin = minimum(thresholds),
         xmax = maximum(thresholds)
@@ -186,7 +186,7 @@ begin # Compute optimal SCC paths
     sccmodels = filter(m -> m.climate isa LinearClimate || (m.climate isa TippingClimate && m.climate.feedback.Tᶜ ∈ slicethresholds), models)
     m₀ = log(hogg.M₀ / hogg.Mᵖ)
     X₀ = SVector(hogg.T₀, m₀, 0.)
-    trajectories = 10_000
+    trajectories = 1_000
     savestep = 0.5
 
     sccquantiles = Dict{IAM, Matrix{Float64}}()
@@ -257,8 +257,8 @@ begin # Plot optimal SCC paths
     # First plot: both trajectories together
     @pgf push!(fig, {
         xlabel = "Year",
-        ylabel = L"$[\si{US\mathdollar / tCe}]$",
-        ymin = 0, ymax = 2_000,
+        ylabel = L"$[\si{US\mathdollar / tCO_2e}]$",
+        ymin = 0, 
         legend_pos = "north west",
         title = L"\mathrm{SCC}_t"
     })
@@ -373,7 +373,7 @@ begin # Plot SCC surfaces combined
     sccsurfacefig = @pgf Axis({
         xlabel = L"Discovery temperature $\Delta T^{\mathrm{d}}$ [\si{\degree}]",
         ylabel = L"Critical threshold $T^c$ [\si{\degree}]",
-        zlabel = L"\mathrm{SCC}_{2020} \; [\si{US\mathdollar / tCe}]",
+        zlabel = L"\mathrm{SCC}_{2020} \; [\si{US\mathdollar / tCO_2e}]",
         xlabel_style = "{sloped}",
         ylabel_style = "{sloped}",
         zlabel_style = "{sloped}",
@@ -557,7 +557,7 @@ begin # Plot value of discovery
 
     # Left: SCC level vs threshold
     @pgf push!(discoverysccfig, {
-        ylabel = L"$\mathrm{SCC}_{2020} \; [\si{US\mathdollar / tCe}]$",
+        ylabel = L"$\mathrm{SCC}_{2020} \; [\si{US\mathdollar / tCO_2e}]$",
         xmin = minimum(thresholds),
         xmax = maximum(thresholds),
         legend_pos = "north east",
