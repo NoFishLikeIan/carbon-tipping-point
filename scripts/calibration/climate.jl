@@ -25,6 +25,7 @@ push!(PGFPlotsX.CUSTOM_PREAMBLE,
 using Model, Grid
 
 includet("../../src/valuefunction.jl")
+includet("../../src/regret.jl")
 includet("../../src/extend/model.jl")
 includet("../utils/saving.jl")
 includet("../utils/simulating.jl")
@@ -342,9 +343,15 @@ begin # Compute decay rate observations
     δ̂ = co2calibrationdf.Emissions ./ Mₜ - γ̂
 end
 
+function exponentialdecay(M, p)
+    aδ, bδ, cδ, dδ = p
+
+    return aδ * exp(-((dδ * M - bδ) / cδ)^2)
+end
+
 function decayloss(p, optparameters)
     Mₜ, δ̂ = optparameters
-    δ = [saturationdecay(M, p) for M in Mₜ]
+    δ = [exponentialdecay(M, p) for M in Mₜ]
 
     return sum(abs2, δ̂ - δ)
 end
@@ -353,15 +360,15 @@ begin # Solve parameters of saturation decay
     decaylossfn = Optimization.OptimizationFunction(decayloss, AutoForwardDiff());
     optparameters = (Mₜ, δ̂);
     
-    # Bounds for double exponential parameters
-    p₀ = MVector(0.005, 0.002, 0.007, 0.001, 1100.0, 0.001)  # δ₀, α, δ₁, β, Mᶜ, δ̄
-    lb = MVector(0.0, 0., 0.0, 0., 0., -Inf) # δ₀, α, δ₁, β, Mᶜ, δ̄
-    ub = MVector(Inf, Inf, Inf, Inf, Inf, 0.002)
+    # Bounds for exponential-decay parameters
+    p₀ = MVector(0.008, 900.0, 400.0, 0.4)  # aδ, bδ, cδ
+    lb = MVector(0.0, 0., -Inf, 0.3)
+    ub = MVector(1.0, 3000.0, Inf, 0.5)
     
     decayproblem = Optimization.OptimizationProblem(decaylossfn, p₀, optparameters; lb=lb, ub=ub)
     decaysol = solve(decayproblem, Fminbox(LBFGS()); iterations = 100_000)
 
-    decay = SaturationRecoveryDecay(decaysol.u...)
+    decay = ExponentialDecay(decaysol.u...)
 end
 
 # Check feasibility
@@ -369,12 +376,12 @@ end
 @assert δ̲ + γ̲ > 0
 
 if isinteractive() # Check cumulative emissions vs concentration
-    Mspace = range(minimum(Mₜ), 1.2maximum(Mₜ), 202)
-    yticks = -0.001:0.001:0.01
+    Mspace = range(minimum(Mₜ), maximum(Mₜ), 202)
+    yticks = 0:0.001:0.01
     yticklabels = [L"%$(round(100y, digits = 2)) \%" for y in yticks]
 
     δfig = scatter(Mₜ, δ̂; xlabel = L"M", ylabel = L"Decay rate $\delta$", label = L"Implied decay $\hat{\delta}$", markersize = 2, c = :black, ytick = (yticks, yticklabels), ylims = extrema(yticks))
-    plot!(Mspace, M -> δₘ(M, decay) ; c=:black, label = L"Fit $\delta_m(M)$")
+    plot!(Mspace, M -> δₘ(M, decay) ; c=:black, label = L"Fit $\delta_m(M)$", xlims = (500, 1200))
 
     if SAVEFIG
         savefig(δfig, joinpath(PLOTPATH, "delta.tikz"))

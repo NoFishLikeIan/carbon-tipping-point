@@ -165,7 +165,7 @@ function scc(∂ₘH, Y, M, model::IAM)
     outputfactor = Y / (model.preferences.θ - 1)
     co2factor =  Model.Gtonoverppm / M
 
-    return 3.667 * 1_000 * outputfactor * co2factor * ∂ₘH # Factor converts t$ / GtCO2e to $ / tCe
+    return 1_000 * outputfactor * co2factor * ∂ₘH # Factor converts t$ / GtCO2e to $ / tCO2e
 end
 
 function consumptionfactor(C, model::IAM, t)

@@ -289,13 +289,14 @@ let
 end
 
 ## Dynamics comparison: state trajectories (M_t, T_t) for optimal vs regret
-controlledtemperatureticks = makedeviationtickz(1., 3.; step=1, digits=0)
+controlledtemperatureticks = makedeviationtickz(1., 3.; step=0.5, digits=1)
 
 let
     statefig = @pgf GroupPlot({
         group_style = {
             group_size = "$(length(extremamodels)) by 2",
-            horizontal_sep = raw"2em"
+            horizontal_sep = raw"1em",
+            vertical_sep = raw"1em"
     }})
 
     medianopts = @pgf {line_width = LINE_WIDTH}
@@ -333,7 +334,7 @@ let
         labelopts = @pgf k > 1 ? {
             yticklabel = raw"\empty"
         } : {
-            ylabel = L"Concentration $M_t \; [\si{ppm}]$"
+            ylabel = L"\footnotesize Concentration $M_t$"
         }
 
         legendopt = k > 1 ? (LegendEntry(raw"\footnotesize Optimal"),) : ()
@@ -383,7 +384,7 @@ let
         } : {
             ytick = controlledtemperatureticks[1],
             yticklabels = controlledtemperatureticks[2],
-            ylabel = raw"Temperature $T_t$"
+            ylabel = raw"\footnotesize Temperature $T_t$"
         }
 
         @pgf push!(statefig, {figopts...,
@@ -406,19 +407,49 @@ end
 
 ## Dynamics comparison: abatement trajectory (ε_t) for optimal vs regret
 let
-    abatementfig = @pgf GroupPlot({
-        group_style = {
-            group_size = "$(length(extremamodels)) by 1",
-            horizontal_sep = raw"2em"
-    }})
-
     medianopts = @pgf {line_width = LINE_WIDTH}
     confidenceopts = @pgf {draw = "none", forget_plot}
-    figopts = @pgf {width = raw"0.49\linewidth", height = raw"0.34\linewidth", grid = "both", xmin = 0, xmax = horizon}
 
     yearlytime = 0:horizon
-    εtick = 0.4:0.2:1.4
+    εtick = 0.4:0.2:1.2
     εticklabels = [@sprintf("\\footnotesize %.0f\\%%", 100y) for y in εtick]
+
+    abatementfig = @pgf Axis({
+        width = raw"0.98\linewidth",
+        height = raw"0.55\linewidth",
+        grid = "both",
+        xmin = 0,
+        xmax = horizon,
+        ymin = 0.35,
+        ymax = maximum(εtick),
+        xtick = yearticks,
+        xticklabels = 2020 .+ Int.(yearticks),
+        xticklabel_style = {rotate = 45},
+        xlabel = "Year",
+        ylabel = raw"Abated emissions fraction $\varepsilon_t$",
+        ytick = εtick,
+        yticklabels = εticklabels,
+        legend_pos = "south east"
+    })
+
+    # Shared negative-emissions band
+    bandx = (0, horizon)
+    bandy = [1.0, maximum(εtick)]
+    bandcoords = vcat([(x, bandy[1]) for x in bandx], [(x, bandy[2]) for x in reverse(bandx)])
+    bandpoly = @pgf Plot({fill = "gray", opacity = 0.2, draw = "none", forget_plot}, Coordinates(bandcoords))
+    push!(abatementfig, bandpoly)
+
+    legendlinear = @pgf Plot({line_width = LINE_WIDTH, color = colors[1], solid}, Coordinates([0., 0.], [0., 0.]))
+    legendtipping = @pgf Plot({line_width = LINE_WIDTH, color = colors[2], solid}, Coordinates([0., 0.], [0., 0.]))
+    legendrobust = @pgf Plot({line_width = LINE_WIDTH, color = "black", dashdotted}, Coordinates([0., 0.], [0., 0.]))
+    push!(abatementfig,
+        legendlinear,
+        LegendEntry("\\footnotesize Linear"),
+        legendtipping,
+        LegendEntry("\\footnotesize Tipping"),
+        legendrobust,
+        LegendEntry("\\footnotesize Robust")
+    )
 
     for (k, model) in enumerate(extremamodels)
         _, αitp = interpolations[model]
@@ -455,40 +486,25 @@ let
         εupperreg = @pgf Plot({confidenceopts..., color = colors[k], name_path = highreg}, Coordinates(yearlytime, getindex.(εreg, 3)))
         εfillreg = @pgf Plot(fillreg, "fill between [of=$lowreg and $highreg]")
 
-        bandx = (0, horizon)
-        bandy = [1.0, 1.45]
-        bandcoords = vcat([(x, bandy[1]) for x in bandx], [(x, bandy[2]) for x in reverse(bandx)])
-        bandpoly = @pgf Plot({fill = "gray", opacity = 0.2, draw = "none", forget_plot}, Coordinates(bandcoords))
+        optnetzeroline = @pgf Plot({line_width = 1.2, dashed, color = colors[k], forget_plot}, Coordinates([optnetzero - 2020, optnetzero - 2020], [0., 1.]))
+        optnetzeroscatter = @pgf Plot({only_marks, color = colors[k], forget_plot}, Coordinates([optnetzero - 2020], [1.]))
+        regnetzeroline = @pgf Plot({line_width = 1.2, dotted, color = colors[k], forget_plot}, Coordinates([regnetzero - 2020, regnetzero - 2020], [0., 1.]))
+        regnetzeroscatter = @pgf Plot({only_marks, color = colors[k], forget_plot}, Coordinates([regnetzero - 2020], [1.]))
 
-        figticks = yearticks[1:(k > 1 ? end : end - 1)]
-
-        labelopts = @pgf k > 1 ? {
-            yticklabel = raw"\empty"
-        } : {
-            ylabel = raw"Abated emissions fraction $\varepsilon_t$",
-            ytick = εtick,
-            yticklabels = εticklabels
-        }
-
-        legendopts = @pgf k > 1 ? {
-            legend_pos = "south east"
-        } : {
-        }
-
-        legendopt = k > 1 ? (LegendEntry(raw"\footnotesize Optimal"),) : ()
-        legendreg = k > 1 ? (LegendEntry(raw"\footnotesize Regret"),) : ()
-
-        @pgf push!(abatementfig, {figopts...,
-                ymin = 0.35,
-                ymax = 1.45,
-                xtick = figticks,
-                xticklabels = 2020 .+ Int.(figticks),
-                xticklabel_style = {rotate = 45},
-                xlabel = "Year",
-                title = extremalabels[k],
-            labelopts...,
-            legendopts...
-            }, εmedianopt, legendopt..., εloweropt, εupperopt, εfillopt, εmedianreg, legendreg..., εlowerreg, εupperreg, εfillreg, bandpoly)
+        @pgf push!(abatementfig,
+            εmedianopt,
+            εloweropt,
+            εupperopt,
+            εfillopt,
+            εmedianreg,
+            εlowerreg,
+            εupperreg,
+            εfillreg,
+            optnetzeroline,
+            optnetzeroscatter,
+            regnetzeroline,
+            regnetzeroscatter
+        )
     end
 
     if SAVEFIG
@@ -553,81 +569,75 @@ counterfactualprob = SDEProblem(counterfactualsdefn, jointx₀, (0., 100.), coun
 counterfactual = solve(counterfactualprob)
 
 function premium(counterfactual, (Hitp, Hʳitp), model)
-    P = Vector{Float64}(undef, length(counterfactual.t))
+    P = Vector{Float64}(undef, length(counterfactual))
 
     for (i, t) in enumerate(counterfactual.t)
         T, m, y, Tʳ, mʳ, yʳ = counterfactual(t)
-        
+    
+        ∂ₘH = ForwardDiff.derivative(m -> Hitp(T, m, t), m)
         Y = exp(y) * model.economy.Y₀
         M = exp(m) * model.climate.hogg.Mᵖ
-        ∂ₘH = ForwardDiff.derivative(m -> Hitp(T, m, t), m)
-        carbon = scc(∂ₘH, Y, M, model)
-
+        s = scc(∂ₘH, Y, M, model)
+    
+        ∂ₘHʳ = ForwardDiff.derivative(m -> Hʳitp(Tʳ, m, t), mʳ)
         Yʳ = exp(yʳ) * model.economy.Y₀
         Mʳ = exp(mʳ) * model.climate.hogg.Mᵖ
-        ∂ₘH = ForwardDiff.derivative(m -> Hʳitp(Tʳ, m, t), mʳ)
-        carbonʳ = scc(∂ₘH, Yʳ, Mʳ, model)
+        sʳ = scc(∂ₘHʳ, Yʳ, Mʳ, model)
 
-        Pₜ = (carbon - carbonʳ) / carbon
-
-        P[i] = Pₜ
+        P[i] = (s - sʳ) / s
     end
 
-    return P
+    return smooth!(P, 5)
 end
 
 counterfactualensemble = solve(EnsembleProblem(counterfactualprob); trajectories = 1_000)
+P = [premium(sim, (Hitp, Hʳitp), model) for sim in counterfactualensemble];
 
-P = [premium(counterfactual, (Hitp, Hʳitp), model) for counterfactual in counterfactualensemble];
-
-## Plot insurance premium
+## Premium trajectories
 let
-    yearlytime = 0:horizon
+    yearlytime = 1:Int(horizon)
 
-    Pmatrix = Matrix{Float64}(undef, length(yearlytime), length(counterfactualensemble))
-    for (i, (sol, Pᵢ)) in enumerate(zip(counterfactualensemble, P))
-        Pitp = linear_interpolation(sol.t, Pᵢ; extrapolation_bc = Interpolations.Flat())
-        Pmatrix[:, i] .= Pitp.(yearlytime)
+    # Interpolate each premium trajectory onto a regular yearly grid
+    Pgrid = Matrix{Float64}(undef, length(yearlytime), length(P))
+    for (j, (Pj, sim)) in enumerate(zip(P, counterfactualensemble))
+        pitp = linear_interpolation(sim.t, Pj; extrapolation_bc = Flat())
+        Pgrid[:, j] = pitp.(yearlytime)
     end
 
-    Pqs = timequantiles(Pmatrix, collect(QS))
+    Pquantiles = [quantile(Pgrid[i, :], (0.05, 0.5, 0.95)) for i in 1:size(Pgrid, 1)]
 
-    Pmin = floor(minimum(Pqs[:, 1]); digits = 1)
-    Pmax = ceil(maximum(Pqs[:, 3]); digits = 1)
-    ytick = Pmin:0.1:Pmax
+    medianopts = @pgf {line_width = LINE_WIDTH}
+    confidenceopts = @pgf {draw = "none", forget_plot}
+    fillopts = @pgf {fill = "black", opacity = 0.15, forget_plot}
+
+    Pmedian = @pgf Plot({medianopts..., color = "black"},
+                        Coordinates(yearlytime, getindex.(Pquantiles, 2)))
+    Plower  = @pgf Plot({confidenceopts..., name_path = "Plow"},
+                        Coordinates(yearlytime, getindex.(Pquantiles, 1)))
+    Pupper  = @pgf Plot({confidenceopts..., name_path = "Phigh"},
+                        Coordinates(yearlytime, getindex.(Pquantiles, 3)))
+    Pfill   = @pgf Plot(fillopts, raw"fill between [of=Plow and Phigh]")
+
+    ytick = 0:0.1:0.4
     yticklabels = [@sprintf("\\footnotesize %.0f\\%%", 100y) for y in ytick]
-
-    color = first(colors)
-    lowname = "Plow"
-    highname = "Phigh"
-
-    Pmedian = @pgf Plot({line_width = LINE_WIDTH, color = color, solid},
-        Coordinates(yearlytime, Pqs[:, 2]))
-    Plower = @pgf Plot({draw = "none", forget_plot, name_path = lowname},
-        Coordinates(yearlytime, Pqs[:, 1]))
-    Pupper = @pgf Plot({draw = "none", forget_plot, name_path = highname},
-        Coordinates(yearlytime, Pqs[:, 3]))
-    Pfill = @pgf Plot({fill = color, opacity = 0.15, draw = "none", forget_plot},
-        "fill between [of=$lowname and $highname]")
+    yearticks = 0:20:horizon
 
     premiumfig = @pgf Axis({
-        width = raw"0.8\linewidth",
-        height = raw"0.4\linewidth",
-        grid = "both",
-        xmin = 0, xmax = horizon,
-        xtick = yearticks,
-        xticklabels = 2020 .+ Int.(yearticks),
-        xticklabel_style = {rotate = 45},
-        xlabel = "Year",
-        ylabel = raw"Insurance premium $\mathcal{P}_t$",
-        ytick = ytick,
-        yticklabels = yticklabels,
-        legend_pos = "north west",
-        ymin = 0.
-    }, Pmedian, LegendEntry(raw"\footnotesize Median"), Plower, Pupper, Pfill)
+            width = raw"0.71\linewidth", height = raw"0.4\linewidth",
+            grid = "both",
+            xmin = 0, xmax = horizon,
+            ymin = 0., ymax = ytick[end],
+            xtick = yearticks,
+            xticklabels = 2020 .+ Int.(yearticks),
+            xticklabel_style = {rotate = 45},
+            xlabel = "Year",
+            ytick = ytick,
+            yticklabels = yticklabels,
+            ylabel = L"Premium $P_t$",
+        }, Pmedian, Plower, Pupper, Pfill)
 
     if SAVEFIG
-        PGFPlotsX.save(joinpath(plotpath, "regret-premium.tikz"), premiumfig; include_preamble = true)
+        PGFPlotsX.save(joinpath(plotpath, "regret-simfig-premium.tikz"), premiumfig; include_preamble = true)
     end
 
     premiumfig

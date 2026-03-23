@@ -47,6 +47,7 @@ struct ExponentialDecay{S} <: Decay{S}
     aδ::S
     bδ::S
     cδ::S
+    dδ::S
 end
 struct SaturationRecoveryDecay{S} <: Decay{S}
     δ₀::S  # Initial decay rate (positive)
@@ -62,9 +63,9 @@ function δₘ(_, decay::ConstantDecay)
     decay.δ
 end
 function δₘ(M, decay::ExponentialDecay)
-    @unpack aδ, bδ, cδ = decay
+    @unpack aδ, bδ, cδ, dδ = decay
 
-    return aδ * exp(-((M - bδ) / cδ)^2)
+    return aδ * exp(-((dδ * M - bδ) / cδ)^2)
 end
 function δₘ(M, decay::SaturationRecoveryDecay)
     @unpack δ₀, α, δ₁, β, Mᶜ, δ̄ = decay
