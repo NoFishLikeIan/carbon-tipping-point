@@ -415,7 +415,7 @@ let
     εticklabels = [@sprintf("\\footnotesize %.0f\\%%", 100y) for y in εtick]
 
     abatementfig = @pgf Axis({
-        width = raw"0.98\linewidth",
+        width = raw"0.9\linewidth",
         height = raw"0.55\linewidth",
         grid = "both",
         xmin = 0,

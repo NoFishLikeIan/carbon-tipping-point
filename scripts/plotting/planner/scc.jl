@@ -26,10 +26,13 @@ push!(PGFPlotsX.CUSTOM_PREAMBLE,
     raw"\DeclareSIUnit{\shortoutput}{tr US\mathdollar / y}",
 )
 
+includet("../utils.jl")
 includet("../../../src/valuefunction.jl")
+includet("../../../src/regret.jl")
 includet("../../../src/extend/model.jl")
 includet("../../../src/extend/grid.jl")
 includet("../../../src/extend/valuefunction.jl")
+
 includet("../../utils/simulating.jl")
 includet("../../utils/saving.jl")
 includet("../../utils/simulating.jl")
@@ -38,7 +41,6 @@ damagetype = BurkeHsiangMiguel;
 withnegative = true
 abatementtype = withnegative ? "negative" : "constrained"
 DATAPATH = "data/simulation"; @assert isdir(DATAPATH)
-CEPATH = "data/ce/simulation"; @assert isdir(CEPATH)
 
 SAVEFIG = true;
 PLOTPATH = "../job-market-paper/jeem/plots"
@@ -260,7 +262,9 @@ begin # Plot optimal SCC paths
         ylabel = L"$[\si{US\mathdollar / tCO_2e}]$",
         ymin = 0, 
         legend_pos = "north west",
-        title = L"\mathrm{SCC}_t"
+        title = L"\mathrm{SCC}_t", 
+        width = raw"0.5\linewidth",
+        height = raw"0.5\linewidth"
     })
 
     

@@ -19,6 +19,7 @@ push!(PGFPlotsX.CUSTOM_PREAMBLE, raw"\DeclareSIUnit{\ppm}{p.p.m.}")
 
 using Model, Grid
 
+includet("../utils.jl")
 includet("../../utils/simulating.jl")
 includet("../../utils/saving.jl")
 includet("../../../src/valuefunction.jl")
@@ -95,6 +96,44 @@ begin # Labels, colors and axis
 end;
 
 begin # Feedback plot
+    additionalradiation = [model.climate isa TippingClimate ? λ(T, model.climate.feedback) : 0. for T in Tspace, model in models]
+
+    feedbackfig = @pgf Axis({
+        width = raw"0.51\textwidth",
+        height = raw"0.425\textwidth",
+        grid = "both",
+        xlabel = TLABEL,
+        ylabel = raw"Positive feedback $\lambda(T_t) \; [\si{W.m^{-2}}]$",
+        xticklabels = temperatureticks[2],
+        xtick = temperatureticks[1],
+        xmin = Tmin, xmax = Tmax,
+        ymax = 3.,
+        legend_cell_align = "left",
+        legend_style = { at = {"(0.025, 0.975)"}, anchor = "north west", nodes = {scale = 0.7} }
+    })
+
+    if SAVEFIG
+        PGFPlotsX.save(joinpath(PLOTPATH, "skeleton-albedo.tikz"), feedbackfig; include_preamble=true)
+    end
+
+    for mdx in reverse(axes(additionalradiation, 2))
+        rad = @view additionalradiation[:, mdx]
+        model = models[mdx]
+        
+        radiationcurve = @pgf Plot({ color = colorsbymodel[model], line_width = LINE_WIDTH, opacity = 0.8 }, Coordinates(Tspace, rad))
+
+        push!(feedbackfig, radiationcurve, LegendEntry(labelsbymodel[model]))
+    end
+
+    if SAVEFIG
+        PGFPlotsX.save(joinpath(PLOTPATH, "feedbackfig.tikz"), feedbackfig; include_preamble=true)
+    end
+
+    feedbackfig
+end
+
+
+begin # Equilibria figure
     additionalradiation = [model.climate isa TippingClimate ? λ(T, model.climate.feedback) : 0. for T in Tspace, model in models]
 
     feedbackfig = @pgf Axis({
