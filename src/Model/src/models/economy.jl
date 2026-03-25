@@ -62,11 +62,12 @@ function d′(T, damages::WeitzmanGrowth)
 end
 
 Base.@kwdef struct Kalkuhl{S} <: GrowthDamages{S}
-    ξ₁::S = 0.0373 # [1/°C]
-    ξ₂::S = 0.0018 # [1/°C²]
+    ξ₁::S = 0.006666 # [1/°C]
+    ξ₂::S = 0.000015 # [1/°C²]
 end
 
-function d(T, _, damages::Kalkuhl, _)
+d(T, _, damages::Kalkuhl, _) = damages.ξ₁ * max(T, 0) + damages.ξ₂ * max(T, 0)^2
+function d(T, damages::Kalkuhl)
     damages.ξ₁ * max(T, 0) + damages.ξ₂ * max(T, 0)^2
 end
 
@@ -82,6 +83,15 @@ end
 d(T, _, damages::BurkeHsiangMiguel, _) = d(T, damages)
 function d(T, damages::BurkeHsiangMiguel)
     damages.ξ * max(T, 0)^2
+end
+
+struct QuadraticDamages{S} <: GrowthDamages{S}
+    ξ₁::S # [1/°C]
+    ξ₂::S # [1/°C²]
+end
+
+function d(T, damages::QuadraticDamages)
+    damages.ξ₁ * T + damages.ξ₂ * T^2
 end
 
 Base.broadcastable(damages::Damages) = Ref(damages)

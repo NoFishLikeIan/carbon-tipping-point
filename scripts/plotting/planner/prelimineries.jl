@@ -20,11 +20,14 @@ push!(PGFPlotsX.CUSTOM_PREAMBLE, raw"\DeclareSIUnit{\ppm}{p.p.m.}")
 using Model, Grid
 
 includet("../utils.jl")
+
+includet("../../../src/valuefunction.jl")
+includet("../../../src/regret.jl")
+includet("../../../src/extend/model.jl")
+
 includet("../../utils/simulating.jl")
 includet("../../utils/saving.jl")
-includet("../../../src/valuefunction.jl")
 includet("../../utils/simulating.jl")
-includet("../../../src/extend/model.jl")
 
 begin # Global variables
     DATAPATH = "data"
@@ -57,7 +60,7 @@ begin # Construct models and grids
     close(abatementfile)
 
     investments = Investment()
-    damages = WeitzmanGrowth() # NoDamageGrowth{Float64}()
+    damages = BurkeHsiangMiguel() # NoDamageGrowth{Float64}()
     economy = Economy(investments = investments, damages = damages, abatement = abatement)
     
     preferences = LogSeparable()
@@ -451,9 +454,14 @@ begin # Carbon decay path
 end
 
 let # Damage fig
-    cumulativedamages = [d(T, linearmodel.economy.damages) for T in Tspace]
+    activedamages = [d(T, linearmodel.economy.damages) for T in Tspace]
+    comparedamages = [
+        (raw"Kalkuhl-Wenz (2020) preferred", [d(T, Kalkuhl{Float64}()) for T in Tspace], "solid", "square*"),
+        (raw"Weitzman (2012)", [d(T, WeitzmanGrowth{Float64}()) for T in Tspace], "solid", "triangle*"),
+        (raw"Dell et al. (2012)", [d(T, QuadraticDamages(0.002131, 0.)) for T in Tspace], "solid", "diamond*")
+    ]
 
-    maxpercentage = ceil(maximum(cumulativedamages), digits=2)
+    maxpercentage = ceil(max(maximum(activedamages), maximum(maximum(curve) for (_, curve, _, _) in comparedamages)), digits=2)
     ytick = 0:0.02:maxpercentage
     yticklabels = [@sprintf("%.0f \\%%", 100 * y) for y in ytick]
 
@@ -461,23 +469,42 @@ let # Damage fig
     xtick = Tspace[1]:1:Tspace[end]
 
     damagefig = @pgf Axis({
-        width = raw"0.425\textwidth",
+        width = raw"0.7\textwidth",
         height = raw"0.425\textwidth",
         grid = "both",
         xlabel = TLABEL,
-        ylabel = raw"\footnotesize Damage function $d(T_t) ; [\si{1 / year}]$",
+        ylabel = raw"Damage function $d(T_t) ; [\si{1 / year}]$",
         xmin = 0, xmax = Tspace[end],
         xticklabel_style = {rotate = 45},
         yticklabels = yticklabels, ytick = ytick, ymin = 0.,
         xticklabels = xticklabels, xtick = xtick,
         scaled_y_ticks = false,
+        legend_style = {at = {"(0.03,0.97)"}, anchor = "north west", nodes = {scale = 0.75}},
+        legend_cell_align = "left",
+        ymin = 0, ymax = 0.1,
     })
 
-    @pgf damagecurve = Plot({line_width = LINE_WIDTH},
-        Coordinates(Tspace, cumulativedamages)
+    for (label, curve, style, marker) in comparedamages
+        comparedcurve = @pgf Plot({
+                line_width = LINE_WIDTH / 2,
+                color = "black",
+                opacity = 0.7,
+                style = style,
+                mark = marker,
+                mark_repeat = 10,
+                mark_size = 1.9,
+                mark_options = {fill = "white", draw = "black"}
+            },
+            Coordinates(Tspace, curve)
+        )
+        push!(damagefig, comparedcurve, LegendEntry(label))
+    end
+
+        @pgf damagecurve = Plot({line_width = LINE_WIDTH + 0.4, color = "black"},
+        Coordinates(Tspace, activedamages)
     )
 
-    push!(damagefig, damagecurve)
+    push!(damagefig, damagecurve, LegendEntry("This paper"))
 
     if SAVEFIG
         PGFPlotsX.save(joinpath(PLOTPATH, "damagefig.tikz"), damagefig; include_preamble=true)

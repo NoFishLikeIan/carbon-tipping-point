@@ -24,7 +24,7 @@ export updatethreshold
 
 export Economy, Abatement, Investment, PiecewiseAbatement
 export Damages
-export GrowthDamages, WeitzmanGrowth, Kalkuhl, BurkeHsiangMiguel, NoDamageGrowth
+export GrowthDamages, WeitzmanGrowth, Kalkuhl, BurkeHsiangMiguel, NoDamageGrowth, QuadraticDamages
 export β, β′, d, D, ϕ, A, ω
 export χopt, variance, consumptiongrowth
 
