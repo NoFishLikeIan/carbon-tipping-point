@@ -9,6 +9,7 @@ using StaticArrays
 using Printf
 
 using DifferentialEquations, DifferentialEquations.EnsembleAnalysis
+using Roots
 
 using Plots, Printf, PGFPlotsX, Colors, ColorSchemes, LaTeXStrings
 using Statistics
@@ -511,6 +512,115 @@ let # Damage fig
     end
 
     damagefig
+end
+
+# Growth vs Level
+function deterministictemperature(t, climate::LinearClimate, γ₀)
+    @unpack S₀, G₀, G₁, Tᵖ, η, σ = climate.hogg
+
+    return ((G₀ + S₀ + G₁ * γ₀ * t) / η)^(1 / 4) - Tᵖ
+end
+
+function instantenousdamages(u, p, t)
+    linearmodel, growthdamage, γ₀ = p
+    Tₜ = deterministictemperature(t, linearmodel.climate, γ₀)
+
+    return d(Tₜ, growthdamage)
+end
+
+"Generate level damage comparison axis for a given growth rate γ₀."
+function level_damage_axis(γ₀, linearmodel, Tspace; withlegend = false, withylabel = false)
+    Tmax = Tspace[end]
+    t̄ = find_zero(t -> deterministictemperature(t, linearmodel.climate, γ₀) - Tmax, (0., 5000.))
+
+    cumulativedamageprob = ODEProblem(instantenousdamages, 0., (0., t̄))
+    damagetraj = solve(cumulativedamageprob; p = (linearmodel, BurkeHsiangMiguel(), γ₀))
+    delltraj = solve(cumulativedamageprob; p = (linearmodel, WeitzmanGrowth{Float64}(), γ₀))
+
+    timespace = range(cumulativedamageprob.tspan..., 101)
+    Tₜ = [deterministictemperature(t, linearmodel.climate, γ₀) for t in timespace]
+    Dₜ = [1 - exp(-damagetraj(t)) for t in timespace]
+    Dₜdell = [1 - exp(-delltraj(t)) for t in timespace]
+
+    comparedamages = [
+        ("DICE (Nordhaus, 2017)", [D(T, DICE()) for T in Tₜ], "solid", "square*"),
+        ("Weitzman Level (2012)", [1 - D(T, WeitzmanLevel()) for T in Tₜ], "solid", "triangle*"),
+        ("Weitzman Growth (2012)", Dₜdell, "solid", "diamond*")
+    ]
+
+    ytick = 0:0.2:1.0
+    yticklabels = [@sprintf("%.0f\\%%", 100 * y) for y in ytick]
+
+    _, xticklabels = makedeviationtickz(Tₜ[1], Tₜ[end]; step = 1, digits = 0)
+    xtick = floor(Tₜ[1]):1:ceil(Tₜ[end])
+
+    axis = @pgf Axis({
+        width = raw"0.45\linewidth",
+        height = raw"0.36\linewidth",
+        grid = "both",
+        xlabel = TLABEL,
+        ylabel = withylabel ? raw"Level damage $D_t$" : "",
+        xmin = Tₜ[1], xmax = Tₜ[end],
+        xticklabels = xticklabels, xtick = xtick,
+        xticklabel_style = {rotate = 45},
+        yticklabels = yticklabels, ytick = ytick,
+        ymin = 0., ymax = 1.,
+        scaled_y_ticks = false,
+        legend_style = {at = {"(0.03, 0.97)"}, anchor = "north west", nodes = {scale = 0.6}},
+        legend_cell_align = "left"
+    })
+
+    for (label, curve, style, marker) in comparedamages
+        comparedcurve = @pgf Plot({
+                line_width = LINE_WIDTH / 2,
+                color = "black",
+                opacity = 0.7,
+                style = style,
+                mark = marker,
+                mark_repeat = 10,
+                mark_size = 1.9,
+                mark_options = {fill = "white", draw = "black"}
+            },
+            Coordinates(Tₜ, curve)
+        )
+        push!(axis, comparedcurve)
+        withlegend && push!(axis, LegendEntry(label))
+    end
+
+    activecurve = @pgf Plot({line_width = LINE_WIDTH + 0.4, color = "black"},
+        Coordinates(Tₜ, Dₜ)
+    )
+    push!(axis, activecurve)
+    withlegend && push!(axis, LegendEntry("This paper"))
+
+    return axis
+end
+
+# Level damage comparison across growth scenarios
+begin
+    γ₀scenarios = [
+        (0.014, L"\bar{\gamma} \equiv \gamma_0"),
+        (0.028, L"\bar{\gamma} \equiv 2\gamma_0"),
+    ]
+
+    groupfig = @pgf GroupPlot({
+        group_style = {
+            group_size = "2 by 1",
+            horizontal_sep = "4em"
+        }
+    })
+
+    for (k, (γ, label)) in enumerate(γ₀scenarios)
+        axis = level_damage_axis(γ, linearmodel, Tspace; withlegend = k == length(γ₀scenarios), withylabel = k == 1)
+        push!(groupfig, axis)
+        @pgf axis["title"] = label
+    end
+
+    if SAVEFIG
+        PGFPlotsX.save(joinpath(PLOTPATH, "leveldamage-scenarios.tikz"), groupfig; include_preamble=true)
+    end
+
+    groupfig
 end
 
 begin # Marginal abatement curve

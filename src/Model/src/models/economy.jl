@@ -46,6 +46,9 @@ abstract type Damages{S<:Real} end
 abstract type GrowthDamages{S} <: Damages{S} end
 struct NoDamageGrowth{S} <: GrowthDamages{S} end
 
+Base.broadcastable(damages::Damages) = Ref(damages)
+
+
 d(_, _, damages::NoDamageGrowth{S}, args...) where S = zero(S)
 
 Base.@kwdef struct WeitzmanGrowth{S} <: GrowthDamages{S}
@@ -70,11 +73,6 @@ d(T, _, damages::Kalkuhl, _) = damages.ξ₁ * max(T, 0) + damages.ξ₂ * max(T
 function d(T, damages::Kalkuhl)
     damages.ξ₁ * max(T, 0) + damages.ξ₂ * max(T, 0)^2
 end
-
-function D(T, damages::Kalkuhl)
-    damages.ξ₁ * T + damages.ξ₂ * T^2 / 2.
-end
-
 "Quadratic temperature damages, as in Burket et al. (2016), with calibration by Kalkuhl & Wenz (2020)."
 Base.@kwdef struct BurkeHsiangMiguel{S} <: GrowthDamages{S}
     ξ::S = 2 * 7.09e-4
@@ -94,7 +92,32 @@ function d(T, damages::QuadraticDamages)
     damages.ξ₁ * T + damages.ξ₂ * T^2
 end
 
-Base.broadcastable(damages::Damages) = Ref(damages)
+# Level damages
+abstract type LevelDamages{S} <: Damages{S} end
+struct NoDamageLevel{S} <: LevelDamages{S} end
+
+function D(T, _::NoDamageLevel)
+    zero(T)
+end
+
+Base.@kwdef struct WeitzmanLevel{S} <: LevelDamages{S}
+    ξ₂::S = 20.64
+    ξₙ::S = 6.081
+    ν::S = 6.754 
+end
+
+function D(T, damages::WeitzmanLevel)
+    inv(1 + (T / damages.ξ₂)^2 + (T / damages.ξₙ)^damages.ν)
+end
+
+Base.@kwdef struct DICE{S} <: LevelDamages{S}
+    ξ₁::S = 0.
+    ξ₂::S = 0.003467
+end
+
+function D(T, damages::DICE)
+    damages.ξ₁ * T + damages.ξ₂ * T^2
+end
 
 Base.@kwdef struct Economy{S <: Real, D <: Damages{S}}
     Y₀::S = 75.8
