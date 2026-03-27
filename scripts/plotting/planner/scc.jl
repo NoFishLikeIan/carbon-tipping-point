@@ -36,6 +36,7 @@ includet("../../../src/extend/valuefunction.jl")
 includet("../../utils/simulating.jl")
 includet("../../utils/saving.jl")
 includet("../../utils/simulating.jl")
+includet("../utils.jl")
 
 damagetype = BurkeHsiangMiguel;
 withnegative = true
@@ -155,8 +156,9 @@ end
 
 begin # Plot SCC as a function of Tᶜ
     sccfig = @pgf Axis({
-            xlabel = L"Critical threshold $T^c$ [\si{\degree}]",
-            ylabel = L"Social cost of carbon $[\si{US\mathdollar / tCO_2e}]$",
+        xlabel = L"Critical threshold $T^c$ [\si{\degree}]",
+        ylabel = L"Social cost of carbon $[\si{US\mathdollar / tCO_2e}]$",
+        width = raw"0.5\linewidth",
         grid = "both",
         xmin = minimum(thresholds),
         xmax = maximum(thresholds)
@@ -238,11 +240,7 @@ begin # Plot optimal SCC paths
     yearticks = 0:20:horizon
     timegrid = 0:savestep:horizon
 
-    fig = @pgf GroupPlot({
-        group_style = {
-            group_size = "2 by 1",
-            horizontal_sep = "2.5em"
-        },
+    fig = @pgf Axis({
         width = "5.95cm",
         height = "5.1cm",
         grid = "both",
@@ -250,17 +248,11 @@ begin # Plot optimal SCC paths
         xmax = 80,
         xtick = yearticks,
         xticklabels = floor.(Int64, yearticks .+ 2020),
-        xticklabel_style = {rotate = 45}
-    })
-
-    linearquantiles = nothing
-    tippingquantiles = nothing
-
-    # First plot: both trajectories together
-    @pgf push!(fig, {
+        xticklabel_style = {rotate = 45},
         xlabel = "Year",
         ylabel = L"$[\si{US\mathdollar / tCO_2e}]$",
         ymin = 0, 
+        ytick_distance = 50,
         legend_pos = "north west",
         title = L"\mathrm{SCC}_t", 
         width = raw"0.5\linewidth",
@@ -283,18 +275,6 @@ begin # Plot optimal SCC paths
         push!(fig, @pgf Plot({color = color, line_width = LINE_WIDTH}, median_coords))
         push!(fig, LegendEntry(label))
     end
-
-    # Second plot: difference of medians
-    mediandifference = smooth(sccquantiles[sccmodels[2]][:, 2] .- sccquantiles[sccmodels[1]][:, 2], 10)
-
-    @pgf push!(fig, {
-        xlabel = "Year",
-        ymin = 0,
-        title = L"\mathrm{SCC}^{T^c}_t - \overline{SCC}_t"
-    })
-    
-    diffcoords = Coordinates(timegrid, mediandifference)
-    push!(fig, @pgf Plot({color = "black", line_width = LINE_WIDTH}, diffcoords))
 
     if SAVEFIG
         PGFPlotsX.save(joinpath(plotpath, "scc-paths.tikz"), fig; include_preamble=true)

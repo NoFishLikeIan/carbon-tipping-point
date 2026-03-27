@@ -590,12 +590,13 @@ function premium(counterfactual, (Hitp, Hʳitp), model)
     return smooth!(P, 5)
 end
 
-counterfactualensemble = solve(EnsembleProblem(counterfactualprob); trajectories = 1_000)
+counterfactualensemble = solve(EnsembleProblem(counterfactualprob); trajectories = 10_000)
 P = [premium(sim, (Hitp, Hʳitp), model) for sim in counterfactualensemble];
 
 ## Premium trajectories
 let
-    yearlytime = 1:Int(horizon)
+    premiumhorizon = 50
+    yearlytime = 1:0.01:premiumhorizon
 
     # Interpolate each premium trajectory onto a regular yearly grid
     Pgrid = Matrix{Float64}(undef, length(yearlytime), length(P))
@@ -618,14 +619,16 @@ let
                         Coordinates(yearlytime, getindex.(Pquantiles, 3)))
     Pfill   = @pgf Plot(fillopts, raw"fill between [of=Plow and Phigh]")
 
-    ytick = 0:0.1:0.4
+    ytick = 0:0.03:0.15
     yticklabels = [@sprintf("\\footnotesize %.0f\\%%", 100y) for y in ytick]
-    yearticks = 0:20:horizon
+    
+    yearstep = premiumhorizon ÷ 10
+    yearticks = 0:yearstep:premiumhorizon
 
     premiumfig = @pgf Axis({
             width = raw"0.71\linewidth", height = raw"0.4\linewidth",
             grid = "both",
-            xmin = 0, xmax = horizon,
+            xmin = 0, xmax = premiumhorizon,
             ymin = 0., ymax = ytick[end],
             xtick = yearticks,
             xticklabels = 2020 .+ Int.(yearticks),
@@ -633,7 +636,7 @@ let
             xlabel = "Year",
             ytick = ytick,
             yticklabels = yticklabels,
-            ylabel = L"Premium $P_t$",
+            ylabel = L"Premium $\mathcal{P}_t$",
         }, Pmedian, Plower, Pupper, Pfill)
 
     if SAVEFIG
@@ -643,3 +646,103 @@ let
     premiumfig
 end
 
+## Premium decomposition by Y and E
+
+"Compute (∂R/∂Y) / (∂W/∂Y) along the robust trajectory of a joint simulation."
+function decomposition_Y(sim, (Hitp, Hʳitp), model)
+    D = Vector{Float64}(undef, length(sim))
+    for (i, t) in enumerate(sim.t)
+        _, _, _, Tʳ, mʳ, _ = sim(t)
+        H  = Hitp(Tʳ, mʳ, t)
+        Hʳ = Hʳitp(Tʳ, mʳ, t)
+        D[i] = exp(H - Hʳ) - 1
+    end
+    return smooth!(D, 5)
+end
+
+"Compute (∂R/∂E) / (∂W/∂E) along the robust trajectory of a joint simulation."
+function decomposition_E(sim, (Hitp, Hʳitp), model)
+    D = Vector{Float64}(undef, length(sim))
+    for (i, t) in enumerate(sim.t)
+        _, _, _, Tʳ, mʳ, _ = sim(t)
+        H  = Hitp(Tʳ, mʳ, t)
+        Hʳ = Hʳitp(Tʳ, mʳ, t)
+        ∂ₘH  = ForwardDiff.derivative(m -> Hitp(Tʳ, m, t), mʳ)
+        ∂ₘHʳ = ForwardDiff.derivative(m -> Hʳitp(Tʳ, m, t), mʳ)
+        D[i] = (exp(H) * ∂ₘH - exp(Hʳ) * ∂ₘHʳ) / (exp(Hʳ) * ∂ₘHʳ)
+    end
+    return smooth!(D, 5)
+end
+
+DY = [decomposition_Y(sim, (Hitp, Hʳitp), model) for sim in counterfactualensemble];
+DE = [decomposition_E(sim, (Hitp, Hʳitp), model) for sim in counterfactualensemble];
+
+## Decomposition figure
+decomphorizon = 50
+yearlytime = 1:decomphorizon
+function quantilegrid(D)
+    Dgrid = Matrix{Float64}(undef, length(yearlytime), length(D))
+    for (j, (Dj, sim)) in enumerate(zip(D, counterfactualensemble))
+        ditp = linear_interpolation(sim.t, Dj; extrapolation_bc = Flat())
+        Dgrid[:, j] = ditp.(yearlytime)
+    end
+    return [quantile(Dgrid[i, :], (0.05, 0.5, 0.95)) for i in 1:size(Dgrid, 1)]
+end
+
+DYquantiles = quantilegrid(DY)
+DEquantiles = quantilegrid(DE)
+
+begin
+    medianopts = @pgf {line_width = LINE_WIDTH}
+    confidenceopts = @pgf {forget_plot}
+    fillYopts = @pgf {fill = colors[1], opacity = 0.12, forget_plot}
+    fillEopts = @pgf {fill = colors[2], opacity = 0.12, forget_plot}
+
+    yearstep = decomphorizon ÷ 10
+    yearticks = 0:yearstep:decomphorizon
+
+    ytick = 0:0.1:1
+    yticklabels = [y for y in ytick]
+
+    DYmedian = @pgf Plot({medianopts..., solid}, Coordinates(yearlytime, getindex.(DYquantiles, 2)))
+    DYlower  = @pgf Plot({confidenceopts..., name_path = "DYlow"}, Coordinates(yearlytime, getindex.(DYquantiles, 1)))
+    DYupper  = @pgf Plot({confidenceopts..., name_path = "DYhigh"}, Coordinates(yearlytime, getindex.(DYquantiles, 3)))
+    DYfill   = @pgf Plot(fillYopts, "fill between [of=DYlow and DYhigh]")
+
+    DEmedian = @pgf Plot({medianopts..., dashed}, Coordinates(yearlytime, getindex.(DEquantiles, 2)))
+    DElower  = @pgf Plot({confidenceopts..., dashed, name_path = "DElow"}, Coordinates(yearlytime, getindex.(DEquantiles, 1)))
+    DEupper  = @pgf Plot({confidenceopts..., dashed, name_path = "DEhigh"}, Coordinates(yearlytime, getindex.(DEquantiles, 3)))
+    DEfill   = @pgf Plot(fillEopts, "fill between [of=DElow and DEhigh]")
+
+    decompositionfig = @pgf Axis({
+        width = raw"0.75\linewidth", height = raw"0.4\linewidth",
+        grid = "both",
+        xmin = 0, xmax = decomphorizon,
+        ymin = 0, ymax = ytick[end],
+        xtick = yearticks,
+        xticklabels = 2020 .+ Int.(yearticks),
+        xticklabel_style = {rotate = 45},
+        xlabel = "Year",
+        ytick = ytick,
+        yticklabels = yticklabels,
+        ylabel = "Elasticity",
+        legend_pos = "north west",
+    },
+        DYmedian,
+        LegendEntry(L"\frac{\partial \mathcal{R}^r_t}{\partial Y_t} / \frac{\partial W^r_t}{\partial Y_t}"),
+        DYlower,
+        DYupper,
+        DYfill,
+        DEmedian,
+        LegendEntry(L"\frac{\partial \mathcal{R}^r_t}{\partial E_t} / \frac{\partial W^r_t}{\partial E_t}"),
+        DElower,
+        DEupper,
+        DEfill,
+    )
+
+    if SAVEFIG
+        PGFPlotsX.save(joinpath(plotpath, "regret-simfig-decomposition.tikz"), decompositionfig; include_preamble = true)
+    end
+
+    decompositionfig
+end
