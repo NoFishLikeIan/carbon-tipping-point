@@ -1,3 +1,4 @@
+## Imports
 using Revise
 
 using DotEnv, UnPack, DataStructures
@@ -38,7 +39,7 @@ PALETTE = colorschemes[:grays];
 calibrationpath = joinpath(DATAPATH, "calibration")
 if !isdir(calibrationpath) mkpath(calibrationpath) end
 
-# Loading data 
+## Loading data 
 function parsescenario(sspkey)
     m = match(r"ssp(\d)(\d{2})", sspkey)
     ssp, scenario = m.captures
@@ -90,23 +91,21 @@ coupleddir = joinpath(DATAPATH, "deutloff", "model_output", "coupled_ensemble");
 uncoupleddir = joinpath(DATAPATH, "deutloff", "model_output", "uncoupled_ensemble");
 @assert isdir(uncoupleddir);
 
-begin # Load temperature dataframe
-    temperaturedf = loadhierdataframe(:T_Coupled => joinpath(coupleddir, "T.csv"); groupkeys=[:Quantile])
-    temperaturedf.T_Uncoupled = loadhierdataframe(:T_Uncoupled => joinpath(uncoupleddir, "T.csv"); groupkeys=[:Quantile]).T_Uncoupled
+## Load temperature dataframe
+temperaturedf = loadhierdataframe(:T_Coupled => joinpath(coupleddir, "T.csv"); groupkeys=[:Quantile])
+temperaturedf.T_Uncoupled = loadhierdataframe(:T_Uncoupled => joinpath(uncoupleddir, "T.csv"); groupkeys=[:Quantile]).T_Uncoupled
 
-    temperature = groupby(temperaturedf, [:Scenario, :Quantile])
-end;
+temperature = groupby(temperaturedf, [:Scenario, :Quantile])
 
-begin # Load emissions and GHGs dataframes
-    concentrationdf = loadhierdataframe("Concentration" => joinpath(coupleddir, "C.csv"); groupkeys=[:Particle, :Quantile])
-    concentrationdf.Quantile = safeparse.(Float64, concentrationdf.Quantile)
+## Load emissions and GHGs dataframes
+concentrationdf = loadhierdataframe("Concentration" => joinpath(coupleddir, "C.csv"); groupkeys=[:Particle, :Quantile]);
+concentrationdf.Quantile = safeparse.(Float64, concentrationdf.Quantile);
 
-    emissionsdf = loadhierdataframe("Emissions" => joinpath(coupleddir, "Emm.csv"); groupkeys=[:Particle, :Quantile])
-    emissionsdf.Quantile = safeparse.(Float64, emissionsdf.Quantile)
+emissionsdf = loadhierdataframe("Emissions" => joinpath(coupleddir, "Emm.csv"); groupkeys=[:Particle, :Quantile]);
+emissionsdf.Quantile = safeparse.(Float64, emissionsdf.Quantile);
 
-    concentrationdf.Emissions = emissionsdf.Emissions
-    concentration = groupby(concentrationdf, [:Scenario, :Particle, :Quantile])
-end;
+concentrationdf.Emissions = emissionsdf.Emissions;
+concentration = groupby(concentrationdf, [:Scenario, :Particle, :Quantile]);
 
 if isinteractive() # Figure CO₂ concentration
     qs = SVector(0.05, 0.5, 0.95)
@@ -132,6 +131,7 @@ if isinteractive() # Figure CO₂ concentration
     impulsefig = plot(co2fig, excesstfig; layout=(1, 2), size=600 .* (2√2, 1), margins=5Plots.mm, legend=:topleft)
 end
 
+## Compute CO2 equivalence
 "Construct CO2e concentration"
 function computeco2equivalence(concentration, q, gwpdict)
     co2equivalence = deepcopy(concentration[("SSP5 8.5", "carbon_dioxide", q)])
@@ -169,27 +169,25 @@ function computeco2equivalence(concentration, q, gwpdict)
     return co2equivalence
 end
 
-begin
-    println("Molecular weights (g/mol):")
-    for (gas, mw) in molweights
-        println("  $gas: $mw")
-    end
-    println("\nMass-to-concentration factors (Gt → ppm):")
-    for (gas, factor) in masstoconcentration
-        println("  $gas: $(round(factor, digits=4))")
-    end
-    println("\nGWP values (AR6, 100-year):")
-    for (gas, gwpval) in gwpvalues
-        println("  $gas: $(gwpval)")
-    end
+println("Molecular weights (g/mol):")
+for (gas, mw) in molweights
+    println("  $gas: $mw")
+end
+println("\nMass-to-concentration factors (Gt → ppm):")
+for (gas, factor) in masstoconcentration
+    println("  $gas: $(round(factor, digits=4))")
+end
+println("\nGWP values (AR6, 100-year):")
+for (gas, gwpval) in gwpvalues
+    println("  $gas: $(gwpval)")
+end
 
-    # GWP dictionary: (gwp_value, concentration_unit_factor, emission_unit_factor, mass_to_conc_factor)
-    gwpdict = Dict(mol => (gwpvalue, converter[mol], masstoconcentration[mol]) for (mol, gwpvalue) in gwpvalues)
+# GWP dictionary: (gwp_value, concentration_unit_factor, emission_unit_factor, mass_to_conc_factor)
+gwpdict = Dict(mol => (gwpvalue, converter[mol], masstoconcentration[mol]) for (mol, gwpvalue) in gwpvalues)
 
-    co2equivalence = computeco2equivalence(concentration, 0.5, gwpdict)
-    co2equivalencelower = computeco2equivalence(concentration, 0.05, gwpdict)
-    co2equivalenceupper = computeco2equivalence(concentration, 0.95, gwpdict)
-end;
+co2equivalence = computeco2equivalence(concentration, 0.5, gwpdict)
+co2equivalencelower = computeco2equivalence(concentration, 0.05, gwpdict)
+co2equivalenceupper = computeco2equivalence(concentration, 0.95, gwpdict)
 
 # Define the no-policy scenario for calibration
 npscenario = "SSP5 8.5"
@@ -247,34 +245,32 @@ if isinteractive() # Figure fraction of forcing
     fracfig
 end
 
-# --- Computing parametric emissions form
-begin # Setup CO₂e maximisation problem
-    baselineyear = 2020.
-    τ = 2200. - baselineyear
-    co2tspan = baselineyear .+ (0., τ)
+## Setup CO₂e maximisation problem
+baselineyear = 2000.
+today = 2020.
+τ = 2200. - baselineyear
+co2tspan = baselineyear .+ (0., τ)
 
-    tdxs = baselineyear .≤ co2equivalence.Year .≤ (baselineyear + τ)
-    co2calibrationdf = co2equivalence[tdxs, :]
+tdxs = baselineyear .≤ co2equivalence.Year .≤ (baselineyear + τ)
+co2calibrationdf = co2equivalence[tdxs, :]
 
-    Mᵖ = mean(co2equivalence[1800 .≤ co2equivalence.Year .≤ 1900, "Concentration"])
-    m = @. log(co2calibrationdf.Concentration / Mᵖ)
-    t = co2calibrationdf.Year[1:end-1]
-    γ̂ₜ = diff(m); smooth!(γ̂ₜ, 5)  # Reduced smoothing to preserve SSP5-8.5 growth dynamics
-    Eₜ = Vector{Float64}(co2calibrationdf.Emissions)
-end;
+Mᵖ = mean(co2equivalence[1800 .≤ co2equivalence.Year .≤ 1900, "Concentration"])
+m = @. log(co2calibrationdf.Concentration / Mᵖ)
+t = co2calibrationdf.Year[1:end-1]
+γ̂ₜ = diff(m); smooth!(γ̂ₜ, 5)  # Reduced smoothing to preserve SSP5-8.5 growth dynamics
+Eₜ = Vector{Float64}(co2calibrationdf.Emissions)
 
+## Fit growth rate
 function growthrate(t, p)
     γ₀, α, γ₁, β, γ̄ = p
 
     return γ₀ * exp(α * t) + γ₁ * exp(β * t) + γ̄
 end
 
-begin
-    growthloss = @closure p -> mean(abs2, growthrate.(t .- co2tspan[1], Ref(p)) .- γ̂ₜ)
-    p₀ = MVector(0.001, -0.02, -0.01, -0.02, 0.002)
+growthloss = @closure p -> mean(abs2, growthrate.(t .- co2tspan[1], Ref(p)) .- γ̂ₜ)
+p₀ = MVector(0.001, -0.02, -0.01, -0.02, 0.002)
 
-    γres = optimize(growthloss, p₀, LBFGS())
-end
+γres = optimize(growthloss, p₀, LBFGS())
 
 γ̲ = 0.
 calibration = DoubleExponentialCalibration(co2tspan, Eₜ, γres.minimizer..., γ̲)
@@ -285,20 +281,19 @@ if isinteractive()
     fitfig
 end
 
-# --- Implied emissions
-begin
-    m₀ = first(m)
-    γfn = @closure (m, calibration, t) -> γ(t - baselineyear, calibration)
-    γprob = ODEProblem(γfn, m₀, co2tspan, calibration)
+## Implied emissions
+γfn = @closure (m, calibration, t) -> γ(t - baselineyear, calibration)
+γprob = ODEProblem(γfn, first(m), co2tspan, calibration)
 
-    calibratedpath = solve(γprob, Tsit5(), saveat=range(γprob.tspan...; step=1.))
+calibratedpath = solve(γprob, Tsit5(), saveat=1.)
 
-    m₀ = calibratedpath(baselineyear)
-    M₀ = Mᵖ * exp(m₀)
-    Mₜ = @. Mᵖ * exp(calibratedpath.u)
+m₀ = calibratedpath(baselineyear)
+M₀ = Mᵖ * exp(m₀)
+Mₜ = @. Mᵖ * exp(calibratedpath.u)
 
-    @printf "Calibrated error %.2e [p.p.m.]\n" maximum(abs, Mₜ .- co2calibrationdf.Concentration)
-end
+Mtoday = Mᵖ * exp(calibratedpath(today))
+
+@printf "Calibrated error %.2e [p.p.m.]\n" maximum(abs, Mₜ .- co2calibrationdf.Concentration)
 
 if isinteractive() # Check simulated fit
     Mfig = plot(co2calibrationdf.Year, Mₜ; c=:black, linestyle=:dash, ylabel=L"Concentration $[\si{\ppm}]$", label=L"Fitted $M^{\textrm{np}}_t$")
@@ -318,7 +313,7 @@ if isinteractive() # Check simulated fit
     co2errorfig
 end
 
-# --- Decay rate calibration
+## Compute decay rate observations
 if isinteractive() # Check cumulative emissions vs concentration
     gapfig = plot(co2calibrationdf.Year, Mₜ .- Mₜ[1]; c=:black, ylabel=L"Concentration $[\si{\ppm}]$", label=L"$M^{\textrm{np}}_t - M^{\textrm{np}}_{2012}$", xlabel = L"Year $t$")
 
@@ -338,10 +333,8 @@ function saturationdecay(M, p)
     return δ₀ * exp(-α * ΔM) - δ₁ * exp(-β * ΔM) + δ̄
 end
 
-begin # Compute decay rate observations
-    γ̂ = [γ(t - baselineyear, calibration) for t in co2calibrationdf.Year]
-    δ̂ = co2calibrationdf.Emissions ./ Mₜ - γ̂
-end
+γ̂ = [γ(t - baselineyear, calibration) for t in co2calibrationdf.Year]
+δ̂ = co2calibrationdf.Emissions ./ Mₜ - γ̂
 
 function exponentialdecay(M, p)
     aδ, bδ, cδ, dδ = p
@@ -356,20 +349,18 @@ function decayloss(p, optparameters)
     return sum(abs2, δ̂ - δ)
 end
 
-begin # Solve parameters of saturation decay
-    decaylossfn = Optimization.OptimizationFunction(decayloss, AutoForwardDiff());
-    optparameters = (Mₜ, δ̂);
-    
-    # Bounds for exponential-decay parameters
-    p₀ = MVector(0.008, 900.0, 400.0, 0.4)  # aδ, bδ, cδ
-    lb = MVector(0.0, 0., -Inf, 0.3)
-    ub = MVector(1.0, 3000.0, Inf, 0.5)
-    
-    decayproblem = Optimization.OptimizationProblem(decaylossfn, p₀, optparameters; lb=lb, ub=ub)
-    decaysol = solve(decayproblem, Fminbox(LBFGS()); iterations = 100_000)
+decaylossfn = Optimization.OptimizationFunction(decayloss, AutoForwardDiff());
+optparameters = (Mₜ, δ̂);
 
-    decay = ExponentialDecay(decaysol.u...)
-end
+# Bounds for exponential-decay parameters
+p₀ = MVector(0.008, 900.0, 400.0, 0.4)  # aδ, bδ, cδ
+lb = MVector(0.0, 0., -Inf, 0.3)
+ub = MVector(1.0, 3000.0, Inf, 0.5)
+
+decayproblem = Optimization.OptimizationProblem(decaylossfn, p₀, optparameters; lb=lb, ub=ub)
+decaysol = solve(decayproblem, Fminbox(LBFGS()); iterations = 100_000)
+
+decay = ExponentialDecay(decaysol.u...)
 
 # Check feasibility
 δ̲, _ = gssmin(M -> δₘ(M, decay), 400, 3000; tol = 1e-2)
@@ -391,55 +382,52 @@ if isinteractive() # Check cumulative emissions vs concentration
 end
 
 # CALIBRATION OF TEMPERATURE
-begin # --- Extract lower and upper bounds for the temperature
-    nptemperature = copy(temperature[(npscenario, 0.5)])
+## Extract lower and upper bounds for the temperature
+nptemperature = copy(temperature[(npscenario, 0.5)])
 
-    # Temperature without tipping elements
-    nptemperature[!, "T lower"] = temperature[(npscenario, 0.05)][:, "T_Uncoupled"]
-    nptemperature[!, "T upper"] = temperature[(npscenario, 0.95)][:, "T_Uncoupled"]
-    rename!(nptemperature, :T_Uncoupled => "T")
+# Temperature without tipping elements
+nptemperature[!, "T lower"] = temperature[(npscenario, 0.05)][:, "T_Uncoupled"]
+nptemperature[!, "T upper"] = temperature[(npscenario, 0.95)][:, "T_Uncoupled"]
+rename!(nptemperature, :T_Uncoupled => "T")
 
-    # Temperature with tipping elements
-    nptemperature[!, "T TE lower"] = temperature[(npscenario, 0.05)][:, "T_Coupled"]
-    nptemperature[!, "T TE upper"] = temperature[(npscenario, 0.95)][:, "T_Coupled"]
-    rename!(nptemperature, :T_Coupled => "T TE")
+# Temperature with tipping elements
+nptemperature[!, "T TE lower"] = temperature[(npscenario, 0.05)][:, "T_Coupled"]
+nptemperature[!, "T TE upper"] = temperature[(npscenario, 0.95)][:, "T_Coupled"]
+rename!(nptemperature, :T_Coupled => "T TE")
 
-    select!(nptemperature, Not([:Quantile, :Scenario]))
-end;
+select!(nptemperature, Not([:Quantile, :Scenario]))
 
+## Calibrate GHG radiative forcing
 const Tᵖ = 287.15
 const η = 5.67e-8 # Stefan-Boltzmann constant in Wm⁻²K⁻⁴
-const S₀ = 235.0 # Incoming radiative forcing
+const S₀ = 235.0 # Incoming initial radiative forcing
 
-begin
-    ghgcalibrationhorizon = 80.
-    ghgspan = baselineyear .+ (0, ghgcalibrationhorizon)
-    t₀, t₁ = ghgspan
+ghgcalibrationhorizon = 100.
+ghgspan = baselineyear .+ (0, ghgcalibrationhorizon)
+t₀, t₁ = ghgspan
 
-    m̂ = log.(co2calibrationdf[t₀.≤co2calibrationdf.Year.≤t₁, "Concentration"] ./ Mᵖ)
-    T̂ = nptemperature[t₀ .≤ nptemperature.Year .≤ t₁, "T"] # Temperature in deviation from pre-industrial level
-    X = hcat(ones(length(m̂)), m̂)
-    y = @. η * (T̂ + Tᵖ)^4 - S₀
-    G₀, G₁ = (X'X) \ (X'y)
+m̂ = log.(co2calibrationdf[t₀.≤co2calibrationdf.Year.≤t₁, "Concentration"] ./ Mᵖ)
+T̂ = nptemperature[t₀ .≤ nptemperature.Year .≤ t₁, "T"] # Temperature in deviation from pre-industrial level
+X = hcat(ones(length(m̂)), m̂)
+y = @. η * (T̂ + Tᵖ)^4 - S₀
+G₀, G₁ = (X'X) \ (X'y)
 
-    error = sum(abs2, X * [G₀, G₁] - y)
+error = sum(abs2, X * [G₀, G₁] - y)
 
-    @printf "G₀ = %.3f, G₁ = %.3f; residual = %.3f \n" G₀ G₁ error
-end
+@printf "G₀ = %.3f, G₁ = %.3f; residual = %.3f \n" G₀ G₁ error
 
-begin # Initialize the temperature matching problem
-    constants = (η, S₀, G₀, G₁, Tᵖ)
-    T̂upper = nptemperature[t₀ .≤ nptemperature.Year .≤ t₁, "T upper"]
-    T̂lower = nptemperature[t₀ .≤ nptemperature.Year .≤ t₁, "T lower"]
+## Initialize the temperature matching problem
+constants = (η, S₀, G₀, G₁, Tᵖ)
+T̂upper = nptemperature[t₀ .≤ nptemperature.Year .≤ t₁, "T upper"]
+T̂lower = nptemperature[t₀ .≤ nptemperature.Year .≤ t₁, "T lower"]
 
-    T₀ = T̂[1]
-    u₀ = SVector(m₀, T₀)
+T₀ = T̂[1]
+u₀ = SVector(m₀, T₀)
 
-    α₀ = 1.2
-    ϵ₀ = 0.15
-    σ₀ = 0.01
-    p₀ = SVector(ϵ₀, σ₀, α₀)
-end;
+α₀ = 1.2
+ϵ₀ = 0.15
+σ₀ = 0.01
+p₀ = SVector(ϵ₀, σ₀, α₀)
 
 # --- Optimization of ϵ first
 function dTimpulse(T, parameters, t)
@@ -455,12 +443,11 @@ function dTimpulse(T, parameters, t)
     return (r + ghgforcing) / ϵ
 end
 
-begin
-    m̄ = (η * (T₀ + Tᵖ)^4 - (S₀ + G₀)) / G₁
-    Δm = log((M₀ + 47 / 0.75) / Mᵖ) # ≈ 47 p.p.m. increase
-    T̄ = find_zero(T -> S₀ - η * (T + Tᵖ)^4 + G₀ + G₁ * Δm, T₀ + Tᵖ)
-    impulse = (Δm, T₀, T̄)
-end
+## Compute impulse parameters
+m̄ = (η * (T₀ + Tᵖ)^4 - (S₀ + G₀)) / G₁
+Δm = log((M₀ + 47 / 0.75) / Mᵖ) # ≈ 47 p.p.m. increase
+T̄ = find_zero(T -> S₀ - η * (T + Tᵖ)^4 + G₀ + G₁ * Δm, T₀ + Tᵖ)
+impulse = (Δm, T₀, T̄)
 
 function distancetohalf(T, t, integrator)
     impulse = integrator.p[end]
@@ -493,20 +480,20 @@ if isinteractive() # Plot impulse response with SDE
     
     toestimate = (ϵ, 0.2, α₀)
     timpulsemin = 2020.
-    timpulsemax = 2040.
+    timpulsemax = 2060.
 
     impulsesdeproblem = SDEProblem(dTimpulse, noiseimpulse, T₀, (timpulsemin, timpulsemax), (toestimate, constants, impulse))
     ensembleimpulseproblem = EnsembleProblem(impulsesdeproblem)
     
-    impulsesol = solve(ensembleimpulseproblem, ImplicitEM(); trajectories=10_000)
-    
-    if impulsesol.converged
-        impulseyears = range(ghgspan...; step = 1.)
+    impulsesol = solve(ensembleimpulseproblem, ImplicitEM(); trajectories=1_000, saveat = 1.)
+    Tlower =  timeseries_steps_quantile(impulsesol, 0.05).u
+    Tmedian = timeseries_steps_quantile(impulsesol, 0.5).u
+    Tupper = timeseries_steps_quantile(impulsesol, 0.95).u
 
-        Tlower = timeseries_point_quantile(impulsesol, 0.05, impulseyears).u
-        Tmedian = timeseries_point_quantile(impulsesol, 0.5, impulseyears).u
-        Tupper = timeseries_point_quantile(impulsesol, 0.95, impulseyears).u
-        
+    impulseyears = timpulsemin:1:timpulsemax
+
+
+    if impulsesol.converged
         # Half-life line
         _, T₀_impulse, T̄_impulse = impulse
         Thalf = T₀_impulse + (T̄_impulse - T₀_impulse) / 2
@@ -600,8 +587,8 @@ if isinteractive() let
 
     compfig = plot(xlabel="Year", ylabel=L"Temperature $[\si{\degree}]$", title=L"Comparison: $\hat{T}$ vs fitted $T$ with $\epsilon$", legend=:topleft)
 
-    plot!(compfig, 2020:2100, T̂; label=L"Observed $\hat{T}$", c=:black, linewidth=2.5, alpha=0.7)
-    plot!(compfig, 2020:2100, sol.u; label=L"Fitted $T$ with $\epsilon = %$(round(ϵ, digits = 4))$", c=:darkred, linewidth=2.5, linestyle=:dash)
+    plot!(compfig, sol.t, T̂; label=L"Observed $\hat{T}$", c=:black, linewidth=2.5, alpha=0.7)
+    plot!(compfig, sol.t, sol.u; label=L"Fitted $T$ with $\epsilon = %$(round(ϵ, digits = 4))$", c=:darkred, linewidth=2.5, linestyle=:dash)
 
     compfig
 end end
@@ -631,22 +618,19 @@ function quantileloss(σ, noiseoptparams)
     return sum(abs2, T̂spread - spread)
 end
 
-begin
-    noiseoptparams = (ensemblenoiseprob, (T̂upper - T̂lower))
-    σobjfn = @closure σ -> quantileloss(σ, noiseoptparams) # Tests
-    _, σ = gssmin(σobjfn, 0., 0.5; tol = 1e-2)
-end
+## Calibrate noise σ
+noiseoptparams = (ensemblenoiseprob, (T̂upper - T̂lower))
+σobjfn = @closure σ -> quantileloss(σ, noiseoptparams) # Tests
+_, σ = gssmin(σobjfn, 0., 0.5; tol = 1e-8)
 
 if isinteractive() let
     p = SVector(ϵ, σ, α₀)
     parameters = (p, defaults)
     sol = solve(ensemblenoiseprob, ImplicitEM(); p = parameters, save_idxs = 2, saveat = 1., trajectories = 1_000)
-    quantiles = timestep_quantile(sol, (0.05, 0.5, 0.95), 1:81)
-
-    years = range(t₀, t₁; step=1.)
-    Tlower = @. getindex(quantiles, 1)
-    Tmedian = @. getindex(quantiles, 2)
-    Tupper = @. getindex(quantiles, 3)
+    years = t₀:1.0:t₁
+    Tlower = timeseries_steps_quantile(sol, 0.05).u
+    Tmedian = timeseries_steps_quantile(sol, 0.5).u
+    Tupper = timeseries_steps_quantile(sol, 0.95).u
 
     # Plot observed data with confidence bands
     obsfig = plot(ylims = (1, 8), ylabel="Temperature", xlabel = "Year")
@@ -696,18 +680,19 @@ if isinteractive() # Check calibration
     Tcalfig
 end
 
-begin # Hogg definition
-    hogg = Hogg(
-        T₀=T₀, Tᵖ=Tᵖ, M₀=M₀, Mᵖ=Mᵖ,
-        S₀=S₀, η=η, ϵ=ϵ, 
-        G₀=G₀, G₁=G₁,
-        σ=σ, α=α₀
-    )
+## Hogg definition
+Ttoday =  ((hogg.S₀ + hogg.G₀ + hogg.G₁ * mtoday) / hogg.η)^(1/4) - hogg.Tᵖ
 
-    linearclimate = LinearClimate(hogg, decay)
-end
+hogg = Hogg(
+    T₀=Ttoday, Tᵖ=Tᵖ, M₀=Mtoday, Mᵖ=Mᵖ,
+    S₀=S₀, η=η, ϵ=ϵ, 
+    G₀=G₀, G₁=G₁,
+    σ=σ, α=α₀
+)
 
-# TIPPING POINT CALIBRATION
+linearclimate = LinearClimate(hogg, decay)
+
+## TIPPING POINT CALIBRATION
 if isinteractive()
     excesstfig = plot(xlabel=L"Year, $t$", yaxis="Temperature [°]", xlims=(2020, 2150), legend=:topleft, xticks=2020:20:2150)
 
@@ -812,47 +797,46 @@ function constraints!(res, p, optparameters)
     return res
 end
 
-begin # Calibrate adjustment speed
-    u₀ = SVector(m₀, T₀, T₀)
+## Calibrate adjustment speed
+u₀ = SVector(m₀, T₀, T₀)
 
-    tecalibrationhorizon = 100. + baselineyear
-    centurydx = searchsortedfirst(co2calibrationdf.Year, tecalibrationhorizon)
-    mtarget = log(co2calibrationdf[centurydx, "Concentration"] / Mᵖ)
+tecalibrationhorizon = 100. + baselineyear
+centurydx = searchsortedfirst(co2calibrationdf.Year, tecalibrationhorizon)
+mtarget = log(co2calibrationdf[centurydx, "Concentration"] / Mᵖ)
 
-    Tᶜ₀ = 3.
-    L₀ = 7.
-    ΔS₀ = 10.
-    p₀ = [Tᶜ₀, ΔS₀, L₀]
+Tᶜ₀ = 3.
+L₀ = 7.
+ΔS₀ = 10.
+p₀ = [Tᶜ₀, ΔS₀, L₀]
 
-    adtype = SecondOrder(AutoForwardDiff(), AutoForwardDiff())
-    lcons = [0., 0., 0., 0.]
-    ucons = [Inf, Inf, Inf, Inf]
+adtype = SecondOrder(AutoForwardDiff(), AutoForwardDiff())
+lcons = [0., 0., 0., 0.]
+ucons = [Inf, Inf, Inf, Inf]
 
-    feedbacks = Feedback{Float64}[]
-    for (i, df) in enumerate(tedfs)
-        subdf = df[baselineyear .≤ df.Year .≤ tecalibrationhorizon, :]
+feedbacks = Feedback{Float64}[]
+for (i, df) in enumerate(tedfs)
+    subdf = df[baselineyear .≤ df.Year .≤ tecalibrationhorizon, :]
 
-        parameters = (hogg, calibration, Tᶜ₀, ΔS₀, L₀)
-        coupledprob = ODEProblem(coupledsystem, u₀, extrema(subdf.Year), parameters)
+    parameters = (hogg, calibration, Tᶜ₀, ΔS₀, L₀)
+    coupledprob = ODEProblem(coupledsystem, u₀, extrema(subdf.Year), parameters)
 
-        ΔTtrajectory = subdf.T_Coupled .- subdf.T_Uncoupled
+    ΔTtrajectory = subdf.T_Coupled .- subdf.T_Uncoupled
 
-        objfunction = Optimization.OptimizationFunction(tippingelementloss, adtype; cons=constraints!)
-        optproblem = Optimization.OptimizationProblem(objfunction, p₀, (coupledprob, ΔTtrajectory); lcons, ucons)
+    objfunction = Optimization.OptimizationFunction(tippingelementloss, adtype; cons=constraints!)
+    optproblem = Optimization.OptimizationProblem(objfunction, p₀, (coupledprob, ΔTtrajectory); lcons, ucons)
 
-        teresult = solve(optproblem, IPNewton(); iterations=10_000)
-        Tᶜ, ΔS, L = teresult.u
+    teresult = solve(optproblem, IPNewton(); iterations=10_000)
+    Tᶜ, ΔS, L = teresult.u
 
-        if !SciMLBase.successful_retcode(teresult)
-            @warn @sprintf "Result %i not converged.\n" i
-        else
-            @printf "Problem %i converged with ΔTᶜ=%.3f, ΔS=%.3f, L=%.3f, error=%.3e.\n" i Tᶜ ΔS L teresult.objective
-        end
-
-        feedback = Feedback(Tᶜ, ΔS, L)
-
-        push!(feedbacks, feedback)
+    if !SciMLBase.successful_retcode(teresult)
+        @warn @sprintf "Result %i not converged.\n" i
+    else
+        @printf "Problem %i converged with ΔTᶜ=%.3f, ΔS=%.3f, L=%.3f, error=%.3e.\n" i Tᶜ ΔS L teresult.objective
     end
+
+    feedback = Feedback(Tᶜ, ΔS, L)
+
+    push!(feedbacks, feedback)
 end
 
 function extendedcoupledsystem!(du, u, parameters, t)

@@ -107,7 +107,7 @@ Base.@kwdef struct WeitzmanLevel{S} <: LevelDamages{S}
 end
 
 function D(T, damages::WeitzmanLevel)
-    inv(1 + (T / damages.ξ₂)^2 + (T / damages.ξₙ)^damages.ν)
+    inv(1 + (max(T, 0) / damages.ξ₂)^2 + (max(T, 0) / damages.ξₙ)^damages.ν)
 end
 
 Base.@kwdef struct DICE{S} <: LevelDamages{S}

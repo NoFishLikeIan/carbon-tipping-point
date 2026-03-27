@@ -30,76 +30,76 @@ includet("../../utils/simulating.jl")
 includet("../../utils/saving.jl")
 includet("../../utils/simulating.jl")
 
-begin # Global variables
-    DATAPATH = "data"
-    PLOTPATH = "../job-market-paper/jeem/plots"
-    PRESENTATIONPATH = joinpath(PLOTPATH, "presentation")
+## Global variables
+DATAPATH = "data"
+PLOTPATH = "../job-market-paper/jeem/plots"
+PRESENTATIONPATH = joinpath(PLOTPATH, "presentation")
 
-    SAVEFIG = true
-    LINE_WIDTH = 2.5
-    SEED = 11148705
+SAVEFIG = true
+LINE_WIDTH = 2.5
+SEED = 11148705
 
-    trajectories = 10_000
+trajectories = 10_000
 
-    TLABEL = L"Temperature $T_t \; [\si{\degree}]$"
-    MLABEL = L"\si{CO2}e $M_t \; [\si{\ppm}]$"
-end;
+TLABEL = L"Temperature $T_t \; [\si{\degree}]$"
+MLABEL = L"\si{CO2}e $M_t \; [\si{\ppm}]$"
 
-begin # Construct models and grids
-    calibrationpath = joinpath(DATAPATH, "calibration")
+## Construct models and grids
+calibrationpath = joinpath(DATAPATH, "calibration")
 
-    climatepath = joinpath(calibrationpath, "climate.jld2")
-    @assert isfile(climatepath) "Climate calibration file not found at $climatepath"
-    climatefile = jldopen(climatepath, "r+")
-    @unpack calibration, hogg, feedbacklower, feedback, feedbackhigher, decay = climatefile
-    close(climatefile)
+climatepath = joinpath(calibrationpath, "climate.jld2")
+@assert isfile(climatepath) "Climate calibration file not found at $climatepath"
+climatefile = jldopen(climatepath, "r+")
+@unpack calibration, hogg, feedbacklower, feedback, feedbackhigher, decay = climatefile
+close(climatefile)
 
-    abatementpath = joinpath(calibrationpath, "abatement.jld2")
-    @assert isfile(abatementpath) "Abatement calibration file not found at $abatementpath"
-    abatementfile = jldopen(abatementpath, "r+")
-    @unpack abatement = abatementfile
-    close(abatementfile)
+abatementpath = joinpath(calibrationpath, "abatement.jld2")
+@assert isfile(abatementpath) "Abatement calibration file not found at $abatementpath"
+abatementfile = jldopen(abatementpath, "r+")
+@unpack abatement = abatementfile
+close(abatementfile)
 
-    investments = Investment()
-    damages = BurkeHsiangMiguel() # NoDamageGrowth{Float64}()
-    economy = Economy(investments = investments, damages = damages, abatement = abatement)
-    
-    preferences = LogSeparable()
+investments = Investment()
+damages = BurkeHsiangMiguel() # NoDamageGrowth{Float64}()
+economy = Economy(investments = investments, damages = damages, abatement = abatement)
 
-    linearmodel = IAM(LinearClimate(hogg, decay), economy, preferences)
-    
-    tippingmodels = [
-        IAM(TippingClimate(hogg, decay, updatethreshold(2., feedback)), economy, preferences),
-        IAM(TippingClimate(hogg, decay, updatethreshold(4., feedback)), economy, preferences)
-    ]
+preferences = LogSeparable()
 
-    models = IAM[tippingmodels..., linearmodel]
-    labels = [L"T^c = 2\si{\degree}", L"T^c = 4\si{\degree}", "Linear"]
-    labelsbymodel = Dict(models .=> labels)
-end;
+linearmodel = IAM(LinearClimate(hogg, decay), economy, preferences)
 
-begin # Labels, colors and axis
-    PALETTE = colorschemes[:grays]
-    colors = get(PALETTE, range(0., 1.; length = length(models)), (0., 1.25))
-    trajectorymarkers = ["square*", "diamond*", "*"]
+tippingmodels = [
+    IAM(TippingClimate(hogg, decay, updatethreshold(2., feedback)), economy, preferences),
+    IAM(TippingClimate(hogg, decay, updatethreshold(3., feedback)), economy, preferences)
+]
 
-    colorsbymodel = Dict(models .=> colors)
-    markerbymodel = Dict(models .=> trajectorymarkers)
-    Tmin = 0.0; Tmax = 6.0
-    Tspace = range(Tmin, Tmax; length = 101)
+models = IAM[tippingmodels..., linearmodel]
+labels = [L"T^c = 2\si{\degree}", L"T^c = 3\si{\degree}", "Linear"]
+labelsbymodel = Dict(models .=> labels)
 
-    horizon = 2100. - first(calibration.calibrationspan)
-    yearlytime = 0:1:horizon
-    simtspan = (0, horizon)
+## Labels, colors and axis
+PALETTE = colorschemes[:grays]
+colors = get(PALETTE, range(0., 1.; length = length(models)), (0., 1.25))
+trajectorymarkers = ["square*", "diamond*", "*"]
 
-    temperatureticks = collect.(makedeviationtickz(0, 6; step=1, digits=0))
+colorsbymodel = Dict(models .=> colors)
+markerbymodel = Dict(models .=> trajectorymarkers)
+Tmin = 0.0; Tmax = 4.0
+Tspace = range(Tmin, Tmax; length = 101)
 
-    m₀ = log(hogg.M₀ / hogg.Mᵖ)
-    T₀ = hogg.T₀
-    X₀ = SVector(T₀, m₀)
-end;
+today = 2020.
+horizon = 2080. - today
+yearlytime = 0:1:horizon
+simtspan = (0, horizon)
 
-begin # Feedback plot
+temperatureticks = collect.(makedeviationtickz(0, 6; step=1, digits=0))
+
+m₀ = log(hogg.M₀ / hogg.Mᵖ)
+T₀ = hogg.T₀
+X₀ = SVector(T₀, m₀)
+
+
+## Equilibria figure
+begin
     additionalradiation = [model.climate isa TippingClimate ? λ(T, model.climate.feedback) : 0. for T in Tspace, model in models]
 
     feedbackfig = @pgf Axis({
@@ -111,7 +111,7 @@ begin # Feedback plot
         xticklabels = temperatureticks[2],
         xtick = temperatureticks[1],
         xmin = Tmin, xmax = Tmax,
-        ymax = 3.,
+        ymax = 2.,
         legend_cell_align = "left",
         legend_style = { at = {"(0.025, 0.975)"}, anchor = "north west", nodes = {scale = 0.7} }
     })
@@ -123,8 +123,17 @@ begin # Feedback plot
     for mdx in reverse(axes(additionalradiation, 2))
         rad = @view additionalradiation[:, mdx]
         model = models[mdx]
+        marker = markerbymodel[model]
+        color = colorsbymodel[model]
         
-        radiationcurve = @pgf Plot({ color = colorsbymodel[model], line_width = LINE_WIDTH, opacity = 0.8 }, Coordinates(Tspace, rad))
+        radiationcurve = @pgf Plot({ 
+            color = color, 
+            line_width = LINE_WIDTH, 
+            opacity = 0.8,
+            mark = marker,
+            mark_repeat = 10,
+            mark_options = {fill = color, scale = 0.5}
+        }, Coordinates(Tspace, rad))
 
         push!(feedbackfig, radiationcurve, LegendEntry(labelsbymodel[model]))
     end
@@ -136,45 +145,8 @@ begin # Feedback plot
     feedbackfig
 end
 
-
-begin # Equilibria figure
-    additionalradiation = [model.climate isa TippingClimate ? λ(T, model.climate.feedback) : 0. for T in Tspace, model in models]
-
-    feedbackfig = @pgf Axis({
-        width = raw"0.51\textwidth",
-        height = raw"0.425\textwidth",
-        grid = "both",
-        xlabel = TLABEL,
-        ylabel = raw"Positive feedback $\lambda(T_t) \; [\si{W.m^{-2}}]$",
-        xticklabels = temperatureticks[2],
-        xtick = temperatureticks[1],
-        xmin = Tmin, xmax = Tmax,
-        ymax = 3.,
-        legend_cell_align = "left",
-        legend_style = { at = {"(0.025, 0.975)"}, anchor = "north west", nodes = {scale = 0.7} }
-    })
-
-    if SAVEFIG
-        PGFPlotsX.save(joinpath(PLOTPATH, "skeleton-albedo.tikz"), feedbackfig; include_preamble=true)
-    end
-
-    for mdx in reverse(axes(additionalradiation, 2))
-        rad = @view additionalradiation[:, mdx]
-        model = models[mdx]
-        
-        radiationcurve = @pgf Plot({ color = colorsbymodel[model], line_width = LINE_WIDTH, opacity = 0.8 }, Coordinates(Tspace, rad))
-
-        push!(feedbackfig, radiationcurve, LegendEntry(labelsbymodel[model]))
-    end
-
-    if SAVEFIG
-        PGFPlotsX.save(joinpath(PLOTPATH, "feedbackfig.tikz"), feedbackfig; include_preamble=true)
-    end
-
-    feedbackfig
-end
-
-begin # Simulate NP problem
+## Simulate NP problem
+begin
     sims = Dict{IAM, DiffEqArray}()
 
     npprob = SDEProblem(Fnp, noise, X₀, simtspan, (linearmodel, calibration))
@@ -182,7 +154,7 @@ begin # Simulate NP problem
 
     for model in models
         npparameters = (model, calibration)
-        sol = solve(npensemble; reltol = 1e-8, trajectories = 15_000, p = npparameters, saveat = 1.0)
+        sol = solve(npensemble; reltol = 1e-8, trajectories = trajectories, p = npparameters, saveat = 1.0)
 
         @printf "Done with simulation of %s\n" labelsbymodel[model]
 
@@ -191,7 +163,8 @@ begin # Simulate NP problem
     end
 end;
 
-begin # NP simulation + nullclines
+## NP simulation + nullclines
+begin
     nullclinevariation = Dict{IAM, Vector{Vector{NTuple{2,Float64}}}}()
 
     for model in reverse(models)
@@ -216,14 +189,17 @@ begin # NP simulation + nullclines
         nullclinevariation[model] = nullclines
     end
     
+    markerstep = 15
     mmedianpath = getindex.(getindex.(sims[models[1]].u, 2), 2)
     Mmedianpath = @. hogg.Mᵖ * exp(mmedianpath)
-    Mticks = Mmedianpath[1:15:end]
+    Mticks = Mmedianpath[1:markerstep:end]
     Mmin, Mmax = extrema(Mticks)
 
+    yearticks = 2020 .+ (sims[models[1]].t[1:markerstep:end])
+
     Mtickslabels = [
-        L"\small $%$M$\\ \footnotesize ($%$y$)"
-        for (M, y) in zip(round.(Int, Mticks), 2020:10:2100)
+        L"\footnotesize $%$M$\\ \footnotesize ($%$(floor(Int, y))$)"
+        for (M, y) in zip(round.(Int, Mticks), yearticks)
     ]
 
     nullclinefig = @pgf Axis({
@@ -237,8 +213,8 @@ begin # NP simulation + nullclines
         ytick = temperatureticks[1],
         ymin = Tmin, ymax = Tmax,
         legend_cell_align = "left",
-        xmin = floor(Mmin, digits = -2), 
-        xmax = ceil(Mmax, digits = -2),
+        xmin = floor(Mmin, digits = -1), 
+        xmax = ceil(Mmax, digits = -1),
         xtick = Mticks, xticklabels = Mtickslabels,
         xticklabel_style = {align = "center"}
     })
@@ -276,7 +252,7 @@ begin # NP simulation + nullclines
         mediancoords = Coordinates(Mmedianpath, median)
         curve = @pgf Plot({color = color, line_width = LINE_WIDTH, forget_plot}, mediancoords)
 
-        markers = @pgf Plot({only_marks, mark_options = {fill = "black", scale = 1.5, draw_opacity = 0, color = color, mark = marker}, mark_repeat = 10}, mediancoords)
+        markers = @pgf Plot({only_marks, mark_options = {fill = "black", scale = 1.5, draw_opacity = 0, color = color, mark = marker}, mark_repeat = markerstep}, mediancoords)
 
         label = labelsbymodel[model]
         legend = LegendEntry(label)
@@ -298,7 +274,8 @@ begin # NP simulation + nullclines
     nullclinefig
 end
 
-begin # Pure nullcline figure
+## Pure nullcline figure
+begin
     nullclinefig = @pgf Axis({
         width = raw"0.765\textwidth",
         height = raw"0.595\textwidth",
@@ -325,7 +302,7 @@ begin # Pure nullcline figure
             line_width = LINE_WIDTH,
             mark = marker,
             mark_repeat = 10,
-            mark_options = {fill = color, scale = 1.2}
+            mark_options = {fill = color, scale = 0.5}
         }, Coordinates(stableleft))
 
         label = LegendEntry(labelsbymodel[model])
@@ -335,7 +312,14 @@ begin # Pure nullcline figure
         if !isempty(rest)
             unstable, stableright = rest
             unstablecurve = @pgf Plot({color = color, line_width = LINE_WIDTH, forget_plot, dotted}, Coordinates(unstable))
-            rightcurve = @pgf Plot({color = color, line_width = LINE_WIDTH, forget_plot}, Coordinates(stableright))
+            rightcurve = @pgf Plot({
+                color = color,
+                line_width = LINE_WIDTH,
+                mark = marker,
+                mark_repeat = 10,
+                mark_options = {fill = color, scale = 0.5},
+                forget_plot
+            }, Coordinates(stableright))
 
             push!(nullclinefig, unstablecurve, rightcurve)
         end
@@ -354,7 +338,7 @@ end
 begin # Simulate carbon concentrations
     mbau(m, (hogg, calibration), t) = γ(t, calibration)
     parameters = (hogg, calibration)
-    mnpproblem = ODEProblem(mbau, m₀, (0.0, 80.0), parameters)
+    mnpproblem = ODEProblem(mbau, m₀, simtspan, parameters)
     mnptraj = solve(mnpproblem, AutoVern9(Rodas5P()); saveat = 1.)
 end
 
@@ -372,7 +356,7 @@ begin # Growth of carbon concentration
         xmin = 0.0, xmax = horizon
     })
 
-    growthticks = (0.4:0.2:1.4) ./ 100
+    growthticks = (0:0.2:1.4) ./ 100
 
     γfig = @pgf Axis({})
 
@@ -482,7 +466,7 @@ let # Damage fig
         scaled_y_ticks = false,
         legend_style = {at = {"(0.03,0.97)"}, anchor = "north west", nodes = {scale = 0.75}},
         legend_cell_align = "left",
-        ymin = 0, ymax = 0.1,
+        ymin = 0, ymax = 0.05,
     })
 
     for (label, curve, style, marker) in comparedamages
@@ -548,7 +532,7 @@ function level_damage_axis(γ₀, linearmodel, Tspace; withlegend = false, withy
         ("Weitzman Growth (2012)", Dₜdell, "solid", "diamond*")
     ]
 
-    ytick = 0:0.2:1.0
+    ytick = 0:0.2:0.8
     yticklabels = [@sprintf("%.0f\\%%", 100 * y) for y in ytick]
 
     _, xticklabels = makedeviationtickz(Tₜ[1], Tₜ[end]; step = 1, digits = 0)
