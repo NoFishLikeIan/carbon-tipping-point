@@ -290,8 +290,8 @@ calibratedpath = solve(γprob, Tsit5(), saveat=1.)
 m₀ = calibratedpath(baselineyear)
 M₀ = Mᵖ * exp(m₀)
 Mₜ = @. Mᵖ * exp(calibratedpath.u)
-
-Mtoday = Mᵖ * exp(calibratedpath(today))
+mtoday = calibratedpath(today)
+Mtoday = Mᵖ * exp(mtoday)
 
 @printf "Calibrated error %.2e [p.p.m.]\n" maximum(abs, Mₜ .- co2calibrationdf.Concentration)
 
@@ -681,7 +681,7 @@ if isinteractive() # Check calibration
 end
 
 ## Hogg definition
-Ttoday =  ((hogg.S₀ + hogg.G₀ + hogg.G₁ * mtoday) / hogg.η)^(1/4) - hogg.Tᵖ
+Ttoday =  ((S₀ + G₀ + G₁ * mtoday) / η)^(1/4) - Tᵖ
 
 hogg = Hogg(
     T₀=Ttoday, Tᵖ=Tᵖ, M₀=Mtoday, Mᵖ=Mᵖ,
