@@ -11,6 +11,8 @@ function backwardequilibriumstep!(problem, Sᵨ, equilibriumstencil, (t, H, α),
     if !SciMLBase.successful_retcode(sol)
         throw("Time step solver failed at time $t!")
     end
+
+    return sol
 end
 "Updates stencils, source and policy and takes a step from `H(t)` to `H(t - Δt)`."
 function backwardstep!(problem, R, stencilm, valuefunction::ValueFunction, Δt⁻¹, model::M, G::GR, calibration::Calibration; withnegative = true) where {N₁, N₂, S, M <: UnitIAM{S}, GR <: AbstractGrid{N₁,N₂,S}}
@@ -47,6 +49,8 @@ function equilibriumsteadystate!(valuefunction::ValueFunction{S, N₁, N₂}, Δ
     backwardequilibriumstep!(problem, Sᵨ, equilibriumstencil, (t, H, α), Δt⁻¹, linearmodel, G, calibration; withnegative)
 
     itererror = abserror(problem.u, H)
+    copyto!(H, problem.u)
+
     if itererror < tolerance
         @inbounds for i in 2:N₁
             valuefunction.α[i, :] .= α
@@ -58,9 +62,9 @@ function equilibriumsteadystate!(valuefunction::ValueFunction{S, N₁, N₂}, Δ
     
     for iter in 2:timeiterations  
         backwardequilibriumstep!(problem, Sᵨ, equilibriumstencil, (t, H, α), Δt⁻¹, linearmodel, G, calibration; withnegative)
-        itererror = abserror(problem.u, H)
+        abserror!(itererror, problem.u, H)
 
-        H .= problem.u
+        copyto!(H, problem.u)
 
         if itererror < tolerance
             @inbounds for i in 2:N₁
@@ -104,9 +108,9 @@ function steadystate!(valuefunction::ValueFunction{S, N₁, N₂}, Δt::S, model
     
     for iter in 2:timeiterations  
         backwardstep!(problem, R, stencilm, valuefunction, Δt⁻¹, model, G, calibration; withnegative)
-        itererror = abserror(problem.u, valuefunction.H)
+        abserror!(itererror, problem.u, valuefunction.H)
 
-        copyto!(valuefunction.H[k], uₖ)
+        copyto!(valuefunction.H, problem.u)
 
         if itererror < tolerance
             return valuefunction, (iter, itererror)
@@ -156,7 +160,7 @@ function backwardsimulation!(valuefunction::ValueFunction{S, N₁, N₂}, Δt::S
         valuefunction.t.t -= Δt
         backwardstep!(problem, R, stencilm, valuefunction, Δt⁻¹, model, G, calibration; withnegative)
 
-        copyto!(valuefunction.H[k], uₖ)
+        copyto!(valuefunction.H, problem.u)
 
         if (verbose > 1) || (verbose > 0 && valuefunction.t.t < tverbose)
             if verbose > 0 

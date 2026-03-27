@@ -17,7 +17,9 @@ using Interpolations
 using JLD2
 using Printf, Dates
 
+
 include("../src/valuefunction.jl")
+include("../src/regret.jl")
 include("../src/extend/model.jl")
 include("../src/extend/grid.jl")
 include("../src/extend/valuefunction.jl")

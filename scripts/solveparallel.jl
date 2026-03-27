@@ -4,7 +4,7 @@ using Dates: now
 ## Inputs
 const workers = 8
 const datapath = "./data"
-const simulationpath = "simulation-test"
+const simulationpath = "simulation"
 
 addprocs(workers - 1, exeflags = "--project=$(Base.active_project())")
 

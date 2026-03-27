@@ -1,102 +1,102 @@
-using Test, BenchmarkTools, Revise, UnPack
-using Plots, LaTeXStrings
-default(c=:viridis, label=false, dpi=180)
+using Test, BenchmarkTools, Revise
+using Plots, LaTeXStrings, ColorSchemes
 
 using Model, Grid
 using Base.Threads
 using SciMLBase
 using Statistics
 using StaticArrays, SparseArrays
-using Interpolations, DataStructures
-
 using LinearSolve, LinearAlgebra
+using Interpolations
+using DataStructures
 
 using JLD2, UnPack
 using Dates, Printf
 
 includet("../../src/valuefunction.jl")
+includet("../../src/regret.jl")
 includet("../../src/extend/model.jl")
 includet("../../src/extend/grid.jl")
 includet("../../src/extend/valuefunction.jl")
+
 includet("../utils/saving.jl")
 includet("../utils/simulating.jl")
+
 includet("../plotting/utils.jl")
-includet("../utils/simulating.jl")
+
 includet("../markov/chain.jl")
 includet("../markov/finitedifference.jl")
 
-begin # Construct the model
-    DATAPATH = "data"
-    calibrationpath = joinpath(DATAPATH, "calibration")
+## Construct the model
+DATAPATH = "data"
+calibrationpath = joinpath(DATAPATH, "calibration")
 
-    # Load economic calibration
-    abatementpath = joinpath(calibrationpath, "abatement.jld2")
-    @assert isfile(abatementpath) "Abatement calibration file not found at $abatementpath"
-    abatementfile = jldopen(abatementpath, "r+")
-    @unpack abatement = abatementfile
-    close(abatementfile)
+# Load economic calibration
+abatementpath = joinpath(calibrationpath, "abatement.jld2")
+@assert isfile(abatementpath) "Abatement calibration file not found at $abatementpath"
+abatementfile = jldopen(abatementpath, "r+")
+@unpack abatement = abatementfile
+close(abatementfile)
 
-    investments = Investment()
-    damages = BurkeHsiangMiguel() # WeitzmanGrowth()
-    economy = Economy(investments = investments, damages = damages, abatement = abatement)
+investments = Investment()
+damages = BurkeHsiangMiguel() # WeitzmanGrowth()
+economy = Economy(investments = investments, damages = damages, abatement = abatement)
 
-    # Load climate claibration
-    climatepath = joinpath(calibrationpath, "climate.jld2")
-    @assert isfile(climatepath) "Climate calibration file not found at $climatepath"
-    climatefile = jldopen(climatepath, "r+")
-    @unpack calibration, hogg, feedbacklower, feedback, feedbackhigher = climatefile
-    close(climatefile)
+# Load climate claibration
+climatepath = joinpath(calibrationpath, "climate.jld2")
+@assert isfile(climatepath) "Climate calibration file not found at $climatepath"
+climatefile = jldopen(climatepath, "r+")
+@unpack calibration, hogg, feedbacklower, feedback, feedbackhigher = climatefile
+close(climatefile)
 
-    decay = ConstantDecay(0.)
-    threshold = 2.
-    climate = if 0 < threshold < Inf
-        feedback = updatethreshold(threshold, feedback)
-        TippingClimate(hogg, decay, feedback)
-    else
-        LinearClimate(hogg, decay)
-    end
-
-    preferences = LogSeparable()
-    model = IAM(climate, economy, preferences)
-    model = determinsticIAM(model)
+decay = ConstantDecay(0.)
+threshold = 2.
+climate = if 0 < threshold < Inf
+    feedback = updatethreshold(threshold, feedback)
+    TippingClimate(hogg, decay, feedback)
+else
+    LinearClimate(hogg, decay)
 end
 
-begin
-    N₁ = 30; N₂ = 31;
-    N = (N₁, N₂)
-    Tmin = 0.; Tmax = 8.;
-    mmin = mstable(Tmin + 0.1, model.climate)
-    mmax = mstable(Tmax - 0.1, model.climate)
-    
-    Tdomain = (Tmin, Tmax)
-    mdomain = (mmin, mmax)
-    
-    domains = (Tdomain, mdomain)
-    withnegative = true
+preferences = LogSeparable()
+model = IAM(climate, economy, preferences)
+model = determinsticIAM(model)
 
-    G = RegularGrid(N, domains)
-    Δt⁻¹ = 24.
-    Δt = 1 / Δt⁻¹
-    τ = 500.
-end;
+## Construct grid
+N₁ = 30; N₂ = 31;
+N = (N₁, N₂)
+Tmin = 0.; Tmax = 8.;
+mmin = mstable(Tmin + 0.1, model.climate)
+mmax = mstable(Tmax - 0.1, model.climate)
 
+Tdomain = (Tmin, Tmax)
+mdomain = (mmin, mmax)
+
+domains = (Tdomain, mdomain)
+withnegative = true
+
+G = RegularGrid(N, domains)
+Δt⁻¹ = 24.
+Δt = 1 / Δt⁻¹
+τ = 500.
+
+## Solve terminal first
 terminalvaluefunction = ValueFunction(τ, climate, G, calibration)
 
 equilibriumsteadystate!(terminalvaluefunction, Δt, linearIAM(model), G, calibration; verbose = 1, timeiterations = 100_000, printstep = 10_000, tolerance = Error(1e-8, 1e-8))
-
 steadystate!(terminalvaluefunction, Δt, model, G, calibration; timeiterations = 10_000, printstep = 1_000, verbose = 1, tolerance = Error(1e-7, 1e-8))
 
 let # HJB error
     n = prod(size(G))
     stencilT, stencilm = makestencil(G)
     constructDᵀ!(stencilT, model, G)
-    constructDᵐ!(stencilm, valuefunction, model, G, calibration, withnegative)
-    b̄ = constructsource(valuefunction, Δt⁻¹, model, G, calibration)
+    constructDᵐ!(stencilm, terminalvaluefunction, model, G, calibration, withnegative)
+    b̄ = constructsource(terminalvaluefunction, Δt⁻¹, model, G, calibration)
     Sᵨ = (preferences.ρ + Δt⁻¹) * I
     R = Sᵨ - sparse(stencilT[1], stencilT[2], stencilT[3], n, n)
     Ā = R - sparse(stencilm[1], stencilm[2], stencilm[3], n, n)
 
-    hjb = reshape(Ā * vec(valuefunction.H) - b̄, size(G))
+    hjb = reshape(Ā * vec(terminalvaluefunction.H) - b̄, size(G))
 
     hjberror = maximum(abs, hjb)
     println("Maximum HJB error: ", hjberror)
@@ -109,13 +109,13 @@ end
 
 if isinteractive()
     Tspace, mspace = G.ranges
-    E = ε(valuefunction, model, calibration, G)
+    E = ε(terminalvaluefunction, model, calibration, G)
     Ē = max(maximum(E), 1)
     nullcline = [mstable(T, model.climate) for T in Tspace]
 
     policyfig = heatmap(mspace, Tspace, E; title = L"Terminal $\bar{\alpha}_{\tau} / \gamma_t$", xlabel = L"m", ylabel = L"T", xlims = extrema(mspace), ylims = extrema(Tspace), clims = (0, Ē), linewidth = 0., color = abatementcolorbar(Ē))
 
-    valuefig = contourf(mspace, Tspace, valuefunction.H; title = L"Terminal value $\bar{H}$", xlabel = L"m", ylabel = L"T", xlims = extrema(mspace), ylims = extrema(Tspace), levels = 21)
+    valuefig = contourf(mspace, Tspace, terminalvaluefunction.H; title = L"Terminal value $\bar{H}$", xlabel = L"m", ylabel = L"T", xlims = extrema(mspace), ylims = extrema(Tspace), levels = 21)
 
     for fig in (policyfig, valuefig)
         plot!(fig, nullcline, Tspace; label = false, c = :black, linewidth = 2.5)
@@ -125,7 +125,7 @@ if isinteractive()
     plot(policyfig, valuefig; layout=(1,2), size = 600 .* (2√2, 1))
 end
 
-# Simulate backwards
+## Simulate backwards
 valuefunction = deepcopy(terminalvaluefunction)
 valuefunctiontraj = backwardsimulation!(valuefunction, Δt, model, G, calibration; t₀ = 0., withnegative, withsave = false, verbose = 1, storetrajectory = true)
 

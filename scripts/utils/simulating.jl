@@ -181,11 +181,14 @@ function Base.isless(error::Error{S}, tolerance::Error{S}) where S
     (error.absolute < tolerance.absolute) && (error.relative < tolerance.relative)
 end
 
-function abserror(a::AbstractArray, b::AbstractArray)
-    z = first(promote(a[1], b[1]))
+function abserror(a::A, b::B) where {S, A <: AbstractArray{S}, B <: AbstractArray}
+    z = zero(S)
     abserror!(Error(z, z), a, b)
 end
 function abserror!(error::Error{S}, a::AbstractArray, b::AbstractArray) where S
+    error.absolute = zero(S)
+    error.absolute = zero(S)
+    
     for k in eachindex(a)
         Δ = abs(a[k] - b[k])
         if Δ > error.absolute

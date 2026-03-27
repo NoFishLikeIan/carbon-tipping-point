@@ -56,5 +56,5 @@ UnPack = "3a884ed6-31ef-47d7-9d2a-63182c4928ed"
 ZigZagBoomerang = "36347407-b186-4a6a-8c98-4f4567861712"
 
 [sources]
-Grid = {path = "src/Grid"}
-Model = {path = "src/Model"}
+Grid = {path = "src\\Grid"}
+Model = {path = "src\\Model"}
