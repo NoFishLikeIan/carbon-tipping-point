@@ -129,7 +129,7 @@ begin
     extremalabels = ("Linear", "Tipping")
     PALETTE = colorschemes[:grays]
     colors = reverse(get(PALETTE, range(0, 0.6; length=length(extremamodels))))
-    modelmarkers = ("square*", "**")
+    modelmarkers = ("square*", "*")
     MARKER_REPEAT = 10
 
     TEMPLABEL = raw"Temperature deviations $T_t \; [\si{\degree\Celsius}]$"
@@ -164,9 +164,9 @@ begin
         for (M, y) in zip(round.(Int, Mmedianpath), years)
     ]
     
-    ytick = 0.:0.1:1.3
+    ytick = 0.3:0.1:1.3
     yticklabels = [ @sprintf("\\footnotesize %.0f\\%%", 100y) for y in ytick ]
-    ymin, ymax = 0., 1.3  
+    ymin, ymax = extrema(ytick)
 
     policyfig = @pgf Axis({
         ymin = ymin, ymax = ymax, 
@@ -187,7 +187,7 @@ begin
     bandpoly = @pgf Plot({fill = "gray", opacity = 0.2, draw = "none", forget_plot}, Coordinates(bandcoords))
     push!(policyfig, bandpoly)
 
-    timepoints = 0:0.1:horizon
+    timepoints = 0:1:horizon
     for (i, model) in enumerate(extremamodels)
         _, α = interpolations[model]
         T̄ = [Tstable(mnp(t), model.climate) for t in timepoints]
@@ -259,7 +259,7 @@ begin
         ensembleprob = EnsembleProblem(problem)
 
         simulation = solve(ensembleprob; trajectories = 10_000)
-        println("Done with simulation of $i / $(length(extremamodels))\n$model\n")
+        println("Done with simulation of $i / $(length(extremamodels))\n")
 
         simulations[model] = simulation
     end
@@ -273,12 +273,12 @@ begin
     confidenceopts = @pgf {draw = "none", forget_plot}
     fillopts = @pgf {fill = "gray", opacity = 0.5, forget_plot}
     
-    εtick = 0.:0.1:1.2
+    εtick = 0.3:0.1:1.2
     εticklabels = [ @sprintf("\\footnotesize %.0f\\%%", 100y) for y in εtick ]
 
     optabatementfig = @pgf Axis({
-        width = raw"0.8\textwidth",
-        height = raw"0.45\textwidth",
+        width = raw"0.6\textwidth",
+        height = raw"0.6\textwidth",
         grid = "both",
         xmin = 0,
         xmax = horizon,
@@ -341,8 +341,6 @@ begin
 
         fullabatementline = @pgf Plot({ line_width = 1.5, dashed, color = colors[k], forget_plot }, Coordinates([fullabatementyear, fullabatementyear], [0., 1.]))
 
-        fullabatementscatter = @pgf Plot({ only_marks, color = colors[k], forget_plot }, Coordinates([fullabatementyear], [1.]))
-
         @pgf push!(optabatementfig,
             emedianplot,
             LegendEntry("\\footnotesize $(extremalabels[k])"),
@@ -350,7 +348,6 @@ begin
             eupperplot,
             efill,
             fullabatementline,
-            fullabatementscatter
         )
     end
 
@@ -371,7 +368,7 @@ begin
 
     yearticks = 0:20:horizon
 
-    medianopts = @pgf {line_width = LINE_WIDTH}
+    medianopts = @pgf {line_width = LINE_WIDTH, mark = "square*", mark_repeat = MARKER_REPEAT, mark_options = { scale = 0.6 }}
     confidenceopts = @pgf {forget_plot, line_width = 0.6}
     fillopts = @pgf { opacity = 0.15 }
     figopts = @pgf {width = raw"0.5\textwidth", height = raw"0.35\textwidth", grid = "both", xmin = 0, xmax = horizon}
@@ -400,7 +397,8 @@ begin
 
         @pgf push!(simfig, {figopts...,
             xticklabel = raw"\empty", ymin = hogg.M₀, ymax = 600.,
-            title = extremalabels[k], labeloption...,
+            title = extremalabels[k], 
+            labeloption...,
         }, Mmedianplot, Mlowerplot, Mupperplot, Mfill, nppath)
     end
 

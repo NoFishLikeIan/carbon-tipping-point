@@ -159,8 +159,8 @@ close(climatefile)
 ## Shared plotting/simulation constants
 PALETTE = colorschemes[:grays]
 colors = reverse(get(PALETTE, range(0, 0.6; length=length(extremamodels))))
-modelmarkers = ("square*", "**")
-policymarkers = (optimal = "square*", robust = "triangle*")
+modelmarkers = ("square*", "*")
+policymarkers = (optimal = "square*", robust = "**")
 MARKER_REPEAT = 10
 LINE_WIDTH = 2.5
 QS = (0.1, 0.5, 0.9)
@@ -236,7 +236,7 @@ let
 
     push!(policyfig, bandpoly)
 
-    timepoints = 0:0.1:horizon
+    timepoints = 0:1:horizon
 
     # Optimal policy for each model
     for (k, model) in enumerate(extremamodels)
@@ -361,7 +361,7 @@ let
             medianopts...,
             color = colors[k],
             solid,
-            mark = policymarkers.optimal,
+            mark = modelmarkers[k],
             mark_repeat = MARKER_REPEAT,
             mark_options = {fill = colors[k], scale = 0.55}
         }, Coordinates(yearlytime, getindex.(Mopt, 2)))
@@ -479,8 +479,8 @@ let
     εticklabels = [@sprintf("\\footnotesize %.0f\\%%", 100y) for y in εtick]
 
     abatementfig = @pgf Axis({
-        width = raw"0.8\textwidth",
-        height = raw"0.45\textwidth",
+        width = raw"0.6\textwidth",
+        height = raw"0.6\textwidth",
         grid = "both",
         xmin = 0,
         xmax = horizon,
@@ -564,12 +564,14 @@ let
         εupperreg = @pgf Plot({confidenceopts..., color = colors[k], name_path = highreg}, Coordinates(yearlytime, getindex.(εreg, 3)))
         εfillreg = @pgf Plot(fillreg, "fill between [of=$lowreg and $highreg]")
 
-        optnetzeroline = @pgf Plot({line_width = 1.2, dashed, color = colors[k], forget_plot}, Coordinates([optnetzero - 2020, optnetzero - 2020], [0., 1.]))
-        optnetzeroscatter = @pgf Plot({only_marks, color = colors[k], forget_plot}, Coordinates([optnetzero - 2020], [1.]))
-        regnetzeroline = @pgf Plot({line_width = 1.2, dotted, color = colors[k], forget_plot}, Coordinates([regnetzero - 2020, regnetzero - 2020], [0., 1.]))
-        regnetzeroscatter = @pgf Plot({only_marks, color = colors[k], forget_plot}, Coordinates([regnetzero - 2020], [1.]))
+        optnetzeroline = @pgf Plot({line_width = 1.2, color = colors[k], forget_plot}, Coordinates([optnetzero - 2020, optnetzero - 2020], [0., 1.]))
+
+        regnetzeroline = @pgf Plot({line_width = 1.2, dashdotted, color = colors[k], forget_plot}, Coordinates([regnetzero - 2020, regnetzero - 2020], [0., 1.]))
+
 
         @pgf push!(abatementfig,
+            optnetzeroline,
+            regnetzeroline,
             εmedianopt,
             εloweropt,
             εupperopt,
@@ -578,10 +580,6 @@ let
             εlowerreg,
             εupperreg,
             εfillreg,
-            optnetzeroline,
-            optnetzeroscatter,
-            regnetzeroline,
-            regnetzeroscatter
         )
     end
 
@@ -665,7 +663,7 @@ function premium(counterfactual, (Hitp, Hʳitp), model)
         P[i] = (s - sʳ) / s
     end
 
-    return smooth!(P, 10)
+    return smooth!(P, 20)
 end
 
 counterfactualensemble = solve(EnsembleProblem(counterfactualprob); trajectories = 10_000)
@@ -674,7 +672,7 @@ P = [premium(sim, (Hitp, Hʳitp), model) for sim in counterfactualensemble];
 ## Premium trajectories
 let
     premiumhorizon = 80
-    yearlytime = 1:0.5:premiumhorizon
+    yearlytime = 1:1:premiumhorizon
 
     # Interpolate each premium trajectory onto a regular yearly grid
     Pgrid = Matrix{Float64}(undef, length(yearlytime), length(P))
