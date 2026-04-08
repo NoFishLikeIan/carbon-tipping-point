@@ -166,7 +166,7 @@ begin
     medianopts = @pgf {line_width = LINE_WIDTH}
     confidenceopts = @pgf {draw = "none", forget_plot}
     fillopts = @pgf {fill = "gray", opacity = 0.5}
-    figopts = @pgf {width = raw"0.33\textwidth", height = raw"0.3\textwidth", grid = "both", xmin = 0, xmax = horizon}
+    figopts = @pgf {width = raw"0.33\textwidth", height = raw"0.24\textwidth", grid = "both", xmin = 0, xmax = horizon}
 
     qs = (0.1, 0.5, 0.9)
     temperatureticks = makedeviationtickz(1, 3; step=0.5, digits=1)

@@ -116,6 +116,8 @@ begin # Plot estetics
     extremalabels = ("Linear", "Tipping")
     PALETTE = colorschemes[:grays]
     colors = reverse(get(PALETTE, range(0, 0.6; length=length(extremamodels))))
+    modelmarkers = ("square*", "**")
+    MARKER_REPEAT = 10
 
     TEMPLABEL = raw"Temperature deviations $T_t \; [\si{\degree\Celsius}]$"
     LINE_WIDTH = 2.5
@@ -159,12 +161,19 @@ begin # Plot SCC as a function of Tᶜ
         xlabel = L"Critical threshold $T^c$ [\si{\degree}]",
         ylabel = L"Social cost of carbon $[\si{US\mathdollar / tCO_2e}]$",
         width = raw"0.5\linewidth",
+        height = raw"0.32\linewidth",
         grid = "both",
         xmin = minimum(thresholds),
         xmax = maximum(thresholds)
     })
 
-    curve = @pgf Plot({ color = colors[2], line_width = LINE_WIDTH }, Coordinates(thresholds, sccs))
+    curve = @pgf Plot({
+        color = colors[2],
+        line_width = LINE_WIDTH,
+        mark = modelmarkers[2],
+        mark_repeat = MARKER_REPEAT,
+        mark_options = {fill = colors[2], scale = 0.6}
+    }, Coordinates(thresholds, sccs))
     push!(sccfig, curve, LegendEntry(L"\mathrm{SCC}^{T^c}_{2020}"))
 
     if !isnan(scclinear)
@@ -241,8 +250,8 @@ begin # Plot optimal SCC paths
     timegrid = 0:savestep:horizon
 
     fig = @pgf Axis({
-        width = "5.95cm",
-        height = "5.1cm",
+        width = raw"0.7\linewidth",
+        height = raw"0.4\linewidth",
         grid = "both",
         xmin = 0,
         xmax = 80,
@@ -254,9 +263,7 @@ begin # Plot optimal SCC paths
         ymin = 0, 
         ytick_distance = 50,
         legend_pos = "north west",
-        title = L"\mathrm{SCC}_t", 
-        width = raw"0.5\linewidth",
-        height = raw"0.5\linewidth"
+        title = L"\mathrm{SCC}_t"
     })
 
     
@@ -272,7 +279,13 @@ begin # Plot optimal SCC paths
         
         # Median line
         median_coords = Coordinates(timegrid, quantiles[:, 2])
-        push!(fig, @pgf Plot({color = color, line_width = LINE_WIDTH}, median_coords))
+        push!(fig, @pgf Plot({
+            color = color,
+            line_width = LINE_WIDTH,
+            mark = modelmarkers[i],
+            mark_repeat = MARKER_REPEAT,
+            mark_options = {fill = color, scale = 0.6}
+        }, median_coords))
         push!(fig, LegendEntry(label))
     end
 

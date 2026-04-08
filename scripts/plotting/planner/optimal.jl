@@ -53,7 +53,7 @@ PLOTPATH = "../job-market-paper/jeem/plots"
 plotpath = joinpath(PLOTPATH, abatementtype)
 if !isdir(plotpath) mkpath(plotpath) end
 
-horizon = 100.
+horizon = 80.
 tspan = (0., horizon)
 
 ## Read available files
@@ -129,6 +129,8 @@ begin
     extremalabels = ("Linear", "Tipping")
     PALETTE = colorschemes[:grays]
     colors = reverse(get(PALETTE, range(0, 0.6; length=length(extremamodels))))
+    modelmarkers = ("square*", "**")
+    MARKER_REPEAT = 10
 
     TEMPLABEL = raw"Temperature deviations $T_t \; [\si{\degree\Celsius}]$"
     LINE_WIDTH = 2.5
@@ -151,7 +153,7 @@ begin
     mnpprob = ODEProblem((_, calibration, t) -> γ(t, calibration), m₀, (0, horizon), calibration)
     mnp = solve(mnpprob, Tsit5())
 
-    mediantspan = 0:10:60
+    mediantspan = 0:20:80
     years = 2020 .+ Int.(mediantspan)
     mmedianpath = mnp(mediantspan).u
     Mmedianpath = @. hogg.Mᵖ * exp(mmedianpath)
@@ -162,28 +164,29 @@ begin
         for (M, y) in zip(round.(Int, Mmedianpath), years)
     ]
     
-    ytick = 0.4:0.2:1.4
-    yticklabels = [ @sprintf("\\footnotesize %.0f\\%%", 100y) for y in ytick ]  
+    ytick = 0.:0.1:1.3
+    yticklabels = [ @sprintf("\\footnotesize %.0f\\%%", 100y) for y in ytick ]
+    ymin, ymax = 0., 1.3  
 
     policyfig = @pgf Axis({
-        ymin = 0.35, ymax = 1.45, 
+        ymin = ymin, ymax = ymax, 
         ytick = ytick, yticklabels = yticklabels,
         xlabel = L"\footnotesize \si{\CO} concentration $M_t^{\textrm{np}} \; [\si{\ppm}]$",
         ylabel = L"\footnotesize Fraction of abated emissions $\varepsilon_t$", 
         xtick = mmedianpath, xticklabels = Mtickslabels,
         xmin = mmin, xmax = mmax,
-        width = raw"0.8\linewidth", xticklabel_style = {align = "center"},
+        width = raw"0.8\linewidth", height = raw"0.5\linewidth", xticklabel_style = {align = "center"},
         grid = "both",
         legend_pos = "north west"
     });
 
     # Add gray band for ε > 1 (negative emissions)
     bandx = [mmin, mmax]
-    bandy = [1.0, 1.45]
+    bandy = [1., 1.3]
     bandcoords = vcat([(x, bandy[1]) for x in bandx], [(x, bandy[2]) for x in reverse(bandx)])
     bandpoly = @pgf Plot({fill = "gray", opacity = 0.2, draw = "none", forget_plot}, Coordinates(bandcoords))
     push!(policyfig, bandpoly)
-    
+
     timepoints = 0:0.1:horizon
     for (i, model) in enumerate(extremamodels)
         _, α = interpolations[model]
@@ -206,14 +209,30 @@ begin
         mlow = [mnp(t) for t in tlow]
         mhigh = [mnp(t) for t in thigh]
 
-        εₜlow = [ ε(t, Point(T, m), α(T, m, t), model, calibration) for (T, m, t) in zip(T̄low, mlow, tlow)]
+        εfn = @closure (T, m, t) -> ε(t, Point(T, m), α(T, m, t), model, calibration)
+        εₜlow = [ εfn(T, m, t) for (T, m, t) in zip(T̄low, mlow, tlow)]
         
-        lowcurve = @pgf Plot({ line_width = LINE_WIDTH, color = colors[i], solid }, Coordinates(mlow, εₜlow))
+        lowcurve = @pgf Plot({
+            line_width = LINE_WIDTH,
+            color = colors[i],
+            solid,
+            mark = modelmarkers[i],
+            mark_repeat = MARKER_REPEAT,
+            mark_options = {fill = colors[i], scale = 0.6}
+        }, Coordinates(mlow, εₜlow))
         @pgf push!(policyfig, lowcurve, LegendEntry("\\footnotesize $(extremalabels[i])"))
 
         if !isempty(T̄high)
-            εₜhigh = [ ε(t, Point(T, m), α(T, m, t), model, calibration) for (T, m, t) in zip(T̄high, mhigh, thigh)]
-            highcurve = @pgf Plot({ line_width = LINE_WIDTH, color = colors[i], solid, forget_plot }, Coordinates(mhigh, εₜhigh))
+            εₜhigh = [ εfn(T, m, t) for (T, m, t) in zip(T̄high, mhigh, thigh)]
+            highcurve = @pgf Plot({
+                line_width = LINE_WIDTH,
+                color = colors[i],
+                solid,
+                forget_plot,
+                mark = modelmarkers[i],
+                mark_repeat = MARKER_REPEAT,
+                mark_options = {fill = colors[i], scale = 0.6}
+            }, Coordinates(mhigh, εₜhigh))
             tippingmarker = @pgf Plot({
                 mark_options = {fill = colors[i]}, only_marks, forget_plot
             }, Coordinates(mhigh[[1]], εₜhigh[[1]]))
@@ -254,7 +273,7 @@ begin
     confidenceopts = @pgf {draw = "none", forget_plot}
     fillopts = @pgf {fill = "gray", opacity = 0.5, forget_plot}
     
-    εtick = 0.4:0.2:1.2
+    εtick = 0.:0.1:1.2
     εticklabels = [ @sprintf("\\footnotesize %.0f\\%%", 100y) for y in εtick ]
 
     optabatementfig = @pgf Axis({
@@ -263,7 +282,7 @@ begin
         grid = "both",
         xmin = 0,
         xmax = horizon,
-        ymin = 0.35,
+        ymin = minimum(εtick),
         ymax = maximum(εtick),
         xtick = yearticks,
         xticklabels = 2020 .+ Int.(yearticks),
@@ -308,7 +327,13 @@ begin
         lowerpath = "elower$(k)"
         upperpath = "eupper$(k)"
 
-        emedianplot = @pgf Plot({medianopts..., color = colors[k],}, Coordinates(0:horizon, medianpath))
+        emedianplot = @pgf Plot({
+            medianopts...,
+            color = colors[k],
+            mark = modelmarkers[k],
+            mark_repeat = MARKER_REPEAT,
+            mark_options = {fill = colors[k], scale = 0.6}
+        }, Coordinates(0:horizon, medianpath))
         elowerplot = @pgf Plot({confidenceopts..., color = colors[k], name_path = lowerpath}, Coordinates(0:horizon, getindex.(epaths, 1)))
         eupperplot = @pgf Plot({confidenceopts...,  color = colors[k], name_path = upperpath}, Coordinates(0:horizon, getindex.(epaths, 3)))
 
@@ -352,7 +377,7 @@ begin
     figopts = @pgf {width = raw"0.5\textwidth", height = raw"0.35\textwidth", grid = "both", xmin = 0, xmax = horizon}
 
     qs = (0.1, 0.5, 0.9)
-    temperatureticks = makedeviationtickz(1, 3; step=0.5, digits=1)
+    temperatureticks = makedeviationtickz(1, 2.5; step=0.5, digits=1)
     mnppath = mnp(0:horizon)
     Mnppath = @. exp(mnppath) * hogg.Mᵖ
 
@@ -444,7 +469,7 @@ if false
 
 
     figopts = @pgf {
-        width = raw"0.5\textwidth", height = raw"0.5\textwidth", grid = "both",
+        width = raw"0.5\textwidth", height = raw"0.36\textwidth", grid = "both",
         symbolic_x_coords = decadeslabels,
         xticklabel_style = {rotate = 45, align = "right"}, xtick = "data",
         enlarge_x_limits = 0.1,

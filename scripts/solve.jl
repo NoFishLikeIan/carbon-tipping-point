@@ -9,6 +9,7 @@ using Statistics
 using StaticArrays, SparseArrays
 using LinearSolve, LinearAlgebra
 using DataStructures
+using UnPack
 
 using Optimization, OptimizationOptimJL, LineSearches
 using ForwardDiff
@@ -16,7 +17,6 @@ using Interpolations
 
 using JLD2
 using Printf, Dates
-
 
 include("../src/valuefunction.jl")
 include("../src/regret.jl")

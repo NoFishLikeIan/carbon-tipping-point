@@ -133,15 +133,15 @@ end
 
 ## Compute CO2 equivalence
 "Construct CO2e concentration"
-function computeco2equivalence(concentration, q, gwpdict)
-    co2equivalence = deepcopy(concentration[("SSP5 8.5", "carbon_dioxide", q)])
+function computeco2equivalence(concentration, q, gwpdict; scenario = "SSP5 8.5")
+    co2equivalence = deepcopy(concentration[(scenario, "carbon_dioxide", q)])
     co2equivalence[!, "CO2 Concentration"] .= co2equivalence[:, "Concentration"]
     co2equivalence[!, "CO2 Emissions"] .= co2equivalence[:, "Emissions"]
 
     # Concentration
     co2econcentration = copy(co2equivalence[:, "Concentration"])
     for (particle, (gwpvalue, concentrationconverter, factor)) in gwpdict
-        df = concentration[("SSP5 8.5", particle, q)]
+        df = concentration[(scenario, particle, q)]
         
         # Convert to ppm, then weight by GWP for radiative equivalence
         concppm = df.Concentration .* concentrationconverter * factor
@@ -157,7 +157,7 @@ function computeco2equivalence(concentration, q, gwpdict)
     
     # Add other gases: each contributes ppm/yr based on its own molecular weight and GWP
     for (particle, (gwpvalue, concentrationconverter, factor)) in gwpdict
-        df = concentration[("SSP5 8.5", particle, q)]
+        df = concentration[(scenario, particle, q)]
         emissionsppmfactor = concentrationconverter * factor
 
         emissions = df.Emissions .* emissionsppmfactor
@@ -188,6 +188,11 @@ gwpdict = Dict(mol => (gwpvalue, converter[mol], masstoconcentration[mol]) for (
 co2equivalence = computeco2equivalence(concentration, 0.5, gwpdict)
 co2equivalencelower = computeco2equivalence(concentration, 0.05, gwpdict)
 co2equivalenceupper = computeco2equivalence(concentration, 0.95, gwpdict)
+
+middleofroad = computeco2equivalence(concentration, 0.5, gwpdict; scenario = "SSP1 1.9")
+relrange = 2020 .≤ middleofroad.Year .≤ 2100.
+bauε = 1 .- middleofroad[relrange, "Emissions"] ./ co2equivalence[relrange, "Emissions"]
+JLD2.@save joinpath(calibrationpath, "bauε.jld2") bauε
 
 # Define the no-policy scenario for calibration
 npscenario = "SSP5 8.5"

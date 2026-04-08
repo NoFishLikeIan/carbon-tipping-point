@@ -10,6 +10,8 @@ PALETTE = colorschemes[:grays];
 plotpath = "plots/toy-model"
 
 colors = get(PALETTE, [0., 0.7]);
+linemarkers = (linear = "square*", feedback = "diamond*", low = "square*", high = "triangle*")
+MARKER_REPEAT = 10
 LINE_WIDTH = 2.5
 
 push!(PGFPlotsX.CUSTOM_PREAMBLE, raw"\usetikzlibrary{arrows.meta}")
@@ -76,14 +78,20 @@ begin
         sol = solve(prob)
 
         trajplot = @pgf Plot({
-            line_width = LINE_WIDTH, color = colors[1], dotted
+            line_width = LINE_WIDTH, color = colors[1], dotted,
+            mark = linemarkers.linear,
+            mark_repeat = MARKER_REPEAT,
+            mark_options = {fill = colors[1], scale = 0.6}
         }, Coordinates(timesteps, first.(sol(timesteps).u)))
 
         push!(trajaxis, trajplot, LegendEntry(raw"\footnotesize Linear"))
     end
 
     trajplot = @pgf Plot({
-        line_width = LINE_WIDTH, color = colors[1]
+        line_width = LINE_WIDTH, color = colors[1],
+        mark = linemarkers.feedback,
+        mark_repeat = MARKER_REPEAT,
+        mark_options = {fill = colors[1], scale = 0.6}
     }, Coordinates(timesteps, Ttraj))
 
     push!(trajaxis, trajplot, LegendEntry(raw"\footnotesize Feedback"))
@@ -150,13 +158,19 @@ begin # Phase diagram
 
         curve = @pgf Plot({
             line_width = 2.,
+            mark = linemarkers.feedback,
+            mark_repeat = MARKER_REPEAT,
+            mark_options = {fill = colors[1], scale = 0.55}
         }, Coordinates(Tspace, fₐ.(Tspace)))        
         @pgf push!(axis, curve)
 
         (i == 1) && @pgf push!(axis, LegendEntry(raw"\footnotesize Feedback"))
 
         line = @pgf Plot({
-            line_width = 2., dotted
+            line_width = 2., dotted,
+            mark = linemarkers.linear,
+            mark_repeat = MARKER_REPEAT,
+            mark_options = {fill = colors[1], scale = 0.55}
         }, Coordinates(Tspace, flinear.(Tspace, m)))
         @pgf push!(axis, line)
 
@@ -276,11 +290,23 @@ begin # Plot marginal benefit and marginal cost
 
     uppercoords = Coordinates(timesteps[1:bifurcation], upperpath)
 
-    upperplot = @pgf Plot({ line_width = LINE_WIDTH, color = colors[2] }, uppercoords)
+    upperplot = @pgf Plot({
+        line_width = LINE_WIDTH,
+        color = colors[2],
+        mark = linemarkers.low,
+        mark_repeat = MARKER_REPEAT,
+        mark_options = {fill = colors[2], scale = 0.6}
+    }, uppercoords)
 
     uppermark = @pgf Plot({ only_marks, mark_options = {scale = 1.25}, forget_plot, color = colors[2] }, Coordinates(timesteps[[bifurcation]], upperpath[[bifurcation]]))
 
-    lowerplot = @pgf Plot({line_width = LINE_WIDTH, color = colors[1]}, Coordinates(timesteps, lowerpath))
+    lowerplot = @pgf Plot({
+        line_width = LINE_WIDTH,
+        color = colors[1],
+        mark = linemarkers.high,
+        mark_repeat = MARKER_REPEAT,
+        mark_options = {fill = colors[1], scale = 0.6}
+    }, Coordinates(timesteps, lowerpath))
 
     push!(Jfig, upperplot, uppermark, LegendEntry(raw"\footnotesize Low temp."), lowerplot, LegendEntry(raw"\footnotesize High temp."))
 

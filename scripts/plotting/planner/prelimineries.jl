@@ -80,6 +80,9 @@ labelsbymodel = Dict(models .=> labels)
 PALETTE = colorschemes[:grays]
 colors = get(PALETTE, range(0., 1.; length = length(models)), (0., 1.25))
 trajectorymarkers = ["square*", "diamond*", "*"]
+comparisonmarkers = ["square*", "triangle*", "diamond*", "*"]
+timemarkers = ["square*", "diamond*", "*"]
+MARKER_REPEAT = 10
 
 colorsbymodel = Dict(models .=> colors)
 markerbymodel = Dict(models .=> trajectorymarkers)
@@ -476,7 +479,7 @@ let # Damage fig
                 opacity = 0.7,
                 style = style,
                 mark = marker,
-                mark_repeat = 10,
+                mark_repeat = MARKER_REPEAT,
                 mark_size = 1.9,
                 mark_options = {fill = "white", draw = "black"}
             },
@@ -485,7 +488,13 @@ let # Damage fig
         push!(damagefig, comparedcurve, LegendEntry(label))
     end
 
-        @pgf damagecurve = Plot({line_width = LINE_WIDTH + 0.4, color = "black"},
+        @pgf damagecurve = Plot({
+        line_width = LINE_WIDTH + 0.4,
+        color = "black",
+        mark = comparisonmarkers[end],
+        mark_repeat = MARKER_REPEAT,
+        mark_options = {fill = "black", scale = 0.6}
+    },
         Coordinates(Tspace, activedamages)
     )
 
@@ -561,7 +570,7 @@ function level_damage_axis(γ₀, linearmodel, Tspace; withlegend = false, withy
                 opacity = 0.7,
                 style = style,
                 mark = marker,
-                mark_repeat = 10,
+                mark_repeat = MARKER_REPEAT,
                 mark_size = 1.9,
                 mark_options = {fill = "white", draw = "black"}
             },
@@ -571,7 +580,13 @@ function level_damage_axis(γ₀, linearmodel, Tspace; withlegend = false, withy
         withlegend && push!(axis, LegendEntry(label))
     end
 
-    activecurve = @pgf Plot({line_width = LINE_WIDTH + 0.4, color = "black"},
+    activecurve = @pgf Plot({
+        line_width = LINE_WIDTH + 0.4,
+        color = "black",
+        mark = comparisonmarkers[end],
+        mark_repeat = MARKER_REPEAT,
+        mark_options = {fill = "black", scale = 0.6}
+    },
         Coordinates(Tₜ, Dₜ)
     )
     push!(axis, activecurve)
@@ -643,7 +658,13 @@ begin # Marginal abatement curve
     for (k, t) in enumerate(times)
         mac = [β(t, ε, abatement) for ε in emissivity]
 
-        abatementcurve = @pgf Plot({line_width = LINE_WIDTH, color = yearcolors[k]}, Coordinates(emissivity, mac))
+        abatementcurve = @pgf Plot({
+            line_width = LINE_WIDTH,
+            color = yearcolors[k],
+            mark = timemarkers[k],
+            mark_repeat = MARKER_REPEAT,
+            mark_options = {fill = yearcolors[k], scale = 0.6}
+        }, Coordinates(emissivity, mac))
 
         push!(abatementfig, abatementcurve, LegendEntry(@sprintf("%d", 2020 + t)))
     end
