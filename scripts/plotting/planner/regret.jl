@@ -50,9 +50,10 @@ DATAPATH = "data"
 SIMDATAPATH = "data/simulation"
 calibrationpath = joinpath(DATAPATH, "calibration")
 SAVEFIG = true;
-PLOTPATH = "../job-market-paper/jeem/plots"
-plotpath = joinpath(PLOTPATH, "regret")
-if !isdir(plotpath) mkpath(plotpath) end
+PLOTPATHS = ["../job-market-paper/jeem/plots/negative", "../job-market-paper/jeem/rounds/submissions/third"]
+for path in PLOTPATHS
+    if !isdir(path) mkpath(path) end
+end
 
 regretpolicypath = joinpath(DATAPATH, "regret", "policy.jld2")
 @assert isfile(regretpolicypath) "Missing regret policy file at $regretpolicypath"
@@ -229,7 +230,7 @@ let
         ylabel = L"\footnotesize Fraction of abated emissions $\varepsilon_t$", 
         xtick = mmedianpath, xticklabels = Mtickslabels,
         xmin = mmin, xmax = mmax,
-        width = raw"0.8\linewidth", height = raw"0.5\linewidth", xticklabel_style = {align = "center"},
+        pgf_figsize(:policy; basis = "\\linewidth")..., xticklabel_style = {align = "center"},
         grid = "both",
         legend_pos = "north west"
     });
@@ -318,7 +319,9 @@ let
     end
 
     if SAVEFIG
-        PGFPlotsX.save(joinpath(plotpath, "regret-policyfig.tikz"), policyfig; include_preamble = true)
+        for plotpath in PLOTPATHS
+            PGFPlotsX.save(joinpath(plotpath, "regret-policyfig.tikz"), policyfig; include_preamble = true)
+        end
     end
 
     policyfig
@@ -337,7 +340,7 @@ let
 
     medianopts = @pgf {line_width = LINE_WIDTH}
     confidenceopts = @pgf {draw = "none", forget_plot}
-    figopts = @pgf {width = raw"0.5\textwidth", height = raw"0.35\textwidth", grid = "both", xmin = 0, xmax = horizon}
+    figopts = @pgf {pgf_figsize(:panel_wide)..., grid = "both", xmin = 0, xmax = horizon}
 
     yearlytime = 0:horizon
 
@@ -463,7 +466,9 @@ let
     end
 
     if SAVEFIG
-        PGFPlotsX.save(joinpath(plotpath, "regret-simfig-state.tikz"), statefig; include_preamble = true)
+        for plotpath in PLOTPATHS
+            PGFPlotsX.save(joinpath(plotpath, "regret-simfig-state.tikz"), statefig; include_preamble = true)
+        end
     end
 
     statefig
@@ -479,8 +484,7 @@ let
     εticklabels = [@sprintf("\\footnotesize %.0f\\%%", 100y) for y in εtick]
 
     abatementfig = @pgf Axis({
-        width = raw"0.6\textwidth",
-        height = raw"0.6\textwidth",
+        pgf_figsize(:square)...,
         grid = "both",
         xmin = 0,
         xmax = horizon,
@@ -584,7 +588,9 @@ let
     end
 
     if SAVEFIG
-        PGFPlotsX.save(joinpath(plotpath, "regret-simfig-abatement.tikz"), abatementfig; include_preamble = true)
+        for plotpath in PLOTPATHS
+            PGFPlotsX.save(joinpath(plotpath, "regret-simfig-abatement.tikz"), abatementfig; include_preamble = true)
+        end
     end
 
     abatementfig
@@ -702,7 +708,7 @@ let
     yearticks = 0:yearstep:premiumhorizon
 
     premiumfig = @pgf Axis({
-            width = raw"0.71\linewidth", height = raw"0.4\linewidth",
+            pgf_figsize(:wide; basis = "\\linewidth")...,
             grid = "both",
             xmin = 0, xmax = premiumhorizon,
             ymin = 0., ymax = ytick[end],
@@ -716,7 +722,9 @@ let
         }, Pmedian, Plower, Pupper, Pfill)
 
     if SAVEFIG
-        PGFPlotsX.save(joinpath(plotpath, "regret-simfig-premium.tikz"), premiumfig; include_preamble = true)
+        for plotpath in PLOTPATHS
+            PGFPlotsX.save(joinpath(plotpath, "regret-simfig-premium.tikz"), premiumfig; include_preamble = true)
+        end
     end
 
     premiumfig
@@ -790,7 +798,7 @@ begin
     DEfill   = @pgf Plot(fillEopts, "fill between [of=DElow and DEhigh]")
 
     decompositionfig = @pgf Axis({
-        width = raw"0.75\linewidth", height = raw"0.4\linewidth",
+        pgf_figsize(:wide; basis = "\\linewidth")...,
         grid = "both",
         xmin = 0, xmax = decomphorizon,
         ymin = 0, ymax = ytick[end],
@@ -816,7 +824,9 @@ begin
     )
 
     if SAVEFIG
-        PGFPlotsX.save(joinpath(plotpath, "regret-simfig-decomposition.tikz"), decompositionfig; include_preamble = true)
+        for plotpath in PLOTPATHS
+            PGFPlotsX.save(joinpath(plotpath, "regret-simfig-decomposition.tikz"), decompositionfig; include_preamble = true)
+        end
     end
 
     decompositionfig

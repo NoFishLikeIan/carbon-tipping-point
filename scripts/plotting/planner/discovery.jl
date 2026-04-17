@@ -42,9 +42,10 @@ DATAPATH = "data/simulation-dense"; @assert isdir(DATAPATH)
 CEPATH = "data/ce/simulation-dense"; @assert isdir(CEPATH)
 
 SAVEFIG = true;
-PLOTPATH = "../job-market-paper/jeem/plots"
-plotpath = joinpath(PLOTPATH, abatementtype)
-if !isdir(plotpath) mkpath(plotpath) end
+PLOTPATHS = ["../job-market-paper/jeem/plots/negative", "../job-market-paper/jeem/rounds/submissions/third"]
+for path in PLOTPATHS
+    if !isdir(path) mkpath(path) end
+end
 
 horizon = 100.
 tspan = (0., horizon)
@@ -166,7 +167,7 @@ begin
     medianopts = @pgf {line_width = LINE_WIDTH}
     confidenceopts = @pgf {draw = "none", forget_plot}
     fillopts = @pgf {fill = "gray", opacity = 0.5}
-    figopts = @pgf {width = raw"0.33\textwidth", height = raw"0.24\textwidth", grid = "both", xmin = 0, xmax = horizon}
+    figopts = @pgf {pgf_figsize(:panel)..., grid = "both", xmin = 0, xmax = horizon}
 
     qs = (0.1, 0.5, 0.9)
     temperatureticks = makedeviationtickz(1, 3; step=0.5, digits=1)
@@ -238,7 +239,9 @@ begin
     end
 
     if SAVEFIG
-        PGFPlotsX.save(joinpath(plotpath, "discovery-simfig.tikz"), simfig; include_preamble=true)
+        for plotpath in PLOTPATHS
+            PGFPlotsX.save(joinpath(plotpath, "discovery-simfig.tikz"), simfig; include_preamble=true)
+        end
     end
 
     simfig

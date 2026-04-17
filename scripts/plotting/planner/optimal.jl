@@ -49,9 +49,10 @@ abatementtype = withnegative ? "negative" : "constrained"
 DATAPATH = "data/simulation"; @assert isdir(DATAPATH)
 
 SAVEFIG = true;
-PLOTPATH = "../job-market-paper/jeem/plots"
-plotpath = joinpath(PLOTPATH, abatementtype)
-if !isdir(plotpath) mkpath(plotpath) end
+PLOTPATHS = ["../job-market-paper/jeem/plots/negative", "../job-market-paper/jeem/rounds/submissions/third"]
+for path in PLOTPATHS
+    if !isdir(path) mkpath(path) end
+end
 
 horizon = 80.
 tspan = (0., horizon)
@@ -90,8 +91,8 @@ begin
     
     for (i, filepath) = enumerate(modelfiles)
         print("Loading $i / $(length(modelfiles))\r")
-        values, model, G = loadtotal(filepath; tspan=(0, 1.01horizon))
-        interpolations[model] = buildinterpolations(values, G);
+        values, model, localG = loadtotal(filepath; tspan=(0, 1.01horizon))
+        interpolations[model] = buildinterpolations(values, localG);
         valuefunctions[model] = values;
         push!(models, model)
     end
@@ -175,7 +176,7 @@ begin
         ylabel = L"\footnotesize Fraction of abated emissions $\varepsilon_t$", 
         xtick = mmedianpath, xticklabels = Mtickslabels,
         xmin = mmin, xmax = mmax,
-        width = raw"0.8\linewidth", height = raw"0.5\linewidth", xticklabel_style = {align = "center"},
+        pgf_figsize(:policy; basis = "\\linewidth")..., xticklabel_style = {align = "center"},
         grid = "both",
         legend_pos = "north west"
     });
@@ -241,7 +242,9 @@ begin
     end
 
     if SAVEFIG
-        PGFPlotsX.save(joinpath(plotpath, "policyfig.tikz"), policyfig; include_preamble=true)
+        for plotpath in PLOTPATHS
+            PGFPlotsX.save(joinpath(plotpath, "policyfig.tikz"), policyfig; include_preamble=true)
+        end
     end
 
     policyfig
@@ -277,8 +280,7 @@ begin
     εticklabels = [ @sprintf("\\footnotesize %.0f\\%%", 100y) for y in εtick ]
 
     optabatementfig = @pgf Axis({
-        width = raw"0.6\textwidth",
-        height = raw"0.6\textwidth",
+        pgf_figsize(:square)...,
         grid = "both",
         xmin = 0,
         xmax = horizon,
@@ -352,7 +354,9 @@ begin
     end
 
     if SAVEFIG
-        PGFPlotsX.save(joinpath(plotpath, "optabatementfig.tikz"), optabatementfig; include_preamble=true)
+        for plotpath in PLOTPATHS
+            PGFPlotsX.save(joinpath(plotpath, "optabatementfig.tikz"), optabatementfig; include_preamble=true)
+        end
     end
 
     optabatementfig
@@ -371,7 +375,7 @@ begin
     medianopts = @pgf {line_width = LINE_WIDTH, mark = "square*", mark_repeat = MARKER_REPEAT, mark_options = { scale = 0.6 }}
     confidenceopts = @pgf {forget_plot, line_width = 0.6}
     fillopts = @pgf { opacity = 0.15 }
-    figopts = @pgf {width = raw"0.5\textwidth", height = raw"0.35\textwidth", grid = "both", xmin = 0, xmax = horizon}
+    figopts = @pgf {pgf_figsize(:panel_wide)..., grid = "both", xmin = 0, xmax = horizon}
 
     qs = (0.1, 0.5, 0.9)
     temperatureticks = makedeviationtickz(1, 2.5; step=0.5, digits=1)
@@ -440,7 +444,9 @@ begin
     end
 
     if SAVEFIG
-        PGFPlotsX.save(joinpath(plotpath, "simfig.tikz"), simfig; include_preamble=true)
+        for plotpath in PLOTPATHS
+            PGFPlotsX.save(joinpath(plotpath, "simfig.tikz"), simfig; include_preamble=true)
+        end
     end
 
     simfig
@@ -467,7 +473,7 @@ if false
 
 
     figopts = @pgf {
-        width = raw"0.5\textwidth", height = raw"0.36\textwidth", grid = "both",
+        pgf_figsize(:panel_bar)..., grid = "both",
         symbolic_x_coords = decadeslabels,
         xticklabel_style = {rotate = 45, align = "right"}, xtick = "data",
         enlarge_x_limits = 0.1,
@@ -519,7 +525,9 @@ if false
     end
 
     if SAVEFIG
-        PGFPlotsX.save(joinpath(plotpath, "opt-costs.tikz"), costfig; include_preamble=true)
+        for plotpath in PLOTPATHS
+            PGFPlotsX.save(joinpath(plotpath, "opt-costs.tikz"), costfig; include_preamble=true)
+        end
     end
 
     costfig

@@ -44,9 +44,11 @@ abatementtype = withnegative ? "negative" : "constrained"
 DATAPATH = "data/simulation"; @assert isdir(DATAPATH)
 
 SAVEFIG = true;
-PLOTPATH = "../job-market-paper/jeem/plots"
-plotpath = joinpath(PLOTPATH, abatementtype)
-if !isdir(plotpath) mkpath(plotpath) end
+
+PLOTPATHS = ["../job-market-paper/jeem/plots/negative", "../job-market-paper/jeem/rounds/submissions/third"]
+for path in PLOTPATHS
+    if !isdir(path) mkpath(path) end
+end
 
 horizon = 100.
 tspan = (0., horizon)
@@ -80,8 +82,8 @@ begin # Read available files
     
     for (i, filepath) = enumerate(modelfiles)
         print("Loading $i / $(length(modelfiles))\r")
-        values, model, G = loadtotal(filepath; tspan=(0, 1.01horizon))
-        interpolations[model] = buildinterpolations(values, G);
+        values, model, localG = loadtotal(filepath; tspan=(0, 1.01horizon))
+        interpolations[model] = buildinterpolations(values, localG);
         valuefunctions[model] = values;
         push!(models, model)
     end
@@ -116,7 +118,7 @@ begin # Plot estetics
     extremalabels = ("Linear", "Tipping")
     PALETTE = colorschemes[:grays]
     colors = reverse(get(PALETTE, range(0, 0.6; length=length(extremamodels))))
-    modelmarkers = ("square*", "**")
+    modelmarkers = ("square*", "*")
     MARKER_REPEAT = 10
 
     TEMPLABEL = raw"Temperature deviations $T_t \; [\si{\degree\Celsius}]$"
@@ -143,7 +145,6 @@ begin # Compute SCC
 
     for model in models
         Hitp, _ = interpolations[model]
-        m₀ = log(model.climate.hogg.M₀ / model.climate.hogg.Mᵖ)
         ∂Hₘ = ForwardDiff.derivative(m -> Hitp(model.climate.hogg.T₀, m, 0.), m₀)
         s = scc(∂Hₘ, model.economy.Y₀, model.climate.hogg.M₀, model)
         
@@ -154,18 +155,26 @@ begin # Compute SCC
             global scclinear = s
         end
     end
+
+    @assert !isempty(thresholds) "No tipping models found for SCC threshold plot."
+    perm = sortperm(thresholds)
+    thresholds = thresholds[perm]
+    sccs = sccs[perm]
 end
 
 begin # Plot SCC as a function of Tᶜ
     sccfig = @pgf Axis({
         xlabel = L"Critical threshold $T^c$ [\si{\degree}]",
         ylabel = L"Social cost of carbon $[\si{US\mathdollar / tCO_2e}]$",
-        width = raw"0.5\linewidth",
-        height = raw"0.32\linewidth",
+        pgf_figsize(:compact; basis = "\\linewidth")...,
         grid = "both",
         xmin = minimum(thresholds),
-        xmax = maximum(thresholds)
+        xmax = maximum(thresholds),
+        ymin = scclinear - 0.5
     })
+
+    baseline = @pgf Plot({color = colors[1], line_width = LINE_WIDTH}, Coordinates(collect(extrema(thresholds)), [scclinear, scclinear]))
+    push!(sccfig, baseline, LegendEntry(L"\overline{\mathrm{SCC}}_{2020}"))
 
     curve = @pgf Plot({
         color = colors[2],
@@ -176,19 +185,10 @@ begin # Plot SCC as a function of Tᶜ
     }, Coordinates(thresholds, sccs))
     push!(sccfig, curve, LegendEntry(L"\mathrm{SCC}^{T^c}_{2020}"))
 
-    if !isnan(scclinear)
-        baseline = @pgf Plot({
-            color = colors[1],
-            dashed,
-            line_width = LINE_WIDTH
-        }, Coordinates([minimum(thresholds), maximum(thresholds)], [scclinear, scclinear]))
-        push!(sccfig, baseline, LegendEntry(L"\overline{\mathrm{SCC}}_{2020}"))
-    else 
-        @warn "Linear model SCC not available"
-    end
-
     if SAVEFIG
-        PGFPlotsX.save(joinpath(plotpath, "scc.tikz"), sccfig; include_preamble=true)
+        for plotpath in PLOTPATHS
+            PGFPlotsX.save(joinpath(plotpath, "scc.tikz"), sccfig; include_preamble=true)
+        end
     end
 
     sccfig
@@ -250,8 +250,7 @@ begin # Plot optimal SCC paths
     timegrid = 0:savestep:horizon
 
     fig = @pgf Axis({
-        width = raw"0.7\linewidth",
-        height = raw"0.4\linewidth",
+        pgf_figsize(:wide; basis = "\\linewidth")...,
         grid = "both",
         xmin = 0,
         xmax = 80,
@@ -290,7 +289,9 @@ begin # Plot optimal SCC paths
     end
 
     if SAVEFIG
-        PGFPlotsX.save(joinpath(plotpath, "scc-paths.tikz"), fig; include_preamble=true)
+        for plotpath in PLOTPATHS
+            PGFPlotsX.save(joinpath(plotpath, "scc-paths.tikz"), fig; include_preamble=true)
+        end
     end
 
     fig

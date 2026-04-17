@@ -22,6 +22,11 @@ includet("../../utils/saving.jl")
 includet("../../utils/simulating.jl")
 
 SAVEFIG = true;
+PLOTPATHS = ["../job-market-paper/jeem/plots/negative", "../job-market-paper/jeem/rounds/submissions/third"]
+for path in PLOTPATHS
+    if !isdir(path) mkpath(path) end
+end
+
 withnegative = true;
 datapath = "data/simulation-large";
 experimentpath = "data/experiments/simulation-large";
@@ -40,15 +45,6 @@ begin # Default parameters
             model.albedo.Tᶜ in thresholds
     end
 
-    robustpath = if damages == LevelDamages
-        "robust/damage"
-    elseif maximum(thresholds) > 2.5
-        "robust/tipping"
-    else
-        ""
-    end
-
-    plotpath = joinpath("plots", robustpath)
 end
 
 begin # Import results and interpolations
@@ -145,7 +141,7 @@ begin
     medianopts = @pgf {line_width = LINE_WIDTH}
     confidenceopts = @pgf {draw = "none", forget_plot}
     fillopts = @pgf {fill = "gray", opacity = 0.5}
-    figopts = @pgf {width = raw"0.45\textwidth", height = raw"0.32\textwidth", grid = "both", xmin = 0, xmax = PLOT_HORIZON}
+    figopts = @pgf {pgf_figsize(:panel_wide)..., grid = "both", xmin = 0, xmax = PLOT_HORIZON}
 
     qs = [0.05, 0.5, 0.95]
 
@@ -205,7 +201,9 @@ begin
 
 
     if SAVEFIG
-        PGFPlotsX.save(joinpath(plotpath, "wf-simfig.tikz"), simfig; include_preamble=true)
+        for plotpath in PLOTPATHS
+            PGFPlotsX.save(joinpath(plotpath, "wf-simfig.tikz"), simfig; include_preamble=true)
+        end
     end
 
     simfig
@@ -227,7 +225,7 @@ begin
     decadechange = diff(decadespath.u) / step(decadetime) # average
 
     barchart = @pgf Axis({
-        width = raw"0.7\textwidth", height = raw"0.5\textwidth", grid = "both",
+        pgf_figsize(:wide_tall)..., grid = "both",
         symbolic_x_coords = decadeslabels,
         xticklabel_style = {rotate = 45, align = "right"}, xtick = "data",
         enlarge_x_limits = 0.1,
@@ -255,7 +253,9 @@ begin
     end
 
     if SAVEFIG
-        PGFPlotsX.pgfsave(joinpath(plotpath, "wf-costs.tikz"), barchart; include_preamble=true)
+        for plotpath in PLOTPATHS
+            PGFPlotsX.pgfsave(joinpath(plotpath, "wf-costs.tikz"), barchart; include_preamble=true)
+        end
     end
 
     barchart
@@ -330,7 +330,9 @@ begin
 
 
     if SAVEFIG
-        PGFPlotsX.save(joinpath(plotpath, "p-simfig.tikz"), simfig; include_preamble=true)
+        for plotpath in PLOTPATHS
+            PGFPlotsX.save(joinpath(plotpath, "p-simfig.tikz"), simfig; include_preamble=true)
+        end
     end
 
     simfig
@@ -342,7 +344,7 @@ begin
     decadechange = diff(decadespath.u) / step(decadetime) # average
 
     barchart = @pgf Axis({
-        width = raw"0.7\textwidth", height = raw"0.5\textwidth", grid = "both",
+        pgf_figsize(:wide_tall)..., grid = "both",
         symbolic_x_coords = decadeslabels,
         xticklabel_style = {rotate = 45, align = "right"}, xtick = "data",
         enlarge_x_limits = 0.1,
@@ -370,7 +372,9 @@ begin
     end
 
     if SAVEFIG
-        PGFPlotsX.pgfsave(joinpath(plotpath, "p-costs.tikz"), barchart; include_preamble=true)
+        for plotpath in PLOTPATHS
+            PGFPlotsX.pgfsave(joinpath(plotpath, "p-costs.tikz"), barchart; include_preamble=true)
+        end
     end
 
     barchart

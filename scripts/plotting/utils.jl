@@ -1,5 +1,25 @@
 const kelvintocelsius = 273.15
 
+const PGF_FIGURE_SIZES = Dict{Symbol, Tuple{Float64, Float64}}(
+    :panel => (0.34, 0.24),
+    :panel_pair => (0.36, 0.26),
+    :panel_wide => (0.48, 0.34),
+    :panel_bar => (0.50, 0.36),
+    :compact => (0.50, 0.32),
+    :medium => (0.60, 0.43),
+    :wide => (0.72, 0.44),
+    :wide_tall => (0.72, 0.50),
+    :square => (0.60, 0.60),
+    :policy => (0.80, 0.50),
+    :full => (0.90, 0.68),
+    :full_alt => (0.78, 0.60),
+)
+
+function pgf_figsize(kind::Symbol; basis = "\\textwidth")
+    width, height = PGF_FIGURE_SIZES[kind]
+    return @pgf { width = string(width, basis), height = string(height, basis) }
+end
+
 function stringifydeviation(ΔT; digits = 2)
     fsign = ΔT > 0 ? "+" : ""
     fmt = Printf.Format("$fsign%0.$(digits)f°")

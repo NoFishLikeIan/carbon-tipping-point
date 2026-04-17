@@ -32,8 +32,12 @@ includet("../../utils/simulating.jl")
 
 ## Global variables
 DATAPATH = "data"
-PLOTPATH = "../job-market-paper/jeem/plots"
-PRESENTATIONPATH = joinpath(PLOTPATH, "presentation")
+
+PLOTPATHS = ["../job-market-paper/jeem/plots/negative", "../job-market-paper/jeem/rounds/submissions/third"]
+
+for path in PLOTPATHS
+    if !isdir(path) mkpath(path) end
+end
 
 SAVEFIG = true
 LINE_WIDTH = 2.5
@@ -79,9 +83,9 @@ labelsbymodel = Dict(models .=> labels)
 ## Labels, colors and axis
 PALETTE = colorschemes[:grays]
 colors = get(PALETTE, range(0., 1.; length = length(models)), (0., 1.25))
-trajectorymarkers = ["square*", "diamond*", "*"]
-comparisonmarkers = ["square*", "triangle*", "diamond*", "*"]
-timemarkers = ["square*", "diamond*", "*"]
+trajectorymarkers = ["*", "square*", "diamond*"]
+comparisonmarkers = [ "*", "square*", "triangle*", "diamond*"]
+timemarkers = [ "*", "square*", "diamond*"]
 MARKER_REPEAT = 10
 
 colorsbymodel = Dict(models .=> colors)
@@ -106,8 +110,7 @@ begin
     additionalradiation = [model.climate isa TippingClimate ? λ(T, model.climate.feedback) : 0. for T in Tspace, model in models]
 
     feedbackfig = @pgf Axis({
-        width = raw"0.51\textwidth",
-        height = raw"0.425\textwidth",
+        pgf_figsize(:medium)...,
         grid = "both",
         xlabel = TLABEL,
         ylabel = raw"Positive feedback $\lambda(T_t) \; [\si{W.m^{-2}}]$",
@@ -120,7 +123,9 @@ begin
     })
 
     if SAVEFIG
-        PGFPlotsX.save(joinpath(PLOTPATH, "skeleton-albedo.tikz"), feedbackfig; include_preamble=true)
+        for plotpath in PLOTPATHS
+            PGFPlotsX.save(joinpath(plotpath, "skeleton-albedo.tikz"), feedbackfig; include_preamble=true)
+        end
     end
 
     for mdx in reverse(axes(additionalradiation, 2))
@@ -142,7 +147,9 @@ begin
     end
 
     if SAVEFIG
-        PGFPlotsX.save(joinpath(PLOTPATH, "feedbackfig.tikz"), feedbackfig; include_preamble=true)
+        for plotpath in PLOTPATHS
+            PGFPlotsX.save(joinpath(plotpath, "feedbackfig.tikz"), feedbackfig; include_preamble=true)
+        end
     end
 
     feedbackfig
@@ -206,8 +213,7 @@ begin
     ]
 
     nullclinefig = @pgf Axis({
-        width = raw"0.9\textwidth",
-        height = raw"0.7\textwidth",
+        pgf_figsize(:full)...,
         grid = "both",
         ylabel = TLABEL,
         xlabel_style = {align = "center"},
@@ -223,7 +229,9 @@ begin
     })
 
     if SAVEFIG
-        PGFPlotsX.save(joinpath(PLOTPATH, "skeleton-nullcline.tikz"), nullclinefig; include_preamble=true)
+        for plotpath in PLOTPATHS
+            PGFPlotsX.save(joinpath(plotpath, "skeleton-nullcline.tikz"), nullclinefig; include_preamble=true)
+        end
     end
 
     for model in reverse(models) # Nullclines
@@ -271,7 +279,9 @@ begin
     @pgf nullclinefig["legend style"] = raw"at = {(0.95, 0.3)}"
 
     if SAVEFIG
-        PGFPlotsX.save(joinpath(PLOTPATH, "nullcline.tikz"), nullclinefig; include_preamble=true)
+        for plotpath in PLOTPATHS
+            PGFPlotsX.save(joinpath(plotpath, "nullcline.tikz"), nullclinefig; include_preamble=true)
+        end
     end
 
     nullclinefig
@@ -280,8 +290,7 @@ end
 ## Pure nullcline figure
 begin
     nullclinefig = @pgf Axis({
-        width = raw"0.765\textwidth",
-        height = raw"0.595\textwidth",
+        pgf_figsize(:full_alt)...,
         grid = "both",
         ylabel = TLABEL,
         xlabel_style = {align = "center"},
@@ -331,7 +340,9 @@ begin
     @pgf nullclinefig["legend style"] = raw"at = {(0.95, 0.3)}"
 
     if SAVEFIG
-        PGFPlotsX.save(joinpath(PLOTPATH, "just-nullclines.tikz"), nullclinefig; include_preamble=true)
+        for plotpath in PLOTPATHS
+            PGFPlotsX.save(joinpath(plotpath, "just-nullclines.tikz"), nullclinefig; include_preamble=true)
+        end
     end
 
     nullclinefig
@@ -347,8 +358,7 @@ end
 
 begin # Growth of carbon concentration 
     figsize = @pgf {
-        width = raw"0.361\linewidth",
-        height = raw"0.255\linewidth",
+        pgf_figsize(:panel_pair; basis = "\\linewidth")...
     }
 
     gfig = @pgf GroupPlot({
@@ -366,9 +376,7 @@ begin # Growth of carbon concentration
     gdata = [γ(t, calibration) for t ∈ yearlytime]
     coords = Coordinates(zip(yearlytime, gdata))
 
-    markers = @pgf Plot({only_marks, mark_options = {fill = "black", scale = 1.5, draw_opacity = 0}, mark_repeat = 10}, coords)
-
-    curve = @pgf Plot({color = "black", line_width = "0.1cm"}, coords)
+    curve = @pgf Plot({color = "black", line_width = "0.1cm", mark = "*", mark_options = {fill = "black", scale = 1.5, draw_opacity = 0}, mark_repeat = 10}, coords)
 
     ymin, ymax = extrema(growthticks)
     xtick = 0:20:horizon
@@ -387,12 +395,13 @@ begin # Growth of carbon concentration
             xticklabels = xticklabels,
             xticklabel_style = {rotate = 45},
             scaled_y_ticks = false
-        }, curve, markers)
+        }, curve)
 
     mfig = Axis()
 
     Mpath = @. exp(mnptraj.u) * hogg.Mᵖ
-    medianplot = @pgf Plot({line_width = LINE_WIDTH}, Coordinates(yearlytime, Mpath))
+    medianplot = @pgf Plot({line_width = LINE_WIDTH, mark = "*", mark_options = {fill = "black", scale = 1.5, draw_opacity = 0}, mark_repeat = 10}, Coordinates(yearlytime, Mpath))
+
 
     push!(mfig, medianplot)
 
@@ -408,7 +417,9 @@ begin # Growth of carbon concentration
         }, mfig)
 
     if SAVEFIG
-        PGFPlotsX.save(joinpath(PLOTPATH, "growthmfig.tikz"), gfig; include_preamble=true)
+        for plotpath in PLOTPATHS
+            PGFPlotsX.save(joinpath(plotpath, "growthmfig.tikz"), gfig; include_preamble=true)
+        end
     end
 
     gfig
@@ -420,8 +431,7 @@ begin # Carbon decay path
     yticklabels = ["$(round(δ, digits = 2)) \\%" for δ in ytick]
 
     decaypathfig = @pgf Axis({
-        width = raw"0.595\textwidth",
-        height = raw"0.425\textwidth",
+        pgf_figsize(:medium)...,
         grid = "both",
         xlabel = raw"Carbon concentration $M$",
         ylabel = raw"Decay of CO$_2$ in the atmosphere $\delta_m$",
@@ -435,7 +445,9 @@ begin # Carbon decay path
     )
 
     if SAVEFIG
-        PGFPlotsX.save(joinpath(PLOTPATH, "decaypathfig.tikz"), decaypathfig; include_preamble=true)
+        for plotpath in PLOTPATHS
+            PGFPlotsX.save(joinpath(plotpath, "decaypathfig.tikz"), decaypathfig; include_preamble=true)
+        end
     end
 
     decaypathfig
@@ -457,8 +469,7 @@ let # Damage fig
     xtick = Tspace[1]:1:Tspace[end]
 
     damagefig = @pgf Axis({
-        width = raw"0.7\textwidth",
-        height = raw"0.425\textwidth",
+        pgf_figsize(:wide)...,
         grid = "both",
         xlabel = TLABEL,
         ylabel = raw"Damage function $d(T_t) ; [\si{1 / year}]$",
@@ -501,7 +512,9 @@ let # Damage fig
     push!(damagefig, damagecurve, LegendEntry("This paper"))
 
     if SAVEFIG
-        PGFPlotsX.save(joinpath(PLOTPATH, "damagefig.tikz"), damagefig; include_preamble=true)
+        for plotpath in PLOTPATHS
+            PGFPlotsX.save(joinpath(plotpath, "damagefig.tikz"), damagefig; include_preamble=true)
+        end
     end
 
     damagefig
@@ -548,8 +561,7 @@ function level_damage_axis(γ₀, linearmodel, Tspace; withlegend = false, withy
     xtick = floor(Tₜ[1]):1:ceil(Tₜ[end])
 
     axis = @pgf Axis({
-        width = raw"0.45\linewidth",
-        height = raw"0.36\linewidth",
+        pgf_figsize(:panel_bar; basis = "\\linewidth")...,
         grid = "both",
         xlabel = TLABEL,
         ylabel = withylabel ? raw"Level damage $D_t$" : "",
@@ -616,7 +628,9 @@ begin
     end
 
     if SAVEFIG
-        PGFPlotsX.save(joinpath(PLOTPATH, "leveldamage-scenarios.tikz"), groupfig; include_preamble=true)
+        for plotpath in PLOTPATHS
+            PGFPlotsX.save(joinpath(plotpath, "leveldamage-scenarios.tikz"), groupfig; include_preamble=true)
+        end
     end
 
     groupfig
@@ -636,8 +650,7 @@ begin # Marginal abatement curve
     yticklabels = [@sprintf("%.f\\%%", 100 * y) for y in ytick]
 
     abatementfig = @pgf Axis({
-        width = raw"0.604\textwidth",
-        height = raw"0.425\textwidth",
+        pgf_figsize(:medium)...,
         grid = "both",
         xlabel = L"Abated percentage $\varepsilon(\alpha_t)$",
         ylabel = L"Abatement costs $\beta_t\big(\varepsilon(\alpha_t)\big)$",
@@ -672,7 +685,9 @@ begin # Marginal abatement curve
     @pgf abatementfig["legend style"] = raw"at = {(0.3, 0.95)}"
 
     if SAVEFIG
-        PGFPlotsX.save(joinpath(PLOTPATH, "abatementfig.tikz"), abatementfig; include_preamble=true)
+        for plotpath in PLOTPATHS
+            PGFPlotsX.save(joinpath(plotpath, "abatementfig.tikz"), abatementfig; include_preamble=true)
+        end
     end
     
     abatementfig
